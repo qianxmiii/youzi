@@ -340,7 +340,7 @@ function updateQuote() {
 
     } else if (quoteType === "通用-RMB") {
         // 构建备注内容
-        notes = totalQuantity.toFixed(0) + '箱 ' + totalWeight.toFixed(0) + 'kg ' + totalVolume + 'cbm' +
+        notes = address + ' ' + totalQuantity.toFixed(0) + '箱 ' + totalWeight.toFixed(0) + 'kg ' + totalVolume + 'cbm' +
             '\n';
         if (isDDU) {
             notes += 'DDU ';

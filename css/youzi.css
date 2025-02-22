@@ -89,13 +89,14 @@ td button {
 
 /* 悬停时按钮的背景色变化和阴影效果 */
 button:hover {
-  background-color: #2980b9; /* 悬停时背景色变深 */
+  background-color: #0b5ed7; /* 悬停时背景色变深 */
   box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2); /* 悬停时加大阴影 */
+  color: white !important;
 }
 
 /* 点击时的效果 */
 button:active {
-  background-color: #1c5987; /* 按下时按钮颜色变暗 */
+  background-color: #0b5ed7; /* 按下时按钮颜色变暗 */
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 按下时减小阴影 */
 }
 
@@ -258,6 +259,11 @@ textarea {
 .nav-tabs .nav-link.active {
   background-color: #fff;
   border-bottom: 1px solid #fff;
+}
+
+.nav-tabs .nav-link:hover {
+  background-color: #0d6efd;
+  border-color: #0d6efd;
 }
 
 /* 术语页面 */

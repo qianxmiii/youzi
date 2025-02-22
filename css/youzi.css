@@ -185,7 +185,7 @@ th.hidden {
   transform: scale(1.2); /* Slightly larger checkbox for better visibility */
 }
 
-.d-flex {
+.d-flex{
   display: flex;
   align-items: center; /* Vertically center the checkboxes */
   padding-top: 1em;

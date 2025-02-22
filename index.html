@@ -289,29 +289,28 @@
           <!-- 新增复选框：偏远地址和MOQ -->
         </form>
         <!-- 新增复选框：偏远地址和MOQ，显示在同一行 -->
-        <div class="d-flex">
+        <div class="d-flex align-items-center">
           <div class="form-check mr-3">
             <input type="checkbox" id="remote-address" class="form-check-input" oninput="updateQuote()" />
             <label for="remote-address" class="form-check-label">偏远地址</label>
           </div>
-          <div class="form-check">
+          <div class="form-check mr-3">
             <input type="checkbox" id="battery_check" class="form-check-input" onchange="updateQuote()" />
             <label for="battery_check" class="form-check-label">带电</label>
           </div>
-          <div class="form-check">
-            <input type="checkbox" id="MOQ" class="form-check-input" oninput="toggleMOQInput()"/>
+          <div class="form-check mr-3">
+            <input type="checkbox" id="MOQ" class="form-check-input" oninput="toggleMOQInput()" />
             <label for="MOQ" class="form-check-label">MOQ</label>
           </div>
           <!-- MOQ 输入框 -->
           <div id="moq-input-container" style="display: none;">
             <input type="number" id="moq-input" class="form-control" placeholder="kg" value="21" oninput="updateQuote()">
           </div>
-          <div class="form-check">
-            <input type="checkbox" id="pickup-fee-checkbox" class="form-check-input"
-              onchange="togglePickupFeeInput()" />
+          <div class="form-check mr-3">
+            <input type="checkbox" id="pickup-fee-checkbox" class="form-check-input" onchange="togglePickupFeeInput()" />
             <label for="pickup-fee-checkbox" class="form-check-label">提货费</label>
           </div>
-          <div id="pickup-fee-input-container" style="display: none; width: 100px">
+          <div id="pickup-fee-input-container" style="display: none; width: 100px;">
             <input type="number" id="pickup-fee" class="form-control" placeholder="RMB" oninput="updateQuote()" />
           </div>
           <div class="form-check form-switch">
@@ -322,6 +321,8 @@
               </span>
             </label>
           </div>
+        </div>
+        
           
                             
         </div>

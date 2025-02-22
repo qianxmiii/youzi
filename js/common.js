@@ -111,10 +111,10 @@ function getTransitTimeUSA(channel, postcode) {
     }
 
     // 根据邮编范围匹配时效
-    if (postcode < 4) {
-        return channelData["0-3"] || ""; // 美东
+    if (postcode < 5) {
+        return channelData["0-4"] || ""; // 美东
     } else if (postcode < 8) {
-        return channelData["4-7"] || ""; // 美中
+        return channelData["5-7"] || ""; // 美中
     } else {
         return channelData["8-9"] || ""; // 美西
     }

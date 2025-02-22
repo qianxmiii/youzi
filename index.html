@@ -14,8 +14,8 @@
 
 <body>
   <div class="container">
+    <div class = "module">
     <h3 class="text-center">箱规计算</h3>
-
     <div id="calculator">
       <div class="row">
         <!-- 选择派送方式 -->
@@ -117,8 +117,10 @@
         <label for="box-warnings" class = "labeltext">警告信息</label>
         <textarea id="box-warnings" class="form-control no-warnings" rows="3" readonly></textarea>
       </div>
-      <br>
+    </div>
+    </div>
       <button id="import-data-btn" class="btn btn-outline-dark" onclick="importData()">导入数据</button>
+      <div class="module">
       <!-- 报价计算模块 -->
       <div id="quote-calculation" class="my-4">
         <h3 class="text-center">报价计算</h3>
@@ -169,7 +171,7 @@
               <tr>
                 <th style="width: 6em">地址</th>
                 <th style="width: 6.5em">邮编</th>
-                <th>箱数</th>
+                <th style="width: 5em">箱数</th>
                 <th>实重 (kg)</th>
                 <th>体积 (cbm)</th>
                 <th>材积重 (kg)</th>
@@ -187,9 +189,7 @@
               </tr>
             </thead>
             <tbody>
-              <tr>
-                
-
+              <tr>            
                 <!-- 地址 -->
                 <td>
                   <input type="text" id="address" class="form-control uppercase" oninput="updatePostcode()" />
@@ -300,14 +300,8 @@
               </span>
             </label>
           </div>
+        </div>                  
         </div>
-        
-          
-                            
-        </div>
-          </div>
-        
-
         <!-- 新增备注下拉选项 -->
         <div class="form-group">
           <label for="quote-type" class = "labeltext">备注格式</label>
@@ -325,7 +319,10 @@
         <div class="form-group mt-4 textarea-container position-relative">
           <label for="notes" class="labeltext">报价</label>
           <textarea id="notes" class="form-control" rows="7" placeholder="在此输入计算说明或备注..."></textarea>
+        </div>
+      </div>
 
+      <div class="module">
         <div class="container mt-4">
           <!-- Tab 导航 -->
           <ul class="nav nav-tabs" id="myTab" role="tablist">
@@ -614,6 +611,7 @@
             </div>
 
           </div>
+        </div>
         </div>
       </div>
     </div>

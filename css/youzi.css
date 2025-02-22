@@ -40,6 +40,13 @@
   margin-top: 20px;
 }
 
+.module {
+  padding: 20px;
+  background-color: #f8f9fa; /* 浅灰色背景 */
+  border-radius: 8px; /* 圆角边框 */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
+}
+
 .labeltext {
   font-weight: bold; /* 加粗标签文字 */
 }
@@ -426,10 +433,6 @@ textarea {
 }
 
 /* MOQ 输入框样式 */
-#moq-input-container {
-    margin-top: 10px; /* 与复选框的间距 */
-}
-
 #moq-input {
     width: 80px; /* 输入框宽度 */
 }
@@ -457,7 +460,7 @@ textarea {
 /* 无警告时的绿色背景 */
 #box-warnings.no-warnings {
   background-color: #d4edda; /* 绿色背景 */
-  border-color: #3f704a; /* 绿色边框 */
+  border-color: #5ebd73; /* 绿色边框 */
   color: #155724; /* 绿色文字 */
 }
 
@@ -475,6 +478,7 @@ textarea {
   display: flex;
   align-items: center;
   position: relative;
+  padding-left: 0em;
 }
 
 /* 隐藏默认的 checkbox */
@@ -538,5 +542,16 @@ textarea {
   content: "DDP";
 }
 
+.bi-clipboard {
+  color: #212325;
+}
+
+.bi-clipboard:hover {
+  color: #007bff;
+}
 
 
+#import-data-btn {
+  margin-top: 15px;
+  margin-bottom: 15px;
+}

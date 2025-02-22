@@ -94,12 +94,8 @@
             <td class="result-cell">0 kg</td>
             <td class="result-cell">0 cm</td>
             <td class="button-cell">
-              <button class="btn btn-success btn-sm" onclick="addRow()">
-                +
-              </button>
-              <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">
-                -
-              </button>
+              <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
+              <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
             </td>
           </tr>
         </tbody>
@@ -108,45 +104,28 @@
       <!-- 总结区域 -->
       <div class="result my-4">
         <div class="row">
-          <div class="col">
-            <p>总箱数: <span id="total-quantity">0</span> 箱</p>
-          </div>
-          <div class="col">
-            <p>总体积: <span id="total-volume">0.00</span> cbm</p>
-          </div>
-          <div class="col">
-            <p>总实重: <span id="total-weight">0</span> kg</p>
-          </div>
-          <div class="col">
-            <p>总材积重: <span id="total-dimension-weight">0</span> kg</p>
-          </div>
-          <div class="col">
-            <p>计费重: <span id="billing-weight">0</span> kg</p>
-          </div>
-          <div class="col">
-            <p>泡比: <span id="volume-ratio">0.00</span></p>
-          </div>
+          <div class="col"><p>总箱数: <span id="total-quantity">0</span> 箱</p></div>
+          <div class="col"><p>总体积: <span id="total-volume">0.00</span> cbm</p></div>
+          <div class="col"><p>总实重: <span id="total-weight">0</span> kg</p></div>
+          <div class="col"><p>总材积重: <span id="total-dimension-weight">0</span> kg</p></div>
+          <div class="col"><p>计费重: <span id="billing-weight">0</span> kg</p></div>
+          <div class="col"><p>泡比: <span id="volume-ratio">0.00</span></p></div>
         </div>
-      </div>
-      
-      <!-- 新增文本区域 -->
+      </div>  
+      <!-- 警告信息文本域 -->
       <div class="form-group mt-3">
         <label for="box-warnings" class = "labeltext">警告信息</label>
         <textarea id="box-warnings" class="form-control no-warnings" rows="3" readonly></textarea>
       </div>
       <br>
-      <button id="import-data-btn" class="btn btn-outline-dark" onclick="importData()">
-        导入数据
-      </button>
+      <button id="import-data-btn" class="btn btn-outline-dark" onclick="importData()">导入数据</button>
       <!-- 报价计算模块 -->
       <div id="quote-calculation" class="my-4">
         <h3 class="text-center">报价计算</h3>
         <form>
-          <!-- 新增表格 -->
-
-          <!-- 新增文本输入框 -->
+          <!-- 报价识别：箱数、重量、体积 -->
           <div>
-            <label for="package-info-input" class = "labeltext">箱数、实重、体积识别</label>
+            <label for="package-info-input" class = "labeltext">报价识别</label>
             <input type="text" id="package-info-input" class="form-control" placeholder="例如: 21ctns 8.3 kg 2.126 cbm"
               oninput="parsePackageInfo()" />
           </div>

@@ -21,18 +21,6 @@ function getNextFriday() {
     return `${month.toString().padStart(2, '0')}/${day.toString().padStart(2, '0')}`;
 }
 
-// 复制备注内容
-function copyToClipboard() {
-    // 获取备注文本框的内容
-    let notes = document.getElementById('notes');
-
-    // 选中备注内容
-    notes.select();
-    notes.setSelectionRange(0, 99999); // 对于移动设备需要这个步骤
-
-    // 执行复制操作
-    document.execCommand('copy');
-}
 
 // 插入快捷回复
 function insertQuickReply() {
@@ -69,10 +57,20 @@ function insertQuickReply() {
 }
 
 
-function copyToClipboard(textareaId) {
-    const textArea = document.getElementById(textareaId); // 获取目标文本框
-    textArea.select(); // 选择文本
-    document.execCommand('copy'); // 执行复制命令
+function copyToClipboard(button, text) {
+    navigator.clipboard.writeText(text).then(() => {
+        // 修改按钮样式
+        button.innerHTML = '<i class="bi bi-check"></i>';
+        button.classList.add('copied');
+
+        // 2 秒后恢复按钮样式
+        setTimeout(() => {
+            button.innerHTML = '<i class="bi bi-clipboard"></i>';
+            button.classList.remove('copied');
+        }, 2000);
+    }).catch(err => {
+        console.error('复制失败：', err);
+    });
 }
 
 /**

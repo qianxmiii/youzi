@@ -181,17 +181,6 @@ function updateQuote() {
     let isMOQ = document.getElementById('MOQ').checked;
     let isDDU = document.getElementById('ddu_check').checked;
 
-    const dduCheckbox = document.getElementById("ddu_check");
-
-    // 根据开关状态更新报价逻辑
-    if (dduCheckbox.checked) {
-        console.log("DDU 已选中");
-        // DDU 逻辑
-    } else {
-        console.log("DDP 已选中");
-        // DDP 逻辑
-    }
-
     // 获取提货费
     let pickupFeeCheck = document.getElementById("pickup-fee-checkbox").checked;
     pickUpFee = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee").value) || 0 : 0;
@@ -630,22 +619,7 @@ function calculateCost() {
     updatePaginationButtons(filteredTerms.length);
 }
 
- // 复制功能
- function copyToClipboard(button, text) {
-     navigator.clipboard.writeText(text).then(() => {
-         // 修改按钮样式
-         button.innerHTML = '<i class="bi bi-check"></i>';
-         button.classList.add('copied');
-
-         // 2 秒后恢复按钮样式
-         setTimeout(() => {
-             button.innerHTML = '<i class="bi bi-clipboard"></i>';
-             button.classList.remove('copied');
-         }, 2000);
-     }).catch(err => {
-         console.error('复制失败：', err);
-     });
- }
+  
 
  // 分类筛选
  function filterTerms(category, button) {

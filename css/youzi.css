@@ -126,19 +126,10 @@ button .icon {
   font-weight: bold;
 }
 
-/* 备注框的容器 */
 .textarea-container {
   position: relative;
 }
 
-/* 右上角定位复制按钮 */
-#copy-btn {
-  position: absolute;
-  top: 30px;
-  right: 30px;
-  padding: 10px;
-  font-size: 12px;
-}
 
 /* 定位备注框 */
 .textarea-container {

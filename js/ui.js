@@ -236,21 +236,3 @@ function toggleMOQInput() {
 }
 
 
-// 修改 DDU/DDP 切换的样式逻辑
-function toggleDDUCheckbox() {
-    const dduCheckbox = document.getElementById("ddu_check");
-    const ddpText = document.querySelector(".ddp-text");
-    const dduText = document.querySelector(".ddu-text");
-
-    if (dduCheckbox.checked) {
-        ddpText.style.display = "none";
-        dduText.style.display = "inline";
-    } else {
-        ddpText.style.display = "inline";
-        dduText.style.display = "none";
-    }
-}
-
-// 初始化 DDU/DDP 切换
-document.getElementById("ddu_check").addEventListener("change", toggleDDUCheckbox);
-toggleDDUCheckbox(); // 初始化时调用一次

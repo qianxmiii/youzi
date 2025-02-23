@@ -374,17 +374,22 @@ td input.form-control {
   font-weight: bold;
 }
 
-/* 选中标签按钮样式 */
-#termTagBtns .btn.active {
-  background-color: #007bff; /* 选中背景色 */
-  color: #fff; /* 选中文字颜色 */
-  border-color: #007bff; /* 选中边框颜色 */
+#termTagBtns .btn.selected {
+  background-color:  #007bff !important;
+  color: #fff !important;
+  border-color: #007bff !important;
 }
 
-/* 标签按钮鼠标悬停样式 */
 #termTagBtns .btn:hover {
-  color: var(--hover-color) !important; /* 文字颜色 */
+  color: var(--hover-color)!important; /* 文字颜色 */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
 }
+
+#termTagBtns .btn.selected:hover {
+  color: var(--background-light)!important; /* 文字颜色 */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
+}
+
 
 /* 根据标签未筛选到属于结果显示 */
 #termModal .no-results {

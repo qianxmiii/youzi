@@ -479,13 +479,14 @@ function parseDimensions() {
     calculate();
 }
 
-// 识别报价信息
+// 识别地址、箱数、重量、体积信息
 function parsePackageInfo() {
     const input = document.getElementById("package-info-input").value.trim();
     // 使用正则表达式解析箱数、重量、体积
     const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+    const addressRegex = /\b([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字
 
     // 提取箱数
     const quantityMatch = input.match(quantityRegex);
@@ -508,10 +509,16 @@ function parsePackageInfo() {
         }
     }
 
+    // 识别地址代码
+    const addressMatch = input.match(addressRegex);
+    if (addressMatch && addressToPostcode.hasOwnProperty(addressMatch[0].toUpperCase())) {
+        document.getElementById('address').value = addressMatch[0].toUpperCase();
+    }
+
     document.getElementById('quantity').value = quantity;
     document.getElementById('weight').value = Math.ceil(weight);
     document.getElementById('volume').value = new Decimal(volume).toDecimalPlaces(2, Decimal.ROUND_UP);
-
+    
     // 触发计算
     updateQuote();
 }
@@ -739,7 +746,7 @@ function getWeightIndex(weight) {
     return 4; // 101KG+
 }
 
-// 动态生成价格表格
+// 动态生成快递派价格表格
 function renderPriceTable() {
     const channel = document.getElementById("t4_channel").value;
     const southChinaTableElement = document.getElementById("southChinaPriceTable").getElementsByTagName("tbody")[0];
@@ -935,13 +942,9 @@ function updateTagButtonStyles() {
 
             // 修改选中效果
             if (tagMatch) {
-                button.style.backgroundColor = "#007bff"; // 选中背景色
-                button.style.color = "#fff"; // 选中文字颜色
-                button.style.borderColor = "#007bff"; // 选中边框颜色
+                button.classList.add("selected");
             } else {
-                button.style.backgroundColor = "#f8f9fa"; // 默认背景色
-                button.style.color = "#333"; // 默认文字颜色
-                button.style.borderColor = "#ccc"; // 默认边框颜色
+                button.classList.remove("selected");
             }
         }
     });

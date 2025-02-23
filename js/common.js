@@ -56,8 +56,8 @@ function insertQuickReply() {
     document.getElementById('english-message').value = englishMessage;
 }
 
-
-function copyToClipboard(button, text) {
+/* 复制术语英文 */
+function copyTerm(button, text) {
     navigator.clipboard.writeText(text).then(() => {
         // 修改按钮样式
         button.innerHTML = '<i class="bi bi-check"></i>';

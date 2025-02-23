@@ -315,6 +315,10 @@ td input.form-control {
   color: #fff;
 }
 
+.nav-item {
+  font-weight: bold;
+}
+
 /* Tab1 常用功能 == commonTab */
 /* 术语页面 */
 /* 术语卡片样式 */
@@ -433,13 +437,13 @@ td input.form-control {
 
 /* Tab3 快递派查价 == expressQueryTab */
 /* 报价表格 */
-#expressQuery .price-tables-container {
+#expressQueryTab .price-tables-container {
   display: flex; /* 使用 flexbox 布局 */
   gap: 20px; /* 两个表格之间的间距 */
   justify-content: space-between; /* 使两个表格均匀分布 */
 }
 
-#expressQuery .price-table-container {
+#expressQueryTab .price-table-container {
   flex: 1; /* 使两个表格平分宽度 */
   background-color: #f8f9fa; /* 浅灰色背景 */
   padding: 20px;
@@ -447,36 +451,36 @@ td input.form-control {
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
 }
 
-#expressQuery .price-table-container h4 {
+#expressQueryTab .price-table-container h4 {
   margin-bottom: 15px;
   font-size: 18px;
   font-weight: bold;
   color: #333;
 }
 
-#expressQuery .price-table-container .table {
+#expressQueryTab .price-table-container .table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 10px;
 }
 
-#expressQuery .price-table-container .table th, .table td {
+#expressQueryTab .price-table-container .table th, .table td {
   padding: 12px;
   text-align: center;
   border: 1px solid #ddd;
 }
 
-#expressQuery .price-table-container .table th {
+#expressQueryTab .price-table-container .table th {
   background-color: #007bff; /* 蓝色背景 */
   color: white; /* 白色文字 */
   font-weight: bold;
 }
 
-#expressQuery .price-table-container .table tbody tr:hover {
+#expressQueryTab .price-table-container .table tbody tr:hover {
   background-color: #f1f1f1; /* 鼠标悬停时的背景色 */
 }
 
-#expressQuery .price-table-container .highlight {
+#expressQueryTab .price-table-container .highlight {
   background-color: #ffcc00; /* 黄色背景 */
   font-weight: bold; /* 加粗字体 */
   padding: 2px 5px; /* 增加内边距 */

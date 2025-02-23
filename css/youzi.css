@@ -73,6 +73,7 @@ th.hidden {
   display: flex;
   justify-content: center;
 }
+
 .pagination button {
   margin: 0 5px;
 }
@@ -105,7 +106,7 @@ input[type="number"]::-webkit-inner-spin-button {
 /* 箱规计算模块 */
 /* ----------- */
 
-/* 按钮样式 */
+/* 表格按钮样式 */
 td button {
   width: 35px; /* 设置按钮宽度 */
   height: 35px; /* 设置按钮高度 */
@@ -114,31 +115,10 @@ td button {
   align-items: center; /* 垂直居中 */
   justify-content: center; /* 水平居中 */
   border-radius: 50%; /* 圆形按钮 */
-  background-color: #3498db; /* 按钮背景色 */
   border: none; /* 去掉边框 */
-  color: white; /* 按钮文字颜色 */
-  font-size: 24px; /* 字体大小 */
   transition: background-color 0.3s ease, box-shadow 0.3s ease; /* 添加过渡效果 */
   cursor: pointer; /* 鼠标指针效果 */
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 添加阴影效果 */
-}
-
-/* 悬停时按钮的背景色变化和阴影效果 */
-button:hover {
-  background-color: #0b5ed7; /* 悬停时背景色变深 */
-  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.2); /* 悬停时加大阴影 */
-  color: white !important;
-}
-
-/* 点击时的效果 */
-button:active {
-  background-color: #0b5ed7; /* 按下时按钮颜色变暗 */
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1); /* 按下时减小阴影 */
-}
-
-/* 为按钮中的图标设置大小 */
-button .icon {
-  font-size: 24px; /* 图标大小 */
 }
 
 /* 优化按钮的响应式布局 */
@@ -153,10 +133,12 @@ button .icon {
   }
 }
 
+/* 表格文本样式 */
 td input.form-control {
   text-align: center;
 }
 
+/* 表格显示文本样式 */
 .form-control.result {
   border: none;
   outline: none;
@@ -212,19 +194,6 @@ td input.form-control {
   background-color: #d4edda; /* 绿色背景 */
   border-color: #5ebd73; /* 绿色边框 */
   color: #155724; /* 绿色文字 */
-}
-
-.copy-btn {
-  margin-left: 10px;
-  cursor: pointer;
-  color: #0d6efd;
-  transition: color 0.3s;
-}
-.copy-btn:hover {
-  color: #0b5ed7;
-}
-.copy-btn.copied {
-  color: green;
 }
 
 /* ----------- */
@@ -343,6 +312,7 @@ td input.form-control {
 .nav-tabs .nav-link:hover {
   background-color: var(--hover-color);
   border-color: var(--hover-color);
+  color: #fff;
 }
 
 /* Tab1 常用功能 == commonTab */

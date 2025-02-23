@@ -1,45 +1,23 @@
 :root {
-  --primary-color: #2c3e50; /* 主色 */
-  --secondary-color: #3498db; /* 辅助色 */
-  --success-color: #27ae60; /* 成功色 */
-  --warning-color: #f1c40f; /* 警告色 */
-  --danger-color: #e74c3c; /* 错误色 */
+  --primary-color: #2c3e50;
+  --secondary-color: #3498db;
+  --success-color: #27ae60;
+  --warning-color: #f1c40f;
+  --danger-color: #e74c3c;
+  --hover-color: #0b5ed7;
+  --background-light: #f8f9fa;
+  --border-light: #ffffff;
+  --border-grey: #dedbdb;
+  --border-dark: #373434;
 }
 
-.result-cell.highlight-red {
-  color: var(--danger-color);
-  background: rgba(231, 76, 60, 0.1);
-}
-
-.volume-ratio-indicator {
-  display: inline-block;
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  margin-left: 0.5rem;
-}
-
-.narrow-column {
-  width: 120px;
-}
-
-.table th,
-.table td {
-  text-align: center;
-}
-
-.result-cell {
-  text-align: center;
-}
-
-.highlight-red {
-  color: #d32f2f;
-}
-
+/* 基础样式 */
+/* 通用容器样式 */
 .container {
   margin-top: 20px;
 }
 
+/* 功能模块样式 */
 .module {
   padding: 20px;
   background-color: #f8f9fa; /* 浅灰色背景 */
@@ -47,21 +25,69 @@
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
 }
 
-.labeltext {
-  font-weight: bold; /* 加粗标签文字 */
+/* 小标题样式 */
+.subtitle {
+  font-weight: bold;
+  margin-bottom: 5px;
 }
 
-/* 调整下拉框之间的间距 */
-.channel-dropdown {
-  margin-bottom: 15px; /* 下拉框之间的垂直间距 */
+/* 文本域样式 */
+textarea {
+  margin-top: 10px;
 }
 
-/* 调整标签样式 */
-.channel-dropdown label {
-  font-weight: bold; /* 加粗标签文字 */
-  margin-bottom: 5px; /* 标签与下拉框之间的间距 */
+/* 表格样式 */
+.table th,
+.table td {
+  text-align: center;
 }
 
+/* 隐藏列 */
+td.hidden,
+th.hidden {
+  width: 0;
+  padding: 0; /* 可选，移除内边距 */
+  border: none; /* 可选，移除边框 */
+  display: none; /* 可选，隐藏列 */
+}
+
+/* 单元格高亮突出显示 */
+.result-cell.highlight-red {
+  color: var(--danger-color);
+  font-weight: bold;
+}
+.narrow-column {
+  width: 120px;
+}
+
+/* 下拉框模块样式 */
+/* 下拉框间距 */
+.margin-vertical  {
+  margin-top: 10px;
+  margin-bottom: 10px; /* 下拉框之间的垂直间距 */
+}
+
+/* 翻页按钮 */
+.pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+.pagination button {
+  margin: 0 5px;
+}
+
+/* Tooltip样式 */
+.tooltip-inner {
+  max-width: 400px; /* 设置 Tooltip 的最大宽度 */
+  width: auto; /* 允许 Tooltip 根据内容自动调整宽度 */
+  padding: 10px; /* 增加内边距，使内容更易读 */
+  font-size: 14px; /* 调整字体大小 */
+  text-align: left; /* 左对齐文本 */
+  white-space: pre-wrap; /* 允许文本换行 */
+}
+
+/* 优化样式 */
 /* 去掉数字输入框的上下箭头 */
 input[type="number"] {
   -moz-appearance: textfield; /* Firefox */
@@ -75,12 +101,15 @@ input[type="number"]::-webkit-inner-spin-button {
   margin: 0;
 }
 
-/* 设置按钮为正方形，并进行样式优化 */
+/* ----------- */
+/* 箱规计算模块 */
+/* ----------- */
+
+/* 按钮样式 */
 td button {
   width: 35px; /* 设置按钮宽度 */
   height: 35px; /* 设置按钮高度 */
   padding: 0; /* 去掉默认内边距 */
-  text-align: center; /* 确保文本居中 */
   display: flex; /* 使用 flexbox 来确保内容居中 */
   align-items: center; /* 垂直居中 */
   justify-content: center; /* 水平居中 */
@@ -124,26 +153,6 @@ button .icon {
   }
 }
 
-.btn-danger {
-  margin-left: 10px;
-}
-
-/* 如果需要的话，可以在这里添加通用样式 */
-.result-cell.highlight-red {
-  color: #d32f2f;
-  font-weight: bold;
-}
-
-.textarea-container {
-  position: relative;
-}
-
-
-/* 定位备注框 */
-.textarea-container {
-  position: relative;
-}
-
 td input.form-control {
   text-align: center;
 }
@@ -154,24 +163,18 @@ td input.form-control {
   background: transparent; /* 背景透明 */
 }
 
+/* 文本转换为大写 */
 .form-control.uppercase {
   text-transform: uppercase;
 }
 
-td.hidden,
-th.hidden {
-  width: 0;
-  padding: 0; /* 可选，移除内边距 */
-  border: none; /* 可选，移除边框 */
-  display: none; /* 可选，隐藏列 */
-}
-
-/* Style adjustments for checkboxes */
+/* 复选框样式 */
 .form-group.row {
   display: flex;
   justify-content: space-between; /* Ensure that the checkboxes are spaced evenly */
 }
 
+/* 复选框文字样式 */
 .form-check-label {
   font-size: 16px; /* Adjust font size for readability */
   display: flex;
@@ -182,259 +185,6 @@ th.hidden {
 .form-check-input {
   margin-right: 10px; /* Space between the checkbox and label */
   transform: scale(1.2); /* Slightly larger checkbox for better visibility */
-}
-
-.d-flex{
-  display: flex;
-  align-items: center; /* Vertically center the checkboxes */
-  padding-top: 1em;
-  padding-bottom: 2em;
-  gap: 10px;
-}
-
-/* Style for quick reply dropdown and button */
-.input-group {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-#quick-reply {
-  flex-grow: 1; /* Allow dropdown to take most of the space */
-}
-
-/* Style for the quick reply section */
-.input-group {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-#quick-reply {
-  flex-grow: 1;
-}
-
-textarea {
-  margin-top: 10px;
-}
-
-/* Optional: Make the message area more distinct */
-#chinese-message,
-#english-message {
-  background-color: #f8f9fa;
-  border: 1px solid #ddd;
-  font-size: 14px;
-  resize: vertical;
-}
-
-/* 右上角定位复制按钮 */
-#quick-btn {
-  position: absolute;
-  top: 30px;
-  right: 30px;
-  padding: 10px;
-  font-size: 12px;
-}
-
-/* 计算动画 */
-.value-updated {
-  animation: highlightUpdate 0.3s ease;
-}
-
-@keyframes highlightUpdate {
-  0% {
-    background: rgba(var(--secondary-color), 0.3);
-  }
-  100% {
-    background: transparent;
-  }
-}
-
-/* Tab */
-.tab-content {
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-top: none;
-}
-.nav-tabs .nav-link {
-  border: 1px solid #ddd;
-  border-bottom: none;
-  margin-right: 5px;
-}
-.nav-tabs .nav-link.active {
-  background-color: #fff;
-  border-bottom: 1px solid #fff;
-}
-
-.nav-tabs .nav-link:hover {
-  background-color: #0d6efd;
-  border-color: #0d6efd;
-}
-
-/* 术语页面 */
-.tags {
-  margin-top: 10px;
-}
-
-.tags .badge {
-  margin-right: 5px;
-  font-size: 0.8em;
-}
-
-/* 术语卡片样式 */
-.term-card {
-  border: 1px solid #ddd;
-  border-radius: 5px;
-  padding: 10px;
-  margin-bottom: 10px;
-}
-
-.term-card h5 {
-  font-size: 1.2em;
-  margin-bottom: 5px;
-}
-
-.term-card p {
-  margin-bottom: 0;
-}
-.no-results {
-  display: none;
-  text-align: center;
-  color: #666;
-  font-size: 16px;
-  margin-top: 20px;
-}
-.category-buttons {
-  margin-bottom: 15px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px; /* 按钮之间的间距 */
-}
-
-.category-buttons .btn {
-  margin-right: 5px;
-  margin-bottom: 5px;
-}
-
-.category-buttons .btn.active {
-  background-color: #0d6efd;
-  color: white;
-}
-.copy-btn {
-  margin-left: 10px;
-  cursor: pointer;
-  color: #0d6efd;
-  transition: color 0.3s;
-}
-.copy-btn:hover {
-  color: #0b5ed7;
-}
-.copy-btn.copied {
-  color: green;
-}
-.pagination {
-  margin-top: 20px;
-  display: flex;
-  justify-content: center;
-}
-.pagination button {
-  margin: 0 5px;
-}
-
-/* 增加 Tooltip 的宽度 */
-.tooltip-inner {
-  max-width: 400px; /* 设置 Tooltip 的最大宽度 */
-  width: auto; /* 允许 Tooltip 根据内容自动调整宽度 */
-  padding: 10px; /* 增加内边距，使内容更易读 */
-  font-size: 14px; /* 调整字体大小 */
-  text-align: left; /* 左对齐文本 */
-  white-space: pre-wrap; /* 允许文本换行 */
-}
-
-/* 添加表格样式 */
-.price-tables-container {
-  display: flex; /* 使用 flexbox 布局 */
-  gap: 20px; /* 两个表格之间的间距 */
-  justify-content: space-between; /* 使两个表格均匀分布 */
-}
-
-.price-table-container {
-  flex: 1; /* 使两个表格平分宽度 */
-  background-color: #f8f9fa; /* 浅灰色背景 */
-  padding: 20px;
-  border-radius: 8px; /* 圆角边框 */
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
-}
-
-.price-table-container h4 {
-  margin-bottom: 15px;
-  font-size: 18px;
-  font-weight: bold;
-  color: #333;
-}
-
-.price-table-container .table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-}
-
-.price-table-container .table th, .table td {
-  padding: 12px;
-  text-align: center;
-  border: 1px solid #ddd;
-}
-
-.price-table-container .table th {
-  background-color: #007bff; /* 蓝色背景 */
-  color: white; /* 白色文字 */
-  font-weight: bold;
-}
-
-.price-table-container .table tbody tr:hover {
-  background-color: #f1f1f1; /* 鼠标悬停时的背景色 */
-}
-
-.price-table-container .highlight {
-  background-color: #ffcc00; /* 黄色背景 */
-  font-weight: bold; /* 加粗字体 */
-  padding: 2px 5px; /* 增加内边距 */
-  border-radius: 3px; /* 圆角边框 */
-  animation: highlightAnimation 1s ease-in-out; /* 动画效果 */
-}
-
-@keyframes highlightAnimation {
-  0% {
-      background-color: #ffcc00;
-  }
-  50% {
-      background-color: #ffeb3b;
-  }
-  100% {
-      background-color: #ffcc00;
-  }
-}
-
-/* 默认按钮样式 */
-#tagButtons .btn {
-  color: #333; /* 文字颜色 */
-  background-color: #f8f9fa; /* 背景颜色 */
-  border-color: #ccc; /* 边框颜色 */
-  transition: all 0.3s ease; /* 添加过渡效果 */
-}
-
-/* 选中按钮样式 */
-#tagButtons .btn.active {
-  background-color: #007bff; /* 选中背景色 */
-  color: #fff; /* 选中文字颜色 */
-  border-color: #007bff; /* 选中边框颜色 */
-}
-
-/* MOQ 输入框样式 */
-#moq-input {
-    width: 80px; /* 输入框宽度 */
 }
 
 /* 警告信息文本区域样式 */
@@ -464,16 +214,45 @@ textarea {
   color: #155724; /* 绿色文字 */
 }
 
-/* 标签样式 */
-.tags .badge {
-  margin-right: 5px; /* 标签之间的间距 */
-  padding: 5px 10px; /* 内边距 */
-  border-radius: 12px; /* 圆角 */
-  font-size: 12px; /* 字体大小 */
-  font-weight: normal; /* 字体粗细 */
+.copy-btn {
+  margin-left: 10px;
+  cursor: pointer;
+  color: #0d6efd;
+  transition: color 0.3s;
+}
+.copy-btn:hover {
+  color: #0b5ed7;
+}
+.copy-btn.copied {
+  color: green;
 }
 
-/* 开关按钮容器 */
+/* ----------- */
+/* 导入数据 */
+/* ----------- */
+#import-data-btn {
+  margin-top: 15px;
+  margin-bottom: 15px;
+}
+
+/* ----------- */
+/* 报价计算模块 */
+/* ----------- */
+
+/* 多选模块 如MOQ */
+.option-items{
+  display: flex;
+  align-items: center; /* Vertically center the checkboxes */
+  padding: 1em 0 2em;
+  gap: 10px;
+}
+
+/* MOQ 输入框样式 */
+#moq-input {
+  width: 80px; /* 输入框宽度 */
+}
+
+/* DDP和DDP滑块 */
 .form-switch {
   display: flex;
   align-items: center;
@@ -502,7 +281,6 @@ textarea {
   box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.1);
 }
 
-/* 滑块 */
 .switch-slider {
   width: 3em; /* 让滑块宽度适中 */
   height: 2.2em; /* 让滑块稍小于外壳 */
@@ -542,16 +320,203 @@ textarea {
   content: "DDP";
 }
 
-.bi-clipboard {
+/* ----------- */
+/* Tab模块     */
+/* ----------- */
+
+/* Tab选项卡 */
+.tab-content {
+  padding: 20px;
+  border: 1px solid var(--border-grey);
+  border-top: none;
+}
+.nav-tabs .nav-link {
+  border: 1px solid var(--border-grey);
+  border-bottom: none;
+  margin-right: 5px;
+}
+.nav-tabs .nav-link.active {
+  background-color: var(--background-light);
+  border-bottom: 1px solid var(--border-light);
+}
+
+.nav-tabs .nav-link:hover {
+  background-color: var(--hover-color);
+  border-color: var(--hover-color);
+}
+
+/* Tab1 常用功能 == commonTab */
+/* 术语页面 */
+/* 术语卡片样式 */
+#termModal .term-card {
+  border: 1px solid #ddd;
+  border-radius: 5px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+
+#termModal .term-card h5 {
+  font-size: 1.2em;
+  margin-bottom: 5px;
+}
+
+#termModal .term-card p {
+  margin-bottom: 0;
+}
+
+/* 筛选按钮样式 */
+#termModal .category-buttons {
+  margin-bottom: 15px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px; /* 按钮之间的间距 */
+}
+
+#termModal .category-buttons .btn {
+  margin-right: 5px;
+  margin-bottom: 5px;
+}
+
+#termModal .category-buttons .btn.active {
+  background-color: #0d6efd;
+  color: white;
+}
+
+/* 标签样式 */
+#termModal .tags {
+  margin-top: 10px;
+}
+
+#termModal .tags .badge {
+  margin-right: 5px; /* 标签之间的间距 */
+  padding: 5px 10px; /* 内边距 */
+  border-radius: 12px; /* 圆角 */
+  font-size: 12px; /* 字体大小 */
+  font-weight: normal; /* 字体粗细 */
+}
+
+/* 默认标签按钮样式 */
+#termTagBtns .btn {
+  color: #333; /* 文字颜色 */
+  background-color: #f8f9fa; /* 背景颜色 */
+  border-color: #ccc; /* 边框颜色 */
+  transition: all 0.3s ease; /* 添加过渡效果 */
+  font-weight: bold;
+}
+
+/* 选中标签按钮样式 */
+#termTagBtns .btn.active {
+  background-color: #007bff; /* 选中背景色 */
+  color: #fff; /* 选中文字颜色 */
+  border-color: #007bff; /* 选中边框颜色 */
+}
+
+/* 标签按钮鼠标悬停样式 */
+#termTagBtns .btn:hover {
+  color: var(--hover-color) !important; /* 文字颜色 */
+}
+
+/* 根据标签未筛选到属于结果显示 */
+#termModal .no-results {
+  display: none;
+  text-align: center;
+  color: #666;
+  font-size: 16px;
+  margin-top: 20px;
+}
+
+/* 复制按钮样式 */
+#termModal .bi-clipboard {
   color: #212325;
 }
 
-.bi-clipboard:hover {
+#termModal .bi-clipboard:hover {
   color: #007bff;
 }
 
+/* Tab2 快捷回复 == quickReplyTab */
+/* 快捷回复选择框 */
+.input-group {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 
-#import-data-btn {
-  margin-top: 15px;
+#quick-reply {
+  flex-grow: 1; /* Allow dropdown to take most of the space */
+}
+
+/* 快捷回复文本域 */
+#chinese-message,
+#english-message {
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  font-size: 14px;
+  resize: vertical;
+}
+
+/* Tab3 快递派查价 == expressQueryTab */
+/* 报价表格 */
+#expressQuery .price-tables-container {
+  display: flex; /* 使用 flexbox 布局 */
+  gap: 20px; /* 两个表格之间的间距 */
+  justify-content: space-between; /* 使两个表格均匀分布 */
+}
+
+#expressQuery .price-table-container {
+  flex: 1; /* 使两个表格平分宽度 */
+  background-color: #f8f9fa; /* 浅灰色背景 */
+  padding: 20px;
+  border-radius: 8px; /* 圆角边框 */
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
+}
+
+#expressQuery .price-table-container h4 {
   margin-bottom: 15px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+}
+
+#expressQuery .price-table-container .table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+#expressQuery .price-table-container .table th, .table td {
+  padding: 12px;
+  text-align: center;
+  border: 1px solid #ddd;
+}
+
+#expressQuery .price-table-container .table th {
+  background-color: #007bff; /* 蓝色背景 */
+  color: white; /* 白色文字 */
+  font-weight: bold;
+}
+
+#expressQuery .price-table-container .table tbody tr:hover {
+  background-color: #f1f1f1; /* 鼠标悬停时的背景色 */
+}
+
+#expressQuery .price-table-container .highlight {
+  background-color: #ffcc00; /* 黄色背景 */
+  font-weight: bold; /* 加粗字体 */
+  padding: 2px 5px; /* 增加内边距 */
+  border-radius: 3px; /* 圆角边框 */
+  animation: highlightAnimation 1s ease-in-out; /* 动画效果 */
+}
+
+@keyframes highlightAnimation {
+  0% {
+      background-color: #ffcc00;
+  }
+  50% {
+      background-color: #ffeb3b;
+  }
+  100% {
+      background-color: #ffcc00;
+  }
 }

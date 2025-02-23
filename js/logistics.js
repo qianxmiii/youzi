@@ -81,14 +81,13 @@ function calculate() {
         row.querySelector('.result-cell:nth-child(8)').innerText = `${rowWeight} kg`;
         row.querySelector('.result-cell:nth-child(9)').innerText = `${dimensionWeight} kg`;
         row.querySelector('.result-cell:nth-child(10)').innerText = `${perimeter} cm`;
+        
         // 高亮显示周长
         let perimeterCell = row.querySelector('.result-cell:nth-child(10)');
         if (perimeter.greaterThanOrEqualTo(260)) {
-            perimeterCell.style.color = '#d32f2f';
-            perimeterCell.style.fontWeight = 'bold';
+            perimeterCell.classList.add('highlight-red');
         } else {
-            perimeterCell.style.color = '';
-            perimeterCell.style.fontWeight = '';
+            perimeterCell.classList.remove('highlight-red');
         }
 
         // 累加总计
@@ -595,7 +594,7 @@ function calculateCost() {
                     <h5 data-bs-toggle="tooltip" data-bs-title="${term.definition || '暂无释义'}">${term.chinese}</h5>
                     <p data-bs-toggle="tooltip" data-bs-title="${term.definition || '暂无释义'}">
                         ${term.english}
-                        <span class="copy-btn" onclick="copyToClipboard(this, '${term.english}')">
+                        <span class="copy-btn" onclick="copyTerm(this, '${term.english}')">
                             <i class="bi bi-clipboard"></i>
                         </span>
                     </p>
@@ -927,7 +926,7 @@ function toggleTagFilter(tag) {
 
 // 更新标签按钮样式
 function updateTagButtonStyles() {
-    const tagButtons = document.querySelectorAll("#tagButtons button");
+    const tagButtons = document.querySelectorAll("#termTagBtns button");
     tagButtons.forEach(button => {
         const match = button.innerText.match(/^[^\(]+/);
         if (match) {
@@ -985,7 +984,7 @@ function getAllTags() {
 
 // 动态生成标签按钮
 function renderTagButtons() {
-    const tagButtonsContainer = document.getElementById("tagButtons");
+    const tagButtonsContainer = document.getElementById("termTagBtns");
     const tags = getAllTags();
     const tagCounts = getTagCounts();
 

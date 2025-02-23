@@ -235,4 +235,19 @@ function toggleMOQInput() {
     updateQuote();
 }
 
+/* 复制快捷回复 */
+function copyQuickReply(textareaId, btn) {
+    let textArea = document.getElementById(textareaId);
+    textArea.select();
+    document.execCommand("copy");
 
+    // 按钮变色 & 显示“已复制”文字
+    btn.textContent = "✅ 已复制";
+    btn.classList.add("btn-success");
+
+    // 1.5秒后恢复
+    setTimeout(() => {
+        btn.textContent = textareaId === "chinese-message" ? "复制" : "Copy";
+        btn.classList.remove("btn-success");
+    }, 1500);
+}

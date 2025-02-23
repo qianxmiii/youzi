@@ -48,12 +48,12 @@ function addRow() {
     let newRow = document.createElement('tr');
     newRow.classList.add('input-row');
     newRow.innerHTML = `
-        <td><input type="number" class="form-control length" placeholder="长 (cm)" oninput="calculate()"></td>
-        <td><input type="number" class="form-control width" placeholder="宽 (cm)" oninput="calculate()"></td>
-        <td><input type="number" class="form-control height" placeholder="高 (cm)" oninput="calculate()"></td>
-        <td><input type="number" class="form-control weight" placeholder="单箱实重 (kg)" oninput="calculate()"></td>
-        <td><input type="number" class="form-control quantity" placeholder="箱数" oninput="calculate()"></td>
-        <td class="result-cell">0.00 m³</td>
+        <td><input type="number" class="form-control length" oninput="calculate()"></td>
+        <td><input type="number" class="form-control width" oninput="calculate()"></td>
+        <td><input type="number" class="form-control height" oninput="calculate()"></td>
+        <td><input type="number" class="form-control weight" oninput="calculate()"></td>
+        <td><input type="number" class="form-control quantity" oninput="calculate()"></td>
+        <td class="result-cell">0.00 cbm</td>
         <td class="result-cell">0 kg</td> <!-- 新增列 -->
         <td class="result-cell">0 kg</td>
         <td class="result-cell">0 kg</td>

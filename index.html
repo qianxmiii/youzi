@@ -16,38 +16,44 @@
   <div class="container">
     <!-- 箱规计算模块 -->
     <div class = "module">
-      <h3 class="text-center">箱规计算</h3>
+      <!-- <h3 class="text-center">箱规计算</h3> -->
       <div id="calculator">
         <div class="row">
           <!-- 选择派送方式 -->
-          <div class="col-md-4 form-group subtitle">
-            <label for="delivery-method">选择派送方式</label>
-            <select id="delivery-method" class="form-control" oninput="calculate();">
-              <option value="卡派">卡派</option>
-              <option value="快递派">快递派</option>
-            </select>
+          <!-- 发货区域 -->
+          <div class="col-md-4">
+            <div class="form-floating">
+              <select class="form-select" id="delivery-method" oninput="calculate();">
+                <option value="卡派">卡派</option>
+                <option value="快递派">快递派</option>
+              </select>
+              <label for="delivery-method">派送方式</label>
+            </div>
           </div>
         
           <!-- 选择国家 -->
-          <div class="col-md-4 form-group subtitle">
-            <label for="cal-country">选择国家</label>
-            <select id="cal-country" class="form-control" oninput="calculate();">
-              <option value="US">美国</option>
-              <option value="CA">加拿大</option>
-              <option value="EU">欧洲</option>
-              <option value="UK">英国</option>
-            </select>
+          <div class="col-md-4">
+            <div class="form-floating">
+              <select class="form-select" id="cal-country" oninput="calculate();">
+                <option value="US">美国</option>
+                <option value="CA">加拿大</option>
+                <option value="EU">欧洲</option>
+                <option value="UK">英国</option>
+              </select>
+              <label for="cal-country">国家</label>
+            </div>
           </div>
-        
           <!-- 选择快递方式 -->
-          <div class="col-md-4 form-group subtitle">
-            <label for="cal-channel">选择快递方式</label>
-            <select id="cal-channel" class="form-control" oninput="calculate();">
-              <option value="UPS">UPS</option>
-              <option value="DPD">DPD</option>
-              <option value="GLS">GLS</option>
-              <option value="CWE">CWE</option>
-            </select>
+          <div class="col-md-4">
+            <div class="form-floating">
+              <select class="form-select" id="cal-channel" oninput="calculate();">
+                <option value="UPS">UPS</option>
+                <option value="DPD">DPD</option>
+                <option value="GLS">GLS</option>
+                <option value="CWE">CWE</option>
+              </select>
+              <label for="cal-channel">快递方式</label>
+            </div>
           </div>
         </div>
 
@@ -118,7 +124,7 @@
     <!-- 报价计算模块 -->
     <div class="module">
       <div id="quote-calculation" class="my-4">
-        <h3 class="text-center">报价计算</h3>
+        <!-- <h3 class="text-center">报价计算</h3> -->
         <form>
           <!-- 报价识别：箱数、重量、体积 -->
           <div>
@@ -138,7 +144,7 @@
               <tr>
                 <!-- 派送方式 -->
                 <td>
-                  <select id="delivery-method-select" class="form-control" oninput="updateQuote()" onchange="showTab('seaExpressCal');"></select>
+                  <select id="delivery-method-select" class="form-control" oninput="updateQuote()" onchange="showTab('expressQueryTab');"></select>
                 </td>
                 <!-- 国家 -->
                 <td>
@@ -381,7 +387,7 @@
 
           <!-- Tab2 == 快捷回复 Tab 内容 -->
           <div class="tab-pane fade" id="quickReplyTab" role="tabpanel" aria-labelledby="tab2-tab">
-            <div class="form-group">
+            <div class="form-group subtitle">
                 <label for="quick-reply">快捷回复</label>
                 <div class="input-group">
                     <select id="quick-reply" class="form-control" onchange="insertQuickReply()">
@@ -390,7 +396,7 @@
                 </div>
             </div>
             <!-- 中文回复 -->
-            <div class="form-group">
+            <div class="form-group subtitle">
                 <label for="chinese-message">中文消息</label>
                 <div class="input-group">
                     <textarea id="chinese-message" class="form-control" rows="4" placeholder="在此输入中文消息..."></textarea>
@@ -401,7 +407,7 @@
                 </div>
             </div>
             <!-- 英文回复 -->
-            <div class="form-group mt-3">
+            <div class="form-group mt-3 subtitle">
                 <label for="english-message">English Message</label>
                 <div class="input-group">
                     <textarea id="english-message" class="form-control" rows="4" placeholder="Enter your message in English..."></textarea>
@@ -505,35 +511,33 @@
                   </table>
                 </div>
               </div>
-
-              <div class="form-group">
-                <label>发货区域：</label>
-                <select id="t4_region" class="form-control">
-                  <option value="华南">华南</option>
-                  <option value="华东">华东</option>
-                </select>
+              <br>
+              <div class="row">
+                <!-- 发货区域 -->
+                <div class="col-md-6 mb-3">
+                  <div class="form-floating">
+                    <select class="form-select" id="t4_region">
+                      <option value="华东">华东</option>
+                      <option value="华南">华南</option>
+                    </select>
+                    <label for="t4_region">发货区域</label>
+                  </div>
+                </div>
+              
+                <!-- 渠道 -->
+                <div class="col-md-6 mb-3">
+                  <div class="form-floating">
+                    <select class="form-select" id="t4_channel" onchange="renderPriceTable()">
+                      <option value="美森正班">美森正班</option>
+                      <option value="美森加班">美森加班</option>
+                      <option value="普船">普船</option>
+                      <option value="空派不带电">空派不带电</option>
+                      <option value="空派带电">空派带电</option>
+                    </select>
+                    <label for="t4_channel">渠道</label>
+                  </div>
+                </div>
               </div>
-
-              <label>渠道：</label>
-              <select id="t4_channel" class="form-control" onchange="renderPriceTable()">
-                <option value="美森正班">美森正班</option>
-                <option value="美森加班">美森加班</option>
-                <option value="普船">普船</option>
-                <option value="空派不带电">空派不带电</option>
-                <option value="空派带电">空派带电</option>
-              </select>
-
-              <div class="form-group">
-                <label>邮政编码：</label>
-                <input type="text" id="t4_zipcode" class="form-control" placeholder="请输入美国邮编前1-2位">
-              </div>
-
-              <div class="form-group">
-                <label>重量（KG）：</label>
-                <input type="number" id="t4_weight" class="form-control" placeholder="请输入重量" min="1">
-              </div>
-
-              <button class="btn btn-primary" onclick="calculatePrice()">计算单价</button>
 
               <div class="result mt-3" id="t4_priceResult">单价：--</div>
             </div>

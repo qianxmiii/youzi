@@ -390,11 +390,14 @@
                 </div>
             </div>
             <!-- 中文回复 -->
-            <div class="form-group mt-3">
+            <div class="form-group">
                 <label for="chinese-message">中文消息</label>
                 <div class="input-group">
                     <textarea id="chinese-message" class="form-control" rows="4" placeholder="在此输入中文消息..."></textarea>
-                    <button class="btn btn-outline-success ms-2 copy-btn" onclick="copyQuickReply('chinese-message', this)">复制</button>
+                    <button class="btn btn-outline-success ms-2 copy-btn" onclick="copyQuickReply('chinese-message', this)">
+                      <i class="bi bi-clipboard"></i>
+                      复制
+                    </button>
                 </div>
             </div>
             <!-- 英文回复 -->
@@ -402,10 +405,14 @@
                 <label for="english-message">English Message</label>
                 <div class="input-group">
                     <textarea id="english-message" class="form-control" rows="4" placeholder="Enter your message in English..."></textarea>
-                    <button class="btn btn-outline-success ms-2 copy-btn" onclick="copyQuickReply('english-message', this)">Copy</button>
+                    <button class="btn btn-outline-success ms-2 copy-btn" onclick="copyQuickReply('english-message', this)">
+                      <i class="bi bi-clipboard"></i>
+                      Copy
+                    </button>
                 </div>
             </div>
           </div>
+          
 
           <!-- Tab 3 成本计算 -->
           <div class="tab-pane fade" id="costCalTab" role="tabpanel" aria-labelledby="tab3-tab">
@@ -543,13 +550,13 @@
       </div>
     </div><!-- Module 内容 -->
   </div>
-  
+
   <!-- 引入 Bootstrap JS -->
   <script src="js/common/popper.min.js"></script>
   <script src="js/common/bootstrap.min.js"></script>
   <!-- 引入 decimal.min.js -->
   <script src="js/common/decimal.min.js"></script>
-  <!-- 引入 data.js -->
+  <!-- 引入 数据配置文件 data.js -->
   <script src="js/data.js"></script>
   <!-- 引入外部脚本文件 -->
   <script src="js/common.js"></script>

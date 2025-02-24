@@ -82,6 +82,10 @@ function getTransitTime(country, channel, postcode) {
 
     if (country == "美国") {
         transitTime = getTransitTimeUSA(channel, postcode);
+        let isRemoteAddress = document.getElementById('remote-address').checked;
+        if (isRemoteAddress) {
+            transitTime = getRemoteTranTime(channel,transitTime);
+        }      
     } else if (country == "加拿大") {
         transitTime = getTransitTimeCA(channel, postcode);
     } else if (country == "欧洲") {
@@ -181,16 +185,6 @@ function getCN(channel) {
     }
 }
 
-// 生成随机颜色
-function getRandomColor() {
-    const letters = "0123456789ABCDEF";
-    let color = "#";
-    for (let i = 0; i < 6; i++) {
-        color += letters[Math.floor(Math.random() * 16)];
-    }
-    return color;
-}
-
 // 获取每个标签的术语数量
 function getTagCounts() {
     const allTerms = Object.values(termsByCategory).flat();
@@ -210,3 +204,23 @@ function getTagCounts() {
 
     return tagCounts;
 }
+
+function getRemoteTranTime(channel,transitTime) {
+    if (channel == 'Sea truck'){
+        transitTime = addDays(transitTime, 5);
+    }
+    return transitTime;
+}
+
+function addDays(transitTime, days) {
+    let match = transitTime.match(/(\d+)-(\d+)/); // 使用正则匹配两个数字
+  
+    if (match) {
+      let start = parseInt(match[1], 10) + days; // 提取第一个数字并加5
+      let end = parseInt(match[2], 10) + days;   // 提取第二个数字并加5
+  
+      return `${start}-${end}`; // 返回修改后的字符串
+    } else {
+      return transitTime; // 若格式不匹配，返回错误信息
+    }
+  }

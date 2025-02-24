@@ -77,14 +77,14 @@ function calculate() {
         let perimeter = new Decimal(sides[0]).add(new Decimal(sides[1])).mul(2).add(new Decimal(sides[2]));
 
         // 更新单行数据
-        row.querySelector('.result-cell:nth-child(6)').innerText = `${volume} cbm`;
-        row.querySelector('.result-cell:nth-child(7)').innerText = `${singleDimensionWeight} kg`; // 新增列
-        row.querySelector('.result-cell:nth-child(8)').innerText = `${rowWeight} kg`;
-        row.querySelector('.result-cell:nth-child(9)').innerText = `${dimensionWeight} kg`;
-        row.querySelector('.result-cell:nth-child(10)').innerText = `${perimeter} cm`;
+        row.querySelector('.result-cell:nth-child(7)').innerText = `${volume} cbm`;
+        row.querySelector('.result-cell:nth-child(8)').innerText = `${singleDimensionWeight} kg`; // 新增列
+        row.querySelector('.result-cell:nth-child(9)').innerText = `${rowWeight} kg`;
+        row.querySelector('.result-cell:nth-child(10)').innerText = `${dimensionWeight} kg`;
+        row.querySelector('.result-cell:nth-child(11)').innerText = `${perimeter} cm`;
         
         // 高亮显示周长
-        let perimeterCell = row.querySelector('.result-cell:nth-child(10)');
+        let perimeterCell = row.querySelector('.result-cell:nth-child(11)');
         if (perimeter.greaterThanOrEqualTo(260)) {
             perimeterCell.classList.add('highlight-red');
         } else {
@@ -466,9 +466,9 @@ function parseDimensions() {
     const currentRow = rows[rows.length - 1];
 
     // 填充到长、宽、高列
-    currentRow.querySelector('.length').value = Math.ceil(length);
-    currentRow.querySelector('.width').value = Math.ceil(width);
-    currentRow.querySelector('.height').value = Math.ceil(height);
+    currentRow.querySelector('.length').value = Math.ceil(length.toFixed(1));
+    currentRow.querySelector('.width').value = Math.ceil(width.toFixed(1));
+    currentRow.querySelector('.height').value = Math.ceil(height.toFixed(1));
 
     // 填充到单箱实重列
     currentRow.querySelector('.weight').value = weight.toFixed(2);

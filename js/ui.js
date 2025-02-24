@@ -47,7 +47,12 @@ function addRow() {
     let table = document.getElementById('box-table');
     let newRow = document.createElement('tr');
     newRow.classList.add('input-row');
+
+    // 获取当前行数，用于生成编号
+    let rowCount = table.getElementsByClassName('input-row').length + 1;
+
     newRow.innerHTML = `
+        <td class="index-cell">${rowCount}</td> <!-- 编号单元格 -->
         <td><input type="number" class="form-control length" oninput="calculate()"></td>
         <td><input type="number" class="form-control width" oninput="calculate()"></td>
         <td><input type="number" class="form-control height" oninput="calculate()"></td>
@@ -78,6 +83,14 @@ function deleteRow(event) {
 
     let row = event.target.closest('tr'); // 获取到当前行
     row.remove(); // 删除当前行
+    
+    // 重新编号
+    let table = document.getElementById('box-table');
+    let indexCells = table.getElementsByClassName('index-cell');
+    for (let i = 0; i < indexCells.length; i++) {
+        indexCells[i].textContent = i + 1; // 更新编号
+    }
+
     calculate(); // 重新计算总计
 }
 

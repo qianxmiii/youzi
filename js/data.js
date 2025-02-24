@@ -1,5 +1,27 @@
 // data.js
 
+const shippingChannels = {
+    "卡派": [
+      "Sea truck", 
+      "Fast sea truck", 
+      "Fast Maston truck",
+      "Normal Maston truck",
+      "Normal sea truck"
+    ],
+    "快递派": [
+      "Sea express", 
+      "Air express", 
+      "Fast sea ups/fedex",
+      "Fast sea express",
+      "Fast Maston express",
+      "Fast sea ups/fedex",
+      "Super sea express",
+      "Normal Maston express",
+      "Normal sea express",
+      "Normal sea ups/fedex"
+    ]
+  };
+
 // 将数组数据挂载到 window 对象上
 window.data = {
     // 快捷回复数组

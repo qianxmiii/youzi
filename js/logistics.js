@@ -323,7 +323,7 @@ function updateQuote() {
         }
 
         notes += getTransitTime(country, channel, postcode) + 'days';
-        if (isRemoteAddress) {
+        if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) {
 
             notes += getRemoteAddressfee(totalQuantity);
         }
@@ -382,7 +382,7 @@ function updateQuote() {
         notes += channel + ": " + priceUsd + ' usd per kg. estimate : ' +
             priceUsd + 'usd/kg * ' + chargeWeight.toFixed(0) + 'kg = ' + totalPriceUsd + 'usd ' + MOQ + ' ' +
             getTransitTime(country, channel, postcode) + 'days';
-            if (isRemoteAddress) { notes += getRemoteAddressfee(totalQuantity);}   
+            if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { notes += getRemoteAddressfee(totalQuantity);}   
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
             '\n' + '\n' +

@@ -423,6 +423,19 @@ function importData() {
     document.getElementById('volume').value = totalVolume;
 
     updateQuote();
+
+    // 获取图标元素
+    const importIcon = document.getElementById('import-icon');
+
+    // 改变图标为 bi-send-check
+    importIcon.classList.remove('bi-send');
+    importIcon.classList.add('bi-send-check');
+
+    // 2 秒后恢复图标为 bi-send
+    setTimeout(() => {
+        importIcon.classList.remove('bi-send-check');
+        importIcon.classList.add('bi-send');
+    }, 2000);
 }
 
 // 识别箱规信息

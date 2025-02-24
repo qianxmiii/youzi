@@ -36,6 +36,7 @@ function calculate() {
     let calChannel = document.getElementById("cal-channel").value;
     const rules = boxRules[calCountry]?.[calChannel]; // 获取当前国家和渠道的规则
     let warnings = [];
+    let sizeinfo ='';
 
     rows.forEach((row, index) => {
         let length = new Decimal(row.querySelector('.length').value || 0);
@@ -44,6 +45,8 @@ function calculate() {
         let weight = new Decimal(row.querySelector('.weight').value || 0);
         let quantity = new Decimal(row.querySelector('.quantity').value || 0);
 
+        sizeinfo += '\n';
+        sizeinfo += length + '*' + width + '*' + height + 'cm ' + quantity + '箱';
         // 计算体积 (cbm)
         let volume = length.mul(width).mul(height).mul(quantity).dividedBy(1000000);
         volume = Math.ceil(volume * 100) / 100; // 保留两位小数并向上取整
@@ -144,6 +147,13 @@ function calculate() {
         let volumeRatio = totalWeight.dividedBy(totalVolume);
         document.getElementById('volume-ratio').innerText = volumeRatio.toFixed(0);
     }
+
+     // 更新汇总信息
+     document.getElementById('summary-size').innerText = sizeinfo;
+     document.getElementById('summary-total-quantity').innerText = totalQuantity;
+     document.getElementById('summary-total-volume').innerText = Math.ceil(totalVolume * 100) / 100;
+     document.getElementById('summary-total-weight').innerText = Math.ceil(totalWeight);
+     document.getElementById('summary-total-dimension-weight').innerText = Math.ceil(totalDimensionWeight);
 
     // 更新警告信息
     const warningsTextarea = document.getElementById('box-warnings');

@@ -13,7 +13,8 @@ window.onload = function () {
     // 加载快捷回复选项
     loadQuickReplies();
     // 获取下一个星期五的日期
-    valid_date = getNextFriday();
+    // valid_date = getNextFriday();
+    valid_date = '2/28';
     // 渲染价格表格
     renderPriceTable();
     // 监听渠道下拉选项的变化
@@ -513,6 +514,7 @@ function parsePackageInfo() {
     const addressMatch = input.match(addressRegex);
     if (addressMatch && addressToPostcode.hasOwnProperty(addressMatch[0].toUpperCase())) {
         document.getElementById('address').value = addressMatch[0].toUpperCase();
+        updatePostcode();
     }
 
     document.getElementById('quantity').value = quantity;

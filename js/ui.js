@@ -247,27 +247,3 @@ function toggleMOQInput() {
     // 触发报价更新
     updateQuote();
 }
-
-/* 复制快捷回复 */
-function copyQuickReply(textareaId, btn) {
-    let textArea = document.getElementById(textareaId);
-    textArea.select();
-    document.execCommand("copy");
-
-    let ic ="<i class='bi bi-clipboard'></i>";
-    let ic_check ="<i class='bi bi-clipboard-check'></i>";
-
-    // 按钮变色 & 显示“已复制”文字
-    btn.innerHTML = textareaId === "chinese-message" ? ic_check + " 已复制" : ic_check + " Copied";
-    btn.classList.add("btn-success");
-    btn.classList.remove("btn-outline-success");
-    btn.querySelector('i').classList.add("text-white");
-
-    // 1.5秒后恢复
-    setTimeout(() => {
-        btn.innerHTML = textareaId === "chinese-message" ? ic + " 复制" : ic + " Copy";
-        btn.classList.remove("btn-success");
-        btn.classList.add("btn-outline-success");
-        btn.querySelector('i').classList.remove("text-white");
-    }, 1500);
-}

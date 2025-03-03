@@ -325,7 +325,7 @@
         <ul class="nav nav-tabs" id="myTab" role="tablist">
           <li class="nav-item" role="presentation">
             <button class="nav-link active" id="tab1-tab" data-bs-toggle="tab" data-bs-target="#commonTab" type="button" role="tab" aria-controls="tab1" aria-selected="true">
-              常用功能
+              快速查询
             </button>
           </li>
           <li class="nav-item" role="presentation">
@@ -357,12 +357,17 @@
           <div class="tab-pane fade show active" id="commonTab" role="tabpanel" aria-labelledby="tab1-tab">
             <div class="container mt-4">
               <!-- 按钮：打开模态框 -->
-              <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#termModal" onclick="renderCategoryButtons();filterTerms('全部');">
+              <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#termModal"
+                onclick="renderCategoryButtons();filterTerms('全部');">
                 常用术语
+              </button>
+              <!-- 新增按钮 -->
+              <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#usaModal">
+                美国
               </button>
             </div>
 
-            <!-- 模态框 -->
+            <!-- 模态框-常用术语-->
             <div class="modal fade" id="termModal" tabindex="-1" aria-labelledby="termModalLabel" aria-hidden="true">
               <div class="modal-dialog modal-lg">
                 <div class="modal-content">
@@ -373,26 +378,25 @@
                   <div class="modal-body">
                     <!-- 分类筛选按钮 -->
                     <div class="category-buttons" id="categoryButtons">
-                    <!-- 按钮将通过 JavaScript 动态生成 -->
+                      <!-- 按钮将通过 JavaScript 动态生成 -->
                     </div>
             
                     <!-- 标签筛选区域 -->
                     <div class="tag-buttons my-3" id="termTagBtns">
                     </div>
-
+            
                     <!-- 搜索框 -->
                     <div class="input-group mb-3">
-                      <input type="text" id="searchInput" class="form-control" placeholder="输入关键字搜索..."
-                        aria-label="搜索">
+                      <input type="text" id="searchInput" class="form-control" placeholder="输入关键字搜索..." aria-label="搜索">
                       <button class="btn btn-outline-secondary" type="button" onclick="clearSearch()">清除</button>
                     </div>
-
+            
                     <!-- 术语对照表 -->
                     <div id="termList"></div>
-
+            
                     <!-- 无结果提示 -->
                     <div id="noResults" class="no-results">没有找到匹配的术语。</div>
-
+            
                     <!-- 翻页按钮 -->
                     <div class="pagination">
                       <button id="prevPage" class="btn btn-outline-primary" onclick="prevPage()">上一页</button>
@@ -405,41 +409,89 @@
                 </div>
               </div>
             </div>
-          </div>
+
+            <!-- 模态框 -->
+            <div class="modal fade" id="usaModal" tabindex="-1" aria-labelledby="usaModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="usaModalLabel">美国信息</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <!-- 搜索框 -->
+                    <div class="input-group mb-3">
+                      <input type="text" id="usaSearchInput" class="form-control" placeholder="输入关键字搜索..." aria-label="搜索">
+                      <button class="btn btn-outline-secondary" type="button" onclick="clearUSASearch()">清除</button>
+                    </div>
+                    <div id="usaSearchResults">
+                      <!-- 搜索结果将动态加载到这里 -->
+                    </div>
+            
+                    <!-- 折叠栏 -->
+                    <div class="accordion" id="usaAccordion">
+                      <!-- 动态加载分类 -->
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            </div>
 
           <!-- Tab2 == 快捷回复 Tab 内容 -->
           <div class="tab-pane fade" id="quickReplyTab" role="tabpanel" aria-labelledby="tab2-tab">
-            <div class="form-group subtitle">
-                <label for="quick-reply">快捷回复</label>
-                <div class="input-group">
-                    <select id="quick-reply" class="form-control" onchange="insertQuickReply()">
-                        <option value="">请选择快捷回复</option>
-                    </select>
+           
+            <div class="quick-reply-container" id="quick-reply-container">
+              <!-- 分类按钮 -->
+              <div class="form-group">
+                  <label>选择分类</label>
+                  <div id="quick-reply-categories" class="category-buttons">
+                      <!-- 分类按钮将通过 JavaScript 动态生成 -->
+                  </div>
+              </div>
+          
+              <!-- 输入下拉搜索框 -->
+              <div class="form-group">
+                <label for="quick-reply-search">搜索回复</label>
+                <div class="search-dropdown">
+                  <input type="text" id="quick-reply-search" class="form-control" placeholder="输入关键词..." oninput="filterQuickReplies()">
+                  <div id="quick-reply-dropdown" class="dropdown-list">
+                    <!-- 匹配的回复将通过 JavaScript 动态加载 -->
+                  </div>
                 </div>
-            </div>
-            <!-- 中文回复 -->
-            <div class="form-group subtitle">
-                <label for="chinese-message">中文消息</label>
-                <div class="input-group">
-                    <textarea id="chinese-message" class="form-control" rows="4" placeholder="在此输入中文消息..."></textarea>
-                    <button class="btn btn-outline-success ms-2 copy-btn" onclick="copyQuickReply('chinese-message', this)">
-                      <i class="bi bi-clipboard"></i>
-                      复制
-                    </button>
-                </div>
-            </div>
-            <!-- 英文回复 -->
-            <div class="form-group mt-3 subtitle">
-                <label for="english-message">English Message</label>
-                <div class="input-group">
-                    <textarea id="english-message" class="form-control" rows="4" placeholder="Enter your message in English..."></textarea>
-                    <button class="btn btn-outline-success ms-2 copy-btn" onclick="copyQuickReply('english-message', this)">
-                      <i class="bi bi-clipboard"></i>
-                      Copy
-                    </button>
-                </div>
-            </div>
+              </div>
+              
+              <!-- 回复内容显示区域 -->
+              <div class="form-group">
+                <label for="quick-reply-select">选择回复</label>
+                <select id="quick-reply-select" class="form-control" onchange="insertQuickReply()">
+                  <option value="">请选择回复</option>
+                </select>
+              </div>
+              <!-- 中文回复 -->
+              <div class="form-group">
+                  <label for="chinese-message">中文消息</label>
+                  <textarea id="chinese-message" class="form-control" rows="4" readonly></textarea>
+                  <button class="btn btn-outline-success mt-2" onclick="copyQuickReply('chinese-message', this)">
+                      <i class="bi bi-clipboard"></i> 复制
+                  </button>
+              </div>
+          
+              <!-- 英文回复 -->
+              <div class="form-group">
+                  <label for="english-message">English Message</label>
+                  <textarea id="english-message" class="form-control" rows="4" readonly></textarea>
+                  <button class="btn btn-outline-success mt-2" onclick="copyQuickReply('english-message', this)">
+                      <i class="bi bi-clipboard"></i> Copy
+                  </button>
+              </div>
           </div>
+
+          </div> <!-- Tab 2 end -->
           
 
           <!-- Tab 3 成本计算 -->

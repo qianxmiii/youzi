@@ -26,54 +26,67 @@ const shippingChannels = {
 window.data = {
     // 快捷回复数组
     quickReplies: [
+        // {
+        //     chinese: "卫星仓不建议快递派，有拒收风险。",
+        //     english: "AWD warehouse not suggest ship by express, There is a risk of rejection."
+        // },
+        // {
+        //     chinese: "支付方式",
+        //     english: "You can make payment to us by Bank transfer, Paypal, Payoneer and alibaba link"
+        // },
+        // {
+        //     chinese: "浙江省金华市义乌市稠江街道德贸路2号（2楼37号-38号）启函物流园，余乐（转May），15157953544",
+        //     english: "Qihan Logistics Park, No. 2 Demao Road, Choujiang Street, Yiwu City, Jinhua City, Zhejiang Province (No. 37-38, 2nd floor platform),  Mr yu, 15157953544"
+        // },
+        // {
+        //     chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662",
+        //     english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662"
+        // },
+        // {
+        //     chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3",
+        //     english: "If with batteries , please provide MSDS and the Transportation Identification Report.For lithium batteries, the UN38.3 test report is also required."
+        // },
+        // {
+        //     chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告",
+        //     english: "For wood products, please provide the commodity inspection report. For raw wood products, fumigation report is also required."
+        // },
+        // {
+        //     chinese: "请确认产品无牌不侵权",
+        //     english: "Please confirm that the product is unlicensed and not infringing."
+        // },
+        // {
+        //     chinese: "加拿大邮编查询",
+        //     english: "温哥华：V开头邮编" + "\n" + "卡尔加里：T/S开头邮编" + "\n" + "多伦多：R/L/N/M/P开头邮编" + "\n" + "渥太华/蒙特利尔: K/H/J/G/E/B/A/C/Y/X开头邮编"
+        // },
+        // {
+        //     chinese: "美国海派不走地址",
+        //     english: "波多黎各、维尔京群岛: 006-009" 
+        //     + "\n" + "夏威夷、关岛：966-969" 
+        //     + "\n" + "阿拉斯加：995-999" 
+        //     + "\n" + "军方地址" 
+        // },
+        // {
+        //     chinese: "如因节假日、码头塞港、罢工、天气、海关查验等不可抗拒因素导致延误不做任何赔偿",
+        //     english: "Due to force majeure factors such as holidays, port congestion, strikes, weather conditions, and customs inspections, no compensation will be made for any delays."
+        // },
+        // {
+        //     chinese: "标准托盘尺寸：120cm*100cm*180cm",
+        //     english: "Standard pallet size: 120cm*100cm*180cm"
+        // }  
         {
-            chinese: "卫星仓不建议快递派，有拒收风险。",
-            english: "AWD warehouse not suggest ship by express, There is a risk of rejection."
+            category: "物流",
+            replies: [
+                { chinese: "卫星仓不建议快递派，有拒收风险。", english: "AWD warehouse not suggest ship by express, There is a risk of rejection." },
+                { chinese: "支付方式", english: "You can make payment to us by Bank transfer, Paypal, Payoneer and alibaba link" }
+            ]
         },
         {
-            chinese: "支付方式",
-            english: "You can make payment to us by Bank transfer, Paypal, Payoneer and alibaba link"
-        },
-        {
-            chinese: "浙江省金华市义乌市稠江街道德贸路2号（2楼37号-38号）启函物流园，余乐（转May），15157953544",
-            english: "Qihan Logistics Park, No. 2 Demao Road, Choujiang Street, Yiwu City, Jinhua City, Zhejiang Province (No. 37-38, 2nd floor platform),  Mr yu, 15157953544"
-        },
-        {
-            chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662",
-            english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662"
-        },
-        {
-            chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3",
-            english: "If with batteries , please provide MSDS and the Transportation Identification Report.For lithium batteries, the UN38.3 test report is also required."
-        },
-        {
-            chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告",
-            english: "For wood products, please provide the commodity inspection report. For raw wood products, fumigation report is also required."
-        },
-        {
-            chinese: "请确认产品无牌不侵权",
-            english: "Please confirm that the product is unlicensed and not infringing."
-        },
-        {
-            chinese: "加拿大邮编查询",
-            english: "温哥华：V开头邮编" + "\n" + "卡尔加里：T/S开头邮编" + "\n" + "多伦多：R/L/N/M/P开头邮编" + "\n" + "渥太华/蒙特利尔: K/H/J/G/E/B/A/C/Y/X开头邮编"
-        },
-        {
-            chinese: "美国海派不走地址",
-            english: "波多黎各、维尔京群岛: 006-009" 
-            + "\n" + "夏威夷、关岛：966-969" 
-            + "\n" + "阿拉斯加：995-999" 
-            + "\n" + "军方地址" 
-        },
-        {
-            chinese: "如因节假日、码头塞港、罢工、天气、海关查验等不可抗拒因素导致延误不做任何赔偿",
-            english: "Due to force majeure factors such as holidays, port congestion, strikes, weather conditions, and customs inspections, no compensation will be made for any delays."
-        },
-        {
-            chinese: "标准托盘尺寸：120cm*100cm*180cm",
-            english: "Standard pallet size: 120cm*100cm*180cm"
-        }  
-
+            category: "地址",
+            replies: [
+                { chinese: "浙江省金华市义乌市稠江街道德贸路2号（2楼37号-38号）启函物流园，余乐（转May），15157953544", english: "Qihan Logistics Park, No. 2 Demao Road, Choujiang Street, Yiwu City, Jinhua City, Zhejiang Province (No. 37-38, 2nd floor platform),  Mr yu, 15157953544" },
+                { chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662", english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662" }
+            ]
+        }
     ],
 
     // 地址和邮编的映射关系
@@ -656,3 +669,56 @@ const boxRules = {
         }
     }
 };
+
+// 分类配置
+const usaCategories = [
+    {
+        id: "zipCodes",
+        title: "美国州邮编分布",
+        data: [
+            { area: "美东", state: "加利福尼亚", short: "CA", prefix: "90-96" },
+            { area: "美东", state: "纽约", short: "NY", prefix: "10-14" },
+            { area: "美东", state: "德克萨斯", short: "TX", prefix: "75-79" },
+            { area: "美东", state: "佛罗里达", short: "FL", prefix: "32-34" },
+            // 其他州数据...
+        ],
+        render: (data) => `
+            <table class="table table-bordered">
+                <thead>
+                    <tr>
+                        <th>州</th>
+                        <th>邮编前缀</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    ${data.map(item => `
+                        <tr>
+                            <td>${item.area}</td>
+                            <td>${item.state}</td>
+                            <td>${item.short}</td>
+                            <td>${item.prefix}</td>
+                        </tr>
+                    `).join("")}
+                </tbody>
+            </table>
+        `
+    },
+    {
+        id: "prohibitedItems",
+        title: "美国禁运品",
+        data: [
+            "易燃易爆物品",
+            "毒品及违禁药品",
+            "武器及弹药",
+            "活体动物",
+            "假冒伪劣商品",
+            // 其他禁运品...
+        ],
+        render: (data) => `
+            <ul>
+                ${data.map(item => `<li>${item}</li>`).join("")}
+            </ul>
+        `
+    },
+    // 其他分类...
+];

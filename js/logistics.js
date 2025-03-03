@@ -10,8 +10,8 @@ const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcode
 window.onload = function () {
     // 初始化派送方式
     updateDeliveryMethods();
-    // 加载快捷回复选项
-    loadQuickReplies();
+    // // 加载快捷回复选项
+    // loadQuickReplies();
     // 获取下一个星期五的日期
     // valid_date = getNextFriday();
     valid_date = '2/28';
@@ -21,6 +21,13 @@ window.onload = function () {
     document.getElementById("t4_channel").addEventListener("change", renderPriceTable());
     // 初始化时渲染标签按钮
     renderTagButtons();
+    // 加载美国数据
+    loadUSAData();
+
+    // 监听搜索框输入
+    document.getElementById("usaSearchInput").addEventListener("input", searchUSAData);
+
+    initQuickReplyCategories();
 };
 
 
@@ -1035,3 +1042,99 @@ function renderTagButtons() {
         tagButtonsContainer.appendChild(button);
     });
 }
+
+
+// 动态加载分类数据
+function loadUSAData() {
+    const accordion = document.getElementById("usaAccordion");
+    accordion.innerHTML = usaCategories
+        .map(
+            (category, index) => `
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading${category.id}">
+                    <button class="accordion-button ${index === 0 ? "" : ""}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${category.id}" aria-expanded="${index === 0 ? "true" : "false"}" aria-controls="collapse${category.id}">
+                        ${category.title}
+                    </button>
+                </h2>
+                <div id="collapse${category.id}" class="accordion-collapse collapse ${index === 0 ? "show" : ""}" aria-labelledby="heading${category.id}" data-bs-parent="#usaAccordion">
+                    <div class="accordion-body" id="content${category.id}">
+                        ${category.render(category.data)}
+                    </div>
+                </div>
+            </div>
+        `
+        )
+        .join("");
+}
+
+// 搜索功能
+function searchUSAData() {
+    const keyword = document.getElementById("usaSearchInput").value.trim().toLowerCase();
+    const resultsContainer = document.getElementById("usaSearchResults");
+    resultsContainer.innerHTML = ''; // 清空之前的结果
+
+    if (!keyword) {
+        // 如果关键词为空，显示所有数据
+        usaCategories.forEach(category => {
+            const contentElement = document.getElementById(`content${category.id}`);
+            if (contentElement) {
+                contentElement.innerHTML = category.render(category.data);
+            }
+        });
+        return;
+    }
+
+    // 遍历所有分类
+    usaCategories.forEach(category => {
+        const filteredData = category.data.filter(item => {
+            if (typeof item === "string") {
+                return item.toLowerCase().includes(keyword);
+            } else if (typeof item === "object") {
+                return Object.values(item).some(value =>
+                    String(value).toLowerCase().includes(keyword)
+                );
+            }
+            return false;
+        });
+
+        // 如果有匹配结果，渲染该分类
+        if (filteredData.length > 0) {
+            const categoryElement = document.createElement("div");
+            categoryElement.className = "search-category";
+            categoryElement.innerHTML = `
+                <h3>${category.title} <span class="match-count">(${filteredData.length} 条结果)</span></h3>
+                <div class="search-results">
+                    ${category.render(filteredData)}
+                </div>
+            `;
+            resultsContainer.appendChild(categoryElement);
+
+            // 高亮关键词
+            highlightKeyword(categoryElement, keyword);
+        }
+    });
+
+    // 如果没有匹配结果，显示提示
+    if (resultsContainer.innerHTML === '') {
+        resultsContainer.innerHTML = '<p>未找到匹配的结果。</p>';
+    }
+}
+
+// 高亮关键词
+function highlightKeyword(element, keyword) {
+    const regex = new RegExp(keyword, 'gi');
+    element.innerHTML = element.innerHTML.replace(regex, match => `<span class="highlight">${match}</span>`);
+}
+
+// 实时搜索
+document.getElementById("usaSearchInput").addEventListener("input", searchUSAData);
+
+// 清除搜索
+function clearUSASearch() {
+    document.getElementById("usaSearchInput").value = "";
+    loadUSAData(); // 重新加载所有数据
+}
+
+
+
+

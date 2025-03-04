@@ -26,58 +26,34 @@ const shippingChannels = {
 window.data = {
     // 快捷回复数组
     quickReplies: [
-        // {
-        //     chinese: "卫星仓不建议快递派，有拒收风险。",
-        //     english: "AWD warehouse not suggest ship by express, There is a risk of rejection."
-        // },
-        // {
-        //     chinese: "支付方式",
-        //     english: "You can make payment to us by Bank transfer, Paypal, Payoneer and alibaba link"
-        // },
-        // {
-        //     chinese: "浙江省金华市义乌市稠江街道德贸路2号（2楼37号-38号）启函物流园，余乐（转May），15157953544",
-        //     english: "Qihan Logistics Park, No. 2 Demao Road, Choujiang Street, Yiwu City, Jinhua City, Zhejiang Province (No. 37-38, 2nd floor platform),  Mr yu, 15157953544"
-        // },
-        // {
-        //     chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662",
-        //     english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662"
-        // },
-        // {
-        //     chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3",
-        //     english: "If with batteries , please provide MSDS and the Transportation Identification Report.For lithium batteries, the UN38.3 test report is also required."
-        // },
-        // {
-        //     chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告",
-        //     english: "For wood products, please provide the commodity inspection report. For raw wood products, fumigation report is also required."
-        // },
-        // {
-        //     chinese: "请确认产品无牌不侵权",
-        //     english: "Please confirm that the product is unlicensed and not infringing."
-        // },
-        // {
-        //     chinese: "加拿大邮编查询",
-        //     english: "温哥华：V开头邮编" + "\n" + "卡尔加里：T/S开头邮编" + "\n" + "多伦多：R/L/N/M/P开头邮编" + "\n" + "渥太华/蒙特利尔: K/H/J/G/E/B/A/C/Y/X开头邮编"
-        // },
-        // {
-        //     chinese: "美国海派不走地址",
-        //     english: "波多黎各、维尔京群岛: 006-009" 
-        //     + "\n" + "夏威夷、关岛：966-969" 
-        //     + "\n" + "阿拉斯加：995-999" 
-        //     + "\n" + "军方地址" 
-        // },
-        // {
-        //     chinese: "如因节假日、码头塞港、罢工、天气、海关查验等不可抗拒因素导致延误不做任何赔偿",
-        //     english: "Due to force majeure factors such as holidays, port congestion, strikes, weather conditions, and customs inspections, no compensation will be made for any delays."
-        // },
-        // {
-        //     chinese: "标准托盘尺寸：120cm*100cm*180cm",
-        //     english: "Standard pallet size: 120cm*100cm*180cm"
-        // }  
+
+
+
+
+
         {
             category: "物流",
             replies: [
                 { chinese: "卫星仓不建议快递派，有拒收风险。", english: "AWD warehouse not suggest ship by express, There is a risk of rejection." },
-                { chinese: "支付方式", english: "You can make payment to us by Bank transfer, Paypal, Payoneer and alibaba link" }
+                { chinese: "支付方式", english: "You can make payment to us by Bank transfer, Paypal, Payoneer and alibaba link" },
+                {
+                    chinese: "如因节假日、码头塞港、罢工、天气、海关查验等不可抗拒因素导致延误不做任何赔偿",
+                    english: "Due to force majeure factors such as holidays, port congestion, strikes, weather conditions, and customs inspections, no compensation will be made for any delays."
+                },
+                {
+                    chinese: "标准托盘尺寸：120cm*100cm*180cm",
+                    english: "Standard pallet size: 120cm*100cm*180cm"
+                }  
+            ]
+        },
+        {
+            category: "产品",
+            replies: [
+                { chinese: "请确认产品无牌不侵权", english: "Please confirm that the product is unlicensed and not infringing."},
+                { chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告", english: "Wooden products need the commodity inspection report. For raw wooden products, fumigation report is also required." },
+                { chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3", english: "If with batteries , please provide MSDS and the Transportation Identification Report.For lithium batteries, the UN38.3 test report is also required." },
+                { chinese: "儿童产品请提供CPC和CPSC.", english: "For children's products, please provide CPC and CPSC." }
+
             ]
         },
         {
@@ -85,6 +61,65 @@ window.data = {
             replies: [
                 { chinese: "浙江省金华市义乌市稠江街道德贸路2号（2楼37号-38号）启函物流园，余乐（转May），15157953544", english: "Qihan Logistics Park, No. 2 Demao Road, Choujiang Street, Yiwu City, Jinhua City, Zhejiang Province (No. 37-38, 2nd floor platform),  Mr yu, 15157953544" },
                 { chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662", english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662" }
+            ]
+        },
+        {
+            category: "快速查询",
+            replies: [
+                {
+                    chinese: "美国海派不走地址",
+                    english: "波多黎各、维尔京群岛: 006-009" 
+                    + "\n" + "夏威夷、关岛：966-969" 
+                    + "\n" + "阿拉斯加：995-999" 
+                    + "\n" + "军方地址" 
+                },
+                { chinese: "加拿大邮编查询", english: "温哥华：V开头邮编" + "\n" + "卡尔加里：T/S开头邮编" + "\n" + "多伦多：R/L/N/M/P开头邮编" + "\n" + "渥太华/蒙特利尔: K/H/J/G/E/B/A/C/Y/X开头邮编" }
+            ]
+        },
+        {
+            category: "轨迹",
+            replies: [
+                // 海运
+                { 
+                    chinese: "货物已装柜，等待国内报关", 
+                    english: "The goods have been loaded into the container and is ready for domestic customs declaration."
+                },
+                { 
+                    chinese: "国内报关已完成，等待放行", 
+                    english: "The goods have been declared by domestic customs and is waiting for release."
+                },
+                { 
+                    chinese: "国内清关已完成，等待运输", 
+                    english: "The goods have been cleared by domestic customs and is ready for shipment."
+                },
+                { 
+                    chinese: "已到港，等待卸船", 
+                    english: "Arrived at port, waiting for unloading."
+                },
+                { 
+                    chinese: "已卸船，等待预约提柜", 
+                    english: "The ship has been unloaded, waiting for an appointment to pick up the container."
+                },
+                { 
+                    chinese: "已提柜，等待拆柜", 
+                    english: "The container has been picked up, waiting for unpacking."
+                },
+
+                // 空运
+                { 
+                    chinese: "已提柜，等待拆柜", 
+                    english: "The container has been picked up, waiting for unpacking."
+                },
+                
+                // ---
+                { 
+                    chinese: "已交付UPS，请留意官网更新", 
+                    english: "Has been handed over to UPS, please pay attention to the official website update."
+                },
+                { 
+                    chinese: "已交付Fedex，请留意官网更新", 
+                    english: "Has been handed over to Fedex, please pay attention to the official website update."
+                },
             ]
         }
     ],
@@ -173,6 +208,7 @@ window.data = {
         
         "AVP1": "18202",
         "MDT4": "17408",
+        "HIA1": "17057",
         "LBE1": "15672",       
         "PIT2": "15126", /* 偏远 */      
         "ALB1": "12033", /* 偏远 */
@@ -189,6 +225,7 @@ window.data = {
         "IUSJ": "92223",
         "IUSF": "75241",
         "IUSM": "60563",
+        "IUSR": "29330", /* 偏远 */
         "IUSL": "21901"
     },
 
@@ -198,7 +235,7 @@ window.data = {
         "40165", "42718", "21901", "89408", "18424", "18707", 
         "17257", "19530", "37090", "37090", "37310", "77423", 
         "23803", "53125", "98327", "95215", "15126", "12533",
-        "79108", "87031", "18447"
+        "79108", "87031", "18447", "29330"
     ],
 
     // 派送方式按国家分类

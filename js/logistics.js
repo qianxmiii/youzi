@@ -229,6 +229,16 @@ function updateQuote() {
             MOQ = 'MOQ each box is '+ moqUnit + 'kg';
         }
     }
+
+    // 如果有MOQ，以录入的MOQ计费重为准
+    const moqInput = document.getElementById('moq-input');
+    const moqValue = new Decimal(moqInput.value || 21); // 默认值为 21kg
+    if (isMOQ) {
+        if (chargeWeight.lessThan(moqValue)) {
+            chargeWeight = moqValue;
+        }
+    }
+
     document.getElementById('chargeWeight').value = chargeWeight;
 
     // 计算计费重 (CBM)：取总实重与材积重的较大者
@@ -314,18 +324,11 @@ function updateQuote() {
         }
         notes += channel + ": " + priceUsd + ' usd/kg * ' + chargeWeight.toFixed(0) + 'kg ';
         if (isDDU) {
-            if (country == "英国") {
-                notes += '+ 48usd ';
-                totalPriceUsd = new Decimal(totalPriceUsd).plus(48);
-            } else if (country == "欧洲") {
-                notes += '+ 62usd ';
-                totalPriceUsd = new Decimal(totalPriceUsd).plus(62);
-            }
+            notes+= getDDUFee(country);
         }
         notes += '= ' + totalPriceUsd + 'usd ' + MOQ + ' ';
-        const moqInput = document.getElementById('moq-input');
+        
         if (isMOQ) {
-            const moqValue = moqInput.value || 21; // 默认值为 21kg
             notes += `MOQ is ${moqValue}kg `;
         }
 
@@ -381,15 +384,14 @@ function updateQuote() {
             '\n' + '\n' +
             'To ' + address + ',' + totalQuantity.toFixed(0) + unit + totalWeight.toFixed(0) + 'kg ' + totalVolume + 'cbm' +
             '\n';
-        if (isDDU) {
-            notes += 'DDU ';
-        } else {
-            notes += 'DDP ';
-        }
+        notes += isDDU ?  'DDU ': 'DDP ';
         notes += channel + ": " + priceUsd + ' usd per kg. estimate : ' +
             priceUsd + 'usd/kg * ' + chargeWeight.toFixed(0) + 'kg = ' + totalPriceUsd + 'usd ' + MOQ + ' ' +
             getTransitTime(country, channel, postcode) + 'days';
-            if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { notes += getRemoteAddressfee(totalQuantity);}   
+            if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { notes += getRemoteAddressfee(totalQuantity);} 
+            if (isDDU) {
+                notes+= getDDUFee(country);
+            } 
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
             '\n' + '\n' +
@@ -407,8 +409,13 @@ function updateQuote() {
         }
         notes += channel + ": " + priceUsd + ' usd per cbm. estimate : ' +
             priceUsd + 'usd/cbm * ' + chargeCBM + 'cbm = ' + totalPriceUsd + 'usd ' +
-            getTransitTime(country, channel, postcode) + 'days' +
-            '\n' +
+            getTransitTime(country, channel, postcode) + 'days';
+
+            if (isDDU) {
+                notes+= getDDUFee(country);
+            } 
+
+            notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
             '\n' + '\n' +
             'Valid date: ' + valid_date;
@@ -1135,6 +1142,13 @@ function clearUSASearch() {
     loadUSAData(); // 重新加载所有数据
 }
 
-
-
-
+// 根据国家获取DDU操作费
+function getDDUFee(country){
+    let str = '\n';
+    if (country == "欧洲") {
+        str += 'Customs clearance fee: 62usd';
+    } else if (country == "英国") {
+        str += 'Customs clearance fee: 48usd';
+    }
+    return str;
+}

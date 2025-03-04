@@ -497,7 +497,8 @@
           <!-- Tab 3 成本计算 -->
           <div class="tab-pane fade" id="costCalTab" role="tabpanel" aria-labelledby="tab3-tab">
             <div class="container mt-4">
-              <table class="table table-bordered">
+              <h4>自税成本</h4>
+              <table class="table table-bordered" id="DDUTable">
                 <thead>
                   <tr>
                     <th>箱数</th>
@@ -519,21 +520,58 @@
                 </thead>
                 <tbody>
                   <tr>
-                    <td><input type="number" class="form-control" id="t_quantity" oninput="calculateCost()" /></td>
-                    <td><input type="number" class="form-control" id="t_weight" oninput="calculateCost()" /></td>
-                    <td><input type="number" class="form-control" id="t_volume" oninput="calculateCost()" /></td>
+                    <td><input type="number" class="form-control" id="t_quantity" oninput="calculateCostDDU()" /></td>
+                    <td><input type="number" class="form-control" id="t_weight" oninput="calculateCostDDU()" /></td>
+                    <td><input type="number" class="form-control" id="t_volume" oninput="calculateCostDDU()" /></td>
                     <td><span id="t_charge-volume">0.00</span></td>
                     <td><span id="t_volume-ratio">0</span></td>
-                    <td><input type="number" class="form-control" id="t_price-per-cbm" oninput="calculateCost()" /></td>
-                    <td><input type="number" class="form-control" id="t_goods-value" oninput="calculateCost()" value="120" /></td>
-                    <td><input type="number" class="form-control" id="t_tax-rate" oninput="calculateCost()" /></td>
-                    <td><input type="number" class="form-control" id="t_delivery-fee-usd" oninput="calculateCost()" /></td>
+                    <td><input type="number" class="form-control" id="t_price-per-cbm" oninput="calculateCostDDU()" /></td>
+                    <td><input type="number" class="form-control" id="t_goods-value" oninput="calculateCostDDU()" value="120" /></td>
+                    <td><input type="number" class="form-control" id="t_tax-rate" oninput="calculateCostDDU()" /></td>
+                    <td><input type="number" class="form-control" id="t_delivery-fee-usd" oninput="calculateCostDDU()" /></td>
                     <td><span id="t_freight-forwarding-cost">0.00</span></td>
                     <td><span id="t_delivery-fee-rmb">0.00</span></td>
                     <td><span id="t_tax-amount">0.00</span></td>
                     <td><span id="t_total-cost">0.00</span></td>
                     <td><span id="t_unit-price-cbm">0.00</span></td>
                     <td><span id="t_unit-price-kg">0.00</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <h4>包税成本</h4>
+              <table class="table table-bordered" id="DDPTable">
+                <thead>
+                  <tr>
+                    <th>箱数</th>
+                    <th>实重 (kg)</th>
+                    <th>体积 (cbm)</th>
+                    <th>计费重 (kg)</th>
+                    <th>计费方 (cbm)</th>
+                    <th>泡比</th>
+                    <th>按kg表价</th>
+                    <th>派送费(USD)</th>
+                    <th>头程费</th>
+                    <th>派送费</th>
+                    <th>总成本</th>
+                    <th>单价(cbm)</th>
+                    <th>单价(kg)</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td><input type="number" class="form-control" id="tp_quantity" oninput="calculateCostDDP()" /></td>
+                    <td><input type="number" class="form-control" id="tp_weight" oninput="calculateCostDDP()" /></td>
+                    <td><input type="number" class="form-control" id="tp_volume" oninput="calculateCostDDP()" /></td>
+                    <td><span id="tp_charge-weight">0.00</span></td>
+                    <td><span id="tp_charge-cbm">0.00</span></td>
+                    <td><span id="tp_volume-ratio">0</span></td>
+                    <td><input type="number" class="form-control" id="tp_price-per-kg" oninput="calculateCostDDP()" /></td>
+                    <td><input type="number" class="form-control" id="tp_delivery-fee-usd" oninput="calculateCostDDP()" /></td>
+                    <td><span id="tp_freight-forwarding-cost">0.00</span></td>
+                    <td><span id="tp_delivery-fee-rmb">0.00</span></td>
+                    <td><span id="tp_total-cost">0.00</span></td>
+                    <td><span id="tp_unit-price-cbm">0.00</span></td>
+                    <td><span id="tp_unit-price-kg">0.00</span></td>
                   </tr>
                 </tbody>
               </table>

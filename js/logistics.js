@@ -323,16 +323,16 @@ function updateQuote() {
             notes += 'DDU ';
         }
         notes += channel + ": " + priceUsd + ' usd/kg * ' + chargeWeight.toFixed(0) + 'kg ';
-        if (isDDU) {
-            notes+= getDDUFee(country);
-        }
-        notes += '= ' + totalPriceUsd + 'usd ' + MOQ + ' ';
         
         if (isMOQ) {
             notes += `MOQ is ${moqValue}kg `;
         }
 
         notes += getTransitTime(country, channel, postcode) + 'days';
+        if (isDDU) {
+            notes+= getDDUFee(country);
+        }
+        notes += '= ' + totalPriceUsd + 'usd ' + MOQ + ' ';
         if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) {
 
             notes += getRemoteAddressfee(totalQuantity);
@@ -353,7 +353,9 @@ function updateQuote() {
         notes += channel + ": " + priceUsd + ' usd/cbm * ' + chargeCBM + 'cbm = ' + totalPriceUsd + 'usd ';
 
         notes += getTransitTime(country, channel, postcode) + 'days';
-
+        if (isDDU) {
+            notes+= getDDUFee(country);
+        }
     } else if (quoteType === "通用-单价") {
         // 构建备注内容
         notes = address + ' ' + channel + ': ' + priceUsd + ' usd per kg ' + getTransitTime(country, channel, postcode) + 'days';
@@ -563,8 +565,8 @@ function parsePackageInfo() {
 }
 
 
-// 计算按方成本
-function calculateCost() {
+// 计算自税成本
+function calculateCostDDU() {
     // 获取输入值
     const quantity = parseFloat(document.getElementById('t_quantity').value) || 0;
     const weight = new Decimal(parseFloat(document.getElementById('t_weight').value) || 0);
@@ -589,8 +591,8 @@ function calculateCost() {
     const forwardingCost = pricePerCbm.mul(chargeVolume);
     document.getElementById('t_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
 
-    // 计算税金
-    const taxAmount = goodsValue.mul(taxRate.plus(10)).dividedBy(100).mul(chargeVolume).mul(exchange_rate);
+    // 计算税金 关税加征20%
+    const taxAmount = goodsValue.mul(taxRate.plus(20)).dividedBy(100).mul(chargeVolume).mul(exchange_rate);
     document.getElementById('t_tax-amount').textContent = taxAmount.toDecimalPlaces(0, Decimal.ROUND_UP);
 
     // 计算派送费 (RMB)
@@ -608,6 +610,52 @@ function calculateCost() {
     // 计算单价 (RMD/kg)
     const unitPriceKg = totalCost.dividedBy(weight);
     document.getElementById('t_unit-price-kg').textContent = unitPriceKg.toFixed(2);
+}
+
+// 计算包税成本
+function calculateCostDDP() {
+    // 获取输入值
+    const quantity = parseFloat(document.getElementById('tp_quantity').value) || 0;
+    const weight = new Decimal(parseFloat(document.getElementById('tp_weight').value) || 0);
+    const volume = new Decimal(parseFloat(document.getElementById('tp_volume').value) || 0);
+    const pricePerKg = new Decimal(parseFloat(document.getElementById('tp_price-per-kg').value) || 0);
+    const deliveryFeeUSD = new Decimal(parseFloat(document.getElementById('tp_delivery-fee-usd').value) || 0);
+
+    // 计算计费重
+    let chargeWeight = Decimal.max(weight,volume.mul(1000000).dividedBy(6000)).toDecimalPlaces(0, Decimal.ROUND_UP);
+    document.getElementById('tp_charge-weight').textContent = chargeWeight;
+
+    // 计算计费方
+    let chargeVolume = Decimal.max(volume, weight.dividedBy(363).toDecimalPlaces(2, Decimal.ROUND_UP));
+    document.getElementById('tp_charge-cbm').textContent = chargeVolume.toDecimalPlaces(2, Decimal.ROUND_UP);
+
+
+    // 计算泡比 泡比 = 实重 / 体积
+    let volumeRatio = new Decimal(0);
+    if (weight != 0 && volume != 0) {
+        volumeRatio = weight.dividedBy(volume);
+        document.getElementById('tp_volume-ratio').textContent = volumeRatio.toFixed(0);
+    }
+
+    // 计算头程费用
+    const forwardingCost = pricePerKg.mul(chargeWeight);
+    document.getElementById('tp_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
+
+    // 计算派送费 (RMB)
+    const deliveryFeeRMB = deliveryFeeUSD.mul(exchange_rate);
+    document.getElementById('tp_delivery-fee-rmb').textContent = deliveryFeeRMB.toFixed(2);
+
+    // 计算总成本
+    const totalCost = forwardingCost.plus(deliveryFeeRMB);
+    document.getElementById('tp_total-cost').textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
+    
+    // 计算单价 (RMB/cbm)
+    const unitPriceCbm = totalCost.dividedBy(chargeVolume);
+    document.getElementById('tp_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
+
+    // 计算单价 (RMD/kg)
+    const unitPriceKg = totalCost.dividedBy(weight);
+    document.getElementById('tp_unit-price-kg').textContent = unitPriceKg.toFixed(2);
 }
 
  // 获取所有术语
@@ -1144,11 +1192,11 @@ function clearUSASearch() {
 
 // 根据国家获取DDU操作费
 function getDDUFee(country){
-    let str = '\n';
+    let str = '';
     if (country == "欧洲") {
-        str += 'Customs clearance fee: 62usd';
+        str += '\n' + 'Customs clearance fee: 62usd';
     } else if (country == "英国") {
-        str += 'Customs clearance fee: 48usd';
+        str += '\n' + 'Customs clearance fee: 48usd';
     }
     return str;
 }

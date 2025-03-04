@@ -227,14 +227,26 @@ function getTransitTimeUSA(channel, postcode) {
         return channelData["default"]; // 返回默认时效
     }
 
-    // 根据邮编范围匹配时效
-    if (postcode < 5) {
-        return channelData["0-4"] || ""; // 美东
-    } else if (postcode < 8) {
-        return channelData["5-7"] || ""; // 美中
+    if (channel == "Sea truck") { //卡派 4开头地址时效 萨凡纳等
+        // 根据邮编范围匹配时效
+        if (postcode < 5) {
+            return channelData["0-4"] || ""; // 美东
+        } else if (postcode < 8) {
+            return channelData["5-7"] || ""; // 美中
+        } else {
+            return channelData["8-9"] || ""; // 美西
+        }
     } else {
-        return channelData["8-9"] || ""; // 美西
+        // 根据邮编范围匹配时效
+        if (postcode < 4) {
+            return channelData["0-3"] || ""; // 美东
+        } else if (postcode < 8) {
+            return channelData["4-7"] || ""; // 美中
+        } else {
+            return channelData["8-9"] || ""; // 美西
+        }
     }
+
 }
 
 /**
@@ -290,7 +302,7 @@ function getTransitTimeUK(channel, postcode) {
 function getCN(channel) {
     switch (channel) {
         case 'Sea express':
-            return '普船快递派';
+            return '海运快递派';
         case 'Fast sea express':
             return '快船快递派';
         case 'Air express':
@@ -320,6 +332,7 @@ function getTagCounts() {
     return tagCounts;
 }
 
+// 偏远地址时效
 function getRemoteTranTime(channel,transitTime) {
     if (channel == 'Sea truck'){
         transitTime = addDays(transitTime, 5);
@@ -327,6 +340,7 @@ function getRemoteTranTime(channel,transitTime) {
     return transitTime;
 }
 
+// 增加天数
 function addDays(transitTime, days) {
     let match = transitTime.match(/(\d+)-(\d+)/); // 使用正则匹配两个数字
   

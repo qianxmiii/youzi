@@ -13,8 +13,8 @@ window.onload = function () {
     // // 加载快捷回复选项
     // loadQuickReplies();
     // 获取下一个星期五的日期
-    // valid_date = getNextFriday();
-    valid_date = '2/28';
+    valid_date = getNextFriday();
+    // valid_date = '2/28';
     // 渲染价格表格
     renderPriceTable();
     // 监听渠道下拉选项的变化
@@ -160,7 +160,7 @@ function calculate() {
      document.getElementById('summary-total-quantity').innerText = totalQuantity;
      document.getElementById('summary-total-volume').innerText = Math.ceil(totalVolume * 100) / 100;
      document.getElementById('summary-total-weight').innerText = Math.ceil(totalWeight);
-     document.getElementById('summary-total-dimension-weight').innerText = Math.ceil(totalDimensionWeight);
+     document.getElementById('summary-chargeweight').innerText = Math.ceil(totalDimensionWeight);
 
     // 更新警告信息
     const warningsTextarea = document.getElementById('box-warnings');

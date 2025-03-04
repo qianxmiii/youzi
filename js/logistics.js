@@ -59,7 +59,7 @@ function calculate() {
         volume = Math.ceil(volume * 100) / 100; // 保留两位小数并向上取整
 
         // 计算单箱材积 (kg)
-        let singleDimensionWeight = length.mul(width).mul(height).dividedBy(6000);
+        let singleDimensionWeight = new Decimal(length).mul(width).mul(height).dividedBy(6000);
         singleDimensionWeight = Math.ceil(singleDimensionWeight); // 向上取整
 
         // 计算实重 (kg)
@@ -127,7 +127,7 @@ function calculate() {
                 waringstr += `围长 ${perimeter} cm (> ${rules.maxPerimeter} cm),`;
                 isOver = 1;
             }
-            if (rules.maxDimensionWeight && singleDimensionWeight.greaterThan(rules.maxDimensionWeight)) {
+            if (rules.maxDimensionWeight && singleDimensionWeight > rules.maxDimensionWeight) {
                 waringstr += `单箱材积 ${singleDimensionWeight} kg (> ${rules.maxDimensionWeight} kg),`;
                 isOver = 1;
             }

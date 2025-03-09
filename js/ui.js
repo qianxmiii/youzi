@@ -1,19 +1,3 @@
-// 提货费输入控制
-function togglePickupFeeInput() {
-    const pickupFeeCheckbox = document.getElementById("pickup-fee-checkbox");
-    const pickupFeeInputContainer = document.getElementById("pickup-fee-input-container");
-
-    // 根据 checkbox 的状态显示或隐藏提货费输入框
-    if (pickupFeeCheckbox.checked) {
-        pickupFeeInputContainer.style.display = "block";
-    } else {
-        pickupFeeInputContainer.style.display = "none";
-        document.getElementById("pickup-fee").value = ""; // 清空提货费输入框
-    }
-
-    // 触发更新
-    updateQuote();
-}
 
 // 根据国家显示不同派送方式
 function updateDeliveryMethods() {
@@ -233,6 +217,7 @@ function showTab(tabId) {
     }
 }
 
+// MOQ输入控制
 function toggleMOQInput() {
     const moqCheckbox = document.getElementById("MOQ");
     const moqInputContainer = document.getElementById("moq-input-container");
@@ -245,5 +230,55 @@ function toggleMOQInput() {
     }
 
     // 触发报价更新
+    updateQuote();
+}
+
+// 提货费输入控制
+function togglePickupFeeInput() {
+    const pickupFeeCheckbox = document.getElementById("pickup-fee-checkbox");
+    const pickupFeeInputContainer = document.getElementById("pickup-fee-input-container");
+
+    // 根据 checkbox 的状态显示或隐藏提货费输入框
+    if (pickupFeeCheckbox.checked) {
+        pickupFeeInputContainer.style.display = "block";
+    } else {
+        pickupFeeInputContainer.style.display = "none";
+        document.getElementById("pickup-fee").value = ""; // 清空提货费输入框
+    }
+
+    // 触发更新
+    updateQuote();
+}
+
+// 超尺寸输入控制
+function toggleOverSizeFeeInput() {
+    const overSizeFeeCheckbox = document.getElementById("oversize_check");
+    const overSizeFeeInputContainer = document.getElementById("oversize-input-container");
+
+    // 根据 checkbox 的状态显示或隐藏超尺寸输入框
+    if (overSizeFeeCheckbox.checked) {
+        overSizeFeeInputContainer.style.display = "block";
+    } else {
+        overSizeFeeInputContainer.style.display = "none";
+    }
+
+    // 触发更新
+    updateQuote();
+}
+
+
+// 超重输入控制
+function toggleOverWeightFeeInput() {
+    const overWeightFeeCheckbox = document.getElementById("overweight_check");
+    const overWeightFeeInputContainer = document.getElementById("overweight-input-container");
+
+    // 根据 checkbox 的状态显示或隐藏超尺寸输入框
+    if (overWeightFeeCheckbox.checked) {
+        overWeightFeeInputContainer.style.display = "block";
+    } else {
+        overWeightFeeInputContainer.style.display = "none";
+    }
+
+    // 触发更新
     updateQuote();
 }

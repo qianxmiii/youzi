@@ -169,6 +169,10 @@ td input.form-control {
   transform: scale(1.2); /* Slightly larger checkbox for better visibility */
 }
 
+.form-control.form-input {
+  width: 60px;
+}
+
 #summaryCollapse .card-body {
   background-color: #f8f9fa; /* 浅灰色背景 */
   border: 1px solid #ddd; /* 边框 */

@@ -2,7 +2,7 @@
  /**
   * Tab1 - 常用功能
   */
- 
+
  // 获取所有术语
  const allTerms = Object.values(termsByCategory).flat();
 
@@ -157,6 +157,197 @@
         console.error('翻页按钮未找到');
     }
  }
+
+ let selectedTags = []; // 存储当前选中的标签
+
+// 切换标签筛选状态
+function toggleTagFilter(tag) {
+    if (selectedTags.includes(tag)) {
+        // 如果标签已选中，则移除
+        selectedTags = selectedTags.filter(t => t !== tag);
+    } else {
+        // 如果标签未选中，则添加
+        selectedTags.push(tag);
+    }
+
+    // 更新按钮样式
+    updateTagButtonStyles();
+
+    // 根据选中的标签筛选术语
+    filterTermsByTags();
+}
+
+// 更新标签按钮样式
+function updateTagButtonStyles() {
+    const tagButtons = document.querySelectorAll("#termTagBtns button");
+    tagButtons.forEach(button => {
+        const match = button.innerText.match(/^[^\(]+/);
+        if (match) {
+            const tag = match[0].trim().toLowerCase(); // 统一小写
+            const tagMatch = selectedTags.some(selectedTag => selectedTag.trim().toLowerCase() === tag);
+
+            // 修改选中效果
+            if (tagMatch) {
+                button.classList.add("selected");
+            } else {
+                button.classList.remove("selected");
+            }
+        }
+    });
+}
+function filterTermsByTags() {
+    const allTerms = Object.values(termsByCategory).flat();
+
+    // 如果没有选中任何标签，则显示所有术语
+    if (selectedTags.length === 0) {
+        renderTerms(allTerms);
+        return;
+    }
+
+    const selectedTagsSet = new Set(selectedTags); 
+
+    const filteredTerms = allTerms.filter(term => {
+        // 确保 term.tags 是数组且包含选中的所有标签
+        if (Array.isArray(term.tags)) {
+            return selectedTags.every(tag => {
+                return term.tags.includes(tag);
+            });
+        }
+        return false; // 如果 term 没有 tags 属性，过滤掉
+    });
+    // 渲染筛选后的术语列表
+    renderTerms(filteredTerms);
+}
+
+// 获取所有术语的标签
+function getAllTags() {
+    const allTerms = Object.values(termsByCategory).flat();
+    const tags = new Set();
+    allTerms.forEach(term => {
+        if (term.tags && Array.isArray(term.tags)) {
+            term.tags.forEach(tag => tags.add(tag));
+        }
+    });
+    return Array.from(tags);
+}
+
+// 动态生成标签按钮
+function renderTagButtons() {
+    const tagButtonsContainer = document.getElementById("termTagBtns");
+    const tags = getAllTags();
+    const tagCounts = getTagCounts();
+
+    // 清空现有按钮
+    tagButtonsContainer.innerHTML = '';
+
+    // 为每个标签生成按钮
+    tags.forEach(tag => {
+        const button = document.createElement("button");
+        button.className = "btn btn-sm me-2 mb-2";
+        button.innerText = `${tag} (${tagCounts[tag]})`; // 显示标签和术语数量
+        button.setAttribute("data-tag", tag); // 添加 data-tag 属性
+
+        // 统一颜色
+        button.style.color = "#333"; // 文字颜色
+        button.style.borderColor = "#ccc"; // 边框颜色
+        button.style.backgroundColor = "#f8f9fa"; // 背景颜色
+
+        button.onclick = () => toggleTagFilter(tag);
+        tagButtonsContainer.appendChild(button);
+    });
+}
+
+
+// 动态加载分类数据
+function loadUSAData() {
+    const accordion = document.getElementById("usaAccordion");
+    accordion.innerHTML = usaCategories
+        .map(
+            (category, index) => `
+            <div class="accordion-item">
+                <h2 class="accordion-header" id="heading${category.id}">
+                    <button class="accordion-button ${index === 0 ? "" : ""}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${category.id}" aria-expanded="${index === 0 ? "true" : "false"}" aria-controls="collapse${category.id}">
+                        ${category.title}
+                    </button>
+                </h2>
+                <div id="collapse${category.id}" class="accordion-collapse collapse ${index === 0 ? "show" : ""}" aria-labelledby="heading${category.id}" data-bs-parent="#usaAccordion">
+                    <div class="accordion-body" id="content${category.id}">
+                        ${category.render(category.data)}
+                    </div>
+                </div>
+            </div>
+        `
+        )
+        .join("");
+}
+
+// 搜索功能
+function searchUSAData() {
+    const keyword = document.getElementById("usaSearchInput").value.trim().toLowerCase();
+    const resultsContainer = document.getElementById("usaSearchResults");
+    resultsContainer.innerHTML = ''; // 清空之前的结果
+
+    if (!keyword) {
+        // 如果关键词为空，显示所有数据
+        usaCategories.forEach(category => {
+            const contentElement = document.getElementById(`content${category.id}`);
+            if (contentElement) {
+                contentElement.innerHTML = category.render(category.data);
+            }
+        });
+        return;
+    }
+
+    // 遍历所有分类
+    usaCategories.forEach(category => {
+        const filteredData = category.data.filter(item => {
+            if (typeof item === "string") {
+                return item.toLowerCase().includes(keyword);
+            } else if (typeof item === "object") {
+                return Object.values(item).some(value =>
+                    String(value).toLowerCase().includes(keyword)
+                );
+            }
+            return false;
+        });
+
+        // 如果有匹配结果，渲染该分类
+        if (filteredData.length > 0) {
+            const categoryElement = document.createElement("div");
+            categoryElement.className = "search-category";
+            categoryElement.innerHTML = `
+                <h3>${category.title} <span class="match-count">(${filteredData.length} 条结果)</span></h3>
+                <div class="search-results">
+                    ${category.render(filteredData)}
+                </div>
+            `;
+            resultsContainer.appendChild(categoryElement);
+
+            // 高亮关键词
+            highlightKeyword(categoryElement, keyword);
+        }
+    });
+
+    // 如果没有匹配结果，显示提示
+    if (resultsContainer.innerHTML === '') {
+        resultsContainer.innerHTML = '<p>未找到匹配的结果。</p>';
+    }
+}
+
+// 高亮关键词
+function highlightKeyword(element, keyword) {
+    const regex = new RegExp(keyword, 'gi');
+    element.innerHTML = element.innerHTML.replace(regex, match => `<span class="highlight">${match}</span>`);
+}
+
+// 实时搜索
+document.getElementById("usaSearchInput").addEventListener("input", searchUSAData);
+
+// 清除搜索
+function clearUSASearch() {
+    document.getElementById("usaSearchInput").value = "";
+    loadUSAData(); // 重新加载所有数据
+}
 
 /**
  * Tab2 - 快捷回复

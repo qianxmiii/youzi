@@ -1,5 +1,6 @@
 // 新增常量 exchange_rate
 const exchange_rate = 7.2; //美元汇率
+const cost_exchange_rate = 7.3; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 
@@ -194,9 +195,13 @@ function updateQuote() {
 
 
     // 获取复选框值
-    let isRemoteAddress = document.getElementById('remote-address').checked;
-    let isMOQ = document.getElementById('MOQ').checked;
-    let isDDU = document.getElementById('ddu_check').checked;
+    let isRemoteAddress = document.getElementById('remote-address').checked; // 偏远
+    let isMOQ = document.getElementById('MOQ').checked; // MOQ
+    let isDDU = document.getElementById('ddu_check').checked; // DDP or DDU
+    let isOverSize = document.getElementById('oversize_check').checked; // 超尺寸
+    let overSizeFee = document.getElementById('oversize-input');
+    let isOverWeight = document.getElementById('overweight_check').checked; // 超长
+    let overWeightFee = document.getElementById('overweight-input');
 
     // 获取提货费
     let pickupFeeCheck = document.getElementById("pickup-fee-checkbox").checked;
@@ -328,14 +333,21 @@ function updateQuote() {
             notes += `MOQ is ${moqValue}kg `;
         }
 
-        notes += getTransitTime(country, channel, postcode) + 'days';
         if (isDDU) {
             notes+= getDDUFee(country);
         }
         notes += '= ' + totalPriceUsd + 'usd ' + MOQ + ' ';
+        notes += getTransitTime(country, channel, postcode) + 'days';
         if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) {
 
             notes += getRemoteAddressfee(totalQuantity);
+        }
+
+        if (isOverSize) {
+            notes+= getOverSizeFee(country, totalQuantity);
+        }
+        if (isOverWeight) {
+            notes+= getOverWeightFee(country, totalQuantity);
         }
         
         if (pickupFeeCheck) {
@@ -393,7 +405,13 @@ function updateQuote() {
             if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { notes += getRemoteAddressfee(totalQuantity);} 
             if (isDDU) {
                 notes+= getDDUFee(country);
-            } 
+            }
+            if (isOverSize) {
+                notes+= getOverSizeFee(country, totalQuantity);
+            }
+            if (isOverWeight) {
+                notes+= getOverWeightFee(country, totalQuantity);
+            }
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
             '\n' + '\n' +
@@ -727,6 +745,24 @@ function getRemoteAddressfee(totalQuantity) {
     }
 
     return remoteAddressStr;
+}
+
+// 获取超尺寸费
+function getOverSizeFee(country, totalQuantity) {
+    let overSizeStr = LINE_BREAK + 'OverSize fee: ';
+    let overSizeFee = new Decimal(21).mul(totalQuantity);
+    overSizeStr += '21usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overSizeFee.toFixed(2) + 'usd ';
+
+    return overSizeStr;
+}
+
+// 获取超重费
+function getOverWeightFee(country, totalQuantity) {
+    let overWeightStr = LINE_BREAK + 'OverWeight fee: ';
+    let overWeightFee = new Decimal(25).mul(totalQuantity);
+    overWeightStr += '25usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overWeightFee.toFixed(2) + 'usd ';
+
+    return overWeightStr;
 }
 
 // 总利润 悬停显示

@@ -549,11 +549,11 @@ function calculateCostDDU() {
     document.getElementById('t_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
 
     // 计算税金 关税加征20%
-    const taxAmount = goodsValue.mul(taxRate.plus(20)).dividedBy(100).mul(chargeVolume).mul(exchange_rate);
+    const taxAmount = goodsValue.mul(taxRate.plus(20)).dividedBy(100).mul(chargeVolume).mul(cost_exchange_rate);
     document.getElementById('t_tax-amount').textContent = taxAmount.toDecimalPlaces(0, Decimal.ROUND_UP);
 
     // 计算派送费 (RMB)
-    const deliveryFeeRMB = deliveryFeeUSD.mul(exchange_rate);
+    const deliveryFeeRMB = deliveryFeeUSD.mul(cost_exchange_rate);
     document.getElementById('t_delivery-fee-rmb').textContent = deliveryFeeRMB.toFixed(2);
 
     // 计算总成本

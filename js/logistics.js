@@ -1,5 +1,5 @@
 // 新增常量 exchange_rate
-const exchange_rate = 7.25; //美元汇率
+const exchange_rate = 7.2; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 
@@ -139,11 +139,11 @@ function calculate() {
         
     });
 
-    // 更新总计数据
-    document.getElementById('total-quantity').innerText = totalQuantity;
+    // 更新总计数据entById('total-quantity').innerText = totalQuantity;
     document.getElementById('total-volume').innerText = Math.ceil(totalVolume * 100) / 100; // 向上取整保留两位小数
     document.getElementById('total-weight').innerText = Math.ceil(totalWeight); // 向上取整
-    document.getElementById('total-dimension-weight').innerText = Math.ceil(totalDimensionWeight); // 向上取整
+    document.getElemen
+    document.getElemtById('total-dimension-weight').innerText = Math.ceil(totalDimensionWeight); // 向上取整
 
     // 计算计费重
     let billingWeight = Math.ceil(Decimal.max(totalWeight, totalDimensionWeight.ceil()));
@@ -564,256 +564,6 @@ function parsePackageInfo() {
     updateQuote();
 }
 
-
-// 计算自税成本
-function calculateCostDDU() {
-    // 获取输入值
-    const quantity = parseFloat(document.getElementById('t_quantity').value) || 0;
-    const weight = new Decimal(parseFloat(document.getElementById('t_weight').value) || 0);
-    const volume = new Decimal(parseFloat(document.getElementById('t_volume').value) || 0);
-    const pricePerCbm = new Decimal(parseFloat(document.getElementById('t_price-per-cbm').value) || 0);
-    const goodsValue = new Decimal(parseFloat(document.getElementById('t_goods-value').value) || 0);
-    const taxRate = new Decimal(parseFloat(document.getElementById('t_tax-rate').value) || 0);
-    const deliveryFeeUSD = new Decimal(parseFloat(document.getElementById('t_delivery-fee-usd').value) || 0);
-
-    // 计算计费方
-    let chargeVolume = Decimal.max(volume, weight.dividedBy(363).toDecimalPlaces(2, Decimal.ROUND_UP));
-    document.getElementById('t_charge-volume').textContent = chargeVolume.toFixed(2);
-
-    // 计算泡比 泡比 = 实重 / 体积
-    let volumeRatio = new Decimal(0);
-    if (weight != 0 && volume != 0) {
-        volumeRatio = weight.dividedBy(volume);
-        document.getElementById('t_volume-ratio').textContent = volumeRatio.toFixed(0);
-    }
-
-    // 计算头程费用
-    const forwardingCost = pricePerCbm.mul(chargeVolume);
-    document.getElementById('t_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
-
-    // 计算税金 关税加征20%
-    const taxAmount = goodsValue.mul(taxRate.plus(20)).dividedBy(100).mul(chargeVolume).mul(exchange_rate);
-    document.getElementById('t_tax-amount').textContent = taxAmount.toDecimalPlaces(0, Decimal.ROUND_UP);
-
-    // 计算派送费 (RMB)
-    const deliveryFeeRMB = deliveryFeeUSD.mul(exchange_rate);
-    document.getElementById('t_delivery-fee-rmb').textContent = deliveryFeeRMB.toFixed(2);
-
-    // 计算总成本
-    const totalCost = forwardingCost.plus(taxAmount).plus(deliveryFeeRMB);
-    document.getElementById('t_total-cost').textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
-
-    // 计算单价 (RMB/cbm)
-    const unitPriceCbm = totalCost.dividedBy(chargeVolume);
-    document.getElementById('t_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
-
-    // 计算单价 (RMD/kg)
-    const unitPriceKg = totalCost.dividedBy(weight);
-    document.getElementById('t_unit-price-kg').textContent = unitPriceKg.toFixed(2);
-}
-
-// 计算包税成本
-function calculateCostDDP() {
-    // 获取输入值
-    const quantity = parseFloat(document.getElementById('tp_quantity').value) || 0;
-    const weight = new Decimal(parseFloat(document.getElementById('tp_weight').value) || 0);
-    const volume = new Decimal(parseFloat(document.getElementById('tp_volume').value) || 0);
-    const pricePerKg = new Decimal(parseFloat(document.getElementById('tp_price-per-kg').value) || 0);
-    const deliveryFeeUSD = new Decimal(parseFloat(document.getElementById('tp_delivery-fee-usd').value) || 0);
-
-    // 计算计费重
-    let chargeWeight = Decimal.max(weight,volume.mul(1000000).dividedBy(6000)).toDecimalPlaces(0, Decimal.ROUND_UP);
-    document.getElementById('tp_charge-weight').textContent = chargeWeight;
-
-    // 计算计费方
-    let chargeVolume = Decimal.max(volume, weight.dividedBy(363).toDecimalPlaces(2, Decimal.ROUND_UP));
-    document.getElementById('tp_charge-cbm').textContent = chargeVolume.toDecimalPlaces(2, Decimal.ROUND_UP);
-
-
-    // 计算泡比 泡比 = 实重 / 体积
-    let volumeRatio = new Decimal(0);
-    if (weight != 0 && volume != 0) {
-        volumeRatio = weight.dividedBy(volume);
-        document.getElementById('tp_volume-ratio').textContent = volumeRatio.toFixed(0);
-    }
-
-    // 计算头程费用
-    const forwardingCost = pricePerKg.mul(chargeWeight);
-    document.getElementById('tp_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
-
-    // 计算派送费 (RMB)
-    const deliveryFeeRMB = deliveryFeeUSD.mul(exchange_rate);
-    document.getElementById('tp_delivery-fee-rmb').textContent = deliveryFeeRMB.toFixed(2);
-
-    // 计算总成本
-    const totalCost = forwardingCost.plus(deliveryFeeRMB);
-    document.getElementById('tp_total-cost').textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
-    
-    // 计算单价 (RMB/cbm)
-    const unitPriceCbm = totalCost.dividedBy(chargeVolume);
-    document.getElementById('tp_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
-
-    // 计算单价 (RMD/kg)
-    const unitPriceKg = totalCost.dividedBy(weight);
-    document.getElementById('tp_unit-price-kg').textContent = unitPriceKg.toFixed(2);
-}
-
- // 获取所有术语
- const allTerms = Object.values(termsByCategory).flat();
-
- // 分页相关变量
- let currentPage = 1;
- const termsPerPage = 10; // 每页显示的术语数量
-
- function renderTerms(filteredTerms = allTerms) {
-    const termList = document.getElementById("termList");
-    termList.innerHTML = ''; // 清空列表
-
-    if (filteredTerms.length === 0) {
-        document.getElementById("noResults").style.display = 'block';
-    } else {
-        document.getElementById("noResults").style.display = 'none';
-
-        // 计算当前页的术语
-        const startIndex = (currentPage - 1) * termsPerPage;
-        const endIndex = startIndex + termsPerPage;
-        const termsToShow = filteredTerms.slice(startIndex, endIndex);
-
-        termsToShow.forEach(term => {
-            const card = document.createElement('div');
-            card.className = 'term-card';
-            card.setAttribute('data-term', term.chinese);
-            card.innerHTML = `
-                <div class="card-body">
-                    <h5 data-bs-toggle="tooltip" data-bs-title="${term.definition || '暂无释义'}">${term.chinese}</h5>
-                    <p data-bs-toggle="tooltip" data-bs-title="${term.definition || '暂无释义'}">
-                        ${term.english}
-                        <span class="copy-btn" onclick="copyTerm(this, '${term.english}')">
-                            <i class="bi bi-clipboard"></i>
-                        </span>
-                    </p>
-                    <div class="tags">
-                        ${term.tags.map(tag => {
-                            const color = tagColors[tag] || "#6c757d"; // 默认灰色
-                            return `<span class="badge" style="background-color: ${color}; color: white;">${tag}</span>`;
-                        }).join('')}
-                    </div>
-                </div>
-            `;
-            termList.appendChild(card);
-        });
-
-        // 初始化 Tooltip
-        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
-    }
-
-    // 更新翻页按钮状态
-    updatePaginationButtons(filteredTerms.length);
-}
-
-  
-
- // 分类筛选
- function filterTerms(category, button) {
-     const searchInput = document.getElementById('searchInput');
-     searchInput.value = ''; // 清空搜索框
-
-     // 移除所有按钮的 active 类
-     document.querySelectorAll('.category-buttons .btn').forEach(btn => {
-         btn.classList.remove('active');
-     });
-
-     // 为当前按钮添加 active 类
-     if (button) {
-         button.classList.add('active');
-     }
-
-     // 筛选术语
-     if (category === '全部') {
-         document.getElementById('termTotal').classList.add('active');
-         renderTerms(allTerms);
-     } else {
-         const filteredTerms = termsByCategory[category] || [];
-         renderTerms(filteredTerms);
-     }
-
-     // 重置当前页为第一页
-     currentPage = 1;
- }
-
- // 搜索功能
- const searchInput = document.getElementById('searchInput');
- searchInput.addEventListener('input', function () {
-     const keyword = this.value.trim().toLowerCase();
-     const filteredTerms = allTerms.filter(term => 
-         term.chinese.toLowerCase().includes(keyword) || 
-         term.english.toLowerCase().includes(keyword)
-     );
-     renderTerms(filteredTerms);
-
-     // 重置当前页为第一页
-     currentPage = 1;
- });
-
- // 清除搜索
- function clearSearch() {
-     searchInput.value = '';
-     renderTerms(allTerms); // 重置为全部术语
-
-     // 重置当前页为第一页
-     currentPage = 1;
- }
-
- // 翻页功能
- function prevPage() {
-     if (currentPage > 1) {
-         currentPage--;
-         renderTerms(getFilteredTerms());
-     }
- }
-
- function nextPage() {
-     const filteredTerms = getFilteredTerms();
-     const totalPages = Math.ceil(filteredTerms.length / termsPerPage);
-     if (currentPage < totalPages) {
-         currentPage++;
-         renderTerms(filteredTerms);
-     }
- }
-
- // 获取当前筛选后的术语列表
- function getFilteredTerms() {
-     const searchKeyword = document.getElementById('searchInput').value.trim().toLowerCase();
-     const activeCategory = document.querySelector('.category-buttons .btn.active').textContent;
-
-     if (activeCategory === '全部') {
-         return allTerms.filter(term => 
-             term.chinese.toLowerCase().includes(searchKeyword) || 
-             term.english.toLowerCase().includes(searchKeyword)
-         );
-     } else {
-         return (termsByCategory[activeCategory] || []).filter(term => 
-             term.chinese.toLowerCase().includes(searchKeyword) || 
-             term.english.toLowerCase().includes(searchKeyword)
-         );
-     }
- }
-
- // 更新翻页按钮状态
- function updatePaginationButtons(totalTerms) {
-     const prevButton = document.getElementById('prevPage');
-     const nextButton = document.getElementById('nextPage');
-
-     if (prevButton && nextButton) {
-        prevButton.disabled = currentPage === 1;
-        nextButton.disabled = currentPage === Math.ceil(totalTerms / termsPerPage);
-    } else {
-        console.error('翻页按钮未找到');
-    }
- }
-
-
  // 匹配邮编前缀到区域
 function getRegionByZip(zip) {
     if (/^(0|1|2|3)/.test(zip)) return "美东0.1.2.3";
@@ -826,10 +576,10 @@ function getRegionByZip(zip) {
 
 // 获取重量对应的价格索引
 function getWeightIndex(weight) {
-    if (weight <= 12) return 0;
-    if (weight <= 21) return 1;
-    if (weight <= 45) return 2;
-    if (weight <= 71) return 3;
+    if (weight < 21) return 0;
+    if (weight < 45) return 1;
+    if (weight < 71) return 2;
+    if (weight < 101) return 3;
     return 4; // 101KG+
 }
 

@@ -176,13 +176,24 @@ function getRemoteTranTime(channel,transitTime) {
 // 增加天数
 function addDays(transitTime, days) {
     let match = transitTime.match(/(\d+)-(\d+)/); // 使用正则匹配两个数字
-  
+
     if (match) {
-      let start = parseInt(match[1], 10) + days; // 提取第一个数字并加5
-      let end = parseInt(match[2], 10) + days;   // 提取第二个数字并加5
-  
-      return `${start}-${end}`; // 返回修改后的字符串
+        let start = parseInt(match[1], 10) + days; // 提取第一个数字并加5
+        let end = parseInt(match[2], 10) + days; // 提取第二个数字并加5
+
+        return `${start}-${end}`; // 返回修改后的字符串
     } else {
-      return transitTime; // 若格式不匹配，返回错误信息
+        return transitTime; // 若格式不匹配，返回错误信息
     }
-  }
+}
+
+// 根据国家获取DDU操作费
+function getDDUFee(country){
+    let str = '';
+    if (country == "欧洲") {
+        str += '\n' + 'Customs clearance fee: 62usd';
+    } else if (country == "英国") {
+        str += '\n' + 'Customs clearance fee: 48usd';
+    }
+    return str;
+}

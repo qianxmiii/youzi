@@ -50,9 +50,9 @@ window.data = {
             category: "产品",
             replies: [
                 { chinese: "请确认产品无牌不侵权", english: "Please confirm that the product is unlicensed and not infringing."},
-                { chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告", english: "Wooden products need the commodity inspection report. For raw wooden products, fumigation report is also required." },
+                { chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告", english: "Wooden products the commodity inspection report. For raw wooden products, fumigation report is also required." },
                 { chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3", english: "If with batteries , please provide MSDS and the Transportation Identification Report.For lithium batteries, the UN38.3 test report is also required." },
-                { chinese: "儿童产品请提供CPC和CPSC.", english: "For children's products, please provide CPC and CPSC." }
+                { chinese: "儿童产品请提供CPC和CPSC.", english: "For children's products, please provide CPC." }
 
             ]
         },
@@ -313,38 +313,38 @@ const priceTable = {
     },
     "空派不带电": {
         "美东0.1.2.3": {
-            "华南": [31, 29, 29, 28, 26],
-            "华东": [33, 31, 31, 30, 28]
+            "华南": [44, 42, 42, 41, 39],
+            "华东": [45, 43, 43, 42, 40]
         }, 
         "美中4.5.6.7": { 
-            "华南": [30, 28, 28, 27, 25],
-            "华东": [32, 30, 30, 29, 27]
+            "华南": [43, 41, 41, 40, 38],
+            "华东": [44, 42, 42, 41, 39]
         }, 
         "美西8.9": { 
-            "华南": [29, 27, 27, 26, 24],
-            "华东": [31, 29, 29, 28, 26]
+            "华南": [42, 40, 40, 39, 37],
+            "华东": [43, 41, 41, 40, 38]
         }, 
         "美西96-99": { 
-            "华南": [31, 29, 29, 28, 26],
-            "华东": [33, 31, 31, 30, 28]
+            "华南": [44, 42, 42, 41, 39],
+            "华东": [45, 43, 43, 42, 40]
         }
     },
     "空派带电": {
         "美东0.1.2.3": {
-            "华南": [41, 39, 39, 38, 36],
-            "华东": [41, 39, 39, 38, 36]
+            "华南": [46, 44, 44, 43, 41],
+            "华东": [46, 44, 44, 43, 41]
         }, 
         "美中4.5.6.7": { 
-            "华南": [40, 38, 38, 37, 35],
-            "华东": [40, 38, 38, 37, 35]
+            "华南": [45, 43, 43, 42, 40],
+            "华东": [45, 43, 43, 42, 40]
         }, 
         "美西8.9": { 
-            "华南": [39, 37, 37, 36, 34],
-            "华东": [39, 37, 37, 36, 34]
+            "华南": [44, 42, 42, 41, 39],
+            "华东": [44, 42, 42, 41, 39]
         }, 
         "美西96-99": { 
-            "华南": [41, 39, 39, 38, 36],
-            "华东": [41, 39, 39, 38, 36]
+            "华南": [46, 44, 44, 43, 41],
+            "华东": [46, 44, 44, 43, 41]
         }
     }
 };

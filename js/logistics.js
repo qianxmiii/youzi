@@ -140,11 +140,11 @@ function calculate() {
         
     });
 
-    // 更新总计数据entById('total-quantity').innerText = totalQuantity;
+    // 更新总计数据
     document.getElementById('total-volume').innerText = Math.ceil(totalVolume * 100) / 100; // 向上取整保留两位小数
     document.getElementById('total-weight').innerText = Math.ceil(totalWeight); // 向上取整
-    document.getElemen
-    document.getElemtById('total-dimension-weight').innerText = Math.ceil(totalDimensionWeight); // 向上取整
+    document.getElementById('total-quantity').innerText = totalQuantity;
+    document.getElementById('total-dimension-weight').innerText = Math.ceil(totalDimensionWeight); // 向上取整
 
     // 计算计费重
     let billingWeight = Math.ceil(Decimal.max(totalWeight, totalDimensionWeight.ceil()));

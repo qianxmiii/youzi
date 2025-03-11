@@ -30,10 +30,11 @@ function getTransitTime(country, channel, postcode) {
 
     if (country == "美国") {
         transitTime = getTransitTimeUSA(channel, postcode);
-        let isRemoteAddress = document.getElementById('remote-address').checked;
-        if (isRemoteAddress) {
-            transitTime = getRemoteTranTime(channel,transitTime);
-        }      
+        // 偏远+5天
+        // let isRemoteAddress = document.getElementById('remote-address').checked;
+        // if (isRemoteAddress) {
+        //     transitTime = getRemoteTranTime(channel,transitTime);
+        // }      
     } else if (country == "加拿大") {
         transitTime = getTransitTimeCA(channel, postcode);
     } else if (country == "欧洲") {

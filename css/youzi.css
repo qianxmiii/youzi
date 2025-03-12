@@ -9,6 +9,7 @@
   --border-light: #ffffff;
   --border-grey: #dedbdb;
   --border-dark: #373434;
+  --orange-clor: #ff6600;
 }
 
 /* 基础样式 */
@@ -593,4 +594,36 @@ td input.form-control {
 #quick-reply-container .btn-outline-success {
   width: 100%;
   margin-top: 10px;
+}
+
+/* 车型查询 Tab 样式 */
+#vehicleTab .form-control {
+  margin-bottom: 10px;
+}
+
+#vehicleTab table {
+  margin-top: 20px;
+}
+
+#vehicleTab th,
+#vehicleTab td {
+  text-align: center;
+}
+
+#pickup-fee-display {
+  background-color: #f8f9fa;
+  cursor: not-allowed;
+}
+
+#vehicleTab table th {
+  background-color: var(--orange-clor); /* 橙色背景 */
+  color: white; /* 白色文字 */
+  font-weight: bold;
+}
+
+/* 高亮显示所选车型行 */
+.highlight-red td {
+  background-color: #fcdede; /* 浅红色背景 */
+  font-weight: bold; /* 加粗字体 */
+  color: var(--danger-color);  /* 红色字体 */
 }

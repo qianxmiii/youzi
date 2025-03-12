@@ -1,16 +1,17 @@
 // data.js
-
 const shippingChannels = {
     "卡派": [
       "Sea truck", 
       "Fast sea truck", 
       "Fast Maston truck",
+      "Super Maston truck",
       "Normal Maston truck",
       "Normal sea truck"
     ],
     "快递派": [
       "Sea express", 
       "Air express", 
+      "Air ups/fedex", 
       "Fast sea ups/fedex",
       "Fast sea express",
       "Fast Maston express",
@@ -18,19 +19,144 @@ const shippingChannels = {
       "Super sea express",
       "Normal Maston express",
       "Normal sea express",
-      "Normal sea ups/fedex"
+      "Normal sea ups/fedex",
+      "Train express",
+      "Truck express"
     ]
   };
+// 车型数据
+const vehicleTypes = [
+    {
+        "name": "微面",
+        "lengthRange": [140, 170], // 厢长范围 (cm)
+        "loadWeightRange": [300, 500], // 载重范围 (kg)
+        "loadVolumeRange": [1.7, 2.4] // 载方范围 (cbm)
+    },
+    {
+        "name": "小面",
+        "lengthRange": [180, 240],
+        "loadWeightRange": [500, 800],
+        "loadVolumeRange": [2.4, 4.0]
+    },
+    {
+        "name": "中面",
+        "lengthRange": [240, 320],
+        "loadWeightRange": [800, 1200],
+        "loadVolumeRange": [3.7, 6.1]
+    },
+    {
+        "name": "微货",
+        "lengthRange": [200, 290],
+        "loadWeightRange": [800, 1200],
+        "loadVolumeRange": [4.2, 6.7]
+    },
+    {
+        "name": "小厢货",
+        "lengthRange": [300, 370],
+        "loadWeightRange": [1000, 1500],
+        "loadVolumeRange": [7.2, 9.6]
+    },
+    {
+        "name": "3米8",
+        "lengthRange": [380, 410],
+        "loadWeightRange": [1500, 2000],
+        "loadVolumeRange": [12.3, 18.9]
+    },
+    {
+        "name": "4米2",
+        "lengthRange": [380, 430],
+        "loadWeightRange": [1500, 2000],
+        "loadVolumeRange": [12.3, 19.8]
+    },
+    {
+        "name": "5米2",
+        "lengthRange": [500, 620],
+        "loadWeightRange": [2000, 6000],
+        "loadVolumeRange": [21, 28.6]
+    },
+    {
+        "name": "6米8",
+        "lengthRange": [640, 720],
+        "loadWeightRange": [6000, 10000],
+        "loadVolumeRange": [35.3, 43.2]
+    },
+    {
+        "name": "7米6",
+        "lengthRange": [730, 780],
+        "loadWeightRange": [8000, 12000],
+        "loadVolumeRange": [42, 48.7]
+    },
+    {
+        "name": "9米6",
+        "lengthRange": [900, 980],
+        "loadWeightRange": [10000, 18000],
+        "loadVolumeRange": [51.8, 61.2]
+    },
+    {
+        "name": "13米",
+        "lengthRange": [1170, 1300],
+        "loadWeightRange": [18000, 32000],
+        "loadVolumeRange": [67.3, 81.1]
+    },
+    {
+        "name": "17米5",
+        "lengthRange": [1600, 1750],
+        "loadWeightRange": [25000, 35000],
+        "loadVolumeRange": [100, 137.2]
+    }
+];
+
+const deliveryLocations = ["深圳仓", "义乌仓"]; // 收货地
+const cargoTypes = ["纸箱", "托盘"]; // 货物类型
 
 // 将数组数据挂载到 window 对象上
 window.data = {
+    vehicleTypes: vehicleTypes,
+    deliveryLocations: deliveryLocations,
+    cargoTypes: cargoTypes,
+    pickupFee: {
+        "深圳仓": {
+            // 起始地配置
+            pickupLocations: {
+                "深圳-龙岗": [
+                    { vehicle: "微面", fee: 150 },
+                    { vehicle: "小面", fee: 250 },
+                    { vehicle: "中面", fee: 280 },
+                    { vehicle: "微货", fee: 260 },
+                    { vehicle: "小厢货", fee: 420 },
+                    { vehicle: "3米8", fee: 360 },
+                    { vehicle: "4米2", fee: 480 },
+                    { vehicle: "5米2", fee: 500 },
+                    { vehicle: "6米8", fee: 600 },
+                    { vehicle: "7米6", fee: 750 },
+                    { vehicle: "9米6", fee: 900 },
+                    { vehicle: "13米", fee: 1500 },
+                    { vehicle: "17米5", fee: 1700 }
+                ]
+            }
+        },
+		"义乌仓": {
+            pickupLocations: {
+                "宁波": [
+                    { vehicle: "微面", fee: 400 },
+                    { vehicle: "小面", fee: 550 },
+                    { vehicle: "中面", fee: 640 },
+                    { vehicle: "微货", fee: 640 },
+                    { vehicle: "小厢货", fee: 720 },
+                    { vehicle: "3米8", fee: 700 },
+                    { vehicle: "4米2", fee: 1000 },
+                    { vehicle: "5米2", fee: 1100 },
+                    { vehicle: "6米8", fee: 1250 },
+                    { vehicle: "7米6", fee: 1500 },
+                    { vehicle: "9米6", fee: 1800 },
+                    { vehicle: "13米", fee: 2500 },
+                    { vehicle: "17米5", fee: 3200 }
+                ]
+            }
+        }
+    },
     // 快捷回复数组
     quickReplies: [
-
-
-
-
-
         {
             category: "物流",
             replies: [
@@ -251,8 +377,7 @@ window.data = {
         "欧洲": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Express"],
         "英国": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Express"],
         "其他": ["Express"]
-    }
-    
+    }   
 };
 
 // 价格数据表（支持不同渠道）
@@ -762,3 +887,5 @@ const usaCategories = [
     },
     // 其他分类...
 ];
+
+

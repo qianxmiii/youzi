@@ -9,27 +9,44 @@ const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcode
 
 // 页面加载时初始化
 window.onload = function () {
-    // 初始化派送方式
-    updateDeliveryMethods();
-    // // 加载快捷回复选项
-    // loadQuickReplies();
+
     // 获取下一个星期五的日期
     valid_date = getNextFriday();
     // valid_date = '2/28';
+
+    init(); // 初始化
+    eventListener();
+};
+
+/**
+ * 初始化
+ */
+function init() {
+
+    // 初始化派送方式
+    updateDeliveryMethods();
     // 渲染价格表格
     renderPriceTable();
-    // 监听渠道下拉选项的变化
-    document.getElementById("t4_channel").addEventListener("change", renderPriceTable());
     // 初始化时渲染标签按钮
     renderTagButtons();
     // 加载美国数据
     loadUSAData();
+    // 初始化
+    initQuickReplyCategories();
+    // 初始化车型查询 Tab
+    initVehicleTab();
+}
 
+
+/**
+ * 监听输入
+ */
+function eventListener() {
+    // 监听渠道下拉选项的变化
+    document.getElementById("t4_channel").addEventListener("change", renderPriceTable());
     // 监听搜索框输入
     document.getElementById("usaSearchInput").addEventListener("input", searchUSAData);
-
-    initQuickReplyCategories();
-};
+}
 
 
 // 计算箱规
@@ -786,3 +803,253 @@ function updateProfitRateTooltip(totalProfitRmb) {
     }
 }
 
+// 获取提货费输入框元素
+const pickupFeeInput = document.getElementById("pickup-fee");
+
+// 监听鼠标悬停事件
+pickupFeeInput.addEventListener("mouseenter", function () {
+    // 获取实重和方数
+    const totalWeight = parseFloat(document.getElementById("weight").value) || 0;
+    const totalVolume = parseFloat(document.getElementById("volume").value) || 0;
+
+    // 获取可选车型
+    const availableVehicles = getAvailableVehicles(totalWeight, totalVolume);
+
+    // 生成 Tooltip 内容
+    let tooltipContent = "可选车型：\n";
+    if (availableVehicles.length > 0) {
+        availableVehicles.forEach(vehicle => {
+            tooltipContent += `- ${vehicle.name}（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）\n`;
+        });
+    } else {
+        tooltipContent = "无合适车型，请调整重量或方数。";
+    }
+
+    // 设置 Tooltip 内容
+    const tooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
+    if (tooltipInstance) {
+        tooltipInstance.setContent({ '.tooltip-inner': tooltipContent });
+        tooltipInstance.show();
+    } else {
+        // 初始化 Tooltip
+        new bootstrap.Tooltip(pickupFeeInput, {
+            title: tooltipContent,
+            placement: "top", // Tooltip 显示在顶部
+            trigger: "hover"  // 鼠标悬停时显示
+        });
+    }
+});
+
+// 监听鼠标离开事件
+pickupFeeInput.addEventListener("mouseleave", function () {
+    const tooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
+    if (tooltipInstance) {
+        tooltipInstance.hide();
+    }
+});
+
+/**
+ * 根据重量和方数筛选可选车型
+ * @param {number} weight - 货物重量 (kg)
+ * @param {number} volume - 货物体积 (cbm)
+ * @returns {Array} - 符合条件的车型列表
+ */
+function getAvailableVehicles(weight, volume) {
+    return window.data.vehicleTypes.filter(vehicle => {
+        const [minWeight, maxWeight] = vehicle.loadWeightRange;
+        const [minVolume, maxVolume] = vehicle.loadVolumeRange;
+        return weight <= maxWeight-100 && volume <= maxVolume-1;
+    });
+}
+
+/**
+ * 初始化车型查询 Tab
+ */
+function initVehicleTab() {
+    // 动态加载起始地、收货地、货物类型和车型数据
+    const pickupLocationSelect = document.getElementById("pickup-location");
+    const deliveryLocationSelect = document.getElementById("delivery-location");
+    const cargoTypeSelect = document.getElementById("cargo-type");
+    const vehicleSelect = document.getElementById("vehicle-select");
+    const vehicleTableBody = document.getElementById("vehicle-table-body");
+
+    // // 动态加载起始地
+    // window.data.pickupLocations.forEach(location => {
+    //     const option = document.createElement("option");
+    //     option.value = location;
+    //     option.textContent = location;
+    //     pickupLocationSelect.appendChild(option);
+    // });
+
+    // 动态加载收货地
+    window.data.deliveryLocations.forEach(location => {
+        const option = document.createElement("option");
+        option.value = location;
+        option.textContent = location;
+        deliveryLocationSelect.appendChild(option);
+    });
+
+    // 动态加载货物类型
+    window.data.cargoTypes.forEach(type => {
+        const option = document.createElement("option");
+        option.value = type;
+        option.textContent = type;
+        cargoTypeSelect.appendChild(option);
+    });
+
+    // 动态加载车型
+    window.data.vehicleTypes.forEach(vehicle => {
+        // 添加到下拉选项
+        const option = document.createElement("option");
+        option.value = vehicle.name;
+        option.textContent = vehicle.name;
+        vehicleSelect.appendChild(option);
+
+        // 添加到表格
+        const row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${vehicle.name}</td>
+            <td>${vehicle.lengthRange[0]}~${vehicle.lengthRange[1]}</td>
+            <td>${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}</td>
+            <td>${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}</td>
+        `;
+        vehicleTableBody.appendChild(row);
+    });
+
+    // 监听重量和方数输入框的变化
+    const cargoWeightInput = document.getElementById("cargo-weight");
+    const cargoVolumeInput = document.getElementById("cargo-volume");
+    cargoWeightInput.addEventListener("input", updateVehicleOptions);
+    cargoVolumeInput.addEventListener("input", updateVehicleOptions);
+
+    // // 监听车型选择事件
+    // vehicleSelect.addEventListener("change", function () {
+    //     highlightSelectedVehicle(this.value);
+    //     updatePickupFee(pickupLocationSelect.value,this.value);
+    // });
+
+    initWarehouseSelect();
+}
+
+function initWarehouseSelect() {
+    const warehouseSelect = document.getElementById("delivery-location");
+    if (!warehouseSelect) return;
+
+    // 监听收货仓选择事件
+    warehouseSelect.addEventListener("change", function () {
+        updatePickupLocations(this.value);
+    });
+
+    updatePickupLocations(warehouseSelect.value);
+}
+
+function updatePickupLocations(warehouse) {
+    const pickupLocationSelect = document.getElementById("pickup-location");
+    if (!pickupLocationSelect) return;
+
+    // 清空下拉菜单
+    pickupLocationSelect.innerHTML = '';
+
+    // 获取当前收货仓的起始地
+    const pickupLocations = Object.keys(window.data.pickupFee[warehouse]?.pickupLocations || []);
+
+    // 动态加载起始地选项
+    pickupLocations.forEach(location => {
+        const option = document.createElement("option");
+        option.value = location;
+        option.textContent = location;
+        pickupLocationSelect.appendChild(option);
+    });
+
+    // 监听起始地选择事件
+    pickupLocationSelect.addEventListener("change", function () {
+        updateVehicleOptions(warehouse, this.value);
+    });
+
+    updateVehicleOptions(warehouse, pickupLocationSelect.value);
+}
+
+/**
+ * 根据重量和方数更新车型下拉选项
+ */
+function updateVehicleOptions(warehouse, pickupLocation)  {
+    const weight = parseFloat(document.getElementById("cargo-weight").value) || 0;
+    const volume = parseFloat(document.getElementById("cargo-volume").value) || 0;
+
+    // 获取合适的车型
+    const suitableVehicles = getAvailableVehicles(weight, volume);
+
+    // 更新车型下拉选项
+    const vehicleSelect = document.getElementById("vehicle-select");
+
+    // 如果没有合适的车型，提示用户
+    if (suitableVehicles.length === 0) {
+        vehicleSelect.innerHTML = '<option value="">无合适车型</option>';
+
+        return;
+    }
+
+    vehicleSelect.innerHTML = ''; // 清空选项
+    suitableVehicles.forEach(vehicle => {
+        const option = document.createElement("option");
+        option.value = vehicle.name;
+        option.textContent = vehicle.name;
+        vehicleSelect.appendChild(option);
+    });
+
+    // 找到容量最小的车型
+    let minVehicle = suitableVehicles[0];
+    for (let vehicle of suitableVehicles) {
+        if (vehicle.loadWeightRange[1] < minVehicle.loadWeightRange[1] && 
+            vehicle.loadVolumeRange[1] < minVehicle.loadVolumeRange[1]) {
+            minVehicle = vehicle;
+        }
+    }
+
+    // 高亮显示最小车型
+    highlightSelectedVehicle(minVehicle.name);
+
+    // 监听车型选择事件
+    vehicleSelect.addEventListener("change", function () {
+        updatePickupFee(warehouse, pickupLocation, this.value);
+    });
+
+    updatePickupFee(warehouse, pickupLocation, vehicleSelect.value);
+}
+/**
+ * 突出显示所选车型行
+ * @param {string} selectedVehicleName - 所选车型名称
+ */
+function highlightSelectedVehicle(selectedVehicleName) {
+    const vehicleTableBody = document.getElementById("vehicle-table-body");
+    const rows = vehicleTableBody.getElementsByTagName("tr");
+
+    // 遍历所有行，移除高亮样式
+    for (let row of rows) {
+        row.classList.remove("highlight-red");
+    }
+
+    // 找到所选车型的行并添加高亮样式
+    for (let row of rows) {
+        const vehicleName = row.cells[0].textContent;
+        if (vehicleName === selectedVehicleName) {
+            row.classList.add("highlight-red");
+            break;
+        }
+    }
+}
+
+/**
+ * 更新提货费
+ * @param {string} selectedVehicleName - 所选车型名称
+ */
+function updatePickupFee(warehouse, pickupLocation, selectedVehicle) {
+    const vehicles = window.data.pickupFee[warehouse]?.pickupLocations[pickupLocation] || [];
+    const selectedVehicleInfo = vehicles.find(vehicle => vehicle.vehicle === selectedVehicle);
+
+    if (selectedVehicleInfo) {
+        document.getElementById("pickup-fee-display").value = selectedVehicleInfo.fee;
+    } else {
+        document.getElementById("pickup-fee-display").value = "";
+    }
+}

@@ -304,7 +304,7 @@
           </div>
           <!-- 提货费 输入框 -->
           <div id="pickup-fee-input-container" style="display: none; width: 100px;">
-            <input type="number" id="pickup-fee" class="form-control" placeholder="RMB" oninput="updateQuote()" />
+            <input type="number" id="pickup-fee" class="form-control" placeholder="RMB" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="我在思考..." oninput="updateQuote()" />
           </div>
           <!-- DDU和DDP -->
           <div class="form-check form-switch">
@@ -359,6 +359,11 @@
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="tab4-tab" data-bs-toggle="tab" data-bs-target="#expressQueryTab" type="button" role="tab" aria-controls="tab4" aria-selected="false">
               快递派查价
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="vehicle-tab" data-bs-toggle="tab" data-bs-target="#vehicleTab" type="button" role="tab" aria-controls="vehicleTab" aria-selected="false">
+                车型查询
             </button>
           </li>
           <li class="nav-item" role="presentation">
@@ -673,6 +678,69 @@
             </div>
           </div>
 
+          <!-- Tab 5 提货费计算 -->
+          <div class="tab-pane fade" id="vehicleTab" role="tabpanel" aria-labelledby="vehicle-tab">
+            <div class="container mt-4">
+                <!-- 输入区域 -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <label for="pickup-location">起始地</label>
+                        <select id="pickup-location" class="form-control">
+                            <option value="">请选择起始地</option>
+                            <!-- 动态加载起始地 -->
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="delivery-location">收货地</label>
+                        <select id="delivery-location" class="form-control">
+                            <!-- 动态加载收货地 -->
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="cargo-type">货物类型</label>
+                        <select id="cargo-type" class="form-control">
+                            <!-- 动态加载货物类型 -->
+                        </select>
+                    </div>
+                </div>
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <label for="cargo-weight">重量 (kg)</label>
+                        <input type="number" id="cargo-weight" class="form-control" placeholder="请输入重量">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="cargo-volume">方数 (cbm)</label>
+                        <input type="number" id="cargo-volume" class="form-control" placeholder="请输入方数">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="vehicle-select">车型</label>
+                        <select id="vehicle-select" class="form-control">
+                            <option value="">请选择车型</option>
+                            <!-- 动态加载车型 -->
+                        </select>
+                    </div>
+                    <div class="col-md-3">
+                        <label for="pickup-fee-display">提货费 (RMB)</label>
+                        <input type="text" id="pickup-fee-display" class="form-control" readonly>
+                    </div>
+                </div>
+    
+                <!-- 车型表格 -->
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>车型</th>
+                            <th>厢长 (cm)</th>
+                            <th>载重 (kg)</th>
+                            <th>载方 (cbm)</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vehicle-table-body">
+                        <!-- 动态加载车型数据 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
           <!-- Tab Sample 内容 -->
           <div class="tab-pane fade" id="tabSample" role="tabpanel" aria-labelledby="tab4-tab">

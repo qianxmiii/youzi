@@ -577,6 +577,7 @@ function calculateCostDDP() {
     const volume = new Decimal(parseFloat(document.getElementById('tp_volume').value) || 0);
     const pricePerKg = new Decimal(parseFloat(document.getElementById('tp_price-per-kg').value) || 0);
     const deliveryFeeUSD = new Decimal(parseFloat(document.getElementById('tp_delivery-fee-usd').value) || 0);
+    const deliveryFeeRMB = new Decimal(parseFloat(document.getElementById('tp_delivery-fee-rmb').value) || 0);
 
     // 计算计费重
     let chargeWeight = Decimal.max(weight,volume.mul(1000000).dividedBy(6000)).toDecimalPlaces(0, Decimal.ROUND_UP);
@@ -599,8 +600,8 @@ function calculateCostDDP() {
     document.getElementById('tp_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
 
     // 计算派送费 (RMB)
-    const deliveryFeeRMB = deliveryFeeUSD.mul(exchange_rate);
-    document.getElementById('tp_delivery-fee-rmb').textContent = deliveryFeeRMB.toFixed(2);
+    const deliveryFeeTran = deliveryFeeUSD.mul(exchange_rate);
+    document.getElementById('tp_delivery-fee-final').textContent = deliveryFeeRMB.add(deliveryFeeTran).toFixed(2);
 
     // 计算总成本
     const totalCost = forwardingCost.plus(deliveryFeeRMB);

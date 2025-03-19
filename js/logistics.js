@@ -72,7 +72,7 @@ function calculate() {
         let quantity = new Decimal(row.querySelector('.quantity').value || 0);
 
         sizeinfo += '\n';
-        sizeinfo += length + '*' + width + '*' + height + 'cm ' + quantity + '箱';
+        sizeinfo += weight + 'kg '+ length + '*' + width + '*' + height + 'cm ' + quantity + '箱';
         // 计算体积 (cbm)
         let volume = length.mul(width).mul(height).mul(quantity).dividedBy(1000000);
         volume = Math.ceil(volume * 100) / 100; // 保留两位小数并向上取整
@@ -83,11 +83,11 @@ function calculate() {
 
         // 计算实重 (kg)
         let rowWeight = weight.mul(quantity);
-        rowWeight = Math.ceil(rowWeight * 100) / 100; // 保留两位小数并向上取整
+        rowWeight = new Decimal(Math.ceil(rowWeight * 100) / 100); // 保留两位小数并向上取整
 
         // 计算材积重 (kg)
         let dimensionWeight = length.mul(width).mul(height).mul(quantity).dividedBy(6000);
-        dimensionWeight = Math.ceil(dimensionWeight); // 向上取整
+        dimensionWeight = new Decimal(Math.ceil(dimensionWeight)); // 向上取整
 
         // 检查派送方式为“快递派”时，调整实重和材积重
         if (deliveryMethod == "快递派") {

@@ -3,6 +3,7 @@ const exchange_rate = 7.2; //美元汇率
 const cost_exchange_rate = 7.3; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
+let addFee = new Decimal(0); //其他费用
 
 // 引入 data.js 中的数组
 const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcodes} = window.data;
@@ -336,6 +337,7 @@ function updateQuote() {
         unit = 'ctn ';
     }
 
+    addFee = new Decimal(0); //每次初始化
     // 根据选择的备注格式动态生成备注内容
     if (quoteType === "通用") {
         // 构建备注内容
@@ -419,7 +421,9 @@ function updateQuote() {
         notes += channel + ": " + priceUsd + ' usd per kg. estimate : ' +
             priceUsd + 'usd/kg * ' + chargeWeight.toFixed(0) + 'kg = ' + totalPriceUsd + 'usd ' + MOQ + ' ' +
             getTransitTime(country, channel, postcode) + 'days';
-            if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { notes += getRemoteAddressfee(totalQuantity);} 
+            if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { 
+                notes += getRemoteAddressfee(totalQuantity);
+            } 
             if (isDDU) {
                 notes+= getDDUFee(country);
             }
@@ -431,6 +435,8 @@ function updateQuote() {
             }
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
+            '\n' + '\n' +
+            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + 'usd' +
             '\n' + '\n' +
             'Valid date: ' + valid_date;
     } else if (quoteType === "PROBOXX-CBM") {
@@ -454,6 +460,8 @@ function updateQuote() {
 
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
+            '\n' + '\n' +
+            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + 'usd' +
             '\n' + '\n' +
             'Valid date: ' + valid_date;
     }
@@ -757,8 +765,10 @@ function getRemoteAddressfee(totalQuantity) {
     let remoteAddressFee = new Decimal(3.5).mul(totalQuantity);
     if (remoteAddressFee.lessThan(21)) {
         remoteAddressStr += 'MOQ is 21usd ';
+        addFee = addFee.add(21);
     } else {
-        remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee.toFixed(2) + 'usd ';
+        remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
+        addFee = addFee.add(remoteAddressFee);
     }
 
     return remoteAddressStr;
@@ -767,8 +777,9 @@ function getRemoteAddressfee(totalQuantity) {
 // 获取超尺寸费
 function getOverSizeFee(country, totalQuantity) {
     let overSizeStr = LINE_BREAK + 'OverSize fee: ';
-    let overSizeFee = new Decimal(21).mul(totalQuantity);
-    overSizeStr += '21usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overSizeFee.toFixed(2) + 'usd ';
+    let overSizeFee = new Decimal(21).mul(totalQuantity).toFixed(2);
+    overSizeStr += '21usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overSizeFee+ 'usd ';
+    addFee = addFee.add(overSizeFee);
 
     return overSizeStr;
 }
@@ -776,9 +787,9 @@ function getOverSizeFee(country, totalQuantity) {
 // 获取超重费
 function getOverWeightFee(country, totalQuantity) {
     let overWeightStr = LINE_BREAK + 'OverWeight fee: ';
-    let overWeightFee = new Decimal(25).mul(totalQuantity);
-    overWeightStr += '25usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overWeightFee.toFixed(2) + 'usd ';
-
+    let overWeightFee = new Decimal(25).mul(totalQuantity).toFixed(2) ;
+    overWeightStr += '25usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overWeightFee+ 'usd ';
+    addFee = addFee.add(overWeightFee);
     return overWeightStr;
 }
 
@@ -1052,4 +1063,17 @@ function updatePickupFee(warehouse, pickupLocation, selectedVehicle) {
     } else {
         document.getElementById("pickup-fee-display").value = "";
     }
+}
+
+// 根据国家获取DDU操作费
+function getDDUFee(country){
+    let str = '';
+    if (country == "欧洲") {
+        str += '\n' + 'Customs clearance fee: 62usd';
+        addFee = addFee.add(62);
+    } else if (country == "英国") {
+        str += '\n' + 'Customs clearance fee: 48usd';
+        addFee = addFee.add(48);
+    }
+    return str;
 }

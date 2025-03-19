@@ -188,13 +188,3 @@ function addDays(transitTime, days) {
     }
 }
 
-// 根据国家获取DDU操作费
-function getDDUFee(country){
-    let str = '';
-    if (country == "欧洲") {
-        str += '\n' + 'Customs clearance fee: 62usd';
-    } else if (country == "英国") {
-        str += '\n' + 'Customs clearance fee: 48usd';
-    }
-    return str;
-}

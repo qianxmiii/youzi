@@ -501,65 +501,100 @@ function importData() {
 function parseDimensions() {
     // 获取输入的文本
     const input = document.getElementById("dimension-input").value.trim();
+    
+    // 使用正则表达式分割输入，支持 '|' 或 'LCL Load Item' 作为分隔符
+    const rows = input.split(/\||== LCL Load Item/).map(row => row.trim());
 
-    // 使用正则表达式解析长、宽、高、重量和箱数
-    const dimensionRegex = /(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*(cm|inch|in|英寸)?/i;
-    const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
-    const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+    // 获取表格的 tbody 元素
+    const tableBody = document.getElementById("box-table");
 
-    // 提取长、宽、高
-    const dimensionMatch = input.match(dimensionRegex);
-    let length = 0,
-        width = 0,
-        height = 0;
-    if (dimensionMatch) {
-        length = parseFloat(dimensionMatch[1]);
-        width = parseFloat(dimensionMatch[3]);
-        height = parseFloat(dimensionMatch[5]);
-        const unit = (dimensionMatch[7] || '').toLowerCase();
-
-        // 如果是英寸单位，转换为厘米
-        if (unit === 'inch' || unit === 'in' || unit === '英寸') {
-            length *= 2.54;
-            width *= 2.54;
-            height *= 2.54;
-        }
+    // 清除表格中除第一行外的所有行
+    while (tableBody.rows.length > 1) {
+        tableBody.deleteRow(1);
     }
 
-    // 提取重量
-    const weightMatch = input.match(weightRegex);
-    let weight = 0;
-    if (weightMatch) {
-        weight = parseFloat(weightMatch[1]);
-        const unit = (weightMatch[2] || '').toLowerCase();
 
-        // 如果是磅单位，转换为千克
-        if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
-            weight *= 0.453592;
+    // 处理每一行数据
+    rows.forEach((row, index) => {
+
+        // 如果当前行是空的，跳过
+        if (!row) {
+            return; // 跳过空行
         }
-    }
 
-    // 提取箱数
-    const quantityMatch = input.match(quantityRegex);
-    const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
+        // 使用正则表达式解析长、宽、高、重量和箱数
+        const dimensionRegex = /(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*(cm|inch|in|英寸)?/i;
+        const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
+        const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
 
-    // 获取当前行的输入框
-    const rows = document.querySelectorAll('.input-row');
-    const currentRow = rows[rows.length - 1];
+        // 提取长、宽、高
+        const dimensionMatch = row.match(dimensionRegex);
+        let length = 0, width = 0, height = 0;
+        if (dimensionMatch) {
+            length = parseFloat(dimensionMatch[1]);
+            width = parseFloat(dimensionMatch[3]);
+            height = parseFloat(dimensionMatch[5]);
+            const unit = (dimensionMatch[7] || '').toLowerCase();
+            // 如果是英寸单位，转换为厘米
+            if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+                length *= 2.54;
+                width *= 2.54;
+                height *= 2.54;
+            }
+        }
 
-    // 填充到长、宽、高列
-    currentRow.querySelector('.length').value = Math.ceil(length.toFixed(1));
-    currentRow.querySelector('.width').value = Math.ceil(width.toFixed(1));
-    currentRow.querySelector('.height').value = Math.ceil(height.toFixed(1));
+        // 提取重量
+        const weightMatch = row.match(weightRegex);
+        let weight = 0;
+        if (weightMatch) {
+            weight = parseFloat(weightMatch[1]);
+            const unit = (weightMatch[2] || '').toLowerCase();
+            // 如果是磅单位，转换为千克
+            if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
+                weight *= 0.453592;
+            }
+        }
 
-    // 填充到单箱实重列
-    currentRow.querySelector('.weight').value = weight.toFixed(2);
+        // 提取箱数
+        const quantityMatch = row.match(quantityRegex);
+        const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
 
-    // 填充到箱数列
-    currentRow.querySelector('.quantity').value = quantity;
+        // 获取当前行（如果需要，添加新行）
+        let currentRow;
+        if (index === 0 || (index == 1 && !rows[0])) {
+            currentRow = tableBody.rows[0]; // 第一行直接使用
+        } else {
+            currentRow = tableBody.insertRow(); // 添加新行
+            currentRow.classList.add('input-row');
+            currentRow.innerHTML = `
+                <td class="index-cell">${index + 1}</td>
+                <td><input type="number" class="form-control length" oninput="calculate()"></td>
+                <td><input type="number" class="form-control width" oninput="calculate()"></td>
+                <td><input type="number" class="form-control height" oninput="calculate()"></td>
+                <td><input type="number" class="form-control weight" oninput="calculate()"></td>
+                <td><input type="number" class="form-control quantity" oninput="calculate()"></td>
+                <td class="result-cell">0.00 cbm</td>
+                <td class="result-cell">0 kg</td>
+                <td class="result-cell">0 kg</td>
+                <td class="result-cell">0 kg</td>
+                <td class="result-cell">0 cm</td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
+                </td>
+            `;
+        }
 
-    // 触发计算
-    calculate();
+        // 将解析后的数据填充到当前行
+        currentRow.querySelector('.length').value = Math.ceil(length.toFixed(1));
+        currentRow.querySelector('.width').value = Math.ceil(width.toFixed(1));
+        currentRow.querySelector('.height').value = Math.ceil(height.toFixed(1));
+        currentRow.querySelector('.weight').value = weight.toFixed(2);
+        currentRow.querySelector('.quantity').value = quantity;
+
+        // 触发计算
+        calculate();
+    });
 }
 
 // 识别地址、箱数、重量、体积信息

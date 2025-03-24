@@ -267,7 +267,7 @@ function updateQuote() {
     document.getElementById('chargeWeight').value = chargeWeight;
 
     // 计算计费重 (CBM)：取总实重与材积重的较大者
-    let chargeCBM = Math.ceil(Decimal.max(totalWeight.dividedBy(363), totalVolume)* 100) / 100;
+    let chargeCBM = new Decimal(Math.ceil(Decimal.max(totalWeight.dividedBy(363), totalVolume)* 100) / 100);
     document.getElementById('chargeCBM').value = chargeCBM;
 
     // 计算泡比
@@ -309,8 +309,13 @@ function updateQuote() {
         document.getElementById("profit_rate").value = Math.ceil(profitRate * 100) + "%"; // 显示为百分比
     }
 
+    let totalProfitRmb = new Decimal(0);
     // 计算总利润 (RMB) = 计费重 * 利润 (RMB)
-    let totalProfitRmb = chargeWeight.mul(profitRmb);
+    if (quoteType.includes("CBM")) {
+        totalProfitRmb = chargeCBM.mul(profitRmb);
+    } else {
+        totalProfitRmb = chargeWeight.mul(profitRmb);
+    }
     document.getElementById("total_profit_rmb").value = totalProfitRmb; // 保留两位小数
 
     // 更新利率的 Tooltip

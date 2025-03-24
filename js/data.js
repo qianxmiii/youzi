@@ -842,6 +842,9 @@ const transitTimeData = {
         "Air express": {
             "default": "8-12"
         },
+        "Air ups/fedex": {
+            "default": "8-12"
+        },
         "Fast sea express": {
             "0-3": "20-25",
             "4-7": "18-22",
@@ -894,7 +897,7 @@ const transitTimeData = {
             "default": "32-38"
         },
         "Air express": {
-            "default": "8-12"
+            "default": "10-15"
         }
     }
 };

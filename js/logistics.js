@@ -12,8 +12,8 @@ const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcode
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    valid_date = getNextFriday();
-    // valid_date = '2/28';
+    // valid_date = getNextFriday();
+    valid_date = '3/28';
 
     init(); // 初始化
     eventListener();
@@ -354,6 +354,8 @@ function updateQuote() {
             notes += 'DDU ';
         }
         notes += channel + ": " + priceUsd + ' usd/kg * ' + chargeWeight.toFixed(0) + 'kg ';
+        notes += '= ' + totalPriceUsd + 'usd ' + MOQ + ' ';
+        notes += getTransitTime(country, channel, postcode) + 'days ';
         
         if (isMOQ) {
             notes += `MOQ is ${moqValue}kg `;
@@ -362,8 +364,7 @@ function updateQuote() {
         if (isDDU) {
             notes+= getDDUFee(country);
         }
-        notes += '= ' + totalPriceUsd + 'usd ' + MOQ + ' ';
-        notes += getTransitTime(country, channel, postcode) + 'days';
+        
         if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) {
 
             notes += getRemoteAddressfee(totalQuantity);
@@ -428,6 +429,9 @@ function updateQuote() {
         notes += channel + ": " + priceUsd + ' usd per kg. estimate : ' +
             priceUsd + 'usd/kg * ' + chargeWeight.toFixed(0) + 'kg = ' + totalPriceUsd + 'usd ' + MOQ + ' ' +
             getTransitTime(country, channel, postcode) + 'days';
+            if (isMOQ) {
+                notes += `MOQ is ${moqValue}kg `;
+            }
             if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { 
                 notes += getRemoteAddressfee(totalQuantity);
             } 
@@ -442,8 +446,8 @@ function updateQuote() {
             }
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
-            '\n' + '\n' +
-            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + 'usd' +
+            '\n' +
+            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + ' usd' +
             '\n' + '\n' +
             'Valid date: ' + valid_date;
     } else if (quoteType === "PROBOXX-CBM") {
@@ -467,8 +471,8 @@ function updateQuote() {
 
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +
-            '\n' + '\n' +
-            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + 'usd' +
+            '\n' +
+            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + ' usd' +
             '\n' + '\n' +
             'Valid date: ' + valid_date;
     }

@@ -254,10 +254,13 @@ function togglePickupFeeInput() {
 function toggleOverSizeFeeInput() {
     const overSizeFeeCheckbox = document.getElementById("oversize_check");
     const overSizeFeeInputContainer = document.getElementById("oversize-input-container");
+    const quantity = document.getElementById("quantity").value;
+    const oversize_quantity = document.getElementById("oversize-quantity");
 
     // 根据 checkbox 的状态显示或隐藏超尺寸输入框
     if (overSizeFeeCheckbox.checked) {
         overSizeFeeInputContainer.style.display = "block";
+        oversize_quantity.value = quantity;
     } else {
         overSizeFeeInputContainer.style.display = "none";
     }
@@ -271,10 +274,13 @@ function toggleOverSizeFeeInput() {
 function toggleOverWeightFeeInput() {
     const overWeightFeeCheckbox = document.getElementById("overweight_check");
     const overWeightFeeInputContainer = document.getElementById("overweight-input-container");
+    const quantity = document.getElementById("quantity").value;
+    const overweight_quantity = document.getElementById("overweight-quantity");
 
     // 根据 checkbox 的状态显示或隐藏超尺寸输入框
     if (overWeightFeeCheckbox.checked) {
         overWeightFeeInputContainer.style.display = "block";
+        overweight_quantity.value = quantity;
     } else {
         overWeightFeeInputContainer.style.display = "none";
     }

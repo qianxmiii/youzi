@@ -218,7 +218,9 @@ function updateQuote() {
     let isDDU = document.getElementById('ddu_check').checked; // DDP or DDU
     let isOverSize = document.getElementById('oversize_check').checked; // 超尺寸
     let overSizeFee = document.getElementById('oversize-input');
+    let overSizeQuantity = new Decimal(document.getElementById('oversize-quantity').value);
     let isOverWeight = document.getElementById('overweight_check').checked; // 超长
+    let overWeightQuantity = new Decimal(document.getElementById('overweight-quantity').value);
     let overWeightFee = document.getElementById('overweight-input');
 
     // 获取提货费
@@ -363,10 +365,10 @@ function updateQuote() {
         }
 
         if (isOverSize) {
-            notes+= getOverSizeFee(country, totalQuantity);
+            notes+= getOverSizeFee(country, overSizeQuantity);
         }
         if (isOverWeight) {
-            notes+= getOverWeightFee(country, totalQuantity);
+            notes+= getOverWeightFee(country, overWeightQuantity);
         }
         
         if (pickupFeeCheck) {
@@ -428,10 +430,10 @@ function updateQuote() {
                 notes+= getDDUFee(country);
             }
             if (isOverSize) {
-                notes+= getOverSizeFee(country, totalQuantity);
+                notes+= getOverSizeFee(country, overSizeQuantity);
             }
             if (isOverWeight) {
-                notes+= getOverWeightFee(country, totalQuantity);
+                notes+= getOverWeightFee(country, overWeightQuantity);
             }
             notes += '\n' +
             'Pick up fee: ' + pickUpFee + ' usd' +

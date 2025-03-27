@@ -362,7 +362,7 @@ function updateQuote() {
         }
 
         if (isDDU) {
-            notes+= getDDUFee(country);
+            notes+= getDDUFee(country, 1);
         }
         
         if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) {
@@ -393,7 +393,7 @@ function updateQuote() {
 
         notes += getTransitTime(country, channel, postcode) + 'days';
         if (isDDU) {
-            notes+= getDDUFee(country);
+            notes+= getDDUFee(country, 1);
         }
     } else if (quoteType === "通用-单价") {
         // 构建备注内容
@@ -408,6 +408,9 @@ function updateQuote() {
         }
         notes += getCN(channel) + ": " + priceRmb + 'RMB/kg * ' + chargeWeight.toFixed(0) + 'kg = ' + totalPriceRMB + 'RMB ' + MOQ + ' ' +
             getTransitTime(country, channel, postcode) + '天';
+        if (isDDU) {
+            notes+= getDDUFee(country, 0);
+        }
 
     } else if (quoteType === "通用-RMB-CBM") {
         // 构建备注内容
@@ -418,6 +421,9 @@ function updateQuote() {
         }
         notes += getCN(channel) + ": " + priceRmb + 'RMB/cbm * ' + chargeCBM + 'kg = ' + totalPriceRMB + 'RMB ' + MOQ + ' ' +
             getTransitTime(country, channel, postcode) + '天';
+        if (isDDU) {
+            notes+= getDDUFee(country, 0);
+        }    
 
     } else if (quoteType === "PROBOXX") {
         // 构建备注内容
@@ -436,7 +442,7 @@ function updateQuote() {
                 notes += getRemoteAddressfee(totalQuantity);
             } 
             if (isDDU) {
-                notes+= getDDUFee(country);
+                notes+= getDDUFee(country, 1);
             }
             if (isOverSize) {
                 notes+= getOverSizeFee(country, overSizeQuantity);
@@ -466,7 +472,7 @@ function updateQuote() {
             getTransitTime(country, channel, postcode) + 'days';
 
             if (isDDU) {
-                notes+= getDDUFee(country);
+                notes+= getDDUFee(country, 1);
             } 
 
             notes += '\n' +
@@ -1112,14 +1118,31 @@ function updatePickupFee(warehouse, pickupLocation, selectedVehicle) {
 }
 
 // 根据国家获取DDU操作费
-function getDDUFee(country){
+/**
+ * 
+ * @param {*} country 
+ * @param {0 中文 1 英文} type 
+ * @returns 
+ */
+function getDDUFee(country,type){
     let str = '';
     if (country == "欧洲") {
-        str += '\n' + 'Customs clearance fee: 62usd';
-        addFee = addFee.add(62);
+        if (type == 0){
+            str += '\n' + '清关费: 450RMB';
+            addFee = addFee.add(450);
+        } else {
+            str += '\n' + 'Customs clearance fee: 62usd';
+            addFee = addFee.add(62);
+        }
+        
     } else if (country == "英国") {
-        str += '\n' + 'Customs clearance fee: 48usd';
-        addFee = addFee.add(48);
+        if (type == 0){
+            str += '\n' + '清关费: 350RMB';
+            addFee = addFee.add(350);
+        } else {
+            str += '\n' + 'Customs clearance fee: 48usd';
+            addFee = addFee.add(48);
+        }        
     }
     return str;
 }

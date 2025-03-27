@@ -305,8 +305,21 @@ function updateQuote() {
 
     // 计算利率 = 1 - (成本 (RMB) / 报价 (RMB))
     if (!costRmb.equals(0) && !priceRmb.equals(0)) {
+        let profitRateInput = document.getElementById('profit_rate');
         let profitRate = new Decimal(1).minus(costRmb.dividedBy(priceRmb));
-        document.getElementById("profit_rate").value = Math.ceil(profitRate * 100) + "%"; // 显示为百分比
+        profitRateInput.value = Math.ceil(profitRate * 100) + "%"; // 显示为百分比
+
+        if (profitRate < 0.15) {
+            profitRateInput.style.color = '#ea4335'; 
+        } else if (profitRate < 0.20) {
+            profitRateInput.style.color = '#fbbc05'; 
+        } else if (profitRate < 0.25) {
+            profitRateInput.style.color = '#4285f4'; 
+        } else if (profitRate == 0){
+            profitRateInput.style.color = ''; // 恢复默认颜色
+        } else {
+            profitRateInput.style.color = '#34a853';
+        }
     }
 
     let totalProfitRmb = new Decimal(0);
@@ -338,6 +351,10 @@ function updateQuote() {
         totalPriceRMB = new Decimal(priceRmb).mul(chargeWeight);
     }
     document.getElementById("total_price_rmb").value = totalPriceRMB.toFixed(2);
+
+    // 计算单价(RMB) = 总报价 (RMB) / 计费重
+    let unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : 0;
+    document.getElementById("unit_price_rmb").value = unitPriceRMB.toFixed(2);
 
     let unit = 'ctns ';
     if (totalQuantity <= 1) {

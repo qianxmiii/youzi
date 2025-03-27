@@ -193,22 +193,23 @@
             <thead>
               <tr>
                 <th style="width: 6em">地址</th>
-                <th style="width: 6.5em">邮编</th>
+                <th style="width: 8.5em">邮编</th>
                 <th style="width: 5em">箱数</th>
-                <th>实重 (kg)</th>
-                <th>体积 (cbm)</th>
-                <th>材积重 (kg)</th>
-                <th>计费重 (kg)</th>
-                <th>计费方 (cbm)</th>
+                <th>实重</th>
+                <th>体积</th>
+                <th>材积重</th>
+                <th>计费重</th>
+                <th>计费方</th>
                 <th style="width: 5em">泡比</th>
-                <th style="width: 6em">成本 (RMB)</th>
-                <th style="width: 4.5em">利润 (RMB)</th>
-                <th style="width: 6em">报价 (RMB)</th>
-                <th style="width: 6em">报价 (USD)</th>
-                <th>利率</th>
+                <th style="width: 6em">成本</th>
+                <th style="width: 4.5em">利润</th>
+                <th style="width: 6em" class="hidden">报价 (RMB)</th>
+                <th style="width: 6em" class="hidden">报价 (USD)</th>
+                <th style="width: 5.5em">利率</th>
                 <th class="hidden">总利润 (RMB)</th>
                 <th class="hidden">总报价 (USD)</th>
                 <th class="hidden">总报价 (RMB)</th>
+                <th>单价</th>
               </tr>
             </thead>
             <tbody>
@@ -240,9 +241,9 @@
                 <!-- 利润 (RMB) -->
                 <td><input type="number" id="profit_rmb" class="form-control" value="0" oninput="updateQuote()" /></td>
                 <!-- 报价 (RMB) -->
-                <td><input type="number" id="price_rmb" class="form-control result" value="0" /></td>
+                <td class="hidden"><input type="number" id="price_rmb" class="form-control result" value="0" /></td>
                 <!-- 报价 (USD) -->
-                <td><input type="number" id="price_usd" class="form-control result" value="0" /></td>
+                <td class="hidden"><input type="number" id="price_usd" class="form-control result" value="0" /></td>
                 <!-- 利率 -->
                 <td><input type="text" id="profit_rate" class="form-control result" value="0" readonly 
                   data-bs-toggle="tooltip" data-bs-placement="top" />
@@ -253,6 +254,8 @@
                 <td class="hidden"><input type="text" id="total_price_usd" class="form-control result" value="0" readonly /></td>
                 <!-- 总报价 (RMB) -->
                 <td class="hidden"><input type="text" id="total_price_rmb" class="form-control result" value="0" readonly /></td>
+                <!-- 单价 (RMB) -->
+                <td><input type="text" id="unit_price_rmb" style="font-weight: bold; color: grey;" class="form-control result" value="0" readonly /></td>
               </tr>
             </tbody>
           </table>

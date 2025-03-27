@@ -6,7 +6,9 @@ const shippingChannels = {
       "Fast Maston truck",
       "Super Maston truck",
       "Normal Maston truck",
-      "Normal sea truck"
+      "Normal sea truck",
+      "Train truck",
+      "Truck truck",
     ],
     "快递派": [
       "Sea express", 
@@ -525,8 +527,8 @@ window.data = {
         "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",
             "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Express"
         ],
-        "欧洲": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Express"],
-        "英国": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Express"],
+        "欧洲": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Truck truck","Express"],
+        "英国": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Truck truck","Express"],
         "其他": ["Express"]
     }   
 };

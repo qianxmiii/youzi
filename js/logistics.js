@@ -79,7 +79,7 @@ function calculate() {
 
         // 计算单箱材积 (kg)
         let singleDimensionWeight = new Decimal(length).mul(width).mul(height).dividedBy(6000);
-        singleDimensionWeight = Math.ceil(singleDimensionWeight); // 向上取整
+        singleDimensionWeight = new Decimal(Math.ceil(singleDimensionWeight)); // 向上取整
 
         // 计算实重 (kg)
         let rowWeight = weight.mul(quantity);
@@ -105,13 +105,21 @@ function calculate() {
         sides.sort((a, b) => a - b); // 排序：从小到大
         let perimeter = new Decimal(sides[0]).add(new Decimal(sides[1])).mul(2).add(new Decimal(sides[2]));
 
+
         // 更新单行数据
         row.querySelector('.result-cell:nth-child(7)').innerText = `${volume} cbm`;
         row.querySelector('.result-cell:nth-child(8)').innerText = `${singleDimensionWeight} kg`; // 新增列
         row.querySelector('.result-cell:nth-child(9)').innerText = `${rowWeight} kg`;
         row.querySelector('.result-cell:nth-child(10)').innerText = `${dimensionWeight} kg`;
         row.querySelector('.result-cell:nth-child(11)').innerText = `${perimeter} cm`;
-        
+
+        let singleDimensionWeightCell = row.querySelector('.result-cell:nth-child(8)');
+        if (singleDimensionWeight >= 25) { // 材积大于25kg就提示
+            singleDimensionWeightCell.classList.add('highlight-red');
+        } else {
+            singleDimensionWeightCell.classList.remove('highlight-red');
+        }
+
         // 高亮显示周长
         let perimeterCell = row.querySelector('.result-cell:nth-child(11)');
         if (perimeter.greaterThanOrEqualTo(260)) {
@@ -638,7 +646,8 @@ function parsePackageInfo() {
     const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
-    const addressRegex = /\b([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字
+    const addressRegex = /(?:To \s+)?([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字 前缀支持带To
+    
 
     // 提取箱数
     const quantityMatch = input.match(quantityRegex);

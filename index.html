@@ -26,6 +26,7 @@
               <select class="form-select" id="delivery-method" oninput="calculate();">
                 <option value="卡派">卡派</option>
                 <option value="快递派">快递派</option>
+                <option value="快递5000">快递5000</option>
               </select>
               <label for="delivery-method">派送方式</label>
             </div>
@@ -70,13 +71,13 @@
               <th class="narrow-column">长 (cm)</th>
               <th class="narrow-column">宽 (cm)</th>
               <th class="narrow-column">高 (cm)</th>
-              <th class="narrow-column">单箱实重 (kg)</th>
+              <th class="narrow-column">单箱实重</th>
               <th class="narrow-column">箱数</th>
-              <th class="narrow-column">体积 (cbm)</th>
-              <th class="narrow-column">单箱材积 (kg)</th>
-              <th class="narrow-column">实重 (kg)</th>
-              <th class="narrow-column">材积重 (kg)</th>
-              <th class="narrow-column">周长 (cm)</th>
+              <th class="narrow-column">体积</th>
+              <th class="narrow-column">单箱材积</th>
+              <th class="narrow-column">实重</th>
+              <th class="narrow-column">材积重</th>
+              <th class="narrow-column">周长</th>
               <th class="narrow-column">操作</th>
             </tr>
           </thead>
@@ -129,11 +130,18 @@
             </div>
           </div>
         </div>
-
-        <!-- 警告信息文本域 -->
+        <!-- 警告信息区域（修改后）-->
         <div class="form-group mt-3">
-          <label for="box-warnings" class = "subtitle">警告信息</label>
-          <textarea id="box-warnings" class="form-control no-warnings" rows="3" readonly></textarea>
+          <button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#warningsCollapse"
+            id="warningsToggle" style="display: none;"> <!-- 初始隐藏 -->
+            警告信息 <span class="badge bg-danger" id="warningCount">0</span>
+          </button>
+        
+          <div class="collapse" id="warningsCollapse">
+            <div class="card card-body mt-2">
+              <textarea id="box-warnings" class="form-control" rows="3" readonly></textarea>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -368,11 +376,16 @@
           </li>
           <li class="nav-item" role="presentation">
             <button class="nav-link" id="vehicle-tab" data-bs-toggle="tab" data-bs-target="#vehicleTab" type="button" role="tab" aria-controls="vehicleTab" aria-selected="false">
-                车型查询
+              车型查询
             </button>
           </li>
           <li class="nav-item" role="presentation">
-            <button class="nav-link" id="tab5-tab" data-bs-toggle="tab" data-bs-target="#tabSample" type="button" role="tab" aria-controls="tab5" aria-selected="false">
+            <button class="nav-link" id="tab6-tab" data-bs-toggle="tab" data-bs-target="#tabSample" type="button" role="tab" aria-controls="tab5" aria-selected="false">
+              柚子杂货铺
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab7-tab" data-bs-toggle="tab" data-bs-target="#tabSample" type="button" role="tab" aria-controls="tab5" aria-selected="false">
               Tab样例
             </button>
           </li>
@@ -554,7 +567,7 @@
                     <td><span id="t_charge-volume">0.00</span></td>
                     <td><span id="t_volume-ratio">0</span></td>
                     <td><input type="number" class="form-control" id="t_price-per-cbm" oninput="calculateCostDDU()" /></td>
-                    <td><input type="number" class="form-control" id="t_goods-value" oninput="calculateCostDDU()" value="120" /></td>
+                    <td><input type="number" class="form-control" id="t_goods-value" oninput="calculateCostDDU()" value="167" /></td>
                     <td><input type="number" class="form-control" id="t_tax-rate" oninput="calculateCostDDU()" /></td>
                     <td><input type="number" class="form-control" id="t_delivery-fee-usd" oninput="calculateCostDDU()" /></td>
                     <td><span id="t_freight-forwarding-cost">0.00</span></td>
@@ -673,6 +686,7 @@
                       <option value="美森正班">美森正班</option>
                       <option value="美森加班">美森加班</option>
                       <option value="普船">普船</option>
+                      <option value="美森以星合德">美森以星合德</option>
                       <option value="空派不带电">空派不带电</option>
                       <option value="空派带电">空派带电</option>
                     </select>

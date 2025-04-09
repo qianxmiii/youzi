@@ -12,8 +12,8 @@ const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcode
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    // valid_date = getNextFriday();
-    valid_date = '3/28';
+    valid_date = getNextFriday();
+    // valid_date = '3/28';
 
     init(); // 初始化
     eventListener();
@@ -78,7 +78,11 @@ function calculate() {
         volume = Math.ceil(volume * 100) / 100; // 保留两位小数并向上取整
 
         // 计算单箱材积 (kg)
-        let singleDimensionWeight = new Decimal(length).mul(width).mul(height).dividedBy(6000);
+        let volumeRatio = new Decimal(6000);
+        if (deliveryMethod == "快递5000") {
+            volumeRatio = new Decimal(5000);
+        }
+        let singleDimensionWeight = new Decimal(length).mul(width).mul(height).dividedBy(volumeRatio);
         singleDimensionWeight = new Decimal(Math.ceil(singleDimensionWeight)); // 向上取整
 
         // 计算实重 (kg)
@@ -189,14 +193,43 @@ function calculate() {
      document.getElementById('summary-total-weight').innerText = Math.ceil(totalWeight);
      document.getElementById('summary-chargeweight').innerText = Math.ceil(totalDimensionWeight);
 
-    // 更新警告信息
+    // 获取DOM元素
     const warningsTextarea = document.getElementById('box-warnings');
+    const warningsToggle = document.getElementById('warningsToggle');
+    const warningCount = document.getElementById('warningCount');
+    const warningsCollapse = new bootstrap.Collapse('#warningsCollapse', {
+        toggle: false
+    });
+
     if (warnings.length > 0) {
-        warningsTextarea.value = warnings.join('\n'); // 将警告信息拼接为字符串
-        warningsTextarea.classList.remove('no-warnings'); // 移除绿色背景类
+        // 有警告的情况
+        warningsTextarea.value = warnings.join('\n');
+        warningsTextarea.classList.remove('no-warnings');
+        warningsTextarea.classList.add('has-warnings');
+
+        // 显示警告按钮并更新计数
+        warningsToggle.style.display = 'inline-block';
+        warningCount.textContent = warnings.length;
+
+        // 自动展开警告框
+        warningsCollapse.show();
+
+        // 添加动画效果
+        warningsTextarea.style.animation = 'shake 0.5s';
+        setTimeout(() => {
+            warningsTextarea.style.animation = '';
+        }, 500);
     } else {
-        warningsTextarea.value = '无警告信息'; // 如果没有警告，显示“无警告信息”
-        warningsTextarea.classList.add('no-warnings'); // 添加绿色背景类
+        // 无警告的情况
+        warningsTextarea.value = '✓ 所有箱规符合要求';
+        warningsTextarea.classList.remove('has-warnings');
+        warningsTextarea.classList.add('no-warnings');
+
+        // 隐藏警告按钮
+        warningsToggle.style.display = 'none';
+
+        // 自动收起警告框
+        warningsCollapse.hide();
     }
 }
 
@@ -778,7 +811,7 @@ function showCost(origin,country,channel,postcode,weight,withBattery){
     let cost = 0;
     if(origin && country && channel.includes('express')){
         if (channel == 'Fast sea express' || channel == 'Fast Maston express' 
-            || channel == 'Super sea express' || channel == 'Fast sea ups/fedex'){
+             || channel == 'Fast sea ups/fedex' || channel == 'Super sea express'){
                 channel = "美森正班";
         } else if (channel == 'Normal sea express' || channel == 'Normal Maston express') {
             channel = "美森加班";

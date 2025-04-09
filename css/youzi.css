@@ -209,6 +209,18 @@ td input.form-control {
   color: #155724; /* 绿色文字 */
 }
 
+/* 有警告时的样式 */
+#box-warnings.has-warnings {
+  background-color: #f8d7da;
+  color: #6b2e33;
+  border-color: #f299a0;
+}
+
+/* 警告按钮 */
+#warningsToggle {
+  transition: all 0.3s ease;
+}
+
 /* ----------- */
 /* 导入数据 */
 /* ----------- */

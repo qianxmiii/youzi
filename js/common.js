@@ -28,19 +28,24 @@ function getTransitTime(country, channel, postcode) {
     let transitTime = "";
     postcode = postcode != null ? postcode[0] : 0;
 
-    if (country == "美国") {
-        transitTime = getTransitTimeUSA(channel, postcode);
-        // 偏远+5天
-        // let isRemoteAddress = document.getElementById('remote-address').checked;
-        // if (isRemoteAddress) {
-        //     transitTime = getRemoteTranTime(channel,transitTime);
-        // }      
-    } else if (country == "加拿大") {
-        transitTime = getTransitTimeCA(channel, postcode);
-    } else if (country == "欧洲") {
-        transitTime = getTransitTimeEU(channel, postcode);
-    } else if (country == "英国") {
-        transitTime = getTransitTimeUK(channel, postcode);
+    switch (country) {
+        case "美国":
+            transitTime = getTransitTimeUSA(channel, postcode);
+            break;
+        case "加拿大":
+            transitTime = getTransitTimeCA(channel, postcode);
+            break;
+        case "欧洲":
+            transitTime = getTransitTimeEU(channel, postcode);
+            break;
+        case "英国":
+            transitTime = getTransitTimeUK(channel, postcode);
+            break;
+        case "澳大利亚":
+            transitTime = getTransitTimeAU(channel, postcode);
+            break;
+        default:
+            transitTime = ""; // 或者其他默认值
     }
     return transitTime;
 }
@@ -128,6 +133,21 @@ function getTransitTimeUK(channel, postcode) {
     }
 
     return transitTime;
+}
+
+/**
+ * 获取加拿大时效
+ */
+function getTransitTimeAU(channel, postcode) {
+    const transitData = transitTimeData["Austrilia"]; // 获取加拿大时效数据
+    if (!transitData || !transitData[channel]) {
+        return ""; // 如果渠道不存在，返回空字符串
+    }
+
+    const channelData = transitData[channel]; // 获取当前渠道的时效数据
+
+    // 返回默认时效
+    return channelData["default"] || "";
 }
 
 /**

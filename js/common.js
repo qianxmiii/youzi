@@ -107,32 +107,31 @@ function getTransitTimeCA(channel, postcode) {
  * 获取欧洲时效
  */
 function getTransitTimeEU(channel, postcode) {
-    let transitTime = "";
-    if (channel == "Sea truck") {
-        transitTime = "50-55";
-    } else if (channel == "Sea express") {
-        transitTime = "45-50";
-    } else if (channel == "Air express") {
-        transitTime = "8-12";
+
+    const transitData = transitTimeData["Europe"]; // 获取加拿大时效数据
+    if (!transitData || !transitData[channel]) {
+        return ""; // 如果渠道不存在，返回空字符串
     }
 
-    return transitTime;
+    const channelData = transitData[channel]; // 获取当前渠道的时效数据
+
+    // 返回默认时效
+    return channelData["default"] || "";
 }
 
 /**
  * 获取英国时效
  */
 function getTransitTimeUK(channel, postcode) {
-    let transitTime = "";
-    if (channel == "Sea truck") {
-        transitTime = "50-55";
-    } else if (channel == "Sea express") {
-        transitTime = "45-50";
-    } else if (channel == "Air express") {
-        transitTime = "8-12";
+    const transitData = transitTimeData["UK"]; // 获取加拿大时效数据
+    if (!transitData || !transitData[channel]) {
+        return ""; // 如果渠道不存在，返回空字符串
     }
 
-    return transitTime;
+    const channelData = transitData[channel]; // 获取当前渠道的时效数据
+
+    // 返回默认时效
+    return channelData["default"] || "";
 }
 
 /**

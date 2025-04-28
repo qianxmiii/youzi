@@ -8,7 +8,7 @@ const shippingChannels = {
       "Normal Maston truck",
       "Normal sea truck",
       "Train truck",
-      "Truck truck",
+      "Road truck",
     ],
     "快递派": [
       "Sea express", 
@@ -23,7 +23,7 @@ const shippingChannels = {
       "Normal sea express",
       "Normal sea ups/fedex",
       "Train express",
-      "Truck express"
+      "Road express"
     ]
   };
 // 车型数据
@@ -134,6 +134,21 @@ window.data = {
                     { vehicle: "9米6", fee: 900 },
                     { vehicle: "13米", fee: 1500 },
                     { vehicle: "17米5", fee: 1700 }
+                ],
+                "东莞": [
+                    { vehicle: "微面", fee: 180 },
+                    { vehicle: "小面", fee: 240 },
+                    { vehicle: "中面", fee: 280 },
+                    { vehicle: "微货", fee: 280 },
+                    { vehicle: "小厢货", fee: 350 },
+                    { vehicle: "3米8", fee: 420 },
+                    { vehicle: "4米2", fee: 500 },
+                    { vehicle: "5米2", fee: 580 },
+                    { vehicle: "6米8", fee: 750 },
+                    { vehicle: "7米6", fee: 800 },
+                    { vehicle: "9米6", fee: 1000 },
+                    { vehicle: "13米", fee: 1700 },
+                    { vehicle: "17米5", fee: 1900 }
                 ]
             }
         },
@@ -259,6 +274,10 @@ window.data = {
         "LGB8": "92376",
         "LAX9": "92337",
 
+        "ONT2": "92408",
+        "ONT6": "92551",
+        "ONT9": "92374",
+        "SNA4": "92376",
         "QXY9": "92223",
         "KRB1": "92408",
         "POC3": "92509",
@@ -270,10 +289,14 @@ window.data = {
         "SMF6": "95837",
         "SMF3": "95206",
         "OAK3": "95363",
+        "OAK4": "95304",
         "MCE1": "95380",
         "PDX7": "97317",
+        "PDX6": "97203",
+        "PDX9": "97060",
         "BFI1": "98390",
         "BFI3": "98327",
+        "SCK1": "95215", /* 偏远 */
         "SCK4": "95215", /* 偏远 */
         "SCK8": "94561", /* 偏远 */
     
@@ -288,7 +311,12 @@ window.data = {
         "GYR1": "85338",
         "GYR2": "85395",
         "GYR3": "85043",
+        "PHX1": "85340",
+        "PHX3": "85043",
+        "PHX5": "85338",
+        "PHX6": "85043",
         "PHX7": "85043",
+        "SLC3": "84116",
         "SLC2": "84081",
         "SLC1": "84116",
         "DEN2": "80019",
@@ -296,6 +324,7 @@ window.data = {
         "LAS1": "89044", /* 偏远 */
         "ABQ2": "87031", /* 偏远 */
 
+        "SAT6": "78666",
         "SAT4": "78245",
         "SAT2": "78666",
         "SAT1": "78154",
@@ -313,19 +342,29 @@ window.data = {
         "AMA1": "79108", /* 偏远 */
 
         "ICT2": "67219",
+        "MKC6": "66102",
         "MKC4": "66021",
         "FOE1": "66109",
         "MCI3": "64068",
         "STL3": "65738",
         "STL4": "62025",
+        "STL6": "62025",
+        "STL8": "63376",
         "IGQ2": "60484",
         "RFD2": "60142",
+        "RFD4": "60142",
         "ORD2": "60410",
         "MDW2": "60433",
         "MDW4": "60433",
-        "RFD4": "60142",
+        "MDW6": "60446",
+        "MDW7": "60449",
+        "MDW8": "60085",
+        "MDW9": "60502",
+
 
         "JVL1": "53511",
+        "MKE1": "53144",
+        "MKE2": "53154",
         
         "DET2": "48317",
         "DET1": "48150",
@@ -334,19 +373,27 @@ window.data = {
         "IND9": "46143",
         "PPO4": "46410",
         "MQJ1": "46140",
+        "MQJ2": "46184",
         "CMH3": "45050",
         "AKR1": "44705",
         "AKC1": "44320",
+        "SDF1": "42718", /* 偏远 */
+        "SDF4": "40165", /* 偏远 */
         
         "MEM1": "38118",
+        "MEM2": "38611",
+        "MEM4": "38128",
         "MEM6": "38654",
+        "MEM8": "38611",
         "CHA1": "37416",
         "BNA6": "37040",
         "PBI3": "34986",
         "TMB8": "33032",
         "MIA1": "33054",
+        "TPA6": "34475",
         "TPA3": "33823",
         "TPA2": "33811",
+        "TPA1": "33570",
         "MCO1": "32824",
         "MCO2": "32725",
         "JAX3": "32210",
@@ -359,13 +406,17 @@ window.data = {
         "MGE3": "30549", /* 偏远 */
         "RYY2": "30184", /* 偏远 */
   
+        "RDU2": "27577",
         "RDU4": "28303", 
         "CLT2": "28214",
         "GSO1": "27284",
         "ORF2": "23321",
+        "XRI3": "23234",
         "XLX1": "21740",
-        "RDU2": "27577",
-        "HGR6": "21740",  
+        "HGR6": "21740",
+        "RIC1": "23803",
+        "RIC2": "23836",
+        "RIC3": "23234",
         "RMN3": "22406",    
         "CHO1": "22939",
         "DCA6": "21219",
@@ -373,6 +424,14 @@ window.data = {
         "BWI2": "21224",
         "BWI1": "20166",
         
+        "PHL1": "19720",
+        "PHL2": "18015",
+        "PHL3": "19720",
+        "PHL4": "17015",
+        "PHL5": "17339",
+        "PHL6": "17015",
+        "PHL7": "19709",
+        "PHL8": "19709",
         "ILG1": "19720",
         "AVP1": "18202",
         "MDT4": "17408",
@@ -384,6 +443,8 @@ window.data = {
         "SWF2": "12533", /* 偏远 */
         "SWF1": "12575", /* 偏远 */
         
+        "TEB4": "08069",
+        "TEB6": "08512",
         "TEB9": "08873",
         "ABE8": "08518",
         "ACY2": "08016",
@@ -514,24 +575,25 @@ window.data = {
 
     // 偏远地区邮编列表
     remotePostcodes: [
-        "89044", "60421", "46231", "66021", "67337", "66021", 
+        "89044", "60421", "46231", "66021", "67337",
         "40165", "42718", "21901", "89408", "18424", "18707", 
         "17257", "19530", "37090", "37090", "37310", "77423", 
         "23803", "53125", "98327", "95215", "15126", "12533",
-        "79108", "87031", "18447", "29330", "17225", "94561"
+        "79108", "87031", "18447", "29330", "17225", "94561",
+        "30549"
     ],
 
     // 派送方式按国家分类
     deliveryMethodsByCountry: {
         "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",
             "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Express", "Sea ups/fedex", 
-            "Fast sea ups/fedex", "Air ups/fedex",
+            "Fast sea ups/fedex", "Air ups/fedex","UPS/Fedex/DHL"
         ],
         "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",
             "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Express"
         ],
-        "欧洲": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Truck truck","Express"],
-        "英国": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Truck express","Truck truck","Express"],
+        "欧洲": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
+        "英国": ["Sea truck", "Sea express", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
         "澳大利亚": ["Sea truck", "Sea express"],
         "其他": ["Express"]
     }   
@@ -902,14 +964,75 @@ const transitTimeData = {
         "Sea express": {
             "default": "32-38"
         },
+        "Fast Maston truck": {
+            "default": "22-28"
+        },
+        "Fast sea truck": {
+            "default": "22-28"
+        },
         "Fast Maston express": {
-            "default": "32-38"
+            "default": "20-28"
+        },
+        "Fast sea express": {
+            "default": "20-28"
         },
         "Super sea express": {
-            "default": "32-38"
+            "default": "20-28"
         },
         "Air express": {
             "default": "10-15"
+        }
+    },
+    "Europe": {
+        "Sea truck": {
+            "default": "50-55"
+        },
+        "Sea express": {
+            "default": "45-50"
+        },
+        "Train truck": {
+            "default": "28-38"
+        },
+        "Train express": {
+            "default": "28-38"
+        },
+        "Road truck": {
+            "default": "22-28"
+        },
+        "Road express": {
+            "default": "22-28"
+        },
+        "Air express": {
+            "default": "8-12"
+        },
+        "Express": {
+            "default": "5-8"
+        }
+    },
+    "UK": {
+        "Sea truck": {
+            "default": "45-55"
+        },
+        "Sea express": {
+            "default": "40-50"
+        },
+        "Train truck": {
+            "default": "30-40"
+        },
+        "Train express": {
+            "default": "30-38"
+        },
+        "Road truck": {
+            "default": "24-28"
+        },
+        "Road express": {
+            "default": "23-27"
+        },
+        "Air express": {
+            "default": "8-12"
+        },
+        "Express": {
+            "default": "5-8"
         }
     },
     "Austrilia": {

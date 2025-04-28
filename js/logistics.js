@@ -477,7 +477,7 @@ function updateQuote() {
         if (isDDU) {
             notes += 'DDU ';
         }
-        notes += getCN(channel) + ": " + priceRmb + 'RMB/cbm * ' + chargeCBM + 'kg = ' + totalPriceRMB + 'RMB ' + MOQ + ' ' +
+        notes += getCN(channel) + ": " + priceRmb + 'RMB/cbm * ' + chargeCBM + 'cbm = ' + totalPriceRMB + 'RMB ' + MOQ + ' ' +
             getTransitTime(country, channel, postcode) + '天';
         if (isDDU) {
             notes+= getDDUFee(country, 0);

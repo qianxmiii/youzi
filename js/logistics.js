@@ -12,8 +12,8 @@ const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcode
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    valid_date = getNextFriday();
-    // valid_date = '3/28';
+    // valid_date = getNextFriday();
+    valid_date = '4/30';
 
     init(); // 初始化
     eventListener();

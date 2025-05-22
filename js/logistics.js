@@ -12,8 +12,8 @@ const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcode
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    // valid_date = getNextFriday();
-    valid_date = '5/23';
+    valid_date = getNextFriday();
+    // valid_date = '5/23';
 
     init(); // 初始化
     eventListener();
@@ -71,44 +71,32 @@ function calculate() {
         let weight = new Decimal(row.querySelector('.weight').value || 0);
         let quantity = new Decimal(row.querySelector('.quantity').value || 0);
 
-        sizeinfo += '\n';
-        sizeinfo += weight + 'kg '+ length + '*' + width + '*' + height + 'cm ' + quantity + '箱';
+        sizeinfo += `\n${weight}kg ${length}*${width}*${height}cm ${quantity}箱`;
         // 计算体积 (cbm)
         let volume = length.mul(width).mul(height).mul(quantity).dividedBy(1000000);
-        volume = Math.ceil(volume * 100) / 100; // 保留两位小数并向上取整
+        volume = volume.mul(100).ceil().div(100); // 保留两位小数并向上取整
 
         // 计算单箱材积 (kg)
-        let volumeRatio = new Decimal(6000);
-        if (deliveryMethod == "快递5000") {
-            volumeRatio = new Decimal(5000);
-        }
-        let singleDimensionWeight = new Decimal(length).mul(width).mul(height).dividedBy(volumeRatio);
-        singleDimensionWeight = new Decimal(Math.ceil(singleDimensionWeight)); // 向上取整
+        let volumeRatio = deliveryMethod == "快递5000" ? new Decimal(5000) : new Decimal(6000);
+        
+        let singleDimensionWeight = length.mul(width).mul(height).div(volumeRatio).ceil(); // 向上取整
 
         // 计算实重 (kg)
-        let rowWeight = weight.mul(quantity);
-        rowWeight = new Decimal(Math.ceil(rowWeight * 100) / 100); // 保留两位小数并向上取整
+        let rowWeight = weight.mul(quantity).mul(100).ceil().div(100); // 保留两位小数并向上取整
 
         // 计算材积重 (kg)
-        let dimensionWeight = length.mul(width).mul(height).mul(quantity).dividedBy(6000);
-        dimensionWeight = new Decimal(Math.ceil(dimensionWeight)); // 向上取整
+        let dimensionWeight = length.mul(width).mul(height).mul(quantity).div(6000).ceil(); // 向上取整
 
         // 检查派送方式为“快递派”时，调整实重和材积重
         if (deliveryMethod == "快递派") {
             let minWeight = new Decimal(12).mul(quantity); // 最低实重和材积重要求
-            if (rowWeight.lessThan(minWeight)) {
-                rowWeight = minWeight; // 更新实重
-            }
-            if (dimensionWeight.lessThan(minWeight)) {
-                dimensionWeight = minWeight; // 更新材积重
-            }
+            if (rowWeight.lessThan(minWeight)) rowWeight = minWeight; // 更新实重
+            if (dimensionWeight.lessThan(minWeight)) dimensionWeight = minWeight; // 更新材积重
         }
 
         // 计算周长 (cm)
-        let sides = [length, width, height];
-        sides.sort((a, b) => a - b); // 排序：从小到大
-        let perimeter = new Decimal(sides[0]).add(new Decimal(sides[1])).mul(2).add(new Decimal(sides[2]));
-
+        let sides = [length, width, height].sort((a, b) => a.minus(b).toNumber()); // 排序：从小到大
+        let perimeter = sides[0].add(sides[1]).mul(2).add(sides[2]);
 
         // 更新单行数据
         row.querySelector('.result-cell:nth-child(7)').innerText = `${volume} cbm`;
@@ -118,19 +106,11 @@ function calculate() {
         row.querySelector('.result-cell:nth-child(11)').innerText = `${perimeter} cm`;
 
         let singleDimensionWeightCell = row.querySelector('.result-cell:nth-child(8)');
-        if (singleDimensionWeight >= 25) { // 材积大于25kg就提示
-            singleDimensionWeightCell.classList.add('highlight-red');
-        } else {
-            singleDimensionWeightCell.classList.remove('highlight-red');
-        }
+        singleDimensionWeightCell.classList.toggle('highlight-red', singleDimensionWeight.greaterThanOrEqualTo(25)); // 材积大于25kg就提示
 
         // 高亮显示周长
         let perimeterCell = row.querySelector('.result-cell:nth-child(11)');
-        if (perimeter.greaterThanOrEqualTo(260)) {
-            perimeterCell.classList.add('highlight-red');
-        } else {
-            perimeterCell.classList.remove('highlight-red');
-        }
+        perimeterCell.classList.toggle('highlight-red', perimeter.greaterThanOrEqualTo(260));
 
         // 累加总计
         totalQuantity = totalQuantity.add(quantity);
@@ -140,45 +120,43 @@ function calculate() {
 
         // 检查规则
         if (rules) {
-            let isOver = 0;
-            let waringstr = `第 ${index + 1} 行：${quantity} 箱，`;
+            let isOver = false;
+            let warningStr = `第 ${index + 1} 行：${quantity} 箱，`;
             if (weight.greaterThan(rules.maxWeight)) {
-                waringstr += `单件实重 ${weight} kg (> ${rules.maxWeight} kg),`;
-                isOver = 1;
+                warningStr += `单件实重 ${weight} kg (> ${rules.maxWeight} kg),`;
+                isOver = true;
             }
             if (sides[2].greaterThan(rules.maxLength)) {
-                waringstr += `最长边 ${sides[2]} cm (> ${rules.maxLength} cm), `;
-                isOver = 1;
+                warningStr += `最长边 ${sides[2]} cm (> ${rules.maxLength} cm), `;
+                isOver = true;
             }
             if (sides[1].greaterThan(rules.maxSecondLength)) {
-                waringstr += `第二长边 ${sides[1]} cm (> ${rules.maxSecondLength} cm), `;
-                isOver = 1;
+                warningStr += `第二长边 ${sides[1]} cm (> ${rules.maxSecondLength} cm), `;
+                isOver = true;
             }
             if (perimeter.greaterThan(rules.maxPerimeter)) {
-                waringstr += `围长 ${perimeter} cm (> ${rules.maxPerimeter} cm),`;
-                isOver = 1;
+                warningStr += `围长 ${perimeter} cm (> ${rules.maxPerimeter} cm),`;
+                isOver = true;
             }
             if (rules.maxDimensionWeight && singleDimensionWeight > rules.maxDimensionWeight) {
-                waringstr += `单箱材积 ${singleDimensionWeight} kg (> ${rules.maxDimensionWeight} kg),`;
-                isOver = 1;
+                warningStr += `单箱材积 ${singleDimensionWeight} kg (> ${rules.maxDimensionWeight} kg),`;
+                isOver = true;
             }
 
-            if (isOver == 1) {
-                warnings.push(waringstr);
-            }
+            if (isOver) warnings.push(warningStr);
         }
         
     });
 
     // 更新总计数据
-    document.getElementById('total-volume').innerText = Math.ceil(totalVolume * 100) / 100; // 向上取整保留两位小数
-    document.getElementById('total-weight').innerText = Math.ceil(totalWeight); // 向上取整
-    document.getElementById('total-quantity').innerText = totalQuantity;
-    document.getElementById('total-dimension-weight').innerText = Math.ceil(totalDimensionWeight); // 向上取整
+    document.getElementById('total-volume').innerText = totalVolume.mul(100).ceil().div(100).toString(); // 向上取整保留两位小数
+    document.getElementById('total-weight').innerText = totalWeight.ceil().toString(); // 向上取整
+    document.getElementById('total-quantity').innerText = totalQuantity.toString();
+    document.getElementById('total-dimension-weight').innerText = totalDimensionWeight.ceil().toString(); // 向上取整
 
     // 计算计费重
-    let billingWeight = Math.ceil(Decimal.max(totalWeight, totalDimensionWeight.ceil()));
-    document.getElementById('billing-weight').innerText = billingWeight;
+    let billingWeight = Decimal.max(totalWeight, totalDimensionWeight.ceil()).ceil();
+    document.getElementById('billing-weight').innerText = billingWeight.toString();
 
     // 计算泡比
     if (!totalWeight.equals(0) && !totalVolume.equals(0)) {
@@ -189,7 +167,7 @@ function calculate() {
      // 更新汇总信息
      document.getElementById('summary-size').innerText = sizeinfo;
      document.getElementById('summary-total-quantity').innerText = totalQuantity;
-     document.getElementById('summary-total-volume').innerText = Math.ceil(totalVolume * 100) / 100;
+     document.getElementById('summary-total-volume').innerText = totalVolume.mul(100).ceil().div(100).toString();
      document.getElementById('summary-total-weight').innerText = Math.ceil(totalWeight);
      document.getElementById('summary-chargeweight').innerText = Math.ceil(totalDimensionWeight);
 
@@ -204,8 +182,7 @@ function calculate() {
     if (warnings.length > 0) {
         // 有警告的情况
         warningsTextarea.value = warnings.join('\n');
-        warningsTextarea.classList.remove('no-warnings');
-        warningsTextarea.classList.add('has-warnings');
+        warningsTextarea.classList.replace('no-warnings', 'has-warnings');
 
         // 显示警告按钮并更新计数
         warningsToggle.style.display = 'inline-block';
@@ -222,8 +199,7 @@ function calculate() {
     } else {
         // 无警告的情况
         warningsTextarea.value = '✓ 所有箱规符合要求';
-        warningsTextarea.classList.remove('has-warnings');
-        warningsTextarea.classList.add('no-warnings');
+        warningsTextarea.classList.replace('has-warnings', 'no-warnings');
 
         // 隐藏警告按钮
         warningsToggle.style.display = 'none';
@@ -679,15 +655,20 @@ function parseDimensions() {
     });
 }
 
+/**
+ *  -------------------- 报价模块
+ */
+
 // 识别地址、箱数、重量、体积信息
 function parsePackageInfo() {
     const input = document.getElementById("package-info-input").value.trim();
     // 使用正则表达式解析箱数、重量、体积
     const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
-    const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
-    const addressRegex = /(?:To \s+)?([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字 前缀支持带To
-    
+    const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;  
+    // 前缀支持带To
+    // 识别 1.通用亚马逊仓库 == 开头3个字母 + 1个数字 2. AWD仓库 == IUS 开头 + 一个字母（例如：IUSA）
+    const addressRegex = /(?:To \s+)?((?:[A-Z]{3}\d)|IUS[A-Z])\b/i;
 
     // 提取箱数
     const quantityMatch = input.match(quantityRegex);

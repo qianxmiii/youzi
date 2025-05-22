@@ -155,11 +155,17 @@ function getTransitTimeAU(channel, postcode) {
 function getCN(channel) {
     switch (channel) {
         case 'Sea express':
-            return '海运快递派';
+            return '普船海派';
         case 'Fast sea express':
-            return '快船快递派';
+            return '快船海派';
+        case 'Fast sea truck':
+            return '快船卡派';
         case 'Air express':
-            return '空运快递派';
+            return '空派';
+        case 'Air truck':
+            return '空卡';
+        case 'UPS/Fedex/DHL':
+            return 'UPS/Fedex/DHL';
         default:
             return '普船卡派';
     }

@@ -522,6 +522,50 @@ function copyTerm(button, text) {
 /**
  * Tab 3 - 成本计算
  */
+
+// 识别地址、箱数、重量、体积信息
+function parseCalTabCargoInfo() {
+    const input = document.getElementById("cargo-input").value.trim();
+    // 使用正则表达式解析箱数、重量、体积
+    const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
+    const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
+    const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+    const addressRegex = /(?:To \s+)?([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字 前缀支持带To
+    
+
+    // 提取箱数
+    const quantityMatch = input.match(quantityRegex);
+    let quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
+
+    // 提取方数
+    const volumeMatch = input.match(volumeRegex);
+    let volume = volumeMatch ? parseFloat(volumeMatch[1]) : 0;
+
+    // 提取重量
+    const weightMatch = input.match(weightRegex);
+    let weight = 0;
+    if (weightMatch) {
+        weight = parseFloat(weightMatch[1]);
+        const unit = (weightMatch[2] || '').toLowerCase();
+
+        // 如果是磅单位，转换为千克
+        if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
+            weight *= 0.453592;
+        }
+    }
+
+    document.getElementById('t_quantity').value = quantity;
+    document.getElementById('t_weight').value = Math.ceil(weight);
+    document.getElementById('t_volume').value = new Decimal(volume).toDecimalPlaces(2, Decimal.ROUND_UP);
+
+    document.getElementById('tp_quantity').value = quantity;
+    document.getElementById('tp_weight').value = Math.ceil(weight);
+    document.getElementById('tp_volume').value = new Decimal(volume).toDecimalPlaces(2, Decimal.ROUND_UP);
+    
+    // 触发计算
+    calculateCostDDU();
+}
+
 // 计算自税成本
 function calculateCostDDU() {
     // 获取输入值
@@ -548,8 +592,8 @@ function calculateCostDDU() {
     const forwardingCost = pricePerCbm.mul(chargeVolume);
     document.getElementById('t_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
 
-    // 计算税金 关税加征145%
-    const taxAmount = goodsValue.mul(taxRate.plus(145).dividedBy(100).mul(chargeVolume).mul(cost_exchange_rate));
+    // 计算税金 关税加征30%
+    const taxAmount = goodsValue.mul(taxRate.plus(30).dividedBy(100).mul(volume).mul(cost_exchange_rate));
     document.getElementById('t_tax-amount').textContent = taxAmount.toDecimalPlaces(0, Decimal.ROUND_UP);
 
     // 计算派送费 (RMB)
@@ -601,10 +645,11 @@ function calculateCostDDP() {
 
     // 计算派送费 (RMB)
     const deliveryFeeTran = deliveryFeeUSD.mul(exchange_rate);
-    document.getElementById('tp_delivery-fee-final').textContent = deliveryFeeRMB.add(deliveryFeeTran).toFixed(2);
+    const totalDeliveryFee = new Decimal(deliveryFeeRMB.add(deliveryFeeTran).toFixed(2));
+    document.getElementById('tp_delivery-fee-final').textContent = totalDeliveryFee;
 
     // 计算总成本
-    const totalCost = forwardingCost.plus(deliveryFeeRMB);
+    const totalCost = forwardingCost.plus(totalDeliveryFee);
     document.getElementById('tp_total-cost').textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
     
     // 计算单价 (RMB/cbm)
@@ -612,6 +657,6 @@ function calculateCostDDP() {
     document.getElementById('tp_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
 
     // 计算单价 (RMD/kg)
-    const unitPriceKg = totalCost.dividedBy(weight);
+    const unitPriceKg = totalCost.dividedBy(chargeWeight);
     document.getElementById('tp_unit-price-kg').textContent = unitPriceKg.toFixed(2);
 }

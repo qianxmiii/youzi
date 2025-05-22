@@ -209,326 +209,6 @@ function calculate() {
     }
 }
 
-// 显示报价
-function updateQuote() {
-    // 获取用户输入
-    let country = document.getElementById("country-select").value;
-    let origin = document.getElementById("origin-select").value;
-    let totalQuantity = new Decimal(document.getElementById('quantity').value || 0); // 箱数
-    let totalWeight = new Decimal(document.getElementById('weight').value || 0); // 实重
-    let totalVolume = new Decimal(document.getElementById('volume').value || 0); // 体积
-    let dimensionWeight = new Decimal(document.getElementById('dimensionWeight').value || 0);
-    let channel = document.getElementById("delivery-method-select").value;
-    let address = document.getElementById("address").value.toUpperCase();
-    let postcode = document.getElementById("postcode").value;
-    let costRmb = new Decimal(document.getElementById("cost_rmb").value || 0);
-    let profitRmb = new Decimal(document.getElementById("profit_rmb").value || 0);
-    let MOQ = '';
-    let quoteType = document.getElementById("quote-type").value; // 获取备注格式选择
-    let notes = "";
-    let pickUpFee = "";
-
-
-    // 获取复选框值
-    let isRemoteAddress = document.getElementById('remote-address').checked; // 偏远
-    let isMOQ = document.getElementById('MOQ').checked; // MOQ
-    let isDDU = document.getElementById('ddu_check').checked; // DDP or DDU
-    let isOverSize = document.getElementById('oversize_check').checked; // 超尺寸
-    let overSizeFee = document.getElementById('oversize-input');
-    let overSizeQuantity = new Decimal(document.getElementById('oversize-quantity').value);
-    let isOverWeight = document.getElementById('overweight_check').checked; // 超长
-    let overWeightQuantity = new Decimal(document.getElementById('overweight-quantity').value);
-    let overWeightFee = document.getElementById('overweight-input');
-    let isUSD = document.getElementById('USD_check').checked; // 美元
-
-    // 获取提货费
-    let pickupFeeCheck = document.getElementById("pickup-fee-checkbox").checked;
-    pickUpFee = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee").value) || 0 : 0;
-    pickUpFee = new Decimal(pickUpFee).dividedBy(exchange_rate).toFixed(0);
-
-    // 计算材积重 (kg) 使用公式：体积 * 1000000 / 6000
-    if (totalVolume.greaterThan(0)) {
-        dimensionWeight = Math.ceil(totalVolume.mul(1000000).dividedBy(6000));
-        document.getElementById('dimensionWeight').value = dimensionWeight;
-    } else {
-        dimensionWeight = 0;
-        document.getElementById('dimensionWeight').value = 0;
-    }
-
-    // 计算计费重 (kg)：取总实重与材积重的较大者
-    let chargeWeight = Decimal.max(totalWeight, dimensionWeight);
-    if (channel.includes('express')) {
-        let moqWeight = 0;
-        let moqUnit = 0;
-        if (channel == 'Air express' || channel == 'Air ups/fedex') {
-            moqWeight = totalQuantity.mul(10);
-            moqUnit = 10;
-        } else {
-            moqWeight = totalQuantity.mul(12);
-            moqUnit = 12;
-        }
-        if (chargeWeight.lessThan(moqWeight)) {
-            chargeWeight = moqWeight;
-            MOQ = 'MOQ each box is '+ moqUnit + 'kg';
-        }
-    }
-
-    // 如果有MOQ，以录入的MOQ计费重为准
-    const moqInput = document.getElementById('moq-input');
-    const moqValue = new Decimal(moqInput.value || 21); // 默认值为 21kg
-    if (isMOQ) {
-        if (chargeWeight.lessThan(moqValue)) {
-            chargeWeight = moqValue;
-        }
-    }
-
-    document.getElementById('chargeWeight').value = chargeWeight;
-
-    // 计算计费重 (CBM)：取总实重与材积重的较大者
-    let chargeCBM = new Decimal(Math.ceil(Decimal.max(totalWeight.dividedBy(363), totalVolume)* 100) / 100);
-    document.getElementById('chargeCBM').value = chargeCBM;
-
-    // 计算泡比
-    let volumeRatio = new Decimal(0);
-    if (!totalWeight.equals(0) && !totalVolume.equals(0)) {
-        volumeRatio = totalWeight.dividedBy(totalVolume);
-        document.getElementById('volumeRatio').value = volumeRatio.toFixed(0);
-    } else {
-        volumeRatio = 0;
-        document.getElementById('volumeRatio').value = 0;
-    }
-
-    // 泡比颜色设置
-    let volumeRatioInput = document.getElementById('volumeRatio');
-    if (volumeRatio >= 200) {
-        volumeRatioInput.style.color = 'green'; // 大于等于200时字体为绿色
-    } else if (volumeRatio < 167) {
-        volumeRatioInput.style.color = 'blue'; // 小于167时字体为蓝色
-    } else {
-        volumeRatioInput.style.color = ''; // 恢复默认颜色
-    }
-
-    if (isUSD){ //如果输入成本是美元，先转换成RMB
-        costRmb = costRmb.mul(exchange_rate);
-    }
-    // 计算报价 (RMB) = 成本 (RMB) + 利润 (RMB)
-    let priceRmb = costRmb.add(profitRmb);
-    document.getElementById("price_rmb").value = priceRmb.toFixed(2);
-    
-    // 计算报价 (USD) = 报价 (RMB) / exchange_rate
-    let priceUsd = new Decimal(0);
-    if (quoteType.includes("CBM")) {
-        priceUsd = priceRmb.dividedBy(exchange_rate).toFixed(0);
-    } else {
-        priceUsd = priceRmb.dividedBy(exchange_rate).toFixed(2); // 保留两位小数
-    }
-    document.getElementById("price_usd").value = priceUsd;
-
-    // 计算利率 = 1 - (成本 (RMB) / 报价 (RMB))
-    if (!costRmb.equals(0) && !priceRmb.equals(0)) {
-        let profitRateInput = document.getElementById('profit_rate');
-        let profitRate = new Decimal(1).minus(costRmb.dividedBy(priceRmb));
-        profitRateInput.value = Math.ceil(profitRate * 100) + "%"; // 显示为百分比
-
-        if (profitRate < 0.15) {
-            profitRateInput.style.color = '#ea4335'; 
-        } else if (profitRate < 0.20) {
-            profitRateInput.style.color = '#fbbc05'; 
-        } else if (profitRate < 0.25) {
-            profitRateInput.style.color = '#4285f4'; 
-        } else if (profitRate == 0){
-            profitRateInput.style.color = ''; // 恢复默认颜色
-        } else {
-            profitRateInput.style.color = '#34a853';
-        }
-    }
-
-    let totalProfitRmb = new Decimal(0);
-    // 计算总利润 (RMB) = 计费重 * 利润 (RMB)
-    if (quoteType.includes("CBM")) {
-        totalProfitRmb = chargeCBM.mul(profitRmb);
-    } else {
-        totalProfitRmb = chargeWeight.mul(profitRmb);
-    }
-    document.getElementById("total_profit_rmb").value = totalProfitRmb; // 保留两位小数
-
-    // 更新利率的 Tooltip
-    updateProfitRateTooltip(totalProfitRmb);
-
-    // 计算总报价 (USD)
-    let totalPriceUsd = new Decimal(0);
-    if (quoteType.includes("CBM")) {
-        totalPriceUsd = new Decimal(priceUsd).mul(chargeCBM);
-    } else {
-        totalPriceUsd = new Decimal(priceUsd).mul(chargeWeight);
-    }
-    document.getElementById("total_price_usd").value = totalPriceUsd;
-
-    // 计算总报价 (RMB) = 总报价 (RMB) / exchange_rate
-    let totalPriceRMB = new Decimal(0);
-    if (quoteType.includes("CBM")) {
-        totalPriceRMB = new Decimal(priceRmb).mul(chargeCBM);
-    } else {
-        totalPriceRMB = new Decimal(priceRmb).mul(chargeWeight);
-    }
-    document.getElementById("total_price_rmb").value = totalPriceRMB.toFixed(2);
-
-    // 计算单价(RMB) = 总报价 (RMB) / 计费重
-    let unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : 0;
-    document.getElementById("unit_price_rmb").value = unitPriceRMB.toFixed(2);
-
-    let unit = 'ctns ';
-    if (totalQuantity <= 1) {
-        unit = 'ctn ';
-    }
-
-    addFee = new Decimal(0); //每次初始化
-    // 根据选择的备注格式动态生成备注内容
-    if (quoteType === "通用") {
-        // 构建备注内容
-        notes = 'To ' + address + ',' + totalQuantity.toFixed(0) + unit + totalWeight.toFixed(0) + 'kg ' + totalVolume.toFixed(2) + 'cbm' +
-            '\n';
-        if (isDDU) {
-            notes += 'DDU ';
-        }
-        notes += channel + ": " + priceUsd + ' usd/kg * ' + chargeWeight.toFixed(0) + 'kg ';
-        notes += '= ' + totalPriceUsd + 'usd ' ;
-        notes += getTransitTime(country, channel, postcode) + 'days ' + MOQ + ' ';
-        
-        if (isMOQ) {
-            notes += `MOQ is ${moqValue}kg `;
-        }
-
-        if (isDDU) {
-            notes+= getDDUFee(country, 1);
-        }
-        
-        if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) {
-
-            notes += getRemoteAddressfee(totalQuantity);
-        }
-
-        if (isOverSize) {
-            notes+= getOverSizeFee(country, overSizeQuantity);
-        }
-        if (isOverWeight) {
-            notes+= getOverWeightFee(country, overWeightQuantity);
-        }
-        
-        if (pickupFeeCheck) {
-            notes += '\n' + 'Pick up fee: ' + pickUpFee + ' usd';
-        }
-
-
-    } else if (quoteType === "通用-CBM") {
-        // 构建备注内容
-        notes = 'To ' + address + ',' + totalQuantity.toFixed(0) + unit + totalWeight.toFixed(0) + 'kg ' + totalVolume.toFixed(2) + 'cbm' +
-            '\n';
-        if (isDDU) {
-            notes += 'DDU ';
-        }
-        notes += channel + ": " + priceUsd + ' usd/cbm * ' + chargeCBM + 'cbm = ' + totalPriceUsd + 'usd ';
-
-        notes += getTransitTime(country, channel, postcode) + 'days';
-        if (isDDU) {
-            notes+= getDDUFee(country, 1);
-        }
-        if (pickupFeeCheck) {
-            notes += '\n' + 'Pick up fee: ' + pickUpFee + ' usd';
-        }
-    } else if (quoteType === "通用-单价") {
-        // 构建备注内容
-        notes = address + ' ' + channel + ': ' + priceUsd + ' usd per kg ' + getTransitTime(country, channel, postcode) + 'days';
-
-    } else if (quoteType === "通用-RMB") {
-        // 构建备注内容
-        notes = address + ' ' + totalQuantity.toFixed(0) + '箱 ' + totalWeight.toFixed(0) + 'kg ' + totalVolume + 'cbm' +
-            '\n';
-        if (isDDU) {
-            notes += 'DDU ';
-        }
-        notes += getCN(channel) + ": " + priceRmb + 'RMB/kg * ' + chargeWeight.toFixed(0) + 'kg = ' + totalPriceRMB + 'RMB ' + MOQ + ' ' +
-            getTransitTime(country, channel, postcode) + '天';
-        if (isDDU) {
-            notes+= getDDUFee(country, 0);
-        }
-
-    } else if (quoteType === "通用-RMB-CBM") {
-        // 构建备注内容
-        notes = totalQuantity.toFixed(0) + '箱 ' + totalWeight.toFixed(0) + 'kg ' + totalVolume + 'cbm' +
-            '\n';
-        if (isDDU) {
-            notes += 'DDU ';
-        }
-        notes += getCN(channel) + ": " + priceRmb + 'RMB/cbm * ' + chargeCBM + 'cbm = ' + totalPriceRMB + 'RMB ' + MOQ + ' ' +
-            getTransitTime(country, channel, postcode) + '天';
-        if (isDDU) {
-            notes+= getDDUFee(country, 0);
-        }    
-
-    } else if (quoteType === "PROBOXX") {
-        // 构建备注内容
-        notes = 'Hi Tal,' +
-            '\n' + '\n' +
-            'To ' + address + ',' + totalQuantity.toFixed(0) + unit + totalWeight.toFixed(0) + 'kg ' + totalVolume + 'cbm' +
-            '\n';
-        notes += isDDU ?  'DDU ': 'DDP ';
-        notes += channel + ": " + priceUsd + ' usd per kg. estimate : ' +
-            priceUsd + 'usd/kg * ' + chargeWeight.toFixed(0) + 'kg = ' + totalPriceUsd + 'usd ' + MOQ + ' ' +
-            getTransitTime(country, channel, postcode) + 'days';
-            if (isMOQ) {
-                notes += `MOQ is ${moqValue}kg `;
-            }
-            if (isRemoteAddress && shippingChannels["快递派"].includes(channel)) { 
-                notes += getRemoteAddressfee(totalQuantity);
-            } 
-            if (isDDU) {
-                notes+= getDDUFee(country, 1);
-            }
-            if (isOverSize) {
-                notes+= getOverSizeFee(country, overSizeQuantity);
-            }
-            if (isOverWeight) {
-                notes+= getOverWeightFee(country, overWeightQuantity);
-            }
-            notes += '\n' +
-            'Pick up fee: ' + pickUpFee + ' usd' +
-            '\n' +
-            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + ' usd' +
-            '\n' + '\n' +
-            'Valid date: ' + valid_date;
-    } else if (quoteType === "PROBOXX-CBM") {
-        // 构建备注内容
-        notes = 'Hi Tal,' +
-            '\n' + '\n' +
-            'To ' + address + ',' + totalQuantity.toFixed(0) + unit + totalWeight.toFixed(0) + 'kg ' + totalVolume + 'cbm' +
-            '\n';
-        if (isDDU) {
-            notes += 'DDU ';
-        } else {
-            notes += 'DDP ';
-        }
-        notes += channel + ": " + priceUsd + ' usd per cbm. estimate : ' +
-            priceUsd + 'usd/cbm * ' + chargeCBM + 'cbm = ' + totalPriceUsd + 'usd ' +
-            getTransitTime(country, channel, postcode) + 'days';
-
-            if (isDDU) {
-                notes+= getDDUFee(country, 1);
-            } 
-
-            notes += '\n' +
-            'Pick up fee: ' + pickUpFee + ' usd' +
-            '\n' +
-            'Total fee: ' + totalPriceUsd.add(pickUpFee).add(addFee) + ' usd' +
-            '\n' + '\n' +
-            'Valid date: ' + valid_date;
-    }
-
-    // 将备注内容填入 textarea
-    document.getElementById("notes").value = notes;
-
-}
-
 // 导入数据
 function importData() {
 
@@ -553,6 +233,244 @@ function importData() {
         importIcon.classList.remove('bi-send-check');
         importIcon.classList.add('bi-send');
     }, 2000);
+}
+
+// 显示报价
+function updateQuote() {
+
+    // 获取用户输入
+    let data = getInputData();
+
+    let dimensionWeight = new Decimal(0); //材积重 (kg)
+    let chargeWeight = new Decimal(0); //计费重 (kg)
+    let priceRmb = new Decimal(0); //计算报价RMB
+    let priceUsd = new Decimal(0); //计算报价USD
+    let totalProfitRmb = new Decimal(0); // 总利润RMB
+    let totalPriceUsd = new Decimal(0); // 总报价USD
+    let totalPriceRMB = new Decimal(0); // 总利润USD
+    let unitPriceRMB = new Decimal(0); // 报价单价RMB
+    let pickupFeeRMB = new Decimal(0); // 提货费RMB
+    
+    let MOQ = '';
+    let notes = ""; // 备注
+
+    // 获取提货费
+    let pickupFeeCheck = document.getElementById("pickup-fee-checkbox").checked;
+    pickupFeeRMB = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee").value) || 0 : 0;
+    pickUpFee = new Decimal(pickupFeeRMB).dividedBy(exchange_rate).toFixed(0);
+
+    // 计算材积重 (kg) 使用公式：体积 * 1000000 / 6000
+    if (data.totalVolume.greaterThan(0)) {
+        dimensionWeight = Math.ceil(data.totalVolume.mul(1000000).dividedBy(6000));
+        document.getElementById('dimensionWeight').value = dimensionWeight;
+    } else {
+        dimensionWeight = 0;
+        document.getElementById('dimensionWeight').value = 0;
+    }
+
+    // 计算计费重 (kg)：取总实重与材积重的较大者
+    chargeWeight = Decimal.max(data.totalWeight, dimensionWeight);
+    if (data.channel.includes('express')) {
+        let moqWeight = 0;
+        let moqUnit = 0;
+        if (data.channel == 'Air express' || data.channel == 'Air ups/fedex') {
+            moqWeight = data.totalQuantity.mul(10);
+            moqUnit = 10;
+        } else {
+            moqWeight = data.totalQuantity.mul(12);
+            moqUnit = 12;
+        }
+        if (chargeWeight.lessThan(moqWeight)) {
+            chargeWeight = moqWeight;
+            MOQ = 'MOQ each box is '+ moqUnit + 'kg';
+        }
+    }
+
+    // 如果有MOQ，以录入的MOQ计费重为准
+    const moqInput = document.getElementById('moq-input');
+    const moqValue = new Decimal(moqInput.value || 21); // 默认值为 21kg
+    if (data.isMOQ) {
+        if (chargeWeight.lessThan(moqValue)) {
+            chargeWeight = moqValue;
+        }
+    }
+
+    document.getElementById('chargeWeight').value = chargeWeight;
+
+    // 计算计费重 (CBM)：取总实重与材积重的较大者
+    let chargeCBM = new Decimal(Math.ceil(Decimal.max(data.totalWeight.dividedBy(363), data.totalVolume)* 100) / 100);
+    document.getElementById('chargeCBM').value = chargeCBM;
+
+    // 计算泡比
+    let volumeRatio = new Decimal(0);
+    if (!data.totalWeight.equals(0) && !data.totalVolume.equals(0)) {
+        volumeRatio = data.totalWeight.dividedBy(data.totalVolume);
+        document.getElementById('volumeRatio').value = volumeRatio.toFixed(0);
+    } else {
+        volumeRatio = 0;
+        document.getElementById('volumeRatio').value = 0;
+    }
+
+    // 泡比颜色设置
+    let volumeRatioInput = document.getElementById('volumeRatio');
+    if (volumeRatio >= 200) {
+        volumeRatioInput.style.color = 'green'; // 大于等于200时字体为绿色
+    } else if (volumeRatio < 167) {
+        volumeRatioInput.style.color = 'blue'; // 小于167时字体为蓝色
+    } else {
+        volumeRatioInput.style.color = ''; // 恢复默认颜色
+    }
+
+    if (data.isUSD){ //如果输入成本是美元，先转换成RMB
+        data.costRmb = data.costRmb.mul(exchange_rate);
+    }
+    // 计算报价 (RMB) = 成本 (RMB) + 利润 (RMB)
+    priceRmb = data.costRmb.add(data.profitRmb);
+    document.getElementById("price_rmb").value = priceRmb.toFixed(2);
+    
+    // 计算报价 (USD) = 报价 (RMB) / exchange_rate
+    priceUsd = new Decimal(0);
+    if (data.quoteType.includes("CBM")) {
+        priceUsd = priceRmb.dividedBy(exchange_rate).toFixed(0);
+    } else {
+        priceUsd = priceRmb.dividedBy(exchange_rate).toFixed(2); // 保留两位小数
+    }
+    document.getElementById("price_usd").value = priceUsd;
+
+    // 计算利率 = 1 - (成本 (RMB) / 报价 (RMB))
+    if (!data.costRmb.equals(0) && !priceRmb.equals(0)) {
+        let profitRateInput = document.getElementById('profit_rate');
+        let profitRate = new Decimal(1).minus(data.costRmb.dividedBy(priceRmb));
+        profitRateInput.value = Math.ceil(profitRate * 100) + "%"; // 显示为百分比
+
+        if (profitRate < 0.15) {
+            profitRateInput.style.color = '#ea4335'; 
+        } else if (profitRate < 0.20) {
+            profitRateInput.style.color = '#fbbc05'; 
+        } else if (profitRate < 0.25) {
+            profitRateInput.style.color = '#4285f4'; 
+        } else if (profitRate == 0){
+            profitRateInput.style.color = ''; // 恢复默认颜色
+        } else {
+            profitRateInput.style.color = '#34a853';
+        }
+    }
+
+    totalProfitRmb = new Decimal(0);
+    // 计算总利润 (RMB) = 计费重 * 利润 (RMB)
+    if (data.quoteType.includes("CBM")) {
+        totalProfitRmb = chargeCBM.mul(data.profitRmb);
+    } else {
+        totalProfitRmb = chargeWeight.mul(data.profitRmb);
+    }
+    document.getElementById("total_profit_rmb").value = totalProfitRmb; // 保留两位小数
+
+    // 更新利率的 Tooltip
+    updateProfitRateTooltip(totalProfitRmb);
+
+    // 计算总报价 (USD)
+    totalPriceUsd = new Decimal(0);
+    if (data.quoteType.includes("CBM")) {
+        totalPriceUsd = new Decimal(priceUsd).mul(chargeCBM);
+    } else {
+        totalPriceUsd = new Decimal(priceUsd).mul(chargeWeight);
+    }
+    document.getElementById("total_price_usd").value = totalPriceUsd;
+
+    // 计算总报价 (RMB) = 总报价 (RMB) / exchange_rate
+    totalPriceRMB = new Decimal(0);
+    if (data.quoteType.includes("CBM")) {
+        totalPriceRMB = new Decimal(priceRmb).mul(chargeCBM);
+    } else {
+        totalPriceRMB = new Decimal(priceRmb).mul(chargeWeight);
+    }
+    document.getElementById("total_price_rmb").value = totalPriceRMB.toFixed(2);
+
+    // 计算单价(RMB) = 总报价 (RMB) / 计费重
+    unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : 0;
+    document.getElementById("unit_price_rmb").value = unitPriceRMB.toFixed(2);
+
+    let unit = 'ctns ';
+    if (data.totalQuantity <= 1) unit = 'ctn ';
+
+    addFee = new Decimal(0); //每次初始化
+    // 根据选择的备注格式动态生成备注内容
+    if (data.quoteType === "通用") {
+        // 构建备注内容
+        notes = `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        if (data.isDDU) notes += 'DDU ';
+        notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
+        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+
+    } else if (data.quoteType === "通用-CBM") {
+        // 构建备注内容
+        notes = `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        if (data.isDDU) notes += 'DDU ';
+        notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days`;
+        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+
+    } else if (data.quoteType === "通用-单价") {
+        // 构建备注内容
+        notes = `${data.address} ${data.channel}: ${priceUsd} usd per kg `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days`;
+
+    } else if (data.quoteType === "通用-RMB") {
+        // 构建备注内容
+        notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        if (data.isDDU) notes += 'DDU ';
+        notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} 天 ${MOQ} `;
+        if (data.isDDU) notes += getDDUFee(data.country, 0);
+        if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
+        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
+
+    } else if (data.quoteType === "通用-RMB-CBM") {
+        // 构建备注内容
+        notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        if (data.isDDU) notes += 'DDU ';
+        notes += `${getCN(data.channel)}: ${priceRmb}RMB/cbm * ${chargeCBM}cbm = ${totalPriceRMB}RMB `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} 天 ${MOQ} `;
+        if (data.isDDU) notes += getDDUFee(data.country, 0); 
+        if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
+        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
+
+    } else if (data.quoteType === "PROBOXX") {
+        // 构建备注内容
+        notes = 'Hi Tal,\n\n';
+        notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        notes += data.isDDU ?  'DDU ': 'DDP ';
+        notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
+        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
+    } else if (data.quoteType === "PROBOXX-CBM") {
+        // 构建备注内容
+        notes = 'Hi Tal,\n\n';
+        notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        notes += data.isDDU ? 'DDU ' : 'DDP ';
+        notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days`;
+        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
+    }
+
+    // 将备注内容填入 textarea
+    document.getElementById("notes").value = notes;
+
 }
 
 // 识别箱规信息
@@ -714,6 +632,35 @@ function getRegionByZip(zip) {
     else if (/^(8|9|90|91|92|93|94|95)/.test(zip)) return "美西8.9";
     
     return null;
+}
+
+// 获取数据
+function getInputData() {
+    return {
+        country: document.getElementById("country-select").value,
+        origin: document.getElementById("origin-select").value,
+        totalQuantity: new Decimal(document.getElementById('quantity').value || 0),
+        totalWeight: new Decimal(document.getElementById('weight').value || 0),
+        totalVolume: new Decimal(document.getElementById('volume').value || 0),
+        dimensionWeight: new Decimal(document.getElementById('dimensionWeight').value || 0),
+        channel: document.getElementById("delivery-method-select").value,
+        address: document.getElementById("address").value.toUpperCase(),
+        postcode: document.getElementById("postcode").value,
+        costRmb: new Decimal(document.getElementById("cost_rmb").value || 0),
+        profitRmb: new Decimal(document.getElementById("profit_rmb").value || 0),
+        quoteType: document.getElementById("quote-type").value,
+        isRemoteAddress: document.getElementById('remote-address').checked,
+        isMOQ: document.getElementById('MOQ').checked,
+        isDDU: document.getElementById('ddu_check').checked,
+        isOverSize: document.getElementById('oversize_check').checked,
+        overSizeQuantity: new Decimal(document.getElementById('oversize-quantity').value || 0),
+        isOverWeight: document.getElementById('overweight_check').checked,
+        overWeightQuantity: new Decimal(document.getElementById('overweight-quantity').value || 0),
+        isUSD: document.getElementById('USD_check').checked,
+        pickupFeeCheck: document.getElementById("pickup-fee-checkbox").checked,
+        pickUpFeeRaw: parseFloat(document.getElementById("pickup-fee").value) || 0,
+        moqInput: new Decimal(document.getElementById('moq-input').value || 21),
+    };
 }
 
 // 获取重量对应的价格索引

@@ -13,7 +13,7 @@ window.onload = function () {
 
     // 获取下一个星期五的日期
     // valid_date = getNextFriday();
-    valid_date = '4/30';
+    valid_date = '5/23';
 
     init(); // 初始化
     eventListener();
@@ -263,6 +263,7 @@ function updateQuote() {
     let isOverWeight = document.getElementById('overweight_check').checked; // 超长
     let overWeightQuantity = new Decimal(document.getElementById('overweight-quantity').value);
     let overWeightFee = document.getElementById('overweight-input');
+    let isUSD = document.getElementById('USD_check').checked; // 美元
 
     // 获取提货费
     let pickupFeeCheck = document.getElementById("pickup-fee-checkbox").checked;
@@ -331,10 +332,13 @@ function updateQuote() {
         volumeRatioInput.style.color = ''; // 恢复默认颜色
     }
 
+    if (isUSD){ //如果输入成本是美元，先转换成RMB
+        costRmb = costRmb.mul(exchange_rate);
+    }
     // 计算报价 (RMB) = 成本 (RMB) + 利润 (RMB)
     let priceRmb = costRmb.add(profitRmb);
     document.getElementById("price_rmb").value = priceRmb.toFixed(2);
-
+    
     // 计算报价 (USD) = 报价 (RMB) / exchange_rate
     let priceUsd = new Decimal(0);
     if (quoteType.includes("CBM")) {
@@ -412,8 +416,8 @@ function updateQuote() {
             notes += 'DDU ';
         }
         notes += channel + ": " + priceUsd + ' usd/kg * ' + chargeWeight.toFixed(0) + 'kg ';
-        notes += '= ' + totalPriceUsd + 'usd ' + MOQ + ' ';
-        notes += getTransitTime(country, channel, postcode) + 'days ';
+        notes += '= ' + totalPriceUsd + 'usd ' ;
+        notes += getTransitTime(country, channel, postcode) + 'days ' + MOQ + ' ';
         
         if (isMOQ) {
             notes += `MOQ is ${moqValue}kg `;
@@ -452,6 +456,9 @@ function updateQuote() {
         notes += getTransitTime(country, channel, postcode) + 'days';
         if (isDDU) {
             notes+= getDDUFee(country, 1);
+        }
+        if (pickupFeeCheck) {
+            notes += '\n' + 'Pick up fee: ' + pickUpFee + ' usd';
         }
     } else if (quoteType === "通用-单价") {
         // 构建备注内容

@@ -206,12 +206,12 @@
                 <th style="width: 5em">箱数</th>
                 <th>实重</th>
                 <th>体积</th>
-                <th>材积重</th>
+                <th class="hidden">材积重</th>
                 <th>计费重</th>
                 <th>计费方</th>
                 <th style="width: 5em">泡比</th>
                 <th style="width: 6em">成本</th>
-                <th style="width: 4.5em">利润</th>
+                <th style="width: 4.5em">利润(RMB)</th>
                 <th style="width: 6em" class="hidden">报价 (RMB)</th>
                 <th style="width: 6em" class="hidden">报价 (USD)</th>
                 <th style="width: 5.5em">利率</th>
@@ -234,7 +234,7 @@
                 <!-- 体积 -->
                 <td><input type="number" id="volume" class="form-control" value="0" step="any" oninput="updateQuote()" /></td>
                 <!-- 材积重 -->
-                <td><input type="number" id="dimensionWeight" class="form-control result" value="0" step="any" oninput="updateQuote()" /></td>
+                <td class="hidden"><input type="number" id="dimensionWeight" class="form-control result" value="0" step="any" oninput="updateQuote()" /></td>
                 <!-- 计费重 -->
                 <td><input type="number" id="chargeWeight" class="form-control result" value="0" readonly /></td>
                 <!-- 计费方 -->
@@ -328,6 +328,11 @@
                 <span class="switch-text"></span>
              </span>
             </label>
+          </div>
+          <!-- 美元 -->
+          <div class="form-check mr-3">
+            <input type="checkbox" id="USD_check" class="form-check-input" onchange="updateQuote()" />
+            <label for="USD_check" class="form-check-label">美元</label>
           </div>
         </div>
       
@@ -539,6 +544,12 @@
           <!-- Tab 3 成本计算 -->
           <div class="tab-pane fade" id="costCalTab" role="tabpanel" aria-labelledby="tab3-tab">
             <div class="container mt-4">
+              <!-- 报价识别：箱数、重量、体积 -->
+          <div>
+            <label for="cargo-input" class = "subtitle">报价识别</label>
+            <input type="text" id="cargo-input" class="form-control" placeholder="例如: 21ctns 8.3 kg 2.126 cbm"
+              oninput="parseCalTabCargoInfo()" />
+          </div>
               <h4>自税成本</h4>
               <table class="table table-bordered" id="DDUTable">
                 <thead>

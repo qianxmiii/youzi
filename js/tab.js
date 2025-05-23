@@ -660,3 +660,75 @@ function calculateCostDDP() {
     const unitPriceKg = totalCost.dividedBy(chargeWeight);
     document.getElementById('tp_unit-price-kg').textContent = unitPriceKg.toFixed(2);
 }
+
+
+/**
+ * Tab 4 - 快递派查价
+ */
+// 动态生成快递派价格表格
+function renderPriceTable() {
+    const channel = document.getElementById("t4_channel").value;
+    const southChinaTableElement = document.getElementById("southChinaPriceTable").getElementsByTagName("tbody")[0];
+    const eastChinaTableElement = document.getElementById("eastChinaPriceTable").getElementsByTagName("tbody")[0];
+    southChinaTableElement.innerHTML = ""; // 清空表格内容
+    eastChinaTableElement.innerHTML = ""; // 清空表格内容
+
+    // 获取当前渠道的价格数据
+    const currentPriceTable = priceTable[channel];
+
+    // 遍历价格数据表
+    Object.keys(currentPriceTable).forEach(area => {
+        // 添加华南价格行
+        const southChinaRow = document.createElement("tr");
+        southChinaRow.innerHTML = `
+            <td>${area}</td>
+            <td>${currentPriceTable[area]["华南"][0]}</td>
+            <td>${currentPriceTable[area]["华南"][1]}</td>
+            <td>${currentPriceTable[area]["华南"][2]}</td>
+            <td>${currentPriceTable[area]["华南"][3]}</td>
+            <td>${currentPriceTable[area]["华南"][4]}</td>
+        `;
+        southChinaTableElement.appendChild(southChinaRow);
+
+        // 添加华东价格行
+        const eastChinaRow = document.createElement("tr");
+        eastChinaRow.innerHTML = `
+            <td>${area}</td>
+            <td>${currentPriceTable[area]["华东"][0]}</td>
+            <td>${currentPriceTable[area]["华东"][1]}</td>
+            <td>${currentPriceTable[area]["华东"][2]}</td>
+            <td>${currentPriceTable[area]["华东"][3]}</td>
+            <td>${currentPriceTable[area]["华东"][4]}</td>
+        `;
+        eastChinaTableElement.appendChild(eastChinaRow);
+    });
+}
+
+// 计算价格并突出显示对应的单元格
+function calculatePrice(region,channel,zipcode,weight) {
+
+    if (!zipcode || isNaN(weight) || weight <= 0) {
+        document.getElementById("t4_priceResult").innerHTML = "单价：请输入有效的邮编和重量";
+        return;
+    }
+    
+    const area = getRegionByZip(zipcode);
+    if (!area || !priceTable[channel] || !priceTable[channel][area] || !priceTable[channel][area][region]) {
+        document.getElementById("t4_priceResult").innerHTML = "单价：邮编不在配送范围内";
+        console.log(JSON.stringify(priceTable, null, 2));
+        return;
+    }
+
+    renderPriceTable();
+
+    const weightIndex = getWeightIndex(weight);
+    
+    const price = priceTable[channel][area][region][weightIndex];
+
+    document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
+
+    // 突出显示对应的单元格
+    highlightPriceCell(area, region, weightIndex);
+
+    return price;
+}

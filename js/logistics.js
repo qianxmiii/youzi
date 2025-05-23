@@ -307,7 +307,7 @@ function updateQuote() {
         volumeRatio = data.totalWeight.dividedBy(data.totalVolume);
         document.getElementById('volumeRatio').value = volumeRatio.toFixed(0);
     } else {
-        volumeRatio = 0;
+        volumeRatio = new Decimal(0);
         document.getElementById('volumeRatio').value = 0;
     }
 
@@ -574,10 +574,6 @@ function parseDimensions() {
     });
 }
 
-/**
- *  -------------------- 报价模块
- */
-
 // 识别地址、箱数、重量、体积信息
 function parsePackageInfo() {
     const input = document.getElementById("package-info-input").value.trim();
@@ -625,16 +621,6 @@ function parsePackageInfo() {
     updateQuote();
 }
 
- // 匹配邮编前缀到区域
-function getRegionByZip(zip) {
-    if (/^(0|1|2|3)/.test(zip)) return "美东0.1.2.3";
-    else if (/^(4|5|6|7)/.test(zip)) return "美中4.5.6.7";
-    else if (/^(96|97|98|99)/.test(zip)) return "美西96-99";
-    else if (/^(8|9|90|91|92|93|94|95)/.test(zip)) return "美西8.9";
-    
-    return null;
-}
-
 // 获取数据
 function getInputData() {
     return {
@@ -664,84 +650,7 @@ function getInputData() {
     };
 }
 
-// 获取重量对应的价格索引
-function getWeightIndex(weight) {
-    if (weight < 21) return 0;
-    if (weight < 45) return 1;
-    if (weight < 71) return 2;
-    if (weight < 101) return 3;
-    return 4; // 101KG+
-}
-
-// 动态生成快递派价格表格
-function renderPriceTable() {
-    const channel = document.getElementById("t4_channel").value;
-    const southChinaTableElement = document.getElementById("southChinaPriceTable").getElementsByTagName("tbody")[0];
-    const eastChinaTableElement = document.getElementById("eastChinaPriceTable").getElementsByTagName("tbody")[0];
-    southChinaTableElement.innerHTML = ""; // 清空表格内容
-    eastChinaTableElement.innerHTML = ""; // 清空表格内容
-
-    // 获取当前渠道的价格数据
-    const currentPriceTable = priceTable[channel];
-
-    // 遍历价格数据表
-    Object.keys(currentPriceTable).forEach(area => {
-        // 添加华南价格行
-        const southChinaRow = document.createElement("tr");
-        southChinaRow.innerHTML = `
-            <td>${area}</td>
-            <td>${currentPriceTable[area]["华南"][0]}</td>
-            <td>${currentPriceTable[area]["华南"][1]}</td>
-            <td>${currentPriceTable[area]["华南"][2]}</td>
-            <td>${currentPriceTable[area]["华南"][3]}</td>
-            <td>${currentPriceTable[area]["华南"][4]}</td>
-        `;
-        southChinaTableElement.appendChild(southChinaRow);
-
-        // 添加华东价格行
-        const eastChinaRow = document.createElement("tr");
-        eastChinaRow.innerHTML = `
-            <td>${area}</td>
-            <td>${currentPriceTable[area]["华东"][0]}</td>
-            <td>${currentPriceTable[area]["华东"][1]}</td>
-            <td>${currentPriceTable[area]["华东"][2]}</td>
-            <td>${currentPriceTable[area]["华东"][3]}</td>
-            <td>${currentPriceTable[area]["华东"][4]}</td>
-        `;
-        eastChinaTableElement.appendChild(eastChinaRow);
-    });
-}
-
-// 计算价格并突出显示对应的单元格
-function calculatePrice(region,channel,zipcode,weight) {
-
-    if (!zipcode || isNaN(weight) || weight <= 0) {
-        document.getElementById("t4_priceResult").innerHTML = "单价：请输入有效的邮编和重量";
-        return;
-    }
-    
-    const area = getRegionByZip(zipcode);
-    if (!area || !priceTable[channel] || !priceTable[channel][area] || !priceTable[channel][area][region]) {
-        document.getElementById("t4_priceResult").innerHTML = "单价：邮编不在配送范围内";
-        console.log(JSON.stringify(priceTable, null, 2));
-        return;
-    }
-
-    renderPriceTable();
-
-    const weightIndex = getWeightIndex(weight);
-    
-    const price = priceTable[channel][area][region][weightIndex];
-
-    document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
-
-    // 突出显示对应的单元格
-    highlightPriceCell(area, region, weightIndex);
-
-    return price;
-}
-
-/* 计算成本 */
+/* 计算快递派成本 */
 function showCost(origin,country,channel,postcode,weight,withBattery){
 
     let cost = 0;
@@ -804,41 +713,6 @@ costTooltip.addEventListener("mouseleave", function () {
         tooltipInstance.hide();
     }
 });
-
-
-// 获取偏远费
-function getRemoteAddressfee(totalQuantity) {
-    let remoteAddressStr = LINE_BREAK + 'Remote address fee: ';
-    let remoteAddressFee = new Decimal(3.5).mul(totalQuantity);
-    if (remoteAddressFee.lessThan(21)) {
-        remoteAddressStr += 'MOQ is 21usd ';
-        addFee = addFee.add(21);
-    } else {
-        remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
-        addFee = addFee.add(remoteAddressFee);
-    }
-
-    return remoteAddressStr;
-}
-
-// 获取超尺寸费
-function getOverSizeFee(country, totalQuantity) {
-    let overSizeStr = LINE_BREAK + 'OverSize fee: ';
-    let overSizeFee = new Decimal(21).mul(totalQuantity).toFixed(2);
-    overSizeStr += '21usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overSizeFee+ 'usd ';
-    addFee = addFee.add(overSizeFee);
-
-    return overSizeStr;
-}
-
-// 获取超重费
-function getOverWeightFee(country, totalQuantity) {
-    let overWeightStr = LINE_BREAK + 'OverWeight fee: ';
-    let overWeightFee = new Decimal(25).mul(totalQuantity).toFixed(2) ;
-    overWeightStr += '25usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overWeightFee+ 'usd ';
-    addFee = addFee.add(overWeightFee);
-    return overWeightStr;
-}
 
 // 总利润 悬停显示
 function updateProfitRateTooltip(totalProfitRmb) {
@@ -1112,32 +986,3 @@ function updatePickupFee(warehouse, pickupLocation, selectedVehicle) {
     }
 }
 
-// 根据国家获取DDU操作费
-/**
- * 
- * @param {*} country 
- * @param {0 中文 1 英文} type 
- * @returns 
- */
-function getDDUFee(country,type){
-    let str = '';
-    if (country == "欧洲") {
-        if (type == 0){
-            str += '\n' + '清关费: 450RMB';
-            addFee = addFee.add(450);
-        } else {
-            str += '\n' + 'Customs clearance fee: 62usd';
-            addFee = addFee.add(62);
-        }
-        
-    } else if (country == "英国") {
-        if (type == 0){
-            str += '\n' + '清关费: 350RMB';
-            addFee = addFee.add(350);
-        } else {
-            str += '\n' + 'Customs clearance fee: 48usd';
-            addFee = addFee.add(48);
-        }        
-    }
-    return str;
-}

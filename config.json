@@ -1,0 +1,22 @@
+{
+    "vendors": [
+        {
+            "name": "腾信",
+            "appToken": "4b16045c850921577133a7d55674a3ad",
+            "appKey": "达派斯国际",
+            "apiUrl": "http://ywtx.rtb56.com/webservice/PublicService.asmx/ServiceInterfaceUTF8"
+        },
+        {
+            "name": "鹏远",
+            "appToken": "a17b72b35af54d2209cc947554ae44fe",
+            "appKey": "86c74fde01b658c8e24263c2c5df08bb86c74fde01b658c8e24263c2c5df08bb",
+            "apiUrl": "http://ywpy.rtb56.com/webservice/PublicService.asmx/ServiceInterfaceUTF8"
+        },
+        {
+            "name": "森磊",
+            "appToken": "9b1948576ca346b0567115e318d73306",
+            "appKey": "8d1f06230b915473d93659a79a3c84678d1f06230b915473d93659a79a3c8467",
+            "apiUrl": "http://ywsl.rtb56.com/webservice/PublicService.asmx/ServiceInterfaceUTF8"
+        }
+    ]
+}

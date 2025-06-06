@@ -13,7 +13,6 @@ window.onload = function () {
 
     // 获取下一个星期五的日期
     valid_date = getNextFriday();
-    // valid_date = '5/23';
 
     init(); // 初始化
     eventListener();
@@ -356,8 +355,9 @@ function updateQuote() {
         }
     }
 
-    totalProfitRmb = new Decimal(0);
+    
     // 计算总利润 (RMB) = 计费重 * 利润 (RMB)
+    totalProfitRmb = new Decimal(0);
     if (data.quoteType.includes("CBM")) {
         totalProfitRmb = chargeCBM.mul(data.profitRmb);
     } else {
@@ -387,7 +387,7 @@ function updateQuote() {
     document.getElementById("total_price_rmb").value = totalPriceRMB.toFixed(2);
 
     // 计算单价(RMB) = 总报价 (RMB) / 计费重
-    unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : 0;
+    unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : new Decimal(0);
     document.getElementById("unit_price_rmb").value = unitPriceRMB.toFixed(2);
 
     let unit = 'ctns ';
@@ -466,6 +466,19 @@ function updateQuote() {
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
+    } else if (data.quoteType === "163") {
+        // 构建备注内容
+        notes = `${data.address} = ${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        if (data.isDDU) notes += 'DDU ';
+        notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
+        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+
     }
 
     // 将备注内容填入 textarea

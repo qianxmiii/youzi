@@ -564,6 +564,7 @@ function parseCalTabCargoInfo() {
     
     // 触发计算
     calculateCostDDU();
+    calculateCostDDP();
 }
 
 // 计算自税成本

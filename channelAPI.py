@@ -1,6 +1,6 @@
 import requests
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
@@ -300,6 +300,7 @@ def generate_html_report(results, output_file):
     <select id="todayFilter" class="form-select" onchange="filterTable()">
       <option value="">全部更新时间</option>
       <option value="today">今日更新</option>
+      <option value="last2days">近两天更新</option>
     </select>
   </div>
 
@@ -316,8 +317,14 @@ def generate_html_report(results, output_file):
         collapse_id = f"collapse_{idx}"
         status = item.get("data", {}).get("track_status_name", "")
 
-        html_body += f'<div class="tracking-card" data-vendor="{vendor}" data-customer="{customer}" data-status="{status}" data-today-update="{"true" if any(d.get("track_occur_date", "").startswith(today_str) for d in item.get("data", {}).get("details", [])) else "false"}" data-tracking-number="{tracking_number}" data-customername="{customer}">\n'
+        today_str = datetime.now().strftime('%Y-%m-%d')
+        yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
+        details = item.get("data", {}).get("details", [])
 
+        has_today = any(d.get("track_occur_date", "").startswith(today_str) for d in details)
+        has_last2 = any(d.get("track_occur_date", "").startswith(today_str) or d.get("track_occur_date", "").startswith(yesterday_str) for d in details)
+
+        html_body += f'<div class="tracking-card" data-vendor="{vendor}" data-customer="{customer}" data-status="{status}" data-today-update="{"true" if has_today else "false"}" data-last2-update="{"true" if has_last2 else "false"}" data-tracking-number="{tracking_number}" data-customername="{customer}">\n'
         html_body += f'  <div class="tracking-header">\n'
         html_body += f'    <div class="tracking-number">{tracking_number}</div>\n'
         html_body += f'    <div><b>客户:</b> {customer}</div>\n'
@@ -390,7 +397,10 @@ function filterTable() {{
     if (customerFilter && customerFilter !== customer) return false;
     if (statusFilter && statusFilter !== status) return false;
     if (todayFilter === 'today' && todayUpdate !== 'true') return false;
-
+    if (todayFilter === 'last2days') {{
+        const last2 = card.getAttribute('data-last2-update');
+        if (last2 !== 'true') return false;
+    }}
     return true;
   }});
 

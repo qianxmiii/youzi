@@ -355,10 +355,6 @@ function updateQuote() {
             profitRateInput.style.color = '#34a853';
         }
     }
-<<<<<<< HEAD
-
-=======
->>>>>>> 2e6d836c8715855ee739d5b7a67d69b31b7832b4
     
     // 计算总利润 (RMB) = 计费重 * 利润 (RMB)
     totalProfitRmb = new Decimal(0);

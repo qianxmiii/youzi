@@ -1,0 +1,455 @@
+import requests
+import json
+from datetime import datetime
+import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import os
+
+
+def load_config(config_file='config.json'):
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            config = json.load(f)
+            if 'vendors' not in config or not isinstance(config['vendors'], list):
+                raise ValueError("配置文件必须包含'vendors'数组")
+            for vendor in config['vendors']:
+                for key in ['name', 'appToken', 'appKey', 'apiUrl']:
+                    if key not in vendor:
+                        raise ValueError(f"物流商配置缺少字段: {key}")
+            return config
+    except FileNotFoundError:
+        raise Exception(f"配置文件未找到：{config_file}")
+    except json.JSONDecodeError:
+        raise Exception("配置文件解析失败，请确认是合法 JSON")
+
+
+def load_tracking_numbers(json_file='tracking_numbers.json'):
+    try:
+        with open(json_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # 期望是列表，每项包含 tracking_number 和 customer
+        if not isinstance(data, list):
+            raise ValueError("tracking_numbers.json 应为数组，数组元素为字典")
+        for item in data:
+            if 'tracking_number' not in item or 'customer' not in item:
+                raise ValueError("tracking_numbers.json 每项必须包含 'tracking_number' 和 'customer' 字段")
+        return data
+    except FileNotFoundError:
+        raise Exception(f"文件未找到：{json_file}")
+    except json.JSONDecodeError:
+        raise Exception("tracking_numbers.json 解析失败，请确认是合法 JSON")
+
+
+def load_assignments(assign_file='assignments.json'):
+    try:
+        with open(assign_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        # 期望是字典，key为单号，value为物流商名称
+        if not isinstance(data, dict):
+            raise ValueError("assignments.json 应为字典，键为单号，值为物流商名称")
+        return data
+    except FileNotFoundError:
+        raise Exception(f"文件未找到：{assign_file}")
+    except json.JSONDecodeError:
+        raise Exception("assignments.json 解析失败，请确认是合法 JSON")
+
+
+def fetch_tracking_data(tracking_item, vendor, max_retries=3):
+    tracking_number = tracking_item['tracking_number']
+    customer = tracking_item['customer']
+    params = {
+        "appToken": vendor["appToken"],
+        "appKey": vendor["appKey"],
+        "serviceMethod": "gettrack",
+        "paramsJson": json.dumps({"tracking_number": tracking_number})
+    }
+
+    for attempt in range(max_retries):
+        try:
+            response = requests.post(
+                vendor["apiUrl"],
+                data=params,
+                timeout=10
+            )
+            response.raise_for_status()
+            try:
+                result = response.json()
+            except json.JSONDecodeError:
+                print(f"运单 {tracking_number} 返回非法JSON")
+                return None
+
+            if not result.get("success"):
+                print(f"运单 {tracking_number} 请求失败：{result.get('cnmessage')}")
+                return None
+
+            return {
+                "tracking_number": tracking_number,
+                "customer": customer,
+                "vendor": vendor["name"],
+                "data": result["data"][0]
+            }
+
+        except requests.exceptions.RequestException as e:
+            if attempt == max_retries - 1:
+                print(f"运单 {tracking_number} 第{attempt+1}次请求失败：{str(e)}")
+                return None
+            time.sleep(1)
+
+
+def batch_fetch_by_assignments(tracking_list, assignments, vendors, max_workers=5):
+    """
+    只查询分配了物流商的单号，且对应的物流商必须在配置中
+    """
+    all_results = []
+
+    # 物流商名称映射，方便快速查找
+    vendor_map = {v['name']: v for v in vendors}
+
+    # 筛选只保留有分配且配置中存在的单号
+    filtered_list = []
+    for item in tracking_list:
+        tn = item['tracking_number']
+        assigned_vendor = assignments.get(tn)
+        if assigned_vendor and assigned_vendor in vendor_map:
+            filtered_list.append((item, vendor_map[assigned_vendor]))
+        else:
+            print(f"跳过单号 {tn}，无对应物流商分配或物流商未配置")
+
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        future_to_item = {
+            executor.submit(fetch_tracking_data, item, vendor): (item, vendor)
+            for item, vendor in filtered_list
+        }
+
+        for future in as_completed(future_to_item):
+            item, vendor = future_to_item[future]
+            try:
+                data = future.result()
+                if data:
+                    print(f"运单 {item['tracking_number']} 查询成功，物流商 {vendor['name']}")
+                    all_results.append(data)
+                else:
+                    print(f"运单 {item['tracking_number']} 查询失败，物流商 {vendor['name']}")
+            except Exception as e:
+                print(f"运单 {item['tracking_number']} 查询异常：{str(e)}")
+
+    return all_results
+
+
+def save_results(results, output_file):
+    versioned_data = {
+        "version": "1.0",
+        "timestamp": datetime.now().isoformat(),
+        "count": len(results),
+        "success_count": len(results),
+        "data": results
+    }
+
+    with open(output_file, 'w', encoding='utf-8') as f:
+        json.dump(versioned_data, f, ensure_ascii=False, indent=2)
+    print(f"\n成功记录已保存到：{output_file}")
+
+
+def generate_html_report(results, output_file):
+    today_str = datetime.now().strftime('%Y-%m-%d')
+
+    html_head = f"""<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <title>物流查询报告</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <link href="css/common/bootstrap.min.css" rel="stylesheet" />
+  <style>
+    .today-highlight {{
+      background-color: #fff3cd;
+      font-weight: bold;
+    }}
+    .tracking-card {{
+      border: 1px solid #dee2e6;
+      border-radius: .5rem;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }}
+    .tracking-header {{
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }}
+    .tracking-number {{
+      font-weight: bold;
+      font-size: 1.1rem;
+    }}
+    .latest-track {{
+      font-style: italic;
+      color: #555;
+      flex: 1 1 100%;
+    }}
+    .filter-row {{
+      margin-bottom: 1rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 1rem;
+    }}
+    .filter-row > * {{
+      flex: 1 1 150px;
+    }}
+    .collapse-table td {{
+      padding: .5rem .75rem;
+    }}
+  </style>
+</head>
+<body>
+<div class="container my-4">
+  <h2 class="mb-3">物流查询报告</h2>
+  <p>生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
+
+  <div class="filter-row">
+    <input type="text" id="searchInput" class="form-control" placeholder="搜索运单号或客户名" onkeyup="filterTable()" />
+    <select id="vendorFilter" class="form-select" onchange="filterTable()">
+      <option value="">全部物流商</option>
+    </select>
+    <select id="customerFilter" class="form-select" onchange="filterTable()">
+      <option value="">全部客户</option>
+    </select>
+    <select id="statusFilter" class="form-select" onchange="filterTable()">
+      <option value="">全部状态</option>
+      <option value="已签收">已签收</option>
+      <option value="运输中">运输中</option>
+      <option value="问题件">问题件</option>
+    </select>
+    <select id="todayFilter" class="form-select" onchange="filterTable()">
+      <option value="">全部更新时间</option>
+      <option value="today">今日更新</option>
+    </select>
+  </div>
+
+  <div id="trackingList">
+"""
+
+    # 生成唯一物流商和客户名列表（用于前端下拉框）
+    vendors_set = set()
+    customers_set = set()
+    for r in results:
+        vendors_set.add(r.get("vendor", ""))
+        customers_set.add(r.get("customer", ""))
+
+    vendors_list = sorted([v for v in vendors_set if v])
+    customers_list = sorted([c for c in customers_set if c])
+
+    html_body = ""
+
+    for idx, item in enumerate(results):
+        tracking_number = item.get("tracking_number", "")
+        customer = item.get("customer", "")
+        vendor = item.get("vendor", "")
+        collapse_id = f"collapse_{idx}"
+        status = item.get("data", {}).get("track_status_name", "")
+
+        html_body += f'<div class="tracking-card" data-vendor="{vendor}" data-customer="{customer}" data-status="{status}" data-today-update="{"true" if any(d.get("track_occur_date", "").startswith(today_str) for d in item.get("data", {}).get("details", [])) else "false"}" data-tracking-number="{tracking_number}" data-customername="{customer}">\n'
+
+        html_body += f'  <div class="tracking-header">\n'
+        html_body += f'    <div class="tracking-number">{tracking_number}</div>\n'
+        html_body += f'    <div><b>客户:</b> {customer}</div>\n'
+        html_body += f'    <div><b>物流商:</b> {vendor}</div>\n'
+        if "data" in item:
+            details = item["data"].get("details", [])
+            latest = details[0] if details else {}
+            latest_time = latest.get("track_occur_date", "")
+            latest_desc = latest.get("track_description", "")
+            html_body += f'    <div class="latest-track">{latest_time} - {latest_desc[:60]}</div>\n'
+        else:
+            html_body += f'    <div class="text-danger">无详细轨迹</div>\n'
+        html_body += f'    <div><b>状态:</b> {status}</div>\n'
+        html_body += f'  </div>\n'
+
+        if "data" in item and item["data"].get("details"):
+            html_body += f'  <div class="text-end mt-2">\n'
+            html_body += f'    <a class="btn btn-sm btn-outline-primary" data-bs-toggle="collapse" href="#{collapse_id}" role="button" aria-expanded="false" aria-controls="{collapse_id}">展开/收起轨迹</a>\n'
+            html_body += f'  </div>\n'
+
+            html_body += f'  <div class="collapse mt-2" id="{collapse_id}">\n'
+            html_body += f'    <table class="table table-sm table-bordered collapse-table">\n'
+            html_body += f'      <thead class="table-light"><tr><th style="width:180px;">时间</th><th>轨迹描述</th></tr></thead>\n'
+            html_body += f'      <tbody>\n'
+
+            for d in item["data"]["details"]:
+                time_str = d.get("track_occur_date", "")
+                desc = d.get("track_description", "")
+                row_class = "today-highlight" if time_str.startswith(today_str) else ""
+                html_body += f'        <tr class="{row_class}"><td>{time_str}</td><td>{desc}</td></tr>\n'
+
+            html_body += f'      </tbody>\n    </table>\n  </div>\n'
+
+        html_body += '</div>\n'
+
+    html_tail = f"""
+  </div>
+  <nav>
+    <ul class="pagination justify-content-center" id="pagination"></ul>
+  </nav>
+</div>
+
+<script src="js/common/bootstrap.bundle.min.js"></script>
+<script>
+const itemsPerPage = 50;
+let currentPage = 1;
+const trackingList = document.getElementById('trackingList');
+const pagination = document.getElementById('pagination');
+
+function filterTable() {{
+  const searchText = document.getElementById('searchInput').value.toLowerCase();
+  const vendorFilter = document.getElementById('vendorFilter').value;
+  const customerFilter = document.getElementById('customerFilter').value;
+  const statusFilter = document.getElementById('statusFilter').value;
+  const todayFilter = document.getElementById('todayFilter').value;
+
+  // 先筛选出满足条件的元素数组
+  const filtered = Array.from(trackingList.children).filter(card => {{
+    const tn = card.getAttribute('data-tracking-number').toLowerCase();
+    const customer = card.getAttribute('data-customer');
+    const vendor = card.getAttribute('data-vendor');
+    const status = card.getAttribute('data-status');
+    const todayUpdate = card.getAttribute('data-today-update');
+
+    if (searchText && !(tn.includes(searchText) || customer.toLowerCase().includes(searchText))) {{
+      return false;
+    }}
+    if (vendorFilter && vendorFilter !== vendor) return false;
+    if (customerFilter && customerFilter !== customer) return false;
+    if (statusFilter && statusFilter !== status) return false;
+    if (todayFilter === 'today' && todayUpdate !== 'true') return false;
+
+    return true;
+  }});
+
+  // 先隐藏全部
+  Array.from(trackingList.children).forEach(card => {{
+    card.style.display = 'none';
+  }});
+
+  // 显示当前页的筛选结果
+  currentPage = 1; // 筛选后重置页码为1
+  showPage(filtered);
+
+  // 更新分页控件
+  setupPagination(filtered.length);
+}}
+
+function showPage(filteredItems) {{
+  const start = (currentPage - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+
+  // 隐藏所有元素
+  Array.from(trackingList.children).forEach(card => {{
+    card.style.display = 'none';
+  }});
+
+  // 只显示当前页的元素
+  filteredItems.forEach((item, index) => {{
+    if (index >= start && index < end) {{
+      item.style.display = '';
+    }}
+  }});
+}}
+
+function setupPagination(totalItems) {{
+  pagination.innerHTML = '';
+  const pageCount = Math.ceil(totalItems / itemsPerPage);
+  if (pageCount <= 1) return;
+
+  for (let i = 1; i <= pageCount; i++) {{
+    const li = document.createElement('li');
+    li.classList.add('page-item');
+    if (i === currentPage) li.classList.add('active');
+    const a = document.createElement('a');
+    a.classList.add('page-link');
+    a.href = '#';
+    a.innerText = i;
+    a.addEventListener('click', (e) => {{
+      e.preventDefault();
+      if (currentPage === i) return; // 点击当前页不刷新
+      currentPage = i;
+
+      // 重新执行筛选，分页显示
+      filterTable();
+    }});
+    li.appendChild(a);
+    pagination.appendChild(li);
+  }}
+}}
+
+
+// 初始化时填充筛选器选项
+function initFilters() {{
+  const vendorFilter = document.getElementById('vendorFilter');
+  const customerFilter = document.getElementById('customerFilter');
+
+  // 填充物流商选项
+  const vendors = Array.from(new Set(Array.from(trackingList.children).map(c => c.getAttribute('data-vendor')).filter(v=>v)));
+  vendors.sort();
+  vendors.forEach(v => {{
+    const option = document.createElement('option');
+    option.value = v;
+    option.textContent = v;
+    vendorFilter.appendChild(option);
+  }});
+
+  // 填充客户选项
+  const customers = Array.from(new Set(Array.from(trackingList.children).map(c => c.getAttribute('data-customer')).filter(cust=>cust)));
+  customers.sort();
+  customers.forEach(c => {{
+    const option = document.createElement('option');
+    option.value = c;
+    option.textContent = c;
+    customerFilter.appendChild(option);
+  }});
+}}
+
+document.addEventListener('DOMContentLoaded', () => {{
+  initFilters();
+  filterTable();
+}});
+</script>
+</body>
+</html>
+"""
+
+    html_content = html_head + html_body + html_tail
+
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write(html_content)
+
+    print(f"HTML报告已保存到：{output_file}")
+
+def deduplicate_tracking_list(tracking_list):
+    seen = set()
+    unique_list = []
+    for item in tracking_list:
+        tn = item['tracking_number']
+        if tn not in seen:
+            seen.add(tn)
+            unique_list.append(item)
+    return unique_list
+
+if __name__ == "__main__":
+    try:
+        config = load_config("config.json")
+        tracking_list = load_tracking_numbers("tracking_numbers.json")
+        tracking_list = deduplicate_tracking_list(tracking_list)
+        assignments = load_assignments("assignments.json")
+        print(f"成功加载 {len(tracking_list)} 个运单号，分配配置 {len(assignments)} 条")
+
+        results = batch_fetch_by_assignments(tracking_list, assignments, config['vendors'], max_workers=1)
+
+        os.makedirs("result", exist_ok=True)
+        output_json = "tracking_results.json"
+        save_results(results, output_json)
+
+        output_html = "report.html"
+        generate_html_report(results, output_html)
+
+    except Exception as e:
+        print(f"程序出错: {str(e)}")

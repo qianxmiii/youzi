@@ -12,15 +12,24 @@ def load_config(config_file='config.json'):
             config = json.load(f)
             if 'vendors' not in config or not isinstance(config['vendors'], list):
                 raise ValueError("配置文件必须包含'vendors'数组")
+            
             for vendor in config['vendors']:
-                for key in ['name', 'appToken', 'appKey', 'apiUrl']:
+                name = vendor.get('name')
+                if name == "鑫鲲鹏":
+                    required_keys = ['name', 'FACTNO', 'SUPNO', 'SUPPASS', 'APPKEY', 'apiUrl']
+                else:
+                    required_keys = ['name', 'appToken', 'appKey', 'apiUrl']
+                
+                for key in required_keys:
                     if key not in vendor:
-                        raise ValueError(f"物流商配置缺少字段: {key}")
+                        raise ValueError(f"物流商 {name} 配置缺少字段: {key}")
             return config
+
     except FileNotFoundError:
         raise Exception(f"配置文件未找到：{config_file}")
     except json.JSONDecodeError:
         raise Exception("配置文件解析失败，请确认是合法 JSON")
+
 
 
 def load_tracking_numbers(json_file='tracking_numbers.json'):
@@ -57,37 +66,83 @@ def load_assignments(assign_file='assignments.json'):
 def fetch_tracking_data(tracking_item, vendor, max_retries=3):
     tracking_number = tracking_item['tracking_number']
     customer = tracking_item['customer']
-    params = {
-        "appToken": vendor["appToken"],
-        "appKey": vendor["appKey"],
-        "serviceMethod": "gettrack",
-        "paramsJson": json.dumps({"tracking_number": tracking_number})
-    }
 
     for attempt in range(max_retries):
         try:
-            response = requests.post(
-                vendor["apiUrl"],
-                data=params,
-                timeout=10
-            )
-            response.raise_for_status()
-            try:
+            
+            # 鑫鲲鹏特殊逻辑
+            if vendor["name"] == "鑫鲲鹏":
+                params = {
+                    "FACTNO": vendor["FACTNO"],
+                    "SUPNO": vendor["SUPNO"],
+                    "SUPPASS": vendor["SUPPASS"],
+                    "APPKEY": vendor["APPKEY"],
+                    "PACKNO": [tracking_number]
+                }
+                response = requests.post(
+                    vendor["apiUrl"],
+                    json=params,
+                    timeout=10
+                )
+                response.raise_for_status()
                 result = response.json()
-            except json.JSONDecodeError:
-                print(f"运单 {tracking_number} 返回非法JSON")
-                return None
 
-            if not result.get("success"):
-                print(f"运单 {tracking_number} 请求失败：{result.get('cnmessage')}")
-                return None
+                if not isinstance(result, dict) or 'data' not in result or 'details' not in result['data']:
+                    print(f"圆通返回格式异常：{result}")
+                    return None
 
-            return {
-                "tracking_number": tracking_number,
-                "customer": customer,
-                "vendor": vendor["name"],
-                "data": result["data"][0]
-            }
+                details = result['data']['details']
+
+                if not isinstance(details, list) or not details:
+                    print(f"{vendor['name']}返回详情格式异常：{details}")
+                    return None
+
+                # 状态字段
+                kdzt = result['data'].get("kdzt", "")
+
+                # 转为统一格式，details 中每个元素都有 zztm 和 guiji
+                track_details = [{
+                    "track_occur_date": item.get("zztm", ""),
+                    "track_description": item.get("guiji", "")
+                } for item in details if item.get("guiji")]
+
+                return {
+                    "tracking_number": tracking_number,
+                    "customer": customer,
+                    "vendor": vendor["name"],
+                    "data": {
+                        "track_status_name": kdzt,
+                        "details": track_details
+                    }
+                }
+
+            # ✅ 默认其他通用物流商逻辑
+            else:
+                params = {
+                    "appToken": vendor["appToken"],
+                    "appKey": vendor["appKey"],
+                    "serviceMethod": "gettrack",
+                    "paramsJson": json.dumps({"tracking_number": tracking_number})
+                }
+
+                response = requests.post(
+                    vendor["apiUrl"],
+                    data=params,
+                    timeout=10
+                )
+                response.raise_for_status()
+                result = response.json()
+
+                if not result.get("success"):
+                    print(f"运单 {tracking_number} 请求失败：{result.get('cnmessage')}")
+                    return None
+
+                return {
+                    "tracking_number": tracking_number,
+                    "customer": customer,
+                    "vendor": vendor["name"],
+                    "data": result["data"][0]
+                }
 
         except requests.exceptions.RequestException as e:
             if attempt == max_retries - 1:
@@ -153,6 +208,11 @@ def save_results(results, output_file):
 def generate_html_report(results, output_file):
     today_str = datetime.now().strftime('%Y-%m-%d')
 
+    vendors_list = []
+    customers_list = []
+    vendor_options = '\n'.join(f'<option value="{v}">{v}</option>' for v in vendors_list)
+    customer_options = '\n'.join(f'<option value="{c}">{c}</option>' for c in customers_list)
+
     html_head = f"""<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -210,9 +270,11 @@ def generate_html_report(results, output_file):
     <input type="text" id="searchInput" class="form-control" placeholder="搜索运单号或客户名" onkeyup="filterTable()" />
     <select id="vendorFilter" class="form-select" onchange="filterTable()">
       <option value="">全部物流商</option>
+      {vendor_options}
     </select>
     <select id="customerFilter" class="form-select" onchange="filterTable()">
       <option value="">全部客户</option>
+      {customer_options}
     </select>
     <select id="statusFilter" class="form-select" onchange="filterTable()">
       <option value="">全部状态</option>

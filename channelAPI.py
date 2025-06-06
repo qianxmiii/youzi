@@ -15,7 +15,7 @@ def load_config(config_file='config.json'):
             
             for vendor in config['vendors']:
                 name = vendor.get('name')
-                if name == "鑫鲲鹏":
+                if name == "鑫鲲鹏" or name == "华威尔":
                     required_keys = ['name', 'FACTNO', 'SUPNO', 'SUPPASS', 'APPKEY', 'apiUrl']
                 else:
                     required_keys = ['name', 'appToken', 'appKey', 'apiUrl']
@@ -70,8 +70,8 @@ def fetch_tracking_data(tracking_item, vendor, max_retries=3):
     for attempt in range(max_retries):
         try:
             
-            # 鑫鲲鹏特殊逻辑
-            if vendor["name"] == "鑫鲲鹏":
+            # 特殊逻辑
+            if vendor["name"] == "鑫鲲鹏" or vendor["name"] == "华威尔":
                 params = {
                     "FACTNO": vendor["FACTNO"],
                     "SUPNO": vendor["SUPNO"],
@@ -88,7 +88,7 @@ def fetch_tracking_data(tracking_item, vendor, max_retries=3):
                 result = response.json()
 
                 if not isinstance(result, dict) or 'data' not in result or 'details' not in result['data']:
-                    print(f"圆通返回格式异常：{result}")
+                    print(f"{vendor['name']}返回格式异常：{result}")
                     return None
 
                 details = result['data']['details']
@@ -99,6 +99,8 @@ def fetch_tracking_data(tracking_item, vendor, max_retries=3):
 
                 # 状态字段
                 kdzt = result['data'].get("kdzt", "")
+                # 转单号
+                express_number = result['data'].get("zycode", "")
 
                 # 转为统一格式，details 中每个元素都有 zztm 和 guiji
                 track_details = [{
@@ -112,6 +114,7 @@ def fetch_tracking_data(tracking_item, vendor, max_retries=3):
                     "vendor": vendor["name"],
                     "data": {
                         "track_status_name": kdzt,
+                        "express_number": express_number,
                         "details": track_details
                     }
                 }
@@ -210,8 +213,20 @@ def generate_html_report(results, output_file):
 
     vendors_list = []
     customers_list = []
+
+    # 生成唯一物流商和客户名列表（用于前端下拉框）
+    vendors_set = set()
+    customers_set = set()
+    for r in results:
+        vendors_set.add(r.get("vendor", ""))
+        customers_set.add(r.get("customer", ""))
+
+    vendors_list = sorted([v for v in vendors_set if v])
+    customers_list = sorted([c for c in customers_set if c])
+
     vendor_options = '\n'.join(f'<option value="{v}">{v}</option>' for v in vendors_list)
     customer_options = '\n'.join(f'<option value="{c}">{c}</option>' for c in customers_list)
+
 
     html_head = f"""<!DOCTYPE html>
 <html lang="zh">
@@ -291,16 +306,7 @@ def generate_html_report(results, output_file):
   <div id="trackingList">
 """
 
-    # 生成唯一物流商和客户名列表（用于前端下拉框）
-    vendors_set = set()
-    customers_set = set()
-    for r in results:
-        vendors_set.add(r.get("vendor", ""))
-        customers_set.add(r.get("customer", ""))
-
-    vendors_list = sorted([v for v in vendors_set if v])
-    customers_list = sorted([c for c in customers_set if c])
-
+    
     html_body = ""
 
     for idx, item in enumerate(results):
@@ -334,14 +340,15 @@ def generate_html_report(results, output_file):
 
             html_body += f'  <div class="collapse mt-2" id="{collapse_id}">\n'
             html_body += f'    <table class="table table-sm table-bordered collapse-table">\n'
-            html_body += f'      <thead class="table-light"><tr><th style="width:180px;">时间</th><th>轨迹描述</th></tr></thead>\n'
+            html_body += f'      <thead class="table-light"><tr><th style="width:180px;">时间</th><th style="width:150px;">地点</th><th>轨迹描述</th></tr></thead>\n'
             html_body += f'      <tbody>\n'
 
             for d in item["data"]["details"]:
                 time_str = d.get("track_occur_date", "")
                 desc = d.get("track_description", "")
+                location = d.get("track_location", "")
                 row_class = "today-highlight" if time_str.startswith(today_str) else ""
-                html_body += f'        <tr class="{row_class}"><td>{time_str}</td><td>{desc}</td></tr>\n'
+                html_body += f'        <tr class="{row_class}"><td>{time_str}</td><td>{location}</td><td>{desc}</td></tr>\n'
 
             html_body += f'      </tbody>\n    </table>\n  </div>\n'
 
@@ -485,6 +492,8 @@ document.addEventListener('DOMContentLoaded', () => {{
         f.write(html_content)
 
     print(f"HTML报告已保存到：{output_file}")
+
+
 
 def deduplicate_tracking_list(tracking_list):
     seen = set()

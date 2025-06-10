@@ -211,20 +211,17 @@ def save_results(results, output_file):
 def generate_html_report(results, output_file):
     today_str = datetime.now().strftime('%Y-%m-%d')
 
-    vendors_list = []
     customers_list = []
 
     # 生成唯一物流商和客户名列表（用于前端下拉框）
-    vendors_set = set()
     customers_set = set()
     for r in results:
-        vendors_set.add(r.get("vendor", ""))
-        customers_set.add(r.get("customer", ""))
+      customer = str(r.get("customer", "")).strip()
+      if customer:
+          customers_set.add(customer)
 
-    vendors_list = sorted([v for v in vendors_set if v])
-    customers_list = sorted([c for c in customers_set if c])
+    customers_list = sorted(customers_set)
 
-    vendor_options = '\n'.join(f'<option value="{v}">{v}</option>' for v in vendors_list)
     customer_options = '\n'.join(f'<option value="{c}">{c}</option>' for c in customers_list)
 
 
@@ -235,6 +232,7 @@ def generate_html_report(results, output_file):
   <title>物流查询报告</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="css/common/bootstrap.min.css" rel="stylesheet" />
+  <link rel="icon" href="rep_favicon.png" type="image/png">
   <style>
     .today-highlight {{
       background-color: #fff3cd;
@@ -285,7 +283,11 @@ def generate_html_report(results, output_file):
     <input type="text" id="searchInput" class="form-control" placeholder="搜索运单号或客户名" onkeyup="filterTable()" />
     <select id="vendorFilter" class="form-select" onchange="filterTable()">
       <option value="">全部物流商</option>
-      {vendor_options}
+      <option value="森磊">森磊</option>
+      <option value="腾信">腾信</option>
+      <option value="鹏远">鹏远</option>
+      <option value="鑫鲲鹏">鑫鲲鹏</option>
+      <option value="华威尔">华威尔</option>
     </select>
     <select id="customerFilter" class="form-select" onchange="filterTable()">
       <option value="">全部客户</option>
@@ -293,15 +295,22 @@ def generate_html_report(results, output_file):
     </select>
     <select id="statusFilter" class="form-select" onchange="filterTable()">
       <option value="">全部状态</option>
-      <option value="已签收">已签收</option>
+      <option value="未上网">未上网</option>
+      <option value="转运中">转运中</option>
       <option value="运输中">运输中</option>
-      <option value="问题件">问题件</option>
+      <option value="已出库">已出库</option>
+      <option value="已开航">已开航</option>
+      <option value="清关中">清关中</option>
+      <option value="派送中">派送中</option>
+      <option value="已交仓">已交仓</option>
+      <option value="派送妥投">派送妥投</option>
     </select>
     <select id="todayFilter" class="form-select" onchange="filterTable()">
       <option value="">全部更新时间</option>
       <option value="today">今日更新</option>
       <option value="last2days">近两天更新</option>
     </select>
+    <input type="text" id="trackKeywordFilter" class="form-control" placeholder="轨迹关键词筛选" onkeyup="filterTable()" />
   </div>
 
   <div id="trackingList">
@@ -370,7 +379,7 @@ def generate_html_report(results, output_file):
 
 <script src="js/common/bootstrap.bundle.min.js"></script>
 <script>
-const itemsPerPage = 50;
+const itemsPerPage = 100;
 let currentPage = 1;
 const trackingList = document.getElementById('trackingList');
 const pagination = document.getElementById('pagination');
@@ -381,8 +390,8 @@ function filterTable() {{
   const customerFilter = document.getElementById('customerFilter').value;
   const statusFilter = document.getElementById('statusFilter').value;
   const todayFilter = document.getElementById('todayFilter').value;
+  const trackKeyword = document.getElementById('trackKeywordFilter').value.toLowerCase();
 
-  // 先筛选出满足条件的元素数组
   const filtered = Array.from(trackingList.children).filter(card => {{
     const tn = card.getAttribute('data-tracking-number').toLowerCase();
     const customer = card.getAttribute('data-customer');
@@ -390,31 +399,42 @@ function filterTable() {{
     const status = card.getAttribute('data-status');
     const todayUpdate = card.getAttribute('data-today-update');
 
-    if (searchText && !(tn.includes(searchText) || customer.toLowerCase().includes(searchText))) {{
-      return false;
+    // 轨迹关键词匹配逻辑
+    if (trackKeyword) {{
+      const trackDescriptions = Array.from(card.querySelectorAll('td:nth-child(3)')).map(td => td.innerText.toLowerCase());
+      if (!trackDescriptions.some(desc => desc.includes(trackKeyword))) {{
+        return false;
+      }}
     }}
+
+    if (searchText && !(tn.includes(searchText) || customer.toLowerCase().includes(searchText))) return false;
     if (vendorFilter && vendorFilter !== vendor) return false;
     if (customerFilter && customerFilter !== customer) return false;
     if (statusFilter && statusFilter !== status) return false;
     if (todayFilter === 'today' && todayUpdate !== 'true') return false;
-    if (todayFilter === 'last2days') {{
-        const last2 = card.getAttribute('data-last2-update');
-        if (last2 !== 'true') return false;
-    }}
+
     return true;
   }});
 
-  // 先隐藏全部
-  Array.from(trackingList.children).forEach(card => {{
-    card.style.display = 'none';
-  }});
-
-  // 显示当前页的筛选结果
-  currentPage = 1; // 筛选后重置页码为1
+  currentPage = 1;
   showPage(filtered);
-
-  // 更新分页控件
   setupPagination(filtered.length);
+
+  // 🔍 关键词高亮
+  highlightTrackKeywords(trackKeyword);
+}}
+
+function highlightTrackKeywords(keyword) {{
+  const rows = document.querySelectorAll('.collapse-table td:nth-child(3)');
+  rows.forEach(td => {{
+    const text = td.innerText;
+    if (!keyword) {{
+      td.innerHTML = text; // 还原
+    }} else {{
+      const regex = new RegExp(`(${{keyword}})`, 'gi');
+      td.innerHTML = text.replace(regex, '<mark>$1</mark>');
+    }}
+  }});
 }}
 
 function showPage(filteredItems) {{
@@ -463,7 +483,6 @@ function setupPagination(totalItems) {{
 
 // 初始化时填充筛选器选项
 function initFilters() {{
-  const vendorFilter = document.getElementById('vendorFilter');
   const customerFilter = document.getElementById('customerFilter');
 
   // 填充物流商选项
@@ -473,7 +492,6 @@ function initFilters() {{
     const option = document.createElement('option');
     option.value = v;
     option.textContent = v;
-    vendorFilter.appendChild(option);
   }});
 
   // 填充客户选项

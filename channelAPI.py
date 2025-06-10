@@ -295,15 +295,10 @@ def generate_html_report(results, output_file):
     </select>
     <select id="statusFilter" class="form-select" onchange="filterTable()">
       <option value="">全部状态</option>
-      <option value="未上网">未上网</option>
+      <option value="未出库">未出库</option>
       <option value="转运中">转运中</option>
-      <option value="运输中">运输中</option>
-      <option value="已出库">已出库</option>
-      <option value="已开航">已开航</option>
-      <option value="清关中">清关中</option>
       <option value="派送中">派送中</option>
-      <option value="已交仓">已交仓</option>
-      <option value="派送妥投">派送妥投</option>
+      <option value="已签收">已签收</option>
     </select>
     <select id="todayFilter" class="form-select" onchange="filterTable()">
       <option value="">全部更新时间</option>
@@ -392,6 +387,13 @@ function filterTable() {{
   const todayFilter = document.getElementById('todayFilter').value;
   const trackKeyword = document.getElementById('trackKeywordFilter').value.toLowerCase();
 
+  const statusMap = {{
+    "未出库": ["未上网"],
+    "转运中": ["转运中", "运输中", "已出库", "已开航", "清关中"],
+    "派送中": ["派送中", "已交仓"],
+    "已签收": ["派送妥投"]
+  }};
+
   const filtered = Array.from(trackingList.children).filter(card => {{
     const tn = card.getAttribute('data-tracking-number').toLowerCase();
     const customer = card.getAttribute('data-customer');
@@ -410,7 +412,10 @@ function filterTable() {{
     if (searchText && !(tn.includes(searchText) || customer.toLowerCase().includes(searchText))) return false;
     if (vendorFilter && vendorFilter !== vendor) return false;
     if (customerFilter && customerFilter !== customer) return false;
-    if (statusFilter && statusFilter !== status) return false;
+    if (statusFilter) {{
+      const actualStatuses = statusMap[statusFilter] || [statusFilter];
+      if (!actualStatuses.includes(status)) return false;
+    }}
     if (todayFilter === 'today' && todayUpdate !== 'true') return false;
 
     return true;

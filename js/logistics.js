@@ -491,8 +491,9 @@ function parseDimensions() {
     // 获取输入的文本
     const input = document.getElementById("dimension-input").value.trim();
     
-    // 使用正则表达式分割输入，支持 '|' 或 'LCL Load Item' 作为分隔符
-    const rows = input.split(/\||== LCL Load Item/).map(row => row.trim());
+    // 使用正则表达式分割输入，支持 '|' 或 'LCL Load Item' 或 或 'Air Load Item'作为分隔符
+    // const rows = input.split(/\||== LCL Load Item/).map(row => row.trim());
+    const rows = input.split(/\||== LCL Load Item|== Air Load Item/).map(row => row.trim());
 
     // 获取表格的 tbody 元素
     const tableBody = document.getElementById("box-table");

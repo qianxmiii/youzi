@@ -1,6 +1,6 @@
 // 新增常量 exchange_rate
-const exchange_rate = 7.2; //美元汇率
-const cost_exchange_rate = 7.3; //美元汇率
+const exchange_rate = 7.15; //美元汇率
+const cost_exchange_rate = 7.2; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 let addFee = new Decimal(0); //其他费用

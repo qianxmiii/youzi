@@ -553,6 +553,16 @@
             <input type="text" id="cargo-input" class="form-control" placeholder="例如: 21ctns 8.3 kg 2.126 cbm"
               oninput="parseCalTabCargoInfo()" />
           </div>
+          <div class="mb-3 d-flex align-items-center gap-2">
+            <label for="product-select" class="subtitle mb-0">常用产品选择</label>
+            <select id="product-select" class="form-select w-auto" onchange="onProductChange()">
+              <option value="" selected>请选择产品</option>
+              <option data-hscode="7317000000" data-taxrate="12.5">脚轮</option>
+              <option data-hscode="1234567890" data-taxrate="10.0">示例产品A</option>
+              <option data-hscode="0987654321" data-taxrate="15.0">示例产品B</option>
+            </select>
+            <input type="text" id="product-hscode" class="form-control w-auto" readonly placeholder="海关编码" />
+          </div>
               <h4>自税成本</h4>
               <table class="table table-bordered" id="DDUTable">
                 <thead>

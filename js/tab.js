@@ -567,6 +567,27 @@ function parseCalTabCargoInfo() {
     calculateCostDDP();
 }
 
+function onProductChange() {
+    const select = document.getElementById('product-select');
+    const selectedOption = select.options[select.selectedIndex];
+    if (selectedOption && selectedOption.value !== "") {
+        const taxRate = selectedOption.getAttribute('data-taxrate');
+        const hscode = selectedOption.getAttribute('data-hscode');
+
+        // 填入自税成本税率输入框
+        document.getElementById('t_tax-rate').value = taxRate;
+
+        // 显示海关编码
+        document.getElementById('product-hscode').value = hscode;
+        calculateCostDDU();
+    } else {
+        // 没选产品时清空
+        document.getElementById('t_tax-rate').value = "";
+        document.getElementById('product-hscode').value = "";
+    }
+}
+
+
 // 计算自税成本
 function calculateCostDDU() {
     // 获取输入值

@@ -78,6 +78,11 @@ def query_logistics_api(tracking_list, base_url, batch_size=10):
 
     return all_results
 
+def highlight_keywords(text):
+    keywords = ["ETD", "ETA", "POD", "签收", "派送", "delivered"]
+    for kw in keywords:
+        text = text.replace(kw, f"<span class='highlight'>{kw}</span>")
+    return text
 
 def annotate_shipments(results):
     now = datetime.now()
@@ -276,10 +281,35 @@ def generate_html_report(results, output_file="stales.html"):
             elif days > 7:
                 row_class = "stale-row"
 
-        track_list = "<br>".join([
-            f"{log.get('nodeTime', '')} - {log.get('nodeDesc', '')}"
-            for log in item.get("logisticsInfors", [])
+        track_logs = item.get("logisticsInfors", [])
+        short_logs = track_logs[:2]
+        remaining_logs = track_logs[2:]
+        
+        short_html = "<br>".join([
+            highlight_keywords(f"{log.get('nodeTime', '')} - {log.get('nodeDesc', '')}")
+            for log in short_logs
         ])
+        
+        hidden_html = "<br>".join([
+            highlight_keywords(f"{log.get('nodeTime', '')} - {log.get('nodeDesc', '')}")
+            for log in remaining_logs
+        ])
+        
+        expand_id = f"collapse_{item.get('odd')}"
+        button_html = ""
+        if remaining_logs:
+            button_html = f'''
+                <button class="btn btn-sm btn-link p-0" type="button" data-bs-toggle="collapse" data-bs-target="#{expand_id}" aria-expanded="false" aria-controls="{expand_id}">
+                    展开更多
+                </button>
+            '''
+        
+        track_cell = f'''
+            {short_html}<br>{button_html}
+            <div class="collapse mt-1" id="{expand_id}">
+                {hidden_html}
+            </div>
+        '''
 
         # 拼接轨迹内容，用于 JS 模糊匹配筛选
         track_text = " ".join([
@@ -300,7 +330,7 @@ def generate_html_report(results, output_file="stales.html"):
                 <td><span class="badge bg-danger">{days}</span></td>
                 <td>{status}</td>
                 <td>{delivery_country}</td>
-                <td><div class="track-content">{track_list}</div></td>
+                <td>{track_cell}</td>
             </tr>
         """
 
@@ -308,7 +338,7 @@ def generate_html_report(results, output_file="stales.html"):
         </tbody>
     </table>
 </div>
-
+<script src="js/common/bootstrap.bundle.min.js"></script>
 <script>
 function filterTable(type) {
     var rows = document.querySelectorAll("#logisticsTable tbody tr");
@@ -381,7 +411,15 @@ function filterByTrack() {
     // 重置客户筛选和状态筛选
     document.getElementById("customerFilter").value = "";
 }
-
+document.addEventListener('DOMContentLoaded', function () {
+    const buttons = document.querySelectorAll('button[data-bs-toggle="collapse"]');
+    buttons.forEach(btn => {
+        const target = document.querySelector(btn.getAttribute('data-bs-target'));
+        if (!target) return;
+        target.addEventListener('show.bs.collapse', () => btn.textContent = '收起');
+        target.addEventListener('hide.bs.collapse', () => btn.textContent = '展开更多');
+    });
+});
 </script>
 </body>
 </html>"""

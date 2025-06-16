@@ -62,23 +62,6 @@ def load_assignments(assign_file='assignments.json'):
     except json.JSONDecodeError:
         raise Exception("assignments.json 解析失败，请确认是合法 JSON")
 
-def is_within_last_2_days(date_str):
-    try:
-        # 尝试解析各种可能的日期格式
-        for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%Y%m%d', '%Y-%m-%d %H:%M:%S'):
-            try:
-                date = datetime.strptime(date_str.split()[0], fmt).date()
-                break
-            except:
-                continue
-        else:
-            return False
-            
-        today = datetime.now().date()
-        return date in (today, today - timedelta(days=1))
-    except:
-        return False
-
 def fetch_tracking_data(tracking_item, vendor, max_retries=3):
     tracking_number = tracking_item['tracking_number']
     customer = tracking_item['customer']
@@ -320,6 +303,8 @@ def generate_html_report(results, output_file):
       <option value="">全部更新时间</option>
       <option value="today">今日更新</option>
       <option value="last2days">近两天更新</option>
+      <option value="last3days">近三天更新</option>
+      <option value="last7days">近一周更新</option>
     </select>
     <input type="text" id="trackKeywordFilter" class="form-control" placeholder="轨迹关键词筛选" onkeyup="filterTable()" />
   </div>
@@ -330,6 +315,11 @@ def generate_html_report(results, output_file):
     
     html_body = ""
 
+    today = datetime.now().date()
+    yesterday = today - timedelta(days=1)
+    three_days_ago = today - timedelta(days=3)
+    one_week_ago = today - timedelta(days=7)
+
     for idx, item in enumerate(results):
         tracking_number = item.get("tracking_number", "")
         customer = item.get("customer", "")
@@ -338,13 +328,47 @@ def generate_html_report(results, output_file):
         status = item.get("data", {}).get("track_status_name", "")
 
         today_str = datetime.now().strftime('%Y-%m-%d')
-        yesterday_str = (datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d')
         details = item.get("data", {}).get("details", [])
 
-        has_today = any(d.get("track_occur_date", "").startswith(today_str) for d in details)
-        has_last2 = any(is_within_last_2_days(d.get("track_occur_date", "")) for d in details)
+        # 更新日期判断逻辑
+        has_today = False
+        has_last2 = False
+        has_last3 = False
+        has_last7 = False
 
-        html_body += f'<div class="tracking-card" data-vendor="{vendor}" data-customer="{customer}" data-status="{status}" data-today-update="{"true" if has_today else "false"}" data-last2-update="{"true" if has_last2 else "false"}" data-tracking-number="{tracking_number}" data-customername="{customer}">\n'
+        for d in details:
+            track_date_str = d.get("track_occur_date", "")
+            if not track_date_str:
+                continue
+
+            # 解析日期（兼容多种格式）
+            track_date = None
+            for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%Y%m%d', '%Y-%m-%d %H:%M:%S'):
+                try:
+                    track_date = datetime.strptime(track_date_str.split()[0], fmt).date()
+                    break
+                except:
+                    continue
+
+            if not track_date:
+                continue
+
+            if track_date == today:
+                has_today = has_last3 = has_last7 = True
+            elif track_date >= yesterday:
+                has_last2=has_last3 = has_last7 = True
+            elif track_date >= three_days_ago:
+                has_last3 = has_last7 = True
+            elif track_date >= one_week_ago:
+                has_last7 = True
+
+        # 添加到卡片属性
+        html_body += f'<div class="tracking-card" data-vendor="{vendor}" data-customer="{customer}" data-status="{status}" ' \
+                 f'data-today-update="{"true" if has_today else "false"}" ' \
+                 f'data-last2-update="{"true" if has_last2 else "false"}" ' \
+                 f'data-last3-update="{"true" if has_last3 else "false"}" ' \
+                 f'data-last7-update="{"true" if has_last7 else "false"}" ' \
+                 f'data-tracking-number="{tracking_number}" data-customername="{customer}">\n'
         html_body += f'  <div class="tracking-header">\n'
         html_body += f'    <div class="tracking-number">{tracking_number}</div>\n'
         html_body += f'    <div><b>客户:</b> {customer}</div>\n'
@@ -432,10 +456,18 @@ function filterTable() {{
       const actualStatuses = statusMap[statusFilter] || [statusFilter];
       if (!actualStatuses.includes(status)) return false;
     }}
-    if (todayFilter === 'today' && todayUpdate !== 'true') return false;
-    if (todayFilter === 'last2days') {{
-    const last2Update = card.getAttribute('data-last2-update');
-    if (last2Update !== 'true') return false;
+    // 更新时间筛选
+    if (todayFilter === 'today') {{
+      if (card.getAttribute('data-today-update') !== 'true') return false;
+    }} 
+    else if (todayFilter === 'last2days') {{
+      if (card.getAttribute('data-last2-update') !== 'true') return false;
+    }}
+    else if (todayFilter === 'last3days') {{
+      if (card.getAttribute('data-last3-update') !== 'true') return false;
+    }}
+    else if (todayFilter === 'last7days') {{
+      if (card.getAttribute('data-last7-update') !== 'true') return false;
     }}
 
     return true;
@@ -445,7 +477,7 @@ function filterTable() {{
   showPage(filtered);
   setupPagination(filtered.length);
 
-  // 🔍 关键词高亮
+  //关键词高亮
   highlightTrackKeywords(trackKeyword);
 }}
 

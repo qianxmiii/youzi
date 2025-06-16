@@ -14,9 +14,8 @@ def load_tracking_numbers(filename='tracking_numbers.json'):
         # 这里假设每条有 tracking_number 和 customer 字段
         return json.load(f)
 
-# 新增：解析ETA日期的函数，支持多种格式
+
 def parse_eta_date(node_desc):
-    # 匹配 ETA:6.12、ETA 6/12 等格式（忽略大小写）
     pattern = r'ETA[:：]?\s*(\d{1,2})[./\/](\d{1,2})'
     match = re.search(pattern, node_desc, re.IGNORECASE)
     if match:
@@ -28,7 +27,6 @@ def parse_eta_date(node_desc):
             eta_date = datetime(year, month, day)
         except ValueError:
             return None
-        # 如果ETA日期比当前时间早很多，可能是跨年，调整到下一年
         if eta_date < now - timedelta(days=180):
             try:
                 eta_date = datetime(year + 1, month, day)
@@ -37,7 +35,7 @@ def parse_eta_date(node_desc):
         return eta_date
     return None
 
-# 新增：判断ETA是否在指定天数内
+
 def is_eta_within_days(item, days=3):
     logs = item.get("logisticsInfors", [])
     for log in logs:
@@ -63,11 +61,8 @@ def query_logistics_api(tracking_list, base_url, batch_size=10):
             resp.raise_for_status()
             result = resp.json()
             if result.get('code') == 200:
-                # 批量数据
                 data = result.get('data', [])
-                # 关联客户信息
                 for d in data:
-                    # 通过运单号匹配客户名
                     match = next((x for x in batch if x['tracking_number'] == d.get('odd')), None)
                     d['customer'] = match.get('customer') if match else ''
                 all_results.extend(data)
@@ -78,11 +73,13 @@ def query_logistics_api(tracking_list, base_url, batch_size=10):
 
     return all_results
 
+
 def highlight_keywords(text):
     keywords = ["ETD", "ETA", "POD", "签收", "派送", "delivered"]
     for kw in keywords:
-        text = text.replace(kw, f"<span class='highlight'>{kw}</span>")
+        text = re.sub(f"(?i){kw}", lambda m: f"<span class='highlight'>{m.group(0)}</span>", text)
     return text
+
 
 def annotate_shipments(results):
     now = datetime.now()
@@ -103,10 +100,9 @@ def annotate_shipments(results):
             item["last_update"] = "无记录"
             item["days_stale"] = -1
             item["latest_desc"] = ""
-        # 新增字段：是否3天内到港
+
         item["eta_within_3_days"] = is_eta_within_days(item, days=3)
 
-    # 按未更新天数降序排序（-1放后面）
     results.sort(key=lambda x: (x['days_stale'] if x['days_stale'] >= 0 else -9999), reverse=True)
     return results
 
@@ -114,8 +110,10 @@ def annotate_shipments(results):
 def generate_html_report(results, output_file="stales.html"):
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
-    # 取所有客户名，去重排序
+    # 客户名去重排序
     customers = sorted({item.get('customer', '') for item in results if item.get('customer', '')})
+    # 国家名去重排序，deliveryCountry.name 字段，防止空值
+    countries = sorted({item.get('deliveryCountry', {}).get('name', '') for item in results if item.get('deliveryCountry', {}).get('name', '')})
 
     html = f"""<!DOCTYPE html>
 <html lang="zh">
@@ -138,87 +136,109 @@ def generate_html_report(results, output_file="stales.html"):
             font-weight: bold;
         }}
         body {{
-        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
-        background-color: #f9f9fb;
-        color: #333;
-    }}
-
-    h2 {{
-        margin-top: 20px;
-        font-weight: 600;
-        color: #2c3e50;
-    }}
-
-    .container {{
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
-        padding: 25px;
-    }}
-
-    .filter-buttons button,
-    .filter-customer select,
-    .filter-track input {{
-        margin: 5px 8px 15px 0;
-    }}
-
-    .filter-track input {{
-        padding: 5px 10px;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        width: 250px;
-    }}
-
-    table.table {{
-        border-radius: 6px;
-        overflow: hidden;
-    }}
-
-    table th {{
-        background-color: #f0f3f5;
-        text-align: center;
-    }}
-
-    table td {{
-        vertical-align: middle;
-        font-size: 14px;
-    }}
-
-    .very-stale {{
-        background-color: #fbeaea !important;
-    }}
-
-    .stale-row {{
-        background-color: #fff6e0 !important;
-    }}
-
-    .badge {{
-        font-size: 12px;
-        padding: 4px 8px;
-    }}
-
-    .highlight {{
-        background-color: #ffff80;
-        font-weight: bold;
-        padding: 0 2px;
-        border-radius: 3px;
-    }}
-
-    @media (max-width: 768px) {{
-        .filter-buttons,
-        .filter-customer,
-        .filter-track {{
-            display: block;
-            margin-bottom: 10px;
+            font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+            background-color: #f9f9fb;
+            color: #333;
         }}
 
+        h2 {{
+            margin-top: 20px;
+            font-weight: 600;
+            color: #2c3e50;
+        }}
+
+        .container {{
+            background-color: #fff;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+            padding: 25px;
+        }}
+
+        .filter-buttons button,
         .filter-customer select,
         .filter-track input {{
-            width: 100%;
-            margin-bottom: 10px;
+            margin: 5px 8px 15px 0;
         }}
-    }}
 
+        .filter-track input {{
+            padding: 5px 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 250px;
+        }}
+
+        table.table {{
+            border-radius: 6px;
+            overflow: hidden;
+        }}
+
+        table th {{
+            background-color: #f0f3f5;
+            text-align: center;
+        }}
+
+        table td {{
+            vertical-align: middle;
+            font-size: 14px;
+        }}
+
+        .very-stale {{
+            background-color: #fbeaea !important;
+        }}
+
+        .stale-row {{
+            background-color: #fff6e0 !important;
+        }}
+
+        .badge {{
+            font-size: 12px;
+            padding: 4px 8px;
+        }}
+
+        .highlight {{
+            background-color: #ffff80;
+            font-weight: bold;
+            padding: 0 2px;
+            border-radius: 3px;
+        }}
+
+        @media (max-width: 768px) {{
+            .filter-buttons,
+            .filter-customer,
+            .filter-track {{
+                display: block;
+                margin-bottom: 10px;
+            }}
+
+            .filter-customer select,
+            .filter-track input {{
+                width: 100%;
+                margin-bottom: 10px;
+            }}
+        }}
+        td.unupdated-days {{
+           width: 100px;
+           text-align: center;
+           font-weight: 600;
+           color: #444;
+           font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+           font-size: 14px;
+           background-color: #f0f8ff;
+           border-radius: 4px;
+           padding: 5px 8px;
+           white-space: nowrap;
+         }}
+         td.unupdated-days.low {{
+           color: #2a9d8f;
+         }}
+         td.unupdated-days.medium {{
+           color: #e9c46a;
+           font-weight: 700;
+         }}
+         td.unupdated-days.high {{
+           color: #e76f51;
+           font-weight: 900;
+         }}
     </style>
 </head>
 <body>
@@ -234,18 +254,32 @@ def generate_html_report(results, output_file="stales.html"):
         <button class="btn btn-outline-success btn-sm" onclick="filterTable('eta3')">🛳️3天内到港</button>
     </div>
     
-    <div class="filter-customer mb-3">
+    <div class="d-flex mb-3 gap-3">
+    <div class="filter-customer flex-grow-1">
         <label>客户筛选:</label>
-        <select id="customerFilter" onchange="filterByCustomer()">
+        <select id="customerFilter" class="form-select" onchange="filterAll()">
             <option value="">全部客户</option>"""
     for c in customers:
         html += f'<option value="{c}">{c}</option>'
     html += """
         </select>
     </div>
-    <div class="filter-track mb-3">
+
+    <div class="filter-country flex-grow-1">
+        <label>国家筛选:</label>
+        <select id="countryFilter" class="form-select" onchange="filterAll()">
+            <option value="">全部国家</option>"""
+    for co in countries:
+        html += f'<option value="{co}">{co}</option>'
+    html += """
+        </select>
+    </div>
+    
+
+    <div class="filter-track flex-grow-1">
         <label>轨迹关键词筛选:</label>
-        <input type="text" id="trackFilterInput" placeholder="如: ETA, delivered..." oninput="filterByTrack()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
+        <input type="text" id="trackFilterInput" placeholder="如: ETA, delivered..." oninput="filterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
+    </div>
     </div>
 
     <table class="table table-bordered table-hover" id="logisticsTable">
@@ -305,29 +339,49 @@ def generate_html_report(results, output_file="stales.html"):
             '''
         
         track_cell = f'''
+            <div class="track-content">
             {short_html}<br>{button_html}
             <div class="collapse mt-1" id="{expand_id}">
                 {hidden_html}
             </div>
+            </div>
         '''
 
-        # 拼接轨迹内容，用于 JS 模糊匹配筛选
         track_text = " ".join([
             f"{log.get('nodeTime', '')} {log.get('nodeDesc', '')}"
             for log in item.get("logisticsInfors", [])
-        ]).lower().replace('"', '&quot;')  # 转义双引号以防 HTML 错乱
+        ]).replace('"', '&quot;')
+
         eta_flag = 1 if item.get("eta_within_3_days") else 0
-        # data 属性用于 JS 筛选
+        is_warehouse = 1 if latest_desc == 'Your goods are in the warehouse' else 0
+
+        # 根据未更新天数设置badge颜色
+        if not isinstance(days, int):
+            badge_class = "bg-secondary"
+            days_display = "-"
+        elif days <= 3:
+            badge_class = "bg-success"  # 绿色，更新及时
+            days_display = str(days)
+        elif days <= 7:
+            badge_class = "bg-warning text-dark"  # 黄色，提醒
+            days_display = str(days)
+        elif days <= 14:
+            badge_class = "bg-danger"  # 红色，比较严重
+            days_display = str(days)
+        else:
+            badge_class = "bg-dark"  # 深色，严重超时
+            days_display = str(days)
         html += f"""
             <tr class="{row_class}" data-days="{days if isinstance(days, int) else 0}" 
-                data-warehouse="{1 if latest_desc == 'Your goods are in the warehouse' else 0}" 
+                data-warehouse="{is_warehouse}" 
                 data-eta3="{eta_flag}"
                 data-customer="{customer}"
+                data-country="{delivery_country}"
                 data-track="{track_text}">
                 <td>{item.get('odd')}</td>
                 <td>{customer}</td>
                 <td>{item.get('last_update', '')}</td>
-                <td><span class="badge bg-danger">{days}</span></td>
+                <td><span class="badge {badge_class}">{days_display}</span></td>
                 <td>{status}</td>
                 <td>{delivery_country}</td>
                 <td>{track_cell}</td>
@@ -358,59 +412,30 @@ function filterTable(type) {
             row.style.display = eta3 ? "" : "none";
         }
     });
-    // 客户筛选重置
+    // 重置客户和国家筛选
     document.getElementById("customerFilter").value = "";
+    document.getElementById("countryFilter").value = "";
+    document.getElementById("trackFilterInput").value = "";
 }
 
-function filterByCustomer() {
-    var select = document.getElementById("customerFilter");
-    var customer = select.value;
-    var rows = document.querySelectorAll("#logisticsTable tbody tr");
+function filterAll() {
+  const customerFilter = document.getElementById('customerFilter').value.toLowerCase();
+  const countryFilter = document.getElementById('countryFilter').value.toLowerCase();
 
-    rows.forEach(row => {
-        var rowCustomer = row.getAttribute("data-customer");
-        // 如果客户筛选有值，则只显示匹配客户的行
-        if (customer === "" || rowCustomer === customer) {
-            row.style.display = "";
-        } else {
-            row.style.display = "none";
-        }
-    });
-    // 筛选类型按钮重置为全部
-    // 注意如果想让客户筛选和未更新天数筛选共存，可以改这里逻辑
-    // document.querySelectorAll(".filter-buttons button").forEach(btn => btn.classList.remove('active'));
+  const rows = document.querySelectorAll('#logisticsTable tbody tr');
+  rows.forEach(row => {
+    const customer = row.getAttribute('data-customer').toLowerCase();
+    const country = row.getAttribute('data-country').toLowerCase();
+
+    if ((customerFilter === '' || customer.includes(customerFilter)) &&
+        (countryFilter === '' || country.includes(countryFilter))) {
+      row.style.display = '';
+    } else {
+      row.style.display = 'none';
+    }
+  });
 }
-function filterByTrack() {
-    var keyword = document.getElementById("trackFilterInput").value.trim().toLowerCase();
-    var rows = document.querySelectorAll("#logisticsTable tbody tr");
 
-    rows.forEach(row => {
-        const trackData = row.getAttribute("data-track") || "";
-        const trackDiv = row.querySelector(".track-content");
-        const originalText = trackDiv.textContent;
-        // 如果无关键词，则恢复原内容
-        if (!keyword) {
-            row.style.display = "";
-            trackDiv.innerHTML = originalText;
-            return;
-        }
-        if (trackData.includes(keyword)) {
-            row.style.display = "";
-
-            // 高亮匹配关键词（大小写不敏感）
-            const regex = new RegExp(`(${keyword})`, 'gi');
-            const highlighted = originalText.replace(regex, '<span class="highlight">$1</span>');
-            trackDiv.innerHTML = highlighted;
-
-        } else {
-            row.style.display = "none";
-            trackDiv.innerHTML = originalText; // 清除旧高亮
-        }
-    });
-
-    // 重置客户筛选和状态筛选
-    document.getElementById("customerFilter").value = "";
-}
 document.addEventListener('DOMContentLoaded', function () {
     const buttons = document.querySelectorAll('button[data-bs-toggle="collapse"]');
     buttons.forEach(btn => {

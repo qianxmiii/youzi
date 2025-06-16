@@ -62,6 +62,22 @@ def load_assignments(assign_file='assignments.json'):
     except json.JSONDecodeError:
         raise Exception("assignments.json 解析失败，请确认是合法 JSON")
 
+def is_within_last_2_days(date_str):
+    try:
+        # 尝试解析各种可能的日期格式
+        for fmt in ('%Y-%m-%d', '%Y/%m/%d', '%Y%m%d', '%Y-%m-%d %H:%M:%S'):
+            try:
+                date = datetime.strptime(date_str.split()[0], fmt).date()
+                break
+            except:
+                continue
+        else:
+            return False
+            
+        today = datetime.now().date()
+        return date in (today, today - timedelta(days=1))
+    except:
+        return False
 
 def fetch_tracking_data(tracking_item, vendor, max_retries=3):
     tracking_number = tracking_item['tracking_number']
@@ -326,7 +342,7 @@ def generate_html_report(results, output_file):
         details = item.get("data", {}).get("details", [])
 
         has_today = any(d.get("track_occur_date", "").startswith(today_str) for d in details)
-        has_last2 = any(d.get("track_occur_date", "").startswith(today_str) or d.get("track_occur_date", "").startswith(yesterday_str) for d in details)
+        has_last2 = any(is_within_last_2_days(d.get("track_occur_date", "")) for d in details)
 
         html_body += f'<div class="tracking-card" data-vendor="{vendor}" data-customer="{customer}" data-status="{status}" data-today-update="{"true" if has_today else "false"}" data-last2-update="{"true" if has_last2 else "false"}" data-tracking-number="{tracking_number}" data-customername="{customer}">\n'
         html_body += f'  <div class="tracking-header">\n'
@@ -417,6 +433,10 @@ function filterTable() {{
       if (!actualStatuses.includes(status)) return false;
     }}
     if (todayFilter === 'today' && todayUpdate !== 'true') return false;
+    if (todayFilter === 'last2days') {{
+    const last2Update = card.getAttribute('data-last2-update');
+    if (last2Update !== 'true') return false;
+    }}
 
     return true;
   }});
@@ -545,6 +565,8 @@ if __name__ == "__main__":
         tracking_list = deduplicate_tracking_list(tracking_list)
         assignments = load_assignments("assignments.json")
         print(f"成功加载 {len(tracking_list)} 个运单号，分配配置 {len(assignments)} 条")
+
+        # Add this check after loading both files
 
         results = batch_fetch_by_assignments(tracking_list, assignments, config['vendors'], max_workers=1)
 

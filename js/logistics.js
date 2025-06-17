@@ -249,6 +249,7 @@ function updateQuote() {
     let totalPriceRMB = new Decimal(0); // 总利润USD
     let unitPriceRMB = new Decimal(0); // 报价单价RMB
     let pickupFeeRMB = new Decimal(0); // 提货费RMB
+    let pickupFeeUSD = new Decimal(0); // 提货费RMB
     
     let MOQ = '';
     let notes = ""; // 备注
@@ -256,7 +257,8 @@ function updateQuote() {
     // 获取提货费
     let pickupFeeCheck = document.getElementById("pickup-fee-checkbox").checked;
     pickupFeeRMB = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee").value) || 0 : 0;
-    pickUpFee = new Decimal(pickupFeeRMB).dividedBy(exchange_rate).toFixed(0);
+    pickupFeeUSD = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee-USD").value) || 0 : 0;
+    pickUpFee = new Decimal(pickupFeeRMB).dividedBy(exchange_rate).add(pickupFeeUSD).toFixed(0);
 
     // 计算材积重 (kg) 使用公式：体积 * 1000000 / 6000
     if (data.totalVolume.greaterThan(0)) {

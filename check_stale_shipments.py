@@ -121,6 +121,7 @@ def generate_html_report(results, output_file="stales.html"):
     <meta charset="UTF-8" />
     <title>运单轨迹报告</title>
     <link href="css/common/bootstrap.min.css" rel="stylesheet" />
+    <link rel="icon" href="stale_favicon.png" type="image/png">
     <style>
         .very-stale {{ background-color: #ffcdd2; }}
         .stale-row {{ background-color: #fff9c4; }}
@@ -239,6 +240,11 @@ def generate_html_report(results, output_file="stales.html"):
            color: #e76f51;
            font-weight: 900;
          }}
+         
+         /* 问题件强调样式 */
+         tr.problem-item {{
+             border-left: 3px solid #ffc107;
+         }}
     </style>
 </head>
 <body>
@@ -252,6 +258,7 @@ def generate_html_report(results, output_file="stales.html"):
         <button class="btn btn-outline-danger btn-sm" onclick="filterTable('14')">🚨超过14天未更新</button>
         <button class="btn btn-outline-info btn-sm" onclick="filterTable('warehouse')">📦未更新</button>
         <button class="btn btn-outline-success btn-sm" onclick="filterTable('eta3')">🛳️3天内到港</button>
+        
     </div>
     
     <div class="d-flex mb-3 gap-3">
@@ -274,8 +281,14 @@ def generate_html_report(results, output_file="stales.html"):
     html += """
         </select>
     </div>
-    
-
+    <div class="filter-country flex-grow-1">
+        <label>问题件筛选:</label>
+        <select class="form-select form-select-sm d-inline-block w-auto" id="problemFilter" onchange="filterAll() ">
+            <option value="all">所有运单</option>
+            <option value="normal">非问题件</option>
+            <option value="problem">问题件</option>
+        </select>
+    </div>
     <div class="filter-track flex-grow-1">
         <label>轨迹关键词筛选:</label>
         <input type="text" id="trackFilterInput" placeholder="如: ETA, delivered..." oninput="filterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
@@ -292,16 +305,23 @@ def generate_html_report(results, output_file="stales.html"):
                 <th>状态</th>
                 <th>目的国</th>
                 <th>轨迹</th>
+                <th>备注</th>
             </tr>
         </thead>
         <tbody>
     """
 
     status_map = {
-        2: "转运中",
-        3: "已签收"
+        "2": "转运中",
+        "3": "已签收"
     }
+    with open("problem_items.json", "r", encoding="utf-8") as f:
+        problem_items = json.load(f)
+
     for item in results:
+        tracking_number = item.get("tracking_number") or item.get("odd") or ""
+        problem_reason = problem_items.get(tracking_number)
+        problem_class = "problem-item" if tracking_number in problem_items else ""
         days = item.get("days_stale")
         latest_desc = item.get("latest_desc", "")
         delivery_country = item.get("deliveryCountry", {}).get("name", "")
@@ -354,13 +374,22 @@ def generate_html_report(results, output_file="stales.html"):
 
         eta_flag = 1 if item.get("eta_within_3_days") else 0
         is_warehouse = 1 if latest_desc == 'Your goods are in the warehouse' else 0
+        tracking_number = item.get("tracking_number") or item.get("odd") or ""
+        problem_reason = problem_items.get(tracking_number)
 
+        if problem_reason:
+            problem_badge = f'<span class="badge rounded-pill text-bg-info ms-2" title="{problem_reason}">问题件</span>'
+        else:
+            problem_badge = ''
         # 根据未更新天数设置badge颜色
         if not isinstance(days, int):
             badge_class = "bg-secondary"
             days_display = "-"
-        elif days <= 3:
+        elif days <= 1:
             badge_class = "bg-success"  # 绿色，更新及时
+            days_display = str(days)
+        elif days <= 3:
+            badge_class = "bg-primary"  # 蓝色，正常
             days_display = str(days)
         elif days <= 7:
             badge_class = "bg-warning text-dark"  # 黄色，提醒
@@ -372,12 +401,14 @@ def generate_html_report(results, output_file="stales.html"):
             badge_class = "bg-dark"  # 深色，严重超时
             days_display = str(days)
         html += f"""
-            <tr class="{row_class}" data-days="{days if isinstance(days, int) else 0}" 
+            <tr class="{row_class}{problem_class}" data-days="{days if isinstance(days, int) else 0}" 
                 data-warehouse="{is_warehouse}" 
                 data-eta3="{eta_flag}"
                 data-customer="{customer}"
                 data-country="{delivery_country}"
-                data-track="{track_text}">
+                data-track="{track_text}"
+                data-problem="{'1' if tracking_number in problem_items else '0'}"
+                >
                 <td>{item.get('odd')}</td>
                 <td>{customer}</td>
                 <td>{item.get('last_update', '')}</td>
@@ -385,6 +416,7 @@ def generate_html_report(results, output_file="stales.html"):
                 <td>{status}</td>
                 <td>{delivery_country}</td>
                 <td>{track_cell}</td>
+                <td>{problem_badge}</td>
             </tr>
         """
 
@@ -417,23 +449,30 @@ function filterTable(type) {
     document.getElementById("countryFilter").value = "";
     document.getElementById("trackFilterInput").value = "";
 }
-
 function filterAll() {
   const customerFilter = document.getElementById('customerFilter').value.toLowerCase();
   const countryFilter = document.getElementById('countryFilter').value.toLowerCase();
+  const trackFilter = document.getElementById('trackFilterInput').value.toLowerCase();
+  const problemFilter = document.getElementById('problemFilter').value;
 
   const rows = document.querySelectorAll('#logisticsTable tbody tr');
   rows.forEach(row => {
     const customer = row.getAttribute('data-customer').toLowerCase();
     const country = row.getAttribute('data-country').toLowerCase();
+    const trackText = row.getAttribute('data-track').toLowerCase();
+    const isProblem = row.getAttribute('data-problem') === '1';
 
-    if ((customerFilter === '' || customer.includes(customerFilter)) &&
-        (countryFilter === '' || country.includes(countryFilter))) {
-      row.style.display = '';
-    } else {
-      row.style.display = 'none';
-    }
-  });
+    // 综合所有筛选条件
+    const showRow = 
+        (customerFilter === '' || customer.includes(customerFilter)) &&
+        (countryFilter === '' || country.includes(countryFilter)) &&
+        (trackFilter === '' || trackText.includes(trackFilter)) &&
+        (problemFilter === 'all' || 
+         (problemFilter === 'normal' && !isProblem) || 
+         (problemFilter === 'problem' && isProblem));
+    
+    row.style.display = showRow ? '' : 'none';
+    });
 }
 
 document.addEventListener('DOMContentLoaded', function () {

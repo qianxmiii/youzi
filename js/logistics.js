@@ -479,6 +479,19 @@ function updateQuote() {
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
 
+    } else if (data.quoteType === "161") {
+        // 构建备注内容
+        notes = `To ${data.address} ${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        if (data.isDDU) notes += 'DDU ';
+        notes += `${data.channel}: ${totalPriceUsd}usd `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
+        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\n`;
     }
 
     // 将备注内容填入 textarea

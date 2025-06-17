@@ -262,37 +262,59 @@ def generate_html_report(results, output_file="stales.html"):
     </div>
     
     <div class="d-flex mb-3 gap-3">
-    <div class="filter-customer flex-grow-1">
-        <label>客户筛选:</label>
-        <select id="customerFilter" class="form-select" onchange="filterAll()">
+
+    <!-- 客户筛选 -->
+    <div class="col-md-2">
+        <div class="form-floating">
+            <select id="customerFilter" class="form-select" onchange="filterAll()">
             <option value="">全部客户</option>"""
     for c in customers:
         html += f'<option value="{c}">{c}</option>'
     html += """
         </select>
+            <label>客户筛选</label>
+        </div>
     </div>
-
-    <div class="filter-country flex-grow-1">
-        <label>国家筛选:</label>
-        <select id="countryFilter" class="form-select" onchange="filterAll()">
+    <!-- 国家筛选 -->
+    <div class="col-md-2">
+        <div class="form-floating">
+            <select id="countryFilter" class="form-select" onchange="filterAll()">
             <option value="">全部国家</option>"""
     for co in countries:
         html += f'<option value="{co}">{co}</option>'
     html += """
         </select>
+            <label>国家筛选</label>
+        </div>
     </div>
-    <div class="filter-country flex-grow-1">
-        <label>问题件筛选:</label>
-        <select class="form-select form-select-sm d-inline-block w-auto" id="problemFilter" onchange="filterAll() ">
-            <option value="all">所有运单</option>
-            <option value="normal">非问题件</option>
-            <option value="problem">问题件</option>
-        </select>
+
+    <!-- 问题件筛选 -->
+    <div class="col-md-2">
+        <div class="form-floating">
+            <select class="form-select form-select" id="problemFilter" onchange="filterAll() ">
+                <option value="all">所有运单</option>
+                <option value="normal">非问题件</option>
+                <option value="problem">问题件</option>
+            </select>
+            <label>问题件筛选</label>
+        </div>
+    </div>
+    <!-- 状态筛选 -->
+    <div class="col-md-2">
+        <div class="form-floating">
+            <select class="form-select form-select" id="statusFilter" onchange="filterAll() ">
+                <option value="">所有状态</option>
+                <option value="已发货">已发货</option>
+                <option value="转运中">转运中</option>
+                <option value="已签收">已签收</option>
+            </select>
+            <label>状态筛选</label>
+        </div>
+    </div>
     </div>
     <div class="filter-track flex-grow-1">
-        <label>轨迹关键词筛选:</label>
+        <label>轨迹筛选</label>
         <input type="text" id="trackFilterInput" placeholder="如: ETA, delivered..." oninput="filterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
-    </div>
     </div>
 
     <table class="table table-bordered table-hover" id="logisticsTable">
@@ -408,6 +430,7 @@ def generate_html_report(results, output_file="stales.html"):
                 data-country="{delivery_country}"
                 data-track="{track_text}"
                 data-problem="{'1' if tracking_number in problem_items else '0'}"
+                data-status="{status}"
                 >
                 <td>{item.get('odd')}</td>
                 <td>{customer}</td>
@@ -450,28 +473,32 @@ function filterTable(type) {
     document.getElementById("trackFilterInput").value = "";
 }
 function filterAll() {
-  const customerFilter = document.getElementById('customerFilter').value.toLowerCase();
-  const countryFilter = document.getElementById('countryFilter').value.toLowerCase();
-  const trackFilter = document.getElementById('trackFilterInput').value.toLowerCase();
-  const problemFilter = document.getElementById('problemFilter').value;
+    const customerFilter = document.getElementById('customerFilter').value.toLowerCase();
+    const countryFilter = document.getElementById('countryFilter').value.toLowerCase();
+    const trackFilter = document.getElementById('trackFilterInput').value.toLowerCase();
+    const problemFilter = document.getElementById('problemFilter').value;
+    const statusFilter = document.getElementById('statusFilter').value;
 
-  const rows = document.querySelectorAll('#logisticsTable tbody tr');
-  rows.forEach(row => {
-    const customer = row.getAttribute('data-customer').toLowerCase();
-    const country = row.getAttribute('data-country').toLowerCase();
-    const trackText = row.getAttribute('data-track').toLowerCase();
-    const isProblem = row.getAttribute('data-problem') === '1';
+    const rows = document.querySelectorAll('#logisticsTable tbody tr');
+    rows.forEach(row => {
+        const customer = row.getAttribute('data-customer').toLowerCase();
+        const country = row.getAttribute('data-country').toLowerCase();
+        const trackText = row.getAttribute('data-track').toLowerCase();
+        const isProblem = row.getAttribute('data-problem') === '1';
+        const rowStatus = row.getAttribute('data-status');
 
-    // 综合所有筛选条件
-    const showRow = 
-        (customerFilter === '' || customer.includes(customerFilter)) &&
-        (countryFilter === '' || country.includes(countryFilter)) &&
-        (trackFilter === '' || trackText.includes(trackFilter)) &&
-        (problemFilter === 'all' || 
-         (problemFilter === 'normal' && !isProblem) || 
-         (problemFilter === 'problem' && isProblem));
-    
-    row.style.display = showRow ? '' : 'none';
+
+        // 综合所有筛选条件
+        const showRow = 
+            (customerFilter === '' || customer.includes(customerFilter)) &&
+            (countryFilter === '' || country.includes(countryFilter)) &&
+            (trackFilter === '' || trackText.includes(trackFilter)) &&
+            (problemFilter === 'all' || 
+             (problemFilter === 'normal' && !isProblem) || 
+             (problemFilter === 'problem' && isProblem))&&
+                (!statusFilter || rowStatus === statusFilter);
+
+        row.style.display = showRow ? '' : 'none';
     });
 }
 

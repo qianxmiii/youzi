@@ -312,8 +312,19 @@ def generate_html_report(results, output_file="stales.html"):
         </div>
     </div>
     </div>
+    <!-- 运单号查询 -->
+    <div class="tracking-search d-flex align-items-center gap-2 mb-5">
+        <label for="trackingSearchInput" class="form-label mb-0">运单号查询</label>
+        <input type="text" id="trackingSearchInput" 
+               placeholder="输入运单号，多个用空格分隔" 
+               class="form-control form-control-sm w-auto"
+               style="min-width: 250px;">
+        <button class="btn btn-primary btn-sm" onclick="filterByTrackingNumbers()">查询</button>
+    </div>
+
+
     <div class="filter-track flex-grow-1">
-        <label>轨迹筛选</label>
+        <label>轨迹查询</label>
         <input type="text" id="trackFilterInput" placeholder="如: ETA, delivered..." oninput="filterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
     </div>
 
@@ -472,6 +483,25 @@ function filterTable(type) {
     document.getElementById("countryFilter").value = "";
     document.getElementById("trackFilterInput").value = "";
 }
+function filterByTrackingNumbers() {
+    const input = document.getElementById('trackingSearchInput').value.trim();
+    if (!input) {
+        filterAll();
+        return;
+    }
+    
+    const trackingNumbers = input.split(/\s+/).map(num => num.trim());
+    const rows = document.querySelectorAll('#logisticsTable tbody tr');
+    
+    rows.forEach(row => {
+        const rowTrackingNumber = row.cells[0].textContent.trim();
+        const shouldShow = trackingNumbers.some(num => 
+            rowTrackingNumber.includes(num));
+        
+        row.style.display = shouldShow ? '' : 'none';
+    });
+}
+
 function filterAll() {
     const customerFilter = document.getElementById('customerFilter').value.toLowerCase();
     const countryFilter = document.getElementById('countryFilter').value.toLowerCase();
@@ -499,6 +529,8 @@ function filterAll() {
                 (!statusFilter || rowStatus === statusFilter);
 
         row.style.display = showRow ? '' : 'none';
+
+        document.getElementById('trackingSearchInput').value = '';
     });
 }
 

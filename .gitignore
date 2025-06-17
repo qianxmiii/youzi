@@ -3,3 +3,5 @@ tracking_numbers.json
 tracking_results.json
 assignments.json
 report.html
+problem_items.json
+stale_shipments.json

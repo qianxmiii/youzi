@@ -49,7 +49,7 @@ def load_tracking_numbers(json_file='tracking_numbers.json'):
         raise Exception("tracking_numbers.json 解析失败，请确认是合法 JSON")
 
 
-def load_assignments(assign_file='assignments.json'):
+def load_assignments(assign_file='data/assignments.json'):
     try:
         with open(assign_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -231,7 +231,7 @@ def generate_html_report(results, output_file):
   <title>物流查询报告</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <link href="css/common/bootstrap.min.css" rel="stylesheet" />
-  <link rel="icon" href="rep_favicon.png" type="image/png">
+  <link rel="icon" href="img/rep_favicon.png" type="image/png">
   <style>
     .today-highlight {{
       background-color: #fff3cd;
@@ -275,7 +275,7 @@ def generate_html_report(results, output_file):
 </head>
 <body>
 <div class="container my-4">
-  <h2 class="mb-3">物流查询报告</h2>
+  <h3 class="mb-3">物流查询报告</h3>
   <p>生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}</p>
 
   <div class="filter-row">
@@ -595,7 +595,7 @@ if __name__ == "__main__":
         config = load_config("config.json")
         tracking_list = load_tracking_numbers("tracking_numbers.json")
         tracking_list = deduplicate_tracking_list(tracking_list)
-        assignments = load_assignments("assignments.json")
+        assignments = load_assignments("data/assignments.json")
         print(f"成功加载 {len(tracking_list)} 个运单号，分配配置 {len(assignments)} 条")
 
         # Add this check after loading both files

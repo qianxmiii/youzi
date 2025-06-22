@@ -391,7 +391,7 @@ def generate_html_report(results, output_file="stales.html"):
         "3": "已签收"
     }
     
-    with open("problem_items.json", "r", encoding="utf-8") as f:
+    with open("data/problem_items.json", "r", encoding="utf-8") as f:
         problem_items = json.load(f)
 
     for item in results:

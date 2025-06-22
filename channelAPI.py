@@ -603,7 +603,7 @@ if __name__ == "__main__":
         results = batch_fetch_by_assignments(tracking_list, assignments, config['vendors'], max_workers=1)
 
         os.makedirs("result", exist_ok=True)
-        output_json = "tracking_results.json"
+        output_json = "result/tracking_results.json"
         save_results(results, output_json)
 
         output_html = "report.html"

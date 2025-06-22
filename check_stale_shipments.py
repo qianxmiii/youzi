@@ -6,7 +6,15 @@ import re
 
 def load_config(filename='config.json'):
     with open(filename, 'r', encoding='utf-8') as f:
-        return json.load(f)
+        config = json.load(f)
+        # 确保channel_filters有默认值
+        config.setdefault('channel_filters', {
+            "空运": ["Air truck", "Air express"],
+            "快递派": ["Sea express", "Air express"],
+            "卡派": ["Sea truck", "Air truck"],
+            "海运": ["Sea express", "Sea truck"]
+        })
+        return config
 
 
 def load_tracking_numbers(filename='tracking_numbers.json'):
@@ -65,6 +73,8 @@ def query_logistics_api(tracking_list, base_url, batch_size=10):
                 for d in data:
                     match = next((x for x in batch if x['tracking_number'] == d.get('odd')), None)
                     d['customer'] = match.get('customer') if match else ''
+                    d['channel'] = match.get('channel', '') if match else ''
+                    d['carrier'] = match.get('carrier', '') if match else ''
                 all_results.extend(data)
             else:
                 print(f"查询失败: {result.get('msg')}")
@@ -75,7 +85,7 @@ def query_logistics_api(tracking_list, base_url, batch_size=10):
 
 
 def highlight_keywords(text):
-    keywords = ["ETD", "ETA", "POD", "签收", "派送", "delivered"]
+    keywords = ["POD", "签收", "派送", "delivered"]
     for kw in keywords:
         text = re.sub(f"(?i){kw}", lambda m: f"<span class='highlight'>{m.group(0)}</span>", text)
     return text
@@ -109,19 +119,26 @@ def annotate_shipments(results):
 
 def generate_html_report(results, output_file="stales.html"):
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    # 获取唯一的承运商列表
+    carriers = sorted({item.get('carrier', '') for item in results if item.get('carrier', '')})
+    
+    config = load_config()
+    channel_filters = config.get('channel_filters', {})
 
     # 客户名去重排序
     customers = sorted({item.get('customer', '') for item in results if item.get('customer', '')})
     # 国家名去重排序，deliveryCountry.name 字段，防止空值
     countries = sorted({item.get('deliveryCountry', {}).get('name', '') for item in results if item.get('deliveryCountry', {}).get('name', '')})
-
+    channels = sorted({item.get('channel', '') for item in results if item.get('channel', '')})
+    
     html = f"""<!DOCTYPE html>
 <html lang="zh">
 <head>
     <meta charset="UTF-8" />
     <title>运单轨迹报告</title>
     <link href="css/common/bootstrap.min.css" rel="stylesheet" />
-    <link rel="icon" href="stale_favicon.png" type="image/png">
+    <link href="css/common/bootstrap-icons.min.css" rel="stylesheet" />
+    <link rel="icon" href="img/stale_favicon.png" type="image/png">
     <style>
         .very-stale {{ background-color: #ffcdd2; }}
         .stale-row {{ background-color: #fff9c4; }}
@@ -202,21 +219,6 @@ def generate_html_report(results, output_file="stales.html"):
             padding: 0 2px;
             border-radius: 3px;
         }}
-
-        @media (max-width: 768px) {{
-            .filter-buttons,
-            .filter-customer,
-            .filter-track {{
-                display: block;
-                margin-bottom: 10px;
-            }}
-
-            .filter-customer select,
-            .filter-track input {{
-                width: 100%;
-                margin-bottom: 10px;
-            }}
-        }}
         td.unupdated-days {{
            width: 100px;
            text-align: center;
@@ -249,7 +251,7 @@ def generate_html_report(results, output_file="stales.html"):
 </head>
 <body>
 <div class="container mt-4">
-    <h2>运单轨迹报告</h2>
+    <h3>运单轨迹报告</h3>
     <p>生成时间: {now_str}</p>
     
     <div class="filter-buttons mb-2">
@@ -258,7 +260,6 @@ def generate_html_report(results, output_file="stales.html"):
         <button class="btn btn-outline-danger btn-sm" onclick="filterTable('14')">🚨超过14天未更新</button>
         <button class="btn btn-outline-info btn-sm" onclick="filterTable('warehouse')">📦未更新</button>
         <button class="btn btn-outline-success btn-sm" onclick="filterTable('eta3')">🛳️3天内到港</button>
-        
     </div>
     
     <div class="d-flex mb-3 gap-3">
@@ -275,6 +276,18 @@ def generate_html_report(results, output_file="stales.html"):
             <label>客户筛选</label>
         </div>
     </div>
+    <!-- 承运商筛选 -->
+    <div class="col-md-2">
+        <div class="form-floating">
+            <select id="carrierFilter" class="form-select" onchange="filterAll()">
+            <option value="">全部承运商</option>"""
+    for carrier in carriers:
+        html += f'<option value="{carrier}">{carrier}</option>'
+    html += """
+            </select>
+            <label>承运商</label>
+        </div>
+    </div>
     <!-- 国家筛选 -->
     <div class="col-md-2">
         <div class="form-floating">
@@ -287,8 +300,32 @@ def generate_html_report(results, output_file="stales.html"):
             <label>国家筛选</label>
         </div>
     </div>
-
-    <!-- 问题件筛选 -->
+    <!-- 渠道筛选 -->
+    <div class="col-md-2">
+        <div class="form-floating">
+            <select id="channelFilter" class="form-select" onchange="filterAll()">
+                <option value="">全部渠道</option>
+                <option value="all_channels">所有运输方式</option>"""
+    
+    # 添加配置的渠道筛选选项
+    for filter_name, channels in channel_filters.items():
+        channel_list = ",".join(channels)
+        html += f'<option value="{channel_list}">{filter_name}</option>'
+    
+    # 添加单独渠道选项（从实际数据中获取）
+    unique_channels = sorted({item.get('channel', '') for item in results if item.get('channel', '')})
+    html += f'<option value="=====">''=====''</option>'
+    for channel in unique_channels:
+        html += f'<option value="{channel}">{channel}</option>'
+    
+    html += """
+            </select>
+            <label>渠道</label>
+        </div>
+    </div>
+    </div>
+    <div class="d-flex mb-3 gap-3"> 
+        <!-- 问题件筛选 -->
     <div class="col-md-2">
         <div class="form-floating">
             <select class="form-select form-select" id="problemFilter" onchange="filterAll() ">
@@ -304,7 +341,6 @@ def generate_html_report(results, output_file="stales.html"):
         <div class="form-floating">
             <select class="form-select form-select" id="statusFilter" onchange="filterAll() ">
                 <option value="">所有状态</option>
-                <option value="已发货">已发货</option>
                 <option value="转运中">转运中</option>
                 <option value="已签收">已签收</option>
             </select>
@@ -319,20 +355,26 @@ def generate_html_report(results, output_file="stales.html"):
                placeholder="输入运单号，多个用空格分隔" 
                class="form-control form-control-sm w-auto"
                style="min-width: 250px;">
-        <button class="btn btn-primary btn-sm" onclick="filterByTrackingNumbers()">查询</button>
+        <button class="btn btn-outline-primary" onclick="filterByTrackingNumbers()">查询</button>
     </div>
-
-
     <div class="filter-track flex-grow-1">
         <label>轨迹查询</label>
-        <input type="text" id="trackFilterInput" placeholder="如: ETA, delivered..." oninput="filterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
+        <input type="text" id="trackFilterInput" oninput="filterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
     </div>
-
+    <div class="mt-3">
+        <button id="copyBtn" class="btn btn-outline-dark" onclick="copySelectedTrackingNumbers()" data-bs-toggle="tooltip" data-bs-placement="top" title="">
+            <i id="copy-icon" class="bi bi-clipboard"></i> 复制选中运单号
+        </button>
+    </div>
+    <br/>
     <table class="table table-bordered table-hover" id="logisticsTable">
         <thead class="table-light">
             <tr>
+                <th><input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleSelectAll(this)" title="只选中当前筛选条件下可见的运单"></th>
                 <th>运单号</th>
-                <th>客户名称</th>
+                <th>客户名</th>
+                <th>渠道</th>
+                <th>承运商</th>
                 <th>最后更新时间</th>
                 <th>未更新天数</th>
                 <th>状态</th>
@@ -348,6 +390,7 @@ def generate_html_report(results, output_file="stales.html"):
         "2": "转运中",
         "3": "已签收"
     }
+    
     with open("problem_items.json", "r", encoding="utf-8") as f:
         problem_items = json.load(f)
 
@@ -434,17 +477,22 @@ def generate_html_report(results, output_file="stales.html"):
             badge_class = "bg-dark"  # 深色，严重超时
             days_display = str(days)
         html += f"""
-            <tr class="{row_class}{problem_class}" data-days="{days if isinstance(days, int) else 0}" 
+            <tr class="{row_class}{problem_class}" data-days="{days if isinstance(days, int) else 0 }" 
                 data-warehouse="{is_warehouse}" 
                 data-eta3="{eta_flag}"
                 data-customer="{customer}"
                 data-country="{delivery_country}"
+                data-channel="{item.get('channel', '')}"
+                data-carrier="{item.get('carrier', '')}"
                 data-track="{track_text}"
                 data-problem="{'1' if tracking_number in problem_items else '0'}"
                 data-status="{status}"
                 >
+                <td><input type="checkbox" class="tracking-checkbox form-check-input" value="{tracking_number}"></td>
                 <td>{item.get('odd')}</td>
                 <td>{customer}</td>
+                <td>{item.get('channel', '')}</td>
+                <td>{item.get('carrier', '')}</td>
                 <td>{item.get('last_update', '')}</td>
                 <td><span class="badge {badge_class}">{days_display}</span></td>
                 <td>{status}</td>
@@ -460,6 +508,103 @@ def generate_html_report(results, output_file="stales.html"):
 </div>
 <script src="js/common/bootstrap.bundle.min.js"></script>
 <script>
+// 显示工具提示的辅助函数
+function showTooltip(message, duration=2000) {
+    const btn = document.getElementById('copyBtn');
+    let tooltip = bootstrap.Tooltip.getInstance(btn);
+    
+    if (!tooltip) {
+        tooltip = new bootstrap.Tooltip(btn, {
+            title: message,
+            trigger: 'manual'
+        });
+    } else {
+        tooltip.setContent({'.tooltip-inner': message});
+    }
+    
+    tooltip.show();
+    setTimeout(() => tooltip.hide(), duration);
+}
+function toggleSelectAll(source) {
+    const allRows = document.querySelectorAll('#logisticsTable tbody tr');
+    let hasVisible = false;
+    
+    allRows.forEach(row => {
+        if (row.style.display !== 'none') {
+            const checkbox = row.querySelector('.tracking-checkbox');
+            checkbox.checked = source.checked;
+            hasVisible = true;
+        }
+    });
+    
+    if (!hasVisible) {
+        source.checked = false;
+        showTooltip('没有可选的运单');
+    }
+}
+function copySelectedTrackingNumbers() {
+    const selected = [];
+    document.querySelectorAll('.tracking-checkbox:checked').forEach(checkbox => {
+        // 检查父行是否可见
+        const row = checkbox.closest('tr');
+        if (row.style.display !== 'none') {
+            selected.push(checkbox.value);
+        }
+    });
+    
+    if (selected.length === 0) {
+        showTooltip('请至少选择一个运单号');
+        return;
+    }
+    
+    const textToCopy = selected.join(' ');
+    
+    // 创建临时textarea元素
+    const textarea = document.createElement('textarea');
+    textarea.value = textToCopy;
+    textarea.style.position = 'fixed';  // 防止页面滚动
+    document.body.appendChild(textarea);
+    textarea.select();
+    
+    try {
+        const successful = document.execCommand('copy');
+        var copyBtn = document.getElementById('copyBtn');
+        var tooltip = bootstrap.Tooltip.getInstance(copyBtn);
+
+        if (!tooltip) {
+            tooltip = new bootstrap.Tooltip(copyBtn, {
+                title: successful ? '复制成功!' : '复制失败',
+                trigger: 'manual'
+            });
+        } else {
+            tooltip.setContent({'.tooltip-inner': successful ? '复制成功!' : '复制失败'});
+        }
+        
+        tooltip.show();
+
+        if (successful) {
+            // 获取图标元素
+            const copyIcon = document.getElementById('copy-icon');
+
+            // 改变图标为 bi-send-check
+            copyIcon.classList.remove('bi-clipboard');
+            copyIcon.classList.add('bi-check-all');
+
+            // 2 秒后恢复图标为 bi-send
+            setTimeout(() => {
+                copyIcon.classList.remove('bi-check-all');
+                copyIcon.classList.add('bi-clipboard');
+                tooltip.hide();
+            }, 2000);
+        }
+
+    } catch (err) {
+        console.error('复制失败: ', err);
+        alert('复制失败，请手动复制');
+    } finally {
+        document.body.removeChild(textarea);
+    }
+}
 function filterTable(type) {
     var rows = document.querySelectorAll("#logisticsTable tbody tr");
     rows.forEach(row => {
@@ -503,25 +648,39 @@ function filterByTrackingNumbers() {
 }
 
 function filterAll() {
+    document.getElementById('selectAll').checked = false; // 当筛选条件变化时，自动取消全选状态
+    // 取消所有已选中的复选框（包括不可见的）
+    document.querySelectorAll('.tracking-checkbox:checked').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+
     const customerFilter = document.getElementById('customerFilter').value.toLowerCase();
     const countryFilter = document.getElementById('countryFilter').value.toLowerCase();
+    const channelFilter = document.getElementById('channelFilter').value.toLowerCase();
+    const carrierFilter = document.getElementById('carrierFilter').value.toLowerCase();
     const trackFilter = document.getElementById('trackFilterInput').value.toLowerCase();
     const problemFilter = document.getElementById('problemFilter').value;
     const statusFilter = document.getElementById('statusFilter').value;
+    const channelFilterValue = document.getElementById('channelFilter').value;
 
     const rows = document.querySelectorAll('#logisticsTable tbody tr');
     rows.forEach(row => {
         const customer = row.getAttribute('data-customer').toLowerCase();
         const country = row.getAttribute('data-country').toLowerCase();
+        const channel = row.getAttribute('data-channel').toLowerCase();
         const trackText = row.getAttribute('data-track').toLowerCase();
         const isProblem = row.getAttribute('data-problem') === '1';
         const rowStatus = row.getAttribute('data-status');
-
+        const carrier = row.getAttribute('data-carrier').toLowerCase();
 
         // 综合所有筛选条件
         const showRow = 
             (customerFilter === '' || customer.includes(customerFilter)) &&
             (countryFilter === '' || country.includes(countryFilter)) &&
+            (channelFilterValue === '' || 
+             channelFilterValue === 'all_channels' ||
+             channelFilterValue.split(',').some(filterChannel => channel.includes(filterChannel.toLowerCase()))) &&
+            (carrierFilter === '' || carrier.includes(carrierFilter)) &&
             (trackFilter === '' || trackText.includes(trackFilter)) &&
             (problemFilter === 'all' || 
              (problemFilter === 'normal' && !isProblem) || 
@@ -541,6 +700,12 @@ document.addEventListener('DOMContentLoaded', function () {
         if (!target) return;
         target.addEventListener('show.bs.collapse', () => btn.textContent = '收起');
         target.addEventListener('hide.bs.collapse', () => btn.textContent = '展开更多');
+    });
+    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+    tooltipTriggerList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl, {
+            trigger: 'manual'
+        });
     });
 });
 </script>

@@ -447,6 +447,7 @@ function updateQuote() {
     } else if (data.quoteType === "PROBOXX") {
         // 构建备注内容
         notes = 'Hi Tal,\n\n';
+        // notes = 'Hi Amit,\n\n';
         notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
@@ -461,6 +462,7 @@ function updateQuote() {
     } else if (data.quoteType === "PROBOXX-CBM") {
         // 构建备注内容
         notes = 'Hi Tal,\n\n';
+        // notes = 'Hi Amit,\n\n';
         notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ? 'DDU ' : 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;

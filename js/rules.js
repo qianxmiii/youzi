@@ -18,36 +18,72 @@ function getWeightIndex(weight) {
 }
 
 // 获取偏远费
-function getRemoteAddressfee(totalQuantity) {
-    let remoteAddressStr = LINE_BREAK + 'Remote address fee: ';
-    let remoteAddressFee = new Decimal(3.5).mul(totalQuantity);
-    if (remoteAddressFee.lessThan(21)) {
-        remoteAddressStr += 'MOQ is 21usd ';
-        addFee = addFee.add(21);
+function getRemoteAddressfee(totalQuantity, unit) {
+    let remoteAddressStr = "";
+    let remoteAddressFee = new Decimal(0);
+    if (unit == "RMB") {
+        remoteAddressStr = LINE_BREAK + '偏远地址费: ';
+        remoteAddressFee = new Decimal(25).mul(totalQuantity);
+        if (remoteAddressFee.lessThan(150)) {
+            remoteAddressStr += '25RMB/箱，低消150RMB ';
+            addFee = addFee.add(21);
+        } else {
+            remoteAddressStr += '25RMB/箱 * ' + totalQuantity.toFixed(0) + '箱 = ' + remoteAddressFee + 'RMB ';
+            addFee = addFee.add(remoteAddressFee);
+        }
     } else {
-        remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
-        addFee = addFee.add(remoteAddressFee);
+        remoteAddressStr = LINE_BREAK + 'Remote address fee: ';
+        remoteAddressFee = new Decimal(3.5).mul(totalQuantity);
+        if (remoteAddressFee.lessThan(21)) {
+            remoteAddressStr += 'MOQ is 21usd ';
+            addFee = addFee.add(21);
+        } else {
+            remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
+            addFee = addFee.add(remoteAddressFee);
+        }
     }
-
     return remoteAddressStr;
 }
 
 // 获取超尺寸费
-function getOverSizeFee(country, totalQuantity) {
-    let overSizeStr = LINE_BREAK + 'OverSize fee: ';
-    let overSizeFee = new Decimal(21).mul(totalQuantity).toFixed(2);
-    overSizeStr += '21usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overSizeFee+ 'usd ';
-    addFee = addFee.add(overSizeFee);
+function getOverSizeFee(country, totalQuantity, unit) {
+    let overSizeStr = "";
+    let overSizeFee = new Decimal(0);
 
+    if (unit == "RMB") {
+        overSizeStr = LINE_BREAK + '超长费: ';
+        overSizeFee = new Decimal(150).mul(totalQuantity).toFixed(2);
+        overSizeStr += '150RMB/箱 * ' + totalQuantity.toFixed(0) + '箱 = ' + overSizeFee + 'RMB ';
+        addFee = addFee.add(overSizeFee)
+
+    } else {
+        overSizeStr = LINE_BREAK + 'OverSize fee: ';
+        overSizeFee = new Decimal(21).mul(totalQuantity).toFixed(2);
+        overSizeStr += '21usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overSizeFee + 'usd ';
+        addFee = addFee.add(overSizeFee);
+    }
     return overSizeStr;
 }
 
 // 获取超重费
-function getOverWeightFee(country, totalQuantity) {
-    let overWeightStr = LINE_BREAK + 'OverWeight fee: ';
-    let overWeightFee = new Decimal(25).mul(totalQuantity).toFixed(2) ;
-    overWeightStr += '25usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overWeightFee+ 'usd ';
-    addFee = addFee.add(overWeightFee);
+function getOverWeightFee(country, totalQuantity, unit) {
+    let overWeightStr = "";
+    let overWeightFee = new Decimal(0);
+
+    if (unit == "RMB") {
+        overWeightStr = LINE_BREAK + '超重费: ';
+        overWeightFee = new Decimal(180).mul(totalQuantity).toFixed(2);
+        overWeightStr += '180RMB/箱 * ' + totalQuantity.toFixed(0) + '箱 = ' + overWeightFee + 'RMB ';
+        addFee = addFee.add(overWeightFee);
+
+    } else {
+        overWeightStr = LINE_BREAK + 'OverWeight fee: ';
+        overWeightFee = new Decimal(25).mul(totalQuantity).toFixed(2);
+        overWeightStr += '25usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overWeightFee + 'usd ';
+        addFee = addFee.add(overWeightFee);
+    }
+
+
     return overWeightStr;
 }
 

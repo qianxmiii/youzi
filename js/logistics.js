@@ -147,11 +147,15 @@ function calculate() {
         
     });
 
+    totalVolume = totalVolume.mul(100).ceil().div(100);// 向上取整保留两位小数
+    totalWeight = totalWeight.ceil(); // 向上取整
+    totalDimensionWeight = totalDimensionWeight.ceil();// 向上取整
+
     // 更新总计数据
-    document.getElementById('total-volume').innerText = totalVolume.mul(100).ceil().div(100).toString(); // 向上取整保留两位小数
-    document.getElementById('total-weight').innerText = totalWeight.ceil().toString(); // 向上取整
+    document.getElementById('total-volume').innerText = totalVolume.toString(); 
+    document.getElementById('total-weight').innerText = totalWeight.toString(); 
     document.getElementById('total-quantity').innerText = totalQuantity.toString();
-    document.getElementById('total-dimension-weight').innerText = totalDimensionWeight.ceil().toString(); // 向上取整
+    document.getElementById('total-dimension-weight').innerText = totalDimensionWeight.toString(); // 向上取整
 
     // 计算计费重
     let billingWeight = Decimal.max(totalWeight, totalDimensionWeight.ceil()).ceil();
@@ -165,10 +169,8 @@ function calculate() {
 
      // 更新汇总信息
      document.getElementById('summary-size').innerText = sizeinfo;
-     document.getElementById('summary-total-quantity').innerText = totalQuantity;
-     document.getElementById('summary-total-volume').innerText = totalVolume.mul(100).ceil().div(100).toString();
-     document.getElementById('summary-total-weight').innerText = Math.ceil(totalWeight);
-     document.getElementById('summary-chargeweight').innerText = Math.ceil(totalDimensionWeight);
+     document.getElementById('summary-chargeweight').innerText = totalDimensionWeight;
+     document.getElementById('summary-desc').innerText = `\n${totalQuantity}ctns ${totalWeight}kg ${totalVolume}cbm `;
 
     // 获取DOM元素
     const warningsTextarea = document.getElementById('box-warnings');

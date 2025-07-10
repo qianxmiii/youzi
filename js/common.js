@@ -153,21 +153,12 @@ function getTransitTimeAU(channel, postcode) {
  * 获取中文渠道名
  */
 function getCN(channel) {
-    switch (channel) {
-        case 'Sea express':
-            return '普船海派';
-        case 'Fast sea express':
-            return '快船海派';
-        case 'Fast sea truck':
-            return '快船卡派';
-        case 'Air express':
-            return '空派';
-        case 'Air truck':
-            return '空卡';
-        case 'UPS/Fedex/DHL':
-            return 'UPS/Fedex/DHL';
-        default:
-            return '普船卡派';
+     try {
+        const channelMap = window.data?.channelNames || {};
+        return channelMap[channel] ?? channelMap._default ?? channel;
+    } catch (e) {
+        console.error('获取渠道名称失败:', e);
+        return channel; // 出错时返回原渠道名
     }
 }
 

@@ -790,17 +790,39 @@ window.data = {
     // 派送方式按国家分类
     deliveryMethodsByCountry: {
         "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",
-            "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Express", "Sea ups/fedex", 
+            "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck","Express", "Sea ups/fedex", 
             "Fast sea ups/fedex", "Air ups/fedex","UPS/Fedex/DHL"
         ],
         "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",
-            "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Express"
+            "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck", "Express"
         ],
         "欧洲": ["Sea truck", "Sea express", "Air truck", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
         "英国": ["Sea truck", "Sea express", "Air truck", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
         "澳大利亚": ["Sea truck", "Sea express"],
         "其他": ["Express"]
-    }   
+    },
+
+    // 渠道名称中英文映射
+    channelNames: {
+        'Sea express': '普船海派',
+        'Fast sea express': '快船海派',
+        'Fast Maston express': '美森海派',
+        'Fast Maston truck': '美森海卡',
+        'Fast sea truck': '快船海卡', 
+        'Normal sea express': '加班海派', 
+        'Normal Maston express': '加班海派', 
+        'Normal Maston truck': '加班海卡', 
+        'Normal sea truck': '加班海卡', 
+        'Air express': '空派',
+        'Air truck': '空卡',
+        'UPS/Fedex/DHL': 'UPS/Fedex/DHL',
+        'Train express': '铁路快递派',
+        'Train truck': '铁路卡派',
+        'Road express': '卡航快递派',
+        'Road truck': '卡航卡派',
+        // 默认值
+        '_default': '普船卡派'
+    }
 };
 
 const termsByCategory = {

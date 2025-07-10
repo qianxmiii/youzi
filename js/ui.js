@@ -82,18 +82,25 @@ function deleteRow(event) {
 function updatePostcode() {
     const addressInput = document.getElementById("address").value.trim().toUpperCase();
     const postcodeInput = document.getElementById("postcode");
+    const countrySelect = document.getElementById("country-select");
 
-    // 如果地址长度为 4 位，从 JSON 中获取邮编
-    if (addressInput.length === 4) {
-        const postcode = addressToPostcode[addressInput];
-        if (postcode) {
-            postcodeInput.value = postcode;
-        } else {
-            postcodeInput.value = ""; // 如果未找到对应邮编，清空邮编输入框
+    // 1. 遍历所有国家查找匹配
+    let matchedCountry = "美国"; // 默认国家
+    let matchedPostcode = "";
+
+    for (const [country, postalMap] of Object.entries(window.data.addressByCountry)) {
+        if (postalMap[addressInput]) {
+            matchedCountry = country;
+            matchedPostcode = postalMap[addressInput];
+            break; // 找到后立即退出循环
         }
-    } else {
-        postcodeInput.value = ""; // 如果地址长度不为 4 位，清空邮编输入框
     }
+    // 2. 更新界面
+    countrySelect.value = matchedCountry;
+    postcodeInput.value = matchedPostcode || addressInput; // 无匹配时直接显示输入的地址
+
+    // 3.后续处理
+    updateDeliveryMethods();
     // 检查邮编是否为偏远地区
     checkRemoteAddress();
     // 触发更新

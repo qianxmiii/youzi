@@ -411,6 +411,7 @@ function updateQuote() {
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd`;
 
     } else if (data.quoteType === "通用-CBM") {
         // 构建备注内容
@@ -420,6 +421,7 @@ function updateQuote() {
         notes += `${getTransitTime(data.country, data.channel, data.postcode)} days`;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd`;
 
     } else if (data.quoteType === "通用-单价") {
         // 构建备注内容
@@ -433,6 +435,9 @@ function updateQuote() {
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode)} 天 ${MOQ} `;
         if (data.isDDU) notes += getDDUFee(data.country, 0);
+        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB");
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "RMB");
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "RMB");
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
         notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
 

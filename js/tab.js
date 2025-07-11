@@ -754,3 +754,135 @@ function calculatePrice(region,channel,zipcode,weight) {
 
     return price;
 }
+
+/**
+ * 初始化地址簿功能
+ */
+function initAddressBook() {
+
+  const modal = new bootstrap.Modal('#addressModal');
+  
+  // 打开模态框时加载数据
+  document.getElementById('openAddressBook').addEventListener('click', function() {
+    renderAddressTable();
+  });
+
+  // 绑定筛选事件
+  document.getElementById('addressSearch').addEventListener('input', filterAddresses);
+  document.getElementById('addressTypeFilter').addEventListener('change', filterAddresses);
+  document.getElementById('remoteFilter').addEventListener('change', filterAddresses);
+}
+
+/**
+ * 渲染地址表格
+ */
+function renderAddressTable(data = customerAddresses) {
+  const tbody = document.getElementById('addressTableBody');
+  tbody.innerHTML = '';
+
+  data.forEach(addr => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td width="5%">${addr.customer}</td>
+      <td width="5%">${addr.postalCode}</td>
+      <td width="40%" class="text-truncate" title="${addr.address}">
+        ${addr.address}
+      </td>
+      <td width="15%">${addr.company || '-'}</td>
+      <td width="10%">${addr.contact || '-'}</td>
+      <td width="5%">${addr.phone || '-'}</td>
+      <td width="5%">
+        <span class="badge ${addr.isCommercial ? 'bg-primary' : 'bg-success'}">
+          ${addr.isCommercial ? '商业' : '住宅'}
+        </span>
+      </td>
+      <td width="5%">
+        <span class="badge ${addr.isRemote ? 'bg-danger' : 'bg-success'}">
+          ${addr.isRemote ? '偏远' : '非偏远'}
+        </span>
+      </td>
+      <td width="10%">
+        <button class="btn btn-sm btn-outline-primary py-0 px-2"
+                onclick="copyAddress(${addr.id})"
+                title="复制地址信息">
+          <i class="bi bi-clipboard"></i>
+        </button>
+      </td>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+/**
+ * 筛选地址
+ */
+function filterAddresses() {
+  const searchTerm = document.getElementById('addressSearch').value.toLowerCase();
+  const typeFilter = document.getElementById('addressTypeFilter').value;
+  const remoteFilter = document.getElementById('remoteFilter').value;
+
+  const filtered = customerAddresses.filter(addr => {
+    return (
+      // 搜索条件（新增对公司名、联系人、电话的搜索）
+      (addr.customer.toLowerCase().includes(searchTerm) ||
+      addr.postalCode.includes(searchTerm) ||
+      addr.address.toLowerCase().includes(searchTerm) ||
+      (addr.company && addr.company.toLowerCase().includes(searchTerm)) ||
+      (addr.contact && addr.contact.toLowerCase().includes(searchTerm)) ||
+      (addr.phone && addr.phone.includes(searchTerm))
+    ) && (
+      // 类型条件
+      typeFilter === 'all' || 
+      (typeFilter === 'commercial' && addr.isCommercial) ||
+      (typeFilter === 'personal' && !addr.isCommercial)
+    ) && (
+      // 偏远条件
+      remoteFilter === 'all' || 
+      (remoteFilter === 'remote' && addr.isRemote) ||
+      (remoteFilter === 'non-remote' && !addr.isRemote)
+    ));
+  });
+
+  renderAddressTable(filtered);
+}
+
+/**
+ * 使用选中的地址
+ */
+/**
+ * 复制地址信息到剪贴板
+ */
+function copyAddress(id) {
+  const addr = customerAddresses.find(a => a.id === id);
+  if (!addr) return;
+
+  // 构建要复制的文本内容
+  let addressText = '';
+  if (addr.company) addressText += `${addr.company}\n`;
+  if (addr.contact) addressText += `${addr.contact}\n`;
+  if (addr.phone) addressText += `${addr.phone}\n`;
+  addressText += `${addr.address}`;
+
+  // 使用Clipboard API复制文本
+  navigator.clipboard.writeText(addressText.trim())
+    .then(() => {
+      // 显示复制成功的提示
+      const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+      document.getElementById('toastMessage').textContent = '地址已复制到剪贴板';
+      toast.show();
+    })
+    .catch(err => {
+      console.error('复制失败:', err);
+      // 备用复制方法
+      const textarea = document.createElement('textarea');
+      textarea.value = addressText;
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+      
+      const toast = new bootstrap.Toast(document.getElementById('copyToast'));
+      document.getElementById('toastMessage').textContent = '地址已复制(兼容模式)';
+      toast.show();
+    });
+}

@@ -406,7 +406,7 @@
           <!-- Tab1 常用功能 -->
           <div class="tab-pane fade show active" id="commonTab" role="tabpanel" aria-labelledby="tab1-tab">
             <div class="container mt-4">
-              <!-- 按钮：打开模态框 -->
+              <!-- 1. 常用术语 -->
               <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#termModal"
                 onclick="renderCategoryButtons();filterTerms('全部');">
                 常用术语
@@ -414,6 +414,11 @@
               <!-- 新增按钮 -->
               <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#usaModal">
                 美国
+              </button>
+              <!-- 3. 客户地址簿 -->
+              <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addressModal"
+                id="openAddressBook">
+                <i class="bi bi-bookmarks"></i> 客户地址簿
               </button>
             </div>
 
@@ -481,6 +486,65 @@
                     <!-- 折叠栏 -->
                     <div class="accordion" id="usaAccordion">
                       <!-- 动态加载分类 -->
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 3. 客户地址簿 -->
+            <div class="modal fade" id="addressModal" tabindex="-1">
+              <div class="modal-dialog modal-xl">
+                <div class="modal-content">
+                  <div class="modal-header bg-light">
+                    <h5 class="modal-title">常用地址簿</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <div class="modal-body">
+                    <!-- 搜索筛选区 -->
+                    <div class="row g-2 mb-3">
+                      <div class="col-md-6">
+                        <input type="text" id="addressSearch" class="form-control" placeholder="搜索客户/地址/邮编...">
+                      </div>
+                      <div class="col-md-3">
+                        <select id="addressTypeFilter" class="form-select">
+                          <option value="all">所有类型</option>
+                          <option value="commercial">商业地址</option>
+                          <option value="personal">私人地址</option>
+                        </select>
+                      </div>
+                      <div class="col-md-3">
+                        <select id="remoteFilter" class="form-select">
+                          <option value="all">所有区域</option>
+                          <option value="remote">偏远地址</option>
+                          <option value="non-remote">非偏远</option>
+                        </select>
+                      </div>
+                    </div>
+            
+                    <!-- 地址表格 -->
+                    <div class="table-responsive">
+                      <table class="table table-hover align-middle">
+                        <thead class="table-light">
+                          <tr>
+                            <th width="5%">客户</th>
+                            <th width="5%">邮编</th>
+                            <th width="40%">详细地址</th>
+                            <th width="15%">公司名</th>
+                            <th width="15%">联系人</th>
+                            <th width="10%">电话</th>
+                            <th width="5%">类型</th>
+                            <th width="5%">区域</th>
+                            <th width="10%">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody id="addressTableBody">
+                          <!-- 动态加载数据 -->
+                        </tbody>
+                      </table>
                     </div>
                   </div>
                   <div class="modal-footer">
@@ -796,7 +860,19 @@
 
         </div> <!-- Tab 内容 -->
       </div>
-    </div>
+      </div>
+      <!-- 复制成功提示 -->
+      <div class="position-fixed bottom-0 end-0 p-3" style="z-index: 1090">
+        <div id="copyToast" class="toast" role="alert" aria-live="assertive" aria-atomic="true">
+          <div class="toast-header">
+            <strong class="me-auto">系统提示</strong>
+            <button type="button" class="btn-close" data-bs-dismiss="toast" aria-label="Close"></button>
+          </div>
+          <div class="toast-body">
+            <span id="toastMessage"></span>
+          </div>
+        </div>
+      </div>
   </div>
 
   <!-- 引入 Bootstrap JS -->
@@ -805,6 +881,7 @@
   <!-- 引入 decimal.min.js -->
   <script src="js/common/decimal.min.js"></script>
   <!-- 引入 数据配置文件 data.js -->
+  <script src="data/private_data.js"></script>
   <script src="data/data.js"></script>
   <!-- 引入初始化文件 -->
   <script src="js/tab.js"></script>

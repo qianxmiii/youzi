@@ -438,6 +438,29 @@ td input.form-control {
   color: #007bff;
 }
 
+/* 地址表格样式 */
+#addressTableBody tr {
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+#addressTableBody tr:hover {
+  background-color: #f8f9fa;
+}
+
+/* 操作按钮样式 */
+.btn-address-action {
+  padding: 0.25rem 0.5rem;
+  font-size: 0.875rem;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  #addressModal .modal-dialog {
+    margin: 0.5rem auto;
+  }
+}
+
 /* Tab2 快捷回复 == quickReplyTab */
 /* 快捷回复选择框 */
 .input-group {

@@ -35,6 +35,8 @@ function init() {
     initQuickReplyCategories();
     // 初始化车型查询 Tab
     initVehicleTab();
+    // 初始化Tab 常用地址簿
+    initAddressBook();
 }
 
 

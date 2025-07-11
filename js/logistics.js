@@ -6,7 +6,7 @@ const LINE_BREAK = '\n';
 let addFee = new Decimal(0); //其他费用
 
 // 引入 data.js 中的数组
-const {deliveryMethodsByCountry, quickReplies, addressToPostcode, remotePostcodes} = window.data;
+const {deliveryMethodsByCountry, quickReplies, addressByCountry, remotePostcodes} = window.data;
 
 // 页面加载时初始化
 window.onload = function () {
@@ -644,10 +644,28 @@ function parsePackageInfo() {
     }
 
     // 识别地址代码
+    // 识别地址代码（适配新版 addressByCountry 结构）
     const addressMatch = input.match(addressRegex);
-    if (addressMatch && addressToPostcode.hasOwnProperty(addressMatch[0].toUpperCase())) {
-        document.getElementById('address').value = addressMatch[0].toUpperCase();
-        updatePostcode();
+    if (addressMatch) {
+        const addressCode = addressMatch[0].toUpperCase();
+        let found = false;
+        
+        // 遍历所有国家查找匹配
+        for (const country in addressByCountry) {
+            if (addressByCountry[country][addressCode]) {
+                document.getElementById('address').value = addressCode;
+                document.getElementById('postcode').value = addressByCountry[country][addressCode];
+                document.getElementById('country-select').value = country;
+                found = true;
+                break;
+            }
+        }
+        
+        // 未匹配时的处理（可选）
+        if (!found) {
+            document.getElementById('address').value = addressCode;
+            document.getElementById('country-select').value = "美国"; // 默认国家
+        }
     }
 
     document.getElementById('quantity').value = quantity;

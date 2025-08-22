@@ -115,6 +115,41 @@ function calculate() {
         let perimeterCell = row.querySelector('.result-cell:nth-child(11)');
         perimeterCell.classList.toggle('highlight-red', perimeter.greaterThanOrEqualTo(260));
 
+        // 检查特殊尺寸（长宽高大于等于62cm）
+        let lengthCell = row.querySelector('.length');
+        let widthCell = row.querySelector('.width');
+        let heightCell = row.querySelector('.height');
+        let weightCell = row.querySelector('.weight');
+
+        // 移除之前的整行样式
+        row.classList.remove('special-size-warning');
+
+        // 只给超过62cm的单元格添加样式
+        if (length.greaterThanOrEqualTo(62)) {
+            lengthCell.classList.add('special-size-warning');
+        } else {
+            lengthCell.classList.remove('special-size-warning');
+        }
+
+        if (width.greaterThanOrEqualTo(62)) {
+            widthCell.classList.add('special-size-warning');
+        } else {
+            widthCell.classList.remove('special-size-warning');
+        }
+
+        if (height.greaterThanOrEqualTo(62)) {
+            heightCell.classList.add('special-size-warning');
+        } else {
+            heightCell.classList.remove('special-size-warning');
+        }
+
+        // 检查单箱实重（大于等于22kg）
+        if (weight.greaterThanOrEqualTo(22)) {
+            weightCell.classList.add('single-weight-warning');
+        } else {
+            weightCell.classList.remove('single-weight-warning');
+        }
+
         // 累加总计
         totalQuantity = totalQuantity.add(quantity);
         totalVolume = totalVolume.add(volume);

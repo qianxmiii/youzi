@@ -662,3 +662,57 @@ td input.form-control {
   font-weight: bold; /* 加粗字体 */
   color: var(--danger-color);  /* 红色字体 */
 }
+
+/* 计算历史样式 */
+.history-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-item {
+  padding: 10px;
+  margin-bottom: 8px;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  background-color: #f8f9fa;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.history-item:hover {
+  background-color: #e9ecef;
+  border-color: #adb5bd;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.history-time {
+  font-size: 12px;
+  color: #6c757d;
+  margin-bottom: 4px;
+}
+
+.history-summary {
+  font-size: 14px;
+  color: #495057;
+  font-weight: 500;
+}
+
+.history-details {
+  font-size: 12px;
+  color: #6c757d;
+  margin-top: 4px;
+}
+
+.history-item.selected {
+  background-color: #d1ecf1;
+  border-color: #bee5eb;
+}
+
+/* 历史记录为空时的提示 */
+.history-empty {
+  text-align: center;
+  color: #6c757d;
+  padding: 20px;
+  font-style: italic;
+}

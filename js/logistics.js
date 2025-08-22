@@ -212,6 +212,13 @@ function calculate() {
         // 自动收起警告框
         warningsCollapse.hide();
     }
+    
+    // 自动保存计算历史（延迟3秒保存，避免频繁保存）
+    setTimeout(() => {
+        if (typeof saveCalculationHistory === 'function') {
+            saveCalculationHistory();
+        }
+    }, 3000);
 }
 
 // 导入数据

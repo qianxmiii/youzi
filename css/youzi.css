@@ -687,6 +687,17 @@ td input.form-control {
   font-weight: inherit !important;
 }
 
+/* 箱规识别输入组样式 */
+.input-group .btn {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+.input-group .form-control {
+  border-top-right-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
 /* 计算历史样式 */
 .history-list {
   max-height: 300px;

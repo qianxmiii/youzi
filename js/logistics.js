@@ -4,6 +4,7 @@ const cost_exchange_rate = 7.2; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 let addFee = new Decimal(0); //其他费用
+const receiver = "Tal";
 
 // 引入 data.js 中的数组
 const {deliveryMethodsByCountry, quickReplies, addressByCountry, remotePostcodes} = window.data;
@@ -13,6 +14,7 @@ window.onload = function () {
 
     // 获取下一个星期五的日期
     valid_date = getNextFriday();
+    // valid_date = "08/01";
 
     init(); // 初始化
     eventListener();
@@ -455,7 +457,7 @@ function updateQuote() {
 
     } else if (data.quoteType === "PROBOXX") {
         // 构建备注内容
-        notes = 'Hi Tal,\n\n';
+        notes = `Hi ${receiver},\n\n`;
         // notes = 'Hi Amit,\n\n';
         notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ?  'DDU ': 'DDP ';
@@ -470,7 +472,7 @@ function updateQuote() {
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
     } else if (data.quoteType === "PROBOXX-CBM") {
         // 构建备注内容
-        notes = 'Hi Tal,\n\n';
+        notes = `Hi ${receiver},\n\n`;
         // notes = 'Hi Amit,\n\n';
         notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ? 'DDU ' : 'DDP ';

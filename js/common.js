@@ -204,3 +204,333 @@ function addDays(transitTime, days) {
     }
 }
 
+// ==================== 计算历史功能 ====================
+
+/**
+ * 保存计算历史
+ */
+function saveCalculationHistory() {
+    // 获取当前计算数据
+    const currentData = getCurrentCalculationData();
+    
+    if (!currentData || !isValidCalculation(currentData)) {
+        return; // 如果数据无效，不保存
+    }
+    
+    // 获取现有历史记录
+    const history = JSON.parse(localStorage.getItem('calculationHistory') || '[]');
+    
+    // 创建新的历史记录
+    const newRecord = {
+        id: Date.now(),
+        timestamp: new Date().toISOString(),
+        data: currentData,
+        summary: generateHistorySummary(currentData),
+        details: generateHistoryDetails(currentData)
+    };
+    
+    // 检查是否已存在相同的计算记录（避免重复）
+    const isDuplicate = history.some(record => 
+        record.data.totalQuantity === currentData.totalQuantity &&
+        record.data.totalWeight === currentData.totalWeight &&
+        record.data.totalVolume === currentData.totalVolume
+    );
+    
+    if (!isDuplicate) {
+        // 将新记录添加到开头
+        history.unshift(newRecord);
+        
+        // 只保留最近50条记录
+        if (history.length > 50) {
+            history.splice(50);
+        }
+        
+        // 保存到本地存储
+        localStorage.setItem('calculationHistory', JSON.stringify(history));
+        
+        // 更新显示
+        updateHistoryDisplay();
+        
+        // 显示保存成功提示
+        showToast('计算记录已保存', 'success');
+    }
+}
+
+/**
+ * 获取当前计算数据
+ */
+function getCurrentCalculationData() {
+    const totalQuantity = parseInt(document.getElementById('total-quantity')?.textContent || '0');
+    const totalVolume = parseFloat(document.getElementById('total-volume')?.textContent || '0');
+    const totalWeight = parseFloat(document.getElementById('total-weight')?.textContent || '0');
+    const totalDimensionWeight = parseFloat(document.getElementById('total-dimension-weight')?.textContent || '0');
+    const billingWeight = parseFloat(document.getElementById('billing-weight')?.textContent || '0');
+    const volumeRatio = parseFloat(document.getElementById('volume-ratio')?.textContent || '0');
+    
+    // 获取箱规表格数据
+    const boxData = getBoxTableData();
+    
+    return {
+        totalQuantity,
+        totalVolume,
+        totalWeight,
+        totalDimensionWeight,
+        billingWeight,
+        volumeRatio,
+        boxData,
+        timestamp: new Date().toISOString()
+    };
+}
+
+/**
+ * 获取箱规表格数据
+ */
+function getBoxTableData() {
+    const rows = document.querySelectorAll('#box-table tr.input-row');
+    const boxData = [];
+    
+    rows.forEach(row => {
+        const length = parseFloat(row.querySelector('.length')?.value || '0');
+        const width = parseFloat(row.querySelector('.width')?.value || '0');
+        const height = parseFloat(row.querySelector('.height')?.value || '0');
+        const weight = parseFloat(row.querySelector('.weight')?.value || '0');
+        const quantity = parseInt(row.querySelector('.quantity')?.value || '0');
+        
+        if (length > 0 && width > 0 && height > 0 && weight > 0 && quantity > 0) {
+            boxData.push({ length, width, height, weight, quantity });
+        }
+    });
+    
+    return boxData;
+}
+
+/**
+ * 验证计算数据是否有效
+ */
+function isValidCalculation(data) {
+    return data.totalQuantity > 0 && 
+           data.totalWeight > 0 && 
+           data.totalVolume > 0 &&
+           data.boxData.length > 0;
+}
+
+/**
+ * 生成历史记录摘要
+ */
+function generateHistorySummary(data) {
+    return `${data.totalQuantity}箱 ${data.totalWeight}kg ${data.totalVolume.toFixed(2)}cbm`;
+}
+
+/**
+ * 生成历史记录详细信息
+ */
+function generateHistoryDetails(data) {
+    const boxCount = data.boxData.length;
+    const avgWeight = (data.totalWeight / data.totalQuantity).toFixed(2);
+    const avgVolume = (data.totalVolume / data.totalQuantity).toFixed(3);
+    
+    return `${boxCount}种规格 | 平均${avgWeight}kg/箱 | 平均${avgVolume}cbm/箱`;
+}
+
+/**
+ * 更新历史记录显示
+ */
+function updateHistoryDisplay() {
+    const history = JSON.parse(localStorage.getItem('calculationHistory') || '[]');
+    const container = document.getElementById('history-container');
+    const countElement = document.getElementById('historyCount');
+    
+    if (!container || !countElement) return;
+    
+    // 更新计数
+    countElement.textContent = history.length;
+    
+    if (history.length === 0) {
+        container.innerHTML = '<div class="history-empty">暂无计算记录</div>';
+        return;
+    }
+    
+    // 生成历史记录HTML
+    const historyHTML = history.map(record => `
+        <div class="history-item" onclick="loadCalculationFromHistory(${record.id})" title="点击加载此计算">
+            <div class="history-time">${formatHistoryTime(record.timestamp)}</div>
+            <div class="history-summary">${record.summary}</div>
+            <div class="history-details">${record.details}</div>
+        </div>
+    `).join('');
+    
+    container.innerHTML = historyHTML;
+}
+
+/**
+ * 格式化历史记录时间
+ */
+function formatHistoryTime(timestamp) {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now - date;
+    const diffMins = Math.floor(diffMs / (1000 * 60));
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    
+    if (diffMins < 1) return '刚刚';
+    if (diffMins < 60) return `${diffMins}分钟前`;
+    if (diffHours < 24) return `${diffHours}小时前`;
+    if (diffDays < 7) return `${diffDays}天前`;
+    
+    return date.toLocaleDateString('zh-CN', {
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+/**
+ * 从历史记录加载计算
+ */
+function loadCalculationFromHistory(historyId) {
+    const history = JSON.parse(localStorage.getItem('calculationHistory') || '[]');
+    const record = history.find(h => h.id === historyId);
+    
+    if (!record) {
+        showToast('历史记录不存在', 'error');
+        return;
+    }
+    
+    // 加载箱规数据
+    loadBoxDataFromHistory(record.data.boxData);
+    
+    // 更新汇总信息
+    updateSummaryFromHistory(record.data);
+    
+    // 高亮选中的历史记录
+    highlightSelectedHistory(historyId);
+    
+    // 显示加载成功提示
+    showToast('已加载历史记录', 'success');
+    
+    // 自动展开历史记录区域
+    const historyCollapse = new bootstrap.Collapse(document.getElementById('historyCollapse'));
+    historyCollapse.show();
+}
+
+/**
+ * 加载箱规数据到表格
+ */
+function loadBoxDataFromHistory(boxData) {
+    const tableBody = document.getElementById('box-table');
+    if (!tableBody) return;
+    
+    // 清空现有行（保留第一行）
+    const existingRows = tableBody.querySelectorAll('tr.input-row');
+    for (let i = 1; i < existingRows.length; i++) {
+        existingRows[i].remove();
+    }
+    
+    // 加载数据到第一行
+    if (boxData.length > 0) {
+        const firstRow = tableBody.querySelector('tr.input-row');
+        const firstBox = boxData[0];
+        
+        firstRow.querySelector('.length').value = firstBox.length;
+        firstRow.querySelector('.width').value = firstBox.width;
+        firstRow.querySelector('.height').value = firstBox.height;
+        firstRow.querySelector('.weight').value = firstBox.weight;
+        firstRow.querySelector('.quantity').value = firstBox.quantity;
+        
+        // 添加额外的行
+        for (let i = 1; i < boxData.length; i++) {
+            addRow();
+            const newRow = tableBody.querySelector(`tr.input-row:nth-child(${i + 1})`);
+            const box = boxData[i];
+            
+            newRow.querySelector('.length').value = box.length;
+            newRow.querySelector('.width').value = box.width;
+            newRow.querySelector('.height').value = box.height;
+            newRow.querySelector('.weight').value = box.weight;
+            newRow.querySelector('.quantity').value = box.quantity;
+        }
+        
+        // 重新计算
+        calculate();
+    }
+}
+
+/**
+ * 更新汇总信息
+ */
+function updateSummaryFromHistory(data) {
+    const elements = {
+        'total-quantity': data.totalQuantity,
+        'total-volume': data.totalVolume.toFixed(2),
+        'total-weight': data.totalWeight,
+        'total-dimension-weight': data.totalDimensionWeight,
+        'billing-weight': data.billingWeight,
+        'volume-ratio': data.volumeRatio.toFixed(2)
+    };
+    
+    Object.entries(elements).forEach(([id, value]) => {
+        const element = document.getElementById(id);
+        if (element) {
+            element.textContent = value;
+        }
+    });
+}
+
+/**
+ * 高亮选中的历史记录
+ */
+function highlightSelectedHistory(historyId) {
+    // 移除所有高亮
+    document.querySelectorAll('.history-item').forEach(item => {
+        item.classList.remove('selected');
+    });
+    
+    // 高亮选中的记录
+    const selectedItem = document.querySelector(`[onclick*="${historyId}"]`);
+    if (selectedItem) {
+        selectedItem.classList.add('selected');
+    }
+}
+
+/**
+ * 清空计算历史
+ */
+function clearHistory() {
+    if (confirm('确定要清空所有计算历史吗？此操作不可恢复。')) {
+        localStorage.removeItem('calculationHistory');
+        updateHistoryDisplay();
+        showToast('历史记录已清空', 'success');
+    }
+}
+
+/**
+ * 显示提示消息
+ */
+function showToast(message, type = 'info') {
+    // 如果页面中有toast组件，使用它
+    const toast = document.getElementById('copyToast');
+    if (toast) {
+        const toastMessage = document.getElementById('toastMessage');
+        if (toastMessage) {
+            toastMessage.textContent = message;
+        }
+        
+        // 显示toast
+        const bsToast = new bootstrap.Toast(toast);
+        bsToast.show();
+    } else {
+        // 简单的alert提示
+        alert(message);
+    }
+}
+
+// 页面加载完成后初始化历史记录显示
+document.addEventListener('DOMContentLoaded', function() {
+    // 延迟一点时间确保其他组件已加载
+    setTimeout(() => {
+        updateHistoryDisplay();
+    }, 500);
+});
+

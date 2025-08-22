@@ -112,6 +112,27 @@
             <div class="col"><p>计费重: <span id="billing-weight">0</span> kg</p></div>
             <div class="col"><p>泡比: <span id="volume-ratio">0.00</span></p></div>
           </div>
+        </div>
+        
+        <!-- 计算历史区域 -->
+        <div class="form-group mt-3">
+          <button class="btn btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#historyCollapse"
+            aria-expanded="false" aria-controls="historyCollapse">
+            <i class="bi bi-clock-history"></i> 计算历史 <span class="badge bg-info" id="historyCount">0</span>
+          </button>
+          <div class="collapse" id="historyCollapse">
+            <div class="card card-body mt-2">
+              <div class="d-flex justify-content-between align-items-center mb-2">
+                <h6 class="mb-0">最近的计算记录</h6>
+                <button class="btn btn-sm btn-outline-danger" onclick="clearHistory()">
+                  <i class="bi bi-trash"></i> 清空历史
+                </button>
+              </div>
+              <div id="history-container" class="history-list">
+                <!-- 历史记录将在这里动态显示 -->
+              </div>
+            </div>
+          </div>
         </div>  
 
         <!-- Collapse 组件 箱规汇总信息 -->

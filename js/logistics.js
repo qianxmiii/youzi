@@ -1087,3 +1087,73 @@ function updatePickupFee(warehouse, pickupLocation, selectedVehicle) {
     }
 }
 
+/**
+ * 一键清空箱规表格
+ */
+function clearBoxTable() {
+    // 清空箱规识别输入框
+    document.getElementById('dimension-input').value = '';
+    
+    // 获取表格的 tbody 元素
+    const tableBody = document.getElementById("box-table");
+    
+    // 清除表格中除第一行外的所有行
+    while (tableBody.rows.length > 1) {
+        tableBody.deleteRow(1);
+    }
+    
+    // 清空第一行的所有输入框
+    const firstRow = tableBody.rows[0];
+    firstRow.querySelector('.length').value = '';
+    firstRow.querySelector('.width').value = '';
+    firstRow.querySelector('.height').value = '';
+    firstRow.querySelector('.weight').value = '';
+    firstRow.querySelector('.quantity').value = '';
+    
+    // 清空第一行的结果显示
+    firstRow.querySelector('.result-cell:nth-child(7)').innerText = '0.00 cbm';
+    firstRow.querySelector('.result-cell:nth-child(8)').innerText = '0 kg';
+    firstRow.querySelector('.result-cell:nth-child(9)').innerText = '0 kg';
+    firstRow.querySelector('.result-cell:nth-child(10)').innerText = '0 kg';
+    firstRow.querySelector('.result-cell:nth-child(11)').innerText = '0 cm';
+    
+    // 移除所有警告样式
+    firstRow.classList.remove('special-size-warning');
+    firstRow.querySelector('.length').classList.remove('special-size-warning');
+    firstRow.querySelector('.width').classList.remove('special-size-warning');
+    firstRow.querySelector('.height').classList.remove('special-size-warning');
+    firstRow.querySelector('.weight').classList.remove('single-weight-warning');
+    
+    // 重置总计数据
+    document.getElementById('total-volume').innerText = '0.00';
+    document.getElementById('total-weight').innerText = '0';
+    document.getElementById('total-quantity').innerText = '0';
+    document.getElementById('total-dimension-weight').innerText = '0';
+    document.getElementById('billing-weight').innerText = '0';
+    document.getElementById('volume-ratio').innerText = '0.00';
+    
+    // 清空汇总信息
+    document.getElementById('summary-size').innerText = '[length]*[width]*[height]cm';
+    document.getElementById('summary-chargeweight').innerText = '0';
+    document.getElementById('summary-desc').innerText = '0ctns 0kg 0cbm';
+    
+    // 清空警告信息
+    const warningsTextarea = document.getElementById('box-warnings');
+    if (warningsTextarea) {
+        warningsTextarea.value = '✓ 所有箱规符合要求';
+        warningsTextarea.classList.replace('has-warnings', 'no-warnings');
+    }
+    
+    // 隐藏警告按钮
+    const warningsToggle = document.getElementById('warningsToggle');
+    if (warningsToggle) {
+        warningsToggle.style.display = 'none';
+    }
+    
+    // 收起警告框
+    const warningsCollapse = new bootstrap.Collapse('#warningsCollapse', {
+        toggle: false
+    });
+    warningsCollapse.hide();
+}
+

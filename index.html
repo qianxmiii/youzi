@@ -60,7 +60,12 @@
 
         <div class="margin-vertical">
           <label for="dimension-input" class = "subtitle">箱规识别</label>
-          <input type="text" id="dimension-input" class="form-control" placeholder="例如: 45*45*50cm, 10.15kg, 21ctns" oninput="parseDimensions()" />
+          <div class="input-group">
+            <input type="text" id="dimension-input" class="form-control" placeholder="例如: 45*45*50cm, 10.15kg, 21ctns" oninput="parseDimensions()" />
+            <button class="btn btn-outline-danger" type="button" onclick="clearBoxTable()" title="一键清空所有箱规数据">
+              <i class="bi bi-trash"></i> 清空
+            </button>
+          </div>
         </div>
 
         <!-- 箱规输出表格 -->

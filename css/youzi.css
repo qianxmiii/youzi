@@ -10,6 +10,9 @@
   --border-grey: #dedbdb;
   --border-dark: #373434;
   --orange-clor: #ff6600;
+  --info-color: #0dcaf0; /* 按钮信息色（Bootstrap info）*/
+  --light-bg: #f8f9fa;   /* 统一浅色背景变量 */
+  --text-muted: #6c757d; /* 次要文字颜色 */
 }
 
 /* 基础样式 */
@@ -750,4 +753,124 @@ td input.form-control {
   color: #6c757d;
   padding: 20px;
   font-style: italic;
+}
+
+/* 报价历史记录样式 */
+#quoteHistoryModal .modal-xl {
+    max-width: 95%;
+}
+
+#quoteHistoryModal .table th {
+    background-color: var(--primary-color);
+    color: white;
+    font-weight: 500;
+    border: none;
+}
+
+#quoteHistoryModal .table td {
+    vertical-align: middle;
+}
+
+#quoteHistoryModal .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.875rem;
+    margin: 0 0.125rem;
+}
+
+#quoteHistoryModal .table-hover tbody tr:hover {
+    background-color: var(--light-bg);
+}
+
+#quoteHistoryModal .search-controls {
+    background-color: var(--light-bg);
+    padding: 1rem;
+    border-radius: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+#quoteHistoryModal .pagination-info {
+    color: var(--text-muted);
+    font-size: 0.875rem;
+}
+
+/* 报价历史记录按钮样式 */
+.btn-outline-info {
+    border-color: var(--info-color);
+    color: var(--info-color);
+}
+
+.btn-outline-info:hover,
+.btn-outline-info:focus,
+.btn-outline-info:active {
+    background-color: var(--info-color);
+    border-color: var(--info-color);
+    color: white;
+}
+
+/* 历史记录表格响应式设计 */
+@media (max-width: 768px) {
+    #quoteHistoryModal .modal-xl {
+        max-width: 100%;
+        margin: 0.5rem;
+    }
+    
+    #quoteHistoryModal .table-responsive {
+        font-size: 0.875rem;
+    }
+    
+    #quoteHistoryModal .btn-sm {
+        padding: 0.375rem 0.75rem;
+        font-size: 1rem;
+    }
+}
+
+/* ------------------------------ */
+/* 报价计算表格可读性与溢出优化  */
+/* ------------------------------ */
+
+/* 外层容器：开启横向滚动，避免裁切 */
+.table-overflow {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch; /* 移动端顺滑滚动 */
+}
+
+/* 固定布局：列宽更可控，长内容不挤爆 */
+.table-fixed {
+  table-layout: fixed;
+}
+
+/* 省略号：用于长文本列，配合 title 显示完整内容 */
+.cell-ellipsis {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 允许换行：用于需要完整展示多词内容的列 */
+.cell-wrap {
+  white-space: normal;
+  word-break: break-word; /* 长单词/无空格文本也能换行 */
+}
+
+/* 小屏压缩：减小字体与内边距，可选给表格外层加 .shrink-on-small */
+.shrink-on-small .table th,
+.shrink-on-small .table td {
+  transition: all 0.2s ease;
+}
+
+@media (max-width: 992px) {
+  .shrink-on-small .table th,
+  .shrink-on-small .table td {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .shrink-on-small .table th,
+  .shrink-on-small .table td {
+    padding: 0.3rem 0.4rem;
+    font-size: 0.85rem;
+  }
 }

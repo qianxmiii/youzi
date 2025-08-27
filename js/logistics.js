@@ -50,6 +50,21 @@ function eventListener() {
     document.getElementById("t4_channel").addEventListener("change", renderPriceTable());
     // 监听搜索框输入
     document.getElementById("usaSearchInput").addEventListener("input", searchUSAData);
+    
+    // 监听备注框 Ctrl+C 复制触发保存报价历史
+    const notesEl = document.getElementById('notes');
+    if (notesEl) {
+        notesEl.addEventListener('keydown', function(e) {
+            const isCtrlC = (e.ctrlKey || e.metaKey) && (e.key === 'c' || e.key === 'C' || e.keyCode === 67);
+            if (isCtrlC) {
+                setTimeout(() => {
+                    if (typeof saveQuoteHistory === 'function') {
+                        saveQuoteHistory();
+                    }
+                }, 0);
+            }
+        });
+    }
 }
 
 
@@ -1156,4 +1171,380 @@ function clearBoxTable() {
     });
     warningsCollapse.hide();
 }
+
+/**
+ * 保存报价历史记录
+ */
+function saveQuoteHistory() {
+    try {
+        // 获取当前报价的所有数据
+        const quoteData = {
+            id: generateQuoteId(),
+            timestamp: new Date().toLocaleString('zh-CN'),
+            
+            // 基础信息
+            address: (document.getElementById('address').value || '').toUpperCase(),
+            postcode: document.getElementById('postcode').value || '',
+            country: document.getElementById('country-select').value || '',
+            deliveryMethod: document.getElementById('delivery-method-select').value || '',
+            origin: document.getElementById('origin-select').value || '',
+            
+            // 货物信息
+            quantity: parseFloat(document.getElementById('quantity').value) || 0,
+            weight: parseFloat(document.getElementById('weight').value) || 0,
+            volume: parseFloat(document.getElementById('volume').value) || 0,
+            
+            // 费用信息
+            costRmb: parseFloat(document.getElementById('cost_rmb').value) || 0,
+            profitRmb: parseFloat(document.getElementById('profit_rmb').value) || 0,
+            priceRmb: parseFloat(document.getElementById('price_rmb').value) || 0,
+            priceUsd: parseFloat(document.getElementById('price_usd').value) || 0,
+            
+            // 特殊选项
+            isRemote: document.getElementById('remote-address').checked || false,
+            hasBattery: document.getElementById('battery_check').checked || false,
+            isOversize: document.getElementById('oversize_check').checked || false,
+            isOverweight: document.getElementById('overweight_check').checked || false,
+            isMOQ: document.getElementById('MOQ').checked || false,
+            hasPickupFee: document.getElementById('pickup-fee-checkbox').checked || false,
+            isDDU: document.getElementById('ddu_check').checked || false,
+            isUSD: document.getElementById('USD_check').checked || false,
+            
+            // 计算结果
+            chargeWeight: parseFloat(document.getElementById('chargeWeight').value) || 0,
+            chargeCBM: parseFloat(document.getElementById('chargeCBM').value) || 0,
+            volumeRatio: parseFloat(document.getElementById('volumeRatio').value) || 0,
+            totalPriceUsd: parseFloat(document.getElementById('total_price_usd').value) || 0,
+            totalPriceRmb: parseFloat(document.getElementById('total_price_rmb').value) || 0,
+            unitPriceRmb: parseFloat(document.getElementById('unit_price_rmb').value) || 0,
+            
+            // 报价格式
+            quoteType: document.getElementById('quote-type').value || '通用',
+            notes: document.getElementById('notes').value || ''
+        };
+        
+        // 获取现有历史记录
+        let history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+        
+        // 添加新记录到开头
+        history.unshift(quoteData);
+        
+        // 限制历史记录数量（最多保存100条）
+        if (history.length > 100) {
+            history = history.slice(0, 100);
+        }
+        
+        // 保存到localStorage
+        localStorage.setItem('quoteHistory', JSON.stringify(history));
+        
+        console.log('报价历史记录已保存:', quoteData.id);
+        
+    } catch (error) {
+        console.error('保存报价历史记录失败:', error);
+    }
+}
+
+/**
+ * 生成报价ID
+ */
+function generateQuoteId() {
+    const now = new Date();
+    const dateStr = now.getFullYear().toString() + 
+                   (now.getMonth() + 1).toString().padStart(2, '0') + 
+                   now.getDate().toString().padStart(2, '0');
+    const timeStr = now.getHours().toString().padStart(2, '0') + 
+                   now.getMinutes().toString().padStart(2, '0') + 
+                   now.getSeconds().toString().padStart(2, '0');
+    return `quote_${dateStr}_${timeStr}`;
+}
+
+/**
+ * 加载报价历史记录
+ */
+function loadQuoteHistory() {
+    try {
+        const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+        renderQuoteHistoryTable(history);
+        updateQuoteHistoryInfo(history.length);
+    } catch (error) {
+        console.error('加载报价历史记录失败:', error);
+    }
+}
+
+/**
+ * 渲染报价历史记录表格
+ */
+function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
+    const tbody = document.getElementById('quoteHistoryTableBody');
+    if (!tbody) return;
+    
+    tbody.innerHTML = '';
+    
+    if (history.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" class="text-center text-muted">暂无历史记录</td></tr>';
+        return;
+    }
+    
+    // 分页处理
+    const startIndex = (page - 1) * pageSize;
+    const endIndex = startIndex + pageSize;
+    const pageData = history.slice(startIndex, endIndex);
+    
+    pageData.forEach(record => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${record.timestamp}</td>
+            <td>${record.address}</td>
+            <td>${record.country}</td>
+            <td>${record.quantity}</td>
+            <td>${record.weight}</td>
+            <td>${record.volume}</td>
+            <td>${record.priceUsd}</td>
+            <td>${record.totalPriceUsd}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="loadQuoteToForm('${record.id}')" title="加载到表单">
+                    <i class="bi bi-arrow-clockwise"></i>
+                </button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteQuoteHistory('${record.id}')" title="删除">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+    
+    // 更新分页信息
+    updateQuoteHistoryPagination(history.length, page, pageSize);
+}
+
+/**
+ * 更新报价历史记录信息
+ */
+function updateQuoteHistoryInfo(totalCount) {
+    const infoElement = document.getElementById('quoteHistoryInfo');
+    if (infoElement) {
+        infoElement.textContent = `共 ${totalCount} 条记录`;
+    }
+}
+
+/**
+ * 更新报价历史记录分页
+ */
+function updateQuoteHistoryPagination(totalCount, currentPage, pageSize) {
+    const totalPages = Math.ceil(totalCount / pageSize);
+    const pageInfoElement = document.getElementById('quoteHistoryPageInfo');
+    const prevBtn = document.getElementById('quoteHistoryPrev');
+    const nextBtn = document.getElementById('quoteHistoryNext');
+    
+    if (pageInfoElement) {
+        pageInfoElement.textContent = `第 ${currentPage} 页，共 ${totalPages} 页`;
+    }
+    
+    if (prevBtn) {
+        prevBtn.disabled = currentPage <= 1;
+    }
+    
+    if (nextBtn) {
+        nextBtn.disabled = currentPage >= totalPages;
+    }
+    
+    // 保存当前分页状态
+    window.currentQuoteHistoryPage = currentPage;
+    window.currentQuoteHistoryPageSize = pageSize;
+}
+
+/**
+ * 搜索报价历史记录
+ */
+function searchQuoteHistory() {
+    const searchTerm = document.getElementById('quoteHistorySearch').value.toLowerCase();
+    const countryFilter = document.getElementById('quoteHistoryCountry').value;
+    const dateRange = document.getElementById('quoteHistoryDateRange').value;
+    
+    let history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+    
+    // 应用筛选
+    let filteredHistory = history.filter(record => {
+        // 搜索词筛选
+        const matchesSearch = !searchTerm || 
+            record.address.toLowerCase().includes(searchTerm) ||
+            record.postcode.toLowerCase().includes(searchTerm);
+        
+        // 国家筛选
+        const matchesCountry = !countryFilter || record.country === countryFilter;
+        
+        // 日期筛选
+        let matchesDate = true;
+        if (dateRange !== 'all') {
+            const recordDate = new Date(record.timestamp);
+            const now = new Date();
+            const daysDiff = (now - recordDate) / (1000 * 60 * 60 * 24);
+            matchesDate = daysDiff <= parseInt(dateRange);
+        }
+        
+        return matchesSearch && matchesCountry && matchesDate;
+    });
+    
+    renderQuoteHistoryTable(filteredHistory, 1, 10);
+    updateQuoteHistoryInfo(filteredHistory.length);
+}
+
+/**
+ * 上一页
+ */
+function prevQuoteHistoryPage() {
+    const currentPage = window.currentQuoteHistoryPage || 1;
+    if (currentPage > 1) {
+        const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+        renderQuoteHistoryTable(history, currentPage - 1, 10);
+    }
+}
+
+/**
+ * 下一页
+ */
+function nextQuoteHistoryPage() {
+    const currentPage = window.currentQuoteHistoryPage || 1;
+    const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+    const totalPages = Math.ceil(history.length / 10);
+    
+    if (currentPage < totalPages) {
+        renderQuoteHistoryTable(history, currentPage + 1, 10);
+    }
+}
+
+/**
+ * 加载报价到表单
+ */
+function loadQuoteToForm(quoteId) {
+    try {
+        const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+        const record = history.find(item => item.id === quoteId);
+        
+        if (!record) {
+            alert('未找到该报价记录');
+            return;
+        }
+        
+        // 填充表单数据
+        document.getElementById('address').value = record.address;
+        document.getElementById('postcode').value = record.postcode;
+        document.getElementById('country-select').value = record.country;
+        document.getElementById('delivery-method-select').value = record.deliveryMethod;
+        document.getElementById('origin-select').value = record.origin;
+        
+        document.getElementById('quantity').value = record.quantity;
+        document.getElementById('weight').value = record.weight;
+        document.getElementById('volume').value = record.volume;
+        
+        document.getElementById('cost_rmb').value = record.costRmb;
+        document.getElementById('profit_rmb').value = record.profitRmb;
+        
+        // 设置特殊选项
+        document.getElementById('remote-address').checked = record.isRemote;
+        document.getElementById('battery_check').checked = record.hasBattery;
+        document.getElementById('oversize_check').checked = record.isOversize;
+        document.getElementById('overweight_check').checked = record.isOverweight;
+        document.getElementById('MOQ').checked = record.isMOQ;
+        document.getElementById('pickup-fee-checkbox').checked = record.hasPickupFee;
+        document.getElementById('ddu_check').checked = record.isDDU;
+        document.getElementById('USD_check').checked = record.isUSD;
+        
+        document.getElementById('quote-type').value = record.quoteType;
+        document.getElementById('notes').value = record.notes;
+        
+        // 触发计算更新
+        updateQuote();
+        
+        // 关闭模态框
+        const modal = bootstrap.Modal.getInstance(document.getElementById('quoteHistoryModal'));
+        if (modal) {
+            modal.hide();
+        }
+        
+        // 显示成功提示
+        showToast('报价记录已加载到表单');
+        
+    } catch (error) {
+        console.error('加载报价记录失败:', error);
+        alert('加载报价记录失败');
+    }
+}
+
+/**
+ * 删除报价历史记录
+ */
+function deleteQuoteHistory(quoteId) {
+    if (!confirm('确定要删除这条报价记录吗？')) {
+        return;
+    }
+    
+    try {
+        let history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+        history = history.filter(item => item.id !== quoteId);
+        localStorage.setItem('quoteHistory', JSON.stringify(history));
+        
+        // 重新加载表格
+        loadQuoteHistory();
+        showToast('报价记录已删除');
+        
+    } catch (error) {
+        console.error('删除报价记录失败:', error);
+        alert('删除报价记录失败');
+    }
+}
+
+/**
+ * 清空报价历史记录
+ */
+function clearQuoteHistory() {
+    if (!confirm('确定要清空所有报价历史记录吗？此操作不可恢复！')) {
+        return;
+    }
+    
+    try {
+        localStorage.removeItem('quoteHistory');
+        loadQuoteHistory();
+        showToast('所有报价历史记录已清空');
+        
+    } catch (error) {
+        console.error('清空报价历史记录失败:', error);
+        alert('清空报价历史记录失败');
+    }
+}
+
+/**
+ * 显示提示信息
+ */
+function showToast(message) {
+    const toastElement = document.getElementById('copyToast');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    if (toastElement && toastMessage) {
+        toastMessage.textContent = message;
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+    }
+}
+
+// 页面加载完成后初始化报价历史记录功能
+document.addEventListener('DOMContentLoaded', function() {
+    // 监听报价历史记录模态框的显示事件
+    const quoteHistoryModal = document.getElementById('quoteHistoryModal');
+    if (quoteHistoryModal) {
+        quoteHistoryModal.addEventListener('shown.bs.modal', function() {
+            loadQuoteHistory();
+        });
+    }
+    
+    // 监听搜索框的回车事件
+    const searchInput = document.getElementById('quoteHistorySearch');
+    if (searchInput) {
+        searchInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                searchQuoteHistory();
+            }
+        });
+    }
+});
 

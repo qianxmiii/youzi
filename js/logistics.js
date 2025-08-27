@@ -102,8 +102,13 @@ function calculate() {
         // 计算实重 (kg)
         let rowWeight = weight.mul(quantity).mul(100).ceil().div(100); // 保留两位小数并向上取整
 
-        // 计算材积重 (kg)
-        let dimensionWeight = length.mul(width).mul(height).mul(quantity).div(6000).ceil(); // 向上取整
+        // 计算材积重 (kg) —— 与派送方式联动（快递5000 使用 5000，否则使用 6000）
+        let dimensionWeight = length
+            .mul(width)
+            .mul(height)
+            .mul(quantity)
+            .div(volumeRatio)
+            .ceil(); // 向上取整
 
         // 检查派送方式为“快递派”时，调整实重和材积重
         if (deliveryMethod == "快递派") {

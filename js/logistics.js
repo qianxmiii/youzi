@@ -1,6 +1,6 @@
 // 新增常量 exchange_rate
-const exchange_rate = 7.15; //美元汇率
-const cost_exchange_rate = 7.2; //美元汇率
+const exchange_rate = 7.1; //美元汇率
+const cost_exchange_rate = 7.18; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 let addFee = new Decimal(0); //其他费用
@@ -804,8 +804,8 @@ function showCost(origin,country,channel,postcode,weight,withBattery){
 // 获取成本列的 Tooltip 元素
 const costTooltip = document.getElementById("cost-tooltip");
 
-// 监听鼠标悬停事件
-costTooltip.addEventListener("mouseenter", function () {
+// 监听鼠标悬停事件（容错：元素可能不存在或未初始化）
+if (costTooltip) costTooltip.addEventListener("mouseenter", function () {
     // 获取必要的参数
     const origin = document.getElementById("origin-select").value;
     const country = document.getElementById("country-select").value;
@@ -819,16 +819,22 @@ costTooltip.addEventListener("mouseenter", function () {
 
     // 更新 Tooltip 内容
     if (cost) {
-        const tooltipInstance = bootstrap.Tooltip.getInstance(costTooltip);
-        if (tooltipInstance) {
+        let tooltipInstance = bootstrap.Tooltip.getInstance(costTooltip);
+        if (!tooltipInstance) {
+            tooltipInstance = new bootstrap.Tooltip(costTooltip, {
+                placement: "top",
+                trigger: "hover",
+                title: `${cost}`
+            });
+        } else {
             tooltipInstance.setContent({ '.tooltip-inner': `${cost}` });
-            tooltipInstance.show();
         }
+        tooltipInstance.show();
     }
 });
 
 // 监听鼠标离开事件
-costTooltip.addEventListener("mouseleave", function () {
+if (costTooltip) costTooltip.addEventListener("mouseleave", function () {
     const tooltipInstance = bootstrap.Tooltip.getInstance(costTooltip);
     if (tooltipInstance) {
         tooltipInstance.hide();

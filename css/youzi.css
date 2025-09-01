@@ -957,3 +957,76 @@ td input.form-control {
 #cost-tooltip + .tooltip.bs-tooltip-right .tooltip-arrow::after {
     border-right-color: #007bff !important;
 }
+
+/* 提货费tooltip特殊样式 */
+#pickup-fee + .tooltip .tooltip-inner {
+    background-color: #fff !important;
+    color: #495057 !important;
+    border: 2px solid #ff6600 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(255, 102, 0, 0.3) !important;
+    font-weight: 400 !important;
+    font-size: 0.85rem !important;
+    padding: 0.75rem 1rem !important;
+    max-width: 500px !important;
+    min-width: 350px !important;
+    text-align: left !important;
+    line-height: 1.4 !important;
+}
+
+/* 提货费tooltip中推荐车型的样式 */
+#pickup-fee + .tooltip .tooltip-inner strong {
+    color: #ff6600 !important;
+    font-weight: bold !important;
+}
+
+/* 提货费tooltip中推荐车型信息的样式 */
+#pickup-fee + .tooltip .tooltip-inner span {
+    color: #ff6600 !important;
+    font-weight: normal !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: #ff6600 !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-top .tooltip-arrow::after {
+    border-top-color: #fff !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-bottom .tooltip-arrow::before {
+    border-bottom-color: #ff6600 !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-bottom .tooltip-arrow::after {
+    border-bottom-color: #fff !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-left .tooltip-arrow::before {
+    border-left-color: #ff6600 !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-left .tooltip-arrow::after {
+    border-left-color: #fff !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-right .tooltip-arrow::before {
+    border-right-color: #ff6600 !important;
+}
+
+#pickup-fee + .tooltip.bs-tooltip-right .tooltip-arrow::after {
+    border-right-color: #fff !important;
+}
+
+/* 全局tooltip样式 - 去掉半透明效果 */
+.tooltip {
+    opacity: 1 !important;
+}
+
+.tooltip.show {
+    opacity: 1 !important;
+}
+
+.tooltip-inner {
+    opacity: 1 !important;
+}

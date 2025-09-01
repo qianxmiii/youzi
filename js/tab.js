@@ -829,27 +829,27 @@ function calculatePrice(region,channel,zipcode,weight) {
         document.getElementById("t4_priceResult").innerHTML = "单价：请输入有效的邮编和重量";
         return;
     }
-    // // 优先承运商配置 先注释掉，后面来调试
-    // const carrier = (document.getElementById('t4_carrier') || {}).value;
-    // if (carrier && typeof getCarrierPrice === 'function') {
-    //     const price = getCarrierPrice({ carrier, channel, origin: region, zipcode, weight });
-    //     if (price != null) {
-    //         document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
-    //         // 高亮承运商表格对应单元格
-    //         try {
-    //             renderPriceTable();
-    //             const effectiveBreaks = (typeof getEffectiveBreaks === 'function') ? getEffectiveBreaks(carrier, channel) : [];
-    //             const weightIndex = (typeof getWeightIndexByBreaks === 'function') ? getWeightIndexByBreaks(effectiveBreaks, weight) : 0;
-    //             const cfg = (typeof getCarrierCfg === 'function') ? getCarrierCfg(carrier) : null;
-    //             const zipGroups = (cfg && cfg.channels && cfg.channels[channel] && cfg.channels[channel].zipGroups) || (cfg && cfg.zipGroups) || [];
-    //             const zipLabel = (typeof getZipLabelByGroups === 'function') ? getZipLabelByGroups(zipGroups, zipcode) : '';
-    //             if (typeof highlightCarrierPriceCell === 'function') {
-    //                 highlightCarrierPriceCell(zipLabel, weightIndex, region);
-    //             }
-    //         } catch (e) { console.warn('highlight carrier cell error', e); }
-    //         return price;
-    //     }
-    // }
+    // 优先承运商配置 先注释掉，后面来调试
+    const carrier = (document.getElementById('t4_carrier') || {}).value;
+    if (carrier && typeof getCarrierPrice === 'function') {
+        const price = getCarrierPrice({ carrier, channel, origin: region, zipcode, weight });
+        if (price != null) {
+            document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
+            // 高亮承运商表格对应单元格
+            try {
+                renderPriceTable();
+                const effectiveBreaks = (typeof getEffectiveBreaks === 'function') ? getEffectiveBreaks(carrier, channel) : [];
+                const weightIndex = (typeof getWeightIndexByBreaks === 'function') ? getWeightIndexByBreaks(effectiveBreaks, weight) : 0;
+                const cfg = (typeof getCarrierCfg === 'function') ? getCarrierCfg(carrier) : null;
+                const zipGroups = (cfg && cfg.channels && cfg.channels[channel] && cfg.channels[channel].zipGroups) || (cfg && cfg.zipGroups) || [];
+                const zipLabel = (typeof getZipLabelByGroups === 'function') ? getZipLabelByGroups(zipGroups, zipcode) : '';
+                if (typeof highlightCarrierPriceCell === 'function') {
+                    highlightCarrierPriceCell(zipLabel, weightIndex, region);
+                }
+            } catch (e) { console.warn('highlight carrier cell error', e); }
+            return price;
+        }
+    }
 
     // 回退到旧逻辑
     const area = getRegionByZip(zipcode);

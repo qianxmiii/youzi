@@ -497,11 +497,20 @@ function getCarrierCfg(carrier) {
 function getWeightIndexByBreaks(breaks, weight) {
     const list = breaks || [];
     const w = Number(weight || 0);
-    for (let i = 0; i < list.length; i++) {
-        if (w < list[i]) return i; // 小于首断点 → 返回 0（首断点档，视为低消）
+    
+    // 如果没有断点，返回0
+    if (list.length === 0) return 0;
+    
+    // 从最后一个断点开始向前查找，找到第一个大于等于当前重量的断点
+    // 这样确保找到最合适的档位（该公斤段及以上的公斤适用于这个价格）
+    for (let i = list.length - 1; i >= 0; i--) {
+        if (w >= list[i]) {
+            return i;
+        }
     }
-    // 大于等于最后一个断点 → 归到最后一档（lastKG+）
-    return Math.max(0, list.length - 1);
+    
+    // 如果重量小于所有断点，匹配到第一个档位（MOQ档位）
+    return 0;
 }
 
 function getZipLabelByGroups(groups, zipcode) {
@@ -607,6 +616,8 @@ function showToast(message, type = 'info') {
         alert(message);
     }
 }
+
+
 
 // 页面加载完成后初始化历史记录显示
 document.addEventListener('DOMContentLoaded', function() {

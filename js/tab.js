@@ -87,19 +87,26 @@
      currentPage = 1;
  }
 
- // 搜索功能
- const searchInput = document.getElementById('searchInput');
- searchInput.addEventListener('input', function () {
-     const keyword = this.value.trim().toLowerCase();
-     const filteredTerms = allTerms.filter(term => 
-         term.chinese.toLowerCase().includes(keyword) || 
-         term.english.toLowerCase().includes(keyword)
-     );
-     renderTerms(filteredTerms);
+ // 初始化搜索功能
+function initSearchFunction() {
+    const searchInput = document.getElementById('searchInput');
+    if (!searchInput) {
+        console.warn('搜索输入框未找到，将在DOM加载完成后重试');
+        return;
+    }
+    
+    searchInput.addEventListener('input', function () {
+        const keyword = this.value.trim().toLowerCase();
+        const filteredTerms = allTerms.filter(term => 
+            term.chinese.toLowerCase().includes(keyword) || 
+            term.english.toLowerCase().includes(keyword)
+        );
+        renderTerms(filteredTerms);
 
-     // 重置当前页为第一页
-     currentPage = 1;
- });
+        // 重置当前页为第一页
+        currentPage = 1;
+    });
+}
 
  // 清除搜索
  function clearSearch() {
@@ -688,52 +695,163 @@ function calculateCostDDP() {
  * Tab 4 - 快递派查价
  */
 // 动态生成快递派价格表格
-function renderPriceTable() {
-    const channel = document.getElementById("t4_channel").value;
-    const southChinaTableElement = document.getElementById("southChinaPriceTable").getElementsByTagName("tbody")[0];
-    const eastChinaTableElement = document.getElementById("eastChinaPriceTable").getElementsByTagName("tbody")[0];
-    southChinaTableElement.innerHTML = ""; // 清空表格内容
-    eastChinaTableElement.innerHTML = ""; // 清空表格内容
-
-    // 获取当前渠道的价格数据
-    const currentPriceTable = priceTable[channel];
-
-    // 遍历价格数据表
-    Object.keys(currentPriceTable).forEach(area => {
-        // 添加华南价格行
-        const southChinaRow = document.createElement("tr");
-        southChinaRow.innerHTML = `
-            <td>${area}</td>
-            <td>${currentPriceTable[area]["华南"][0]}</td>
-            <td>${currentPriceTable[area]["华南"][1]}</td>
-            <td>${currentPriceTable[area]["华南"][2]}</td>
-            <td>${currentPriceTable[area]["华南"][3]}</td>
-            <td>${currentPriceTable[area]["华南"][4]}</td>
-        `;
-        southChinaTableElement.appendChild(southChinaRow);
-
-        // 添加华东价格行
-        const eastChinaRow = document.createElement("tr");
-        eastChinaRow.innerHTML = `
-            <td>${area}</td>
-            <td>${currentPriceTable[area]["华东"][0]}</td>
-            <td>${currentPriceTable[area]["华东"][1]}</td>
-            <td>${currentPriceTable[area]["华东"][2]}</td>
-            <td>${currentPriceTable[area]["华东"][3]}</td>
-            <td>${currentPriceTable[area]["华东"][4]}</td>
-        `;
-        eastChinaTableElement.appendChild(eastChinaRow);
+function initCarrierSelect() {
+    const sel = document.getElementById('t4_carrier');
+    if (!sel || !window.data || !window.data.expressPricing) return;
+    const carriers = Object.keys(window.data.expressPricing);
+    sel.innerHTML = carriers.map(c => `<option value="${c}">${c}</option>`).join('');
+    sel.addEventListener('change', function() {
+        syncChannelWithCarrier();
+        renderPriceTable();
     });
+}
+
+function renderPriceTable() {
+    const southTable = document.getElementById("southChinaPriceTable");
+    const eastTable = document.getElementById("eastChinaPriceTable");
+    const southTbody = southTable?.getElementsByTagName("tbody")[0];
+    const eastTbody = eastTable?.getElementsByTagName("tbody")[0];
+    if (!southTbody || !eastTbody) return;
+
+    southTbody.innerHTML = "";
+    eastTbody.innerHTML = "";
+
+    const carrier = (document.getElementById('t4_carrier') || {}).value;
+    const cfg = typeof getCarrierCfg === 'function' ? getCarrierCfg(carrier) : null;
+
+    // 如果未配置承运商，则回退到原有 channel 表逻辑
+    if (!cfg) {
+        const channel = document.getElementById("t4_channel").value;
+        const currentPriceTable = priceTable[channel] || {};
+        Object.keys(currentPriceTable).forEach(area => {
+            const southRow = document.createElement("tr");
+            southRow.innerHTML = `
+                <td>${area}</td>
+                <td>${currentPriceTable[area]["华南"][0]}</td>
+                <td>${currentPriceTable[area]["华南"][1]}</td>
+                <td>${currentPriceTable[area]["华南"][2]}</td>
+                <td>${currentPriceTable[area]["华南"][3]}</td>
+                <td>${currentPriceTable[area]["华南"][4]}</td>
+            `;
+            southTbody.appendChild(southRow);
+
+            const eastRow = document.createElement("tr");
+            eastRow.innerHTML = `
+                <td>${area}</td>
+                <td>${currentPriceTable[area]["华东"][0]}</td>
+                <td>${currentPriceTable[area]["华东"][1]}</td>
+                <td>${currentPriceTable[area]["华东"][2]}</td>
+                <td>${currentPriceTable[area]["华东"][3]}</td>
+                <td>${currentPriceTable[area]["华东"][4]}</td>
+            `;
+            eastTbody.appendChild(eastRow);
+        });
+        return;
+    }
+
+    // 基于承运商配置动态渲染
+    const channel = (document.getElementById("t4_channel") || {}).value;
+    const effectiveBreaks = typeof getEffectiveBreaks === 'function' ? getEffectiveBreaks(carrier, channel) : (cfg?.weightBreaks || []);
+    const headers = typeof getWeightHeaders === 'function' ? getWeightHeaders(effectiveBreaks) : [];
+    // 更新两个表头
+    const southThead = southTable.querySelector('thead tr');
+    const eastThead = eastTable.querySelector('thead tr');
+    if (southThead && headers.length) {
+        southThead.innerHTML = `<th>区域</th>` + headers.map(h => `<th>${h}</th>`).join('');
+    }
+    if (eastThead && headers.length) {
+        eastThead.innerHTML = `<th>区域</th>` + headers.map(h => `<th>${h}</th>`).join('');
+    }
+
+    // 优先渠道价、否则承运商级价
+    const prices = (cfg.channels && cfg.channels[channel] && cfg.channels[channel].prices) || cfg.prices || {};
+
+    // 如果缺少一侧区域，则使用同价逻辑渲染
+    const southPrices = prices?.["华南"] || prices?.["华东"] || prices?.['_default'] || {};
+    const eastPrices  = prices?.["华东"] || prices?.["华南"] || prices?.['_default'] || {};
+
+    // 华南
+    Object.keys(southPrices).forEach(label => {
+        const row = document.createElement('tr');
+        const arr = southPrices[label] || [];
+        row.innerHTML = `<td>${label}</td>` + headers.map((_,i) => `<td>${arr[i] ?? '-'}</td>`).join('');
+        southTbody.appendChild(row);
+    });
+    // 华东
+    Object.keys(eastPrices).forEach(label => {
+        const row = document.createElement('tr');
+        const arr = eastPrices[label] || [];
+        row.innerHTML = `<td>${label}</td>` + headers.map((_,i) => `<td>${arr[i] ?? '-'}</td>`).join('');
+        eastTbody.appendChild(row);
+    });
+}
+
+// 页面加载后初始化承运商下拉与价格表
+document.addEventListener('DOMContentLoaded', function () {
+    // 初始化搜索功能
+    initSearchFunction();
+    
+    try {
+        initCarrierSelect();
+    } catch (e) { console.warn('initCarrierSelect error', e); }
+    try {
+        syncChannelWithCarrier();
+        renderPriceTable();
+    } catch (e) { console.warn('renderPriceTable error', e); }
+});
+
+// 当承运商切换时，同步渠道下拉为该承运商可用渠道
+function syncChannelWithCarrier() {
+    const carrier = (document.getElementById('t4_carrier') || {}).value;
+    const channelSel = document.getElementById('t4_channel');
+    if (!carrier || !channelSel || typeof getCarrierCfg !== 'function') return;
+    const cfg = getCarrierCfg(carrier);
+    if (!cfg || !cfg.channels) return;
+
+    const available = Object.keys(cfg.channels);
+    if (available.length === 0) return;
+
+    // 重建渠道下拉，仅展示该承运商支持的渠道
+    const current = channelSel.value;
+    channelSel.innerHTML = available.map(ch => `<option value="${ch}">${ch}</option>`).join('');
+    // 保持当前值如在可选范围，否则选第一个
+    if (available.includes(current)) {
+        channelSel.value = current;
+    }
+    if (!available.includes(channelSel.value)) {
+        channelSel.value = available[0];
+    }
 }
 
 // 计算价格并突出显示对应的单元格
 function calculatePrice(region,channel,zipcode,weight) {
-
     if (!zipcode || isNaN(weight) || weight <= 0) {
         document.getElementById("t4_priceResult").innerHTML = "单价：请输入有效的邮编和重量";
         return;
     }
-    
+    // // 优先承运商配置 先注释掉，后面来调试
+    // const carrier = (document.getElementById('t4_carrier') || {}).value;
+    // if (carrier && typeof getCarrierPrice === 'function') {
+    //     const price = getCarrierPrice({ carrier, channel, origin: region, zipcode, weight });
+    //     if (price != null) {
+    //         document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
+    //         // 高亮承运商表格对应单元格
+    //         try {
+    //             renderPriceTable();
+    //             const effectiveBreaks = (typeof getEffectiveBreaks === 'function') ? getEffectiveBreaks(carrier, channel) : [];
+    //             const weightIndex = (typeof getWeightIndexByBreaks === 'function') ? getWeightIndexByBreaks(effectiveBreaks, weight) : 0;
+    //             const cfg = (typeof getCarrierCfg === 'function') ? getCarrierCfg(carrier) : null;
+    //             const zipGroups = (cfg && cfg.channels && cfg.channels[channel] && cfg.channels[channel].zipGroups) || (cfg && cfg.zipGroups) || [];
+    //             const zipLabel = (typeof getZipLabelByGroups === 'function') ? getZipLabelByGroups(zipGroups, zipcode) : '';
+    //             if (typeof highlightCarrierPriceCell === 'function') {
+    //                 highlightCarrierPriceCell(zipLabel, weightIndex, region);
+    //             }
+    //         } catch (e) { console.warn('highlight carrier cell error', e); }
+    //         return price;
+    //     }
+    // }
+
+    // 回退到旧逻辑
     const area = getRegionByZip(zipcode);
     if (!area || !priceTable[channel] || !priceTable[channel][area] || !priceTable[channel][area][region]) {
         document.getElementById("t4_priceResult").innerHTML = "单价：邮编不在配送范围内";
@@ -742,17 +860,36 @@ function calculatePrice(region,channel,zipcode,weight) {
     }
 
     renderPriceTable();
-
     const weightIndex = getWeightIndex(weight);
-    
     const price = priceTable[channel][area][region][weightIndex];
-
     document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
-
-    // 突出显示对应的单元格
     highlightPriceCell(area, region, weightIndex);
-
     return price;
+}
+
+// 高亮承运商动态表格的单元格（根据 zipLabel 行与 weightIdx 列）
+function highlightCarrierPriceCell(zipLabel, weightIdx) {
+    // 复用旧的清理逻辑，去除所有历史高亮
+    if (typeof clearHighlightedCells === 'function') {
+        try { clearHighlightedCells(); } catch(e) {}
+    }
+
+    const tables = [document.getElementById('southChinaPriceTable'), document.getElementById('eastChinaPriceTable')];
+    tables.forEach(tbl => {
+        if (!tbl) return;
+        const rows = tbl.querySelectorAll('tbody tr');
+        rows.forEach(row => {
+            const first = row.querySelector('td');
+            if (first && first.textContent.trim() === String(zipLabel)) {
+                const tds = row.querySelectorAll('td');
+                const target = tds[1 + weightIdx]; // 第0列为标签
+                if (target) {
+                    // 与原有高亮方式一致：包一层 span.highlight，避免样式不一致
+                    target.innerHTML = `<span class="highlight">${target.textContent}</span>`;
+                }
+            }
+        });
+    });
 }
 
 /**

@@ -251,7 +251,7 @@
             <tbody>
               <tr>            
                 <!-- 地址 -->
-                <td><input type="text" id="address" class="form-control uppercase" onchange="updatePostcode()" /></td>
+                <td><input type="text" id="address" class="form-control uppercase" onchange="updatePostcode()" oninput="checkSpecificAddress()" /></td>
                 <!-- 邮编 -->
                 <td><input type="text" id="postcode" class="form-control" oninput="checkRemoteAddress()" /></td>
                 <!-- 箱数 -->
@@ -817,6 +817,16 @@
                       <option value="空派带电">空派带电</option>
                     </select>
                     <label for="t4_channel">渠道</label>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 承运商选择（可选） -->
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <div class="form-floating">
+                    <select class="form-select" id="t4_carrier"></select>
+                    <label for="t4_carrier">承运商</label>
                   </div>
                 </div>
               </div>

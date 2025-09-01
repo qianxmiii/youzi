@@ -874,3 +874,86 @@ td input.form-control {
     font-size: 0.85rem;
   }
 }
+
+/* 特定地址运输天数提示样式 */
+.transit-time-tooltip {
+    font-size: 0.875rem;
+    line-height: 1.4;
+}
+
+.transit-time-tooltip strong {
+    color: #28a745;
+    font-weight: 600;
+}
+
+/* 地址输入框特定地址样式 */
+#address.specific-address {
+    border-color: #28a745 !important;
+    background-color: #f8fff9 !important;
+    box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+}
+
+/* 运输天数提示tooltip样式 */
+.tooltip-inner {
+    max-width: 300px;
+    text-align: left;
+    padding: 0.75rem;
+    background-color: #fff;
+    color: #495057;
+    border: 1px solid #dee2e6;
+    border-radius: 0.375rem;
+    box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+}
+
+.tooltip.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: #dee2e6;
+}
+
+.tooltip.bs-tooltip-top .tooltip-arrow::after {
+    border-top-color: #fff;
+}
+
+/* 成本提示tooltip特殊样式 */
+#cost-tooltip + .tooltip .tooltip-inner {
+    background-color: #007bff !important;
+    color: white !important;
+    border: 2px solid #0056b3 !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3) !important;
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    padding: 0.75rem 1rem !important;
+    max-width: 350px !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-top .tooltip-arrow::before {
+    border-top-color: #0056b3 !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-top .tooltip-arrow::after {
+    border-top-color: #007bff !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-bottom .tooltip-arrow::before {
+    border-bottom-color: #0056b3 !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-bottom .tooltip-arrow::after {
+    border-bottom-color: #007bff !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-left .tooltip-arrow::before {
+    border-left-color: #0056b3 !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-left .tooltip-arrow::after {
+    border-left-color: #007bff !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-right .tooltip-arrow::before {
+    border-right-color: #0056b3 !important;
+}
+
+#cost-tooltip + .tooltip.bs-tooltip-right .tooltip-arrow::after {
+    border-right-color: #007bff !important;
+}

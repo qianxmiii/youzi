@@ -295,3 +295,58 @@ function toggleOverWeightFeeInput() {
     // 触发更新
     updateQuote();
 }
+
+// 显示特定地址的运输天数信息
+function showSpecificAddressTransitTime(address) {
+    // 移除之前的提示信息
+    removeTransitTimeTooltip();
+    
+    if (!address || typeof specificAddressTransitTime === 'undefined' || !specificAddressTransitTime[address]) {
+        return;
+    }
+
+    const addressConfig = specificAddressTransitTime[address];
+    const addressInput = document.getElementById("address");
+    
+    // 创建提示信息
+    let tooltipContent = `<div class="transit-time-tooltip">
+        <strong>${address} 运输天数配置:</strong><br>`;
+    
+    for (const [channel, days] of Object.entries(addressConfig)) {
+        tooltipContent += `${channel}: ${days} 天<br>`;
+    }
+    tooltipContent += '</div>';
+    
+    // 添加提示样式
+    addressInput.classList.add('specific-address');
+    
+    // 创建或更新tooltip
+    let tooltipInstance = bootstrap.Tooltip.getInstance(addressInput);
+    if (!tooltipInstance) {
+        tooltipInstance = new bootstrap.Tooltip(addressInput, {
+            html: true,
+            placement: 'top',
+            trigger: 'hover',
+            title: tooltipContent
+        });
+    } else {
+        tooltipInstance.setContent({ '.tooltip-inner': tooltipContent });
+    }
+}
+
+// 移除运输天数提示
+function removeTransitTimeTooltip() {
+    const addressInput = document.getElementById("address");
+    addressInput.classList.remove('specific-address');
+    
+    const tooltipInstance = bootstrap.Tooltip.getInstance(addressInput);
+    if (tooltipInstance) {
+        tooltipInstance.dispose();
+    }
+}
+
+// 检查特定地址并显示运输天数信息
+function checkSpecificAddress() {
+    const addressInput = document.getElementById("address").value.trim().toUpperCase();
+    showSpecificAddressTransitTime(addressInput);
+}

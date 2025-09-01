@@ -1,5 +1,8 @@
-const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+// 初始化Bootstrap tooltips
+function initBootstrapTooltips() {
+    const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+}
 
 // 获取当前时间并转为北京时间（UTC +8）
 function getBeijingTime() {
@@ -24,13 +27,13 @@ function getNextFriday() {
 /**
  * 获取时效
  */
-function getTransitTime(country, channel, postcode) {
+function getTransitTime(country, channel, postcode, address) {
     let transitTime = "";
     postcode = postcode != null ? postcode[0] : 0;
 
     switch (country) {
         case "美国":
-            transitTime = getTransitTimeUSA(channel, postcode);
+            transitTime = getTransitTimeUSA(channel, postcode, address);
             break;
         case "加拿大":
             transitTime = getTransitTimeCA(channel, postcode);
@@ -53,7 +56,15 @@ function getTransitTime(country, channel, postcode) {
 /**
  * 获取美国时效
  */
-function getTransitTimeUSA(channel, postcode) {
+function getTransitTimeUSA(channel, postcode, address) {
+    // 优先检查特定地址的配置
+    if (address && typeof specificAddressTransitTime !== 'undefined' && specificAddressTransitTime[address]) {
+        const addressConfig = specificAddressTransitTime[address];
+        if (addressConfig[channel]) {
+            return addressConfig[channel];
+        }
+    }
+
     const usaTransitData = transitTimeData["USA"]; // 获取美国时效数据
     if (!usaTransitData || !usaTransitData[channel]) {
         return ""; // 如果渠道不存在，返回空字符串
@@ -478,6 +489,77 @@ function updateSummaryFromHistory(data) {
     });
 }
 
+// === 承运商定制查价通用函数 ===
+function getCarrierCfg(carrier) {
+    return (window.data && window.data.expressPricing && window.data.expressPricing[carrier]) || null;
+}
+
+function getWeightIndexByBreaks(breaks, weight) {
+    const list = breaks || [];
+    const w = Number(weight || 0);
+    for (let i = 0; i < list.length; i++) {
+        if (w < list[i]) return i; // 小于首断点 → 返回 0（首断点档，视为低消）
+    }
+    // 大于等于最后一个断点 → 归到最后一档（lastKG+）
+    return Math.max(0, list.length - 1);
+}
+
+function getZipLabelByGroups(groups, zipcode) {
+    const z = String(zipcode || "");
+    for (const g of (groups || [])) {
+        if ((g.prefixes || []).some(p => z.startsWith(p))) return g.label;
+    }
+    return "_default";
+}
+
+// 支持承运商下多渠道：优先取子渠道配置，缺失时回退承运商级默认
+function getCarrierPrice(params) {
+    const { carrier, channel, origin, zipcode, weight } = params;
+    const carrierCfg = getCarrierCfg(carrier);
+    if (!carrierCfg) return null;
+
+    const channelCfg = (carrierCfg.channels && carrierCfg.channels[channel]) || {};
+
+    const weightBreaks = channelCfg.weightBreaks || carrierCfg.weightBreaks || [];
+    const zipGroups = channelCfg.zipGroups || carrierCfg.zipGroups || [];
+    const prices = (channelCfg.prices || carrierCfg.prices || {});
+
+    const idx = getWeightIndexByBreaks(weightBreaks, weight);
+    const zipLabel = getZipLabelByGroups(zipGroups, zipcode);
+    // 区域价格回退：优先 origin（华东/华南），否则用另一区域或 _default
+    const otherRegion = origin === '华南' ? '华东' : '华南';
+    const regionMap = prices[origin] || prices[otherRegion] || prices['_default'] || null;
+    if (!regionMap) return null;
+    const row = regionMap[zipLabel] || regionMap["_default"] || null;
+    if (!row) return null;
+    return row[idx] != null ? row[idx] : null;
+}
+
+function getWeightHeaders(breaks) {
+    if (!breaks || breaks.length === 0) return ["∞KG+"]; // 兜底
+    // 仅展示 断点KG+；首断点作为低消（包含小于首断点）
+    return breaks.map(b => `${b}KG+`);
+}
+
+// 获取用于渲染的最终断点（考虑渠道覆盖）
+function getEffectiveBreaks(carrier, channel) {
+    const cfg = getCarrierCfg(carrier);
+    if (!cfg) return [];
+    const ch = (cfg.channels && cfg.channels[channel]) || {};
+    return ch.weightBreaks || cfg.weightBreaks || [];
+}
+
+// 规范化价格数组长度以匹配列头
+function normalizePriceRow(arr, headersLen) {
+    if (!Array.isArray(arr)) return [];
+    // 如果数据仍包含“<首断点”那一档（长度=断点数+1），去掉第一个
+    if (arr.length === headersLen + 1) return arr.slice(1);
+    // 否则截断或填充到相同长度
+    if (arr.length > headersLen) return arr.slice(0, headersLen);
+    if (arr.length < headersLen) return arr.concat(new Array(headersLen - arr.length).fill('-'));
+    return arr;
+}
+
 /**
  * 高亮选中的历史记录
  */
@@ -528,6 +610,9 @@ function showToast(message, type = 'info') {
 
 // 页面加载完成后初始化历史记录显示
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化Bootstrap tooltips
+    initBootstrapTooltips();
+    
     // 延迟一点时间确保其他组件已加载
     setTimeout(() => {
         updateHistoryDisplay();

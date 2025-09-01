@@ -470,7 +470,7 @@ function updateQuote() {
         notes = `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         if (data.isDDU) notes += 'DDU ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
@@ -484,7 +484,7 @@ function updateQuote() {
         notes = `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         if (data.isDDU) notes += 'DDU ';
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days`;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd`;
@@ -492,14 +492,14 @@ function updateQuote() {
     } else if (data.quoteType === "通用-单价") {
         // 构建备注内容
         notes = `${data.address} ${data.channel}: ${priceUsd} usd per kg `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days`;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
 
     } else if (data.quoteType === "通用-RMB") {
         // 构建备注内容
         notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         if (data.isDDU) notes += 'DDU ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} 天 ${MOQ} `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
         if (data.isDDU) notes += getDDUFee(data.country, 0);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB");
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "RMB");
@@ -512,7 +512,7 @@ function updateQuote() {
         notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         if (data.isDDU) notes += 'DDU ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/cbm * ${chargeCBM}cbm = ${totalPriceRMB}RMB `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} 天 ${MOQ} `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
         if (data.isDDU) notes += getDDUFee(data.country, 0); 
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
         notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
@@ -524,7 +524,7 @@ function updateQuote() {
         notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
         if (data.isDDU) notes += getDDUFee(data.country, 1);
@@ -539,7 +539,7 @@ function updateQuote() {
         notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ? 'DDU ' : 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days`;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
@@ -548,7 +548,7 @@ function updateQuote() {
         notes = `${data.address} = ${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         if (data.isDDU) notes += 'DDU ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
@@ -561,7 +561,7 @@ function updateQuote() {
         notes = `To ${data.address} ${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         if (data.isDDU) notes += 'DDU ';
         notes += `${data.channel}: ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode)} days ${MOQ} `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
@@ -801,45 +801,53 @@ function showCost(origin,country,channel,postcode,weight,withBattery){
     return cost;
 }
 
-// 获取成本列的 Tooltip 元素
-const costTooltip = document.getElementById("cost-tooltip");
+// 初始化成本提示功能
+function initCostTooltip() {
+    // 获取成本列的 Tooltip 元素
+    const costTooltip = document.getElementById("cost-tooltip");
+    
+    if (!costTooltip) {
+        console.warn('成本提示元素未找到，将在DOM加载完成后重试');
+        return;
+    }
 
-// 监听鼠标悬停事件（容错：元素可能不存在或未初始化）
-if (costTooltip) costTooltip.addEventListener("mouseenter", function () {
-    // 获取必要的参数
-    const origin = document.getElementById("origin-select").value;
-    const country = document.getElementById("country-select").value;
-    const channel = document.getElementById("delivery-method-select").value;
-    const postcode = document.getElementById("postcode").value;
-    const weight = parseFloat(document.getElementById("chargeWeight").value) || 0;
-    const withBattery = document.getElementById("battery_check").checked;
+    // 监听鼠标悬停事件
+    costTooltip.addEventListener("mouseenter", function () {
+        // 获取必要的参数
+        const origin = document.getElementById("origin-select").value;
+        const country = document.getElementById("country-select").value;
+        const channel = document.getElementById("delivery-method-select").value;
+        const postcode = document.getElementById("postcode").value;
+        const weight = parseFloat(document.getElementById("chargeWeight").value) || 0;
+        const withBattery = document.getElementById("battery_check").checked;
 
-    // 调用 showCost 函数
-    const cost = showCost(origin, country, channel, postcode, weight, withBattery);
+        // 调用 showCost 函数
+        const cost = showCost(origin, country, channel, postcode, weight, withBattery);
 
-    // 更新 Tooltip 内容
-    if (cost) {
-        let tooltipInstance = bootstrap.Tooltip.getInstance(costTooltip);
-        if (!tooltipInstance) {
-            tooltipInstance = new bootstrap.Tooltip(costTooltip, {
-                placement: "top",
-                trigger: "hover",
-                title: `${cost}`
-            });
-        } else {
-            tooltipInstance.setContent({ '.tooltip-inner': `${cost}` });
+        // 更新 Tooltip 内容
+        if (cost) {
+            let tooltipInstance = bootstrap.Tooltip.getInstance(costTooltip);
+            if (!tooltipInstance) {
+                tooltipInstance = new bootstrap.Tooltip(costTooltip, {
+                    placement: "top",
+                    trigger: "hover",
+                    title: `${cost}`
+                });
+            } else {
+                tooltipInstance.setContent({ '.tooltip-inner': `${cost}` });
+            }
+            tooltipInstance.show();
         }
-        tooltipInstance.show();
-    }
-});
+    });
 
-// 监听鼠标离开事件
-if (costTooltip) costTooltip.addEventListener("mouseleave", function () {
-    const tooltipInstance = bootstrap.Tooltip.getInstance(costTooltip);
-    if (tooltipInstance) {
-        tooltipInstance.hide();
-    }
-});
+    // 监听鼠标离开事件
+    costTooltip.addEventListener("mouseleave", function () {
+        const tooltipInstance = bootstrap.Tooltip.getInstance(costTooltip);
+        if (tooltipInstance) {
+            tooltipInstance.hide();
+        }
+    });
+}
 
 // 总利润 悬停显示
 function updateProfitRateTooltip(totalProfitRmb) {
@@ -862,50 +870,58 @@ function updateProfitRateTooltip(totalProfitRmb) {
     }
 }
 
-// 获取提货费输入框元素
-const pickupFeeInput = document.getElementById("pickup-fee");
-
-// 监听鼠标悬停事件
-pickupFeeInput.addEventListener("mouseenter", function () {
-    // 获取实重和方数
-    const totalWeight = parseFloat(document.getElementById("weight").value) || 0;
-    const totalVolume = parseFloat(document.getElementById("volume").value) || 0;
-
-    // 获取可选车型
-    const availableVehicles = getAvailableVehicles(totalWeight, totalVolume);
-
-    // 生成 Tooltip 内容
-    let tooltipContent = "可选车型：\n";
-    if (availableVehicles.length > 0) {
-        availableVehicles.forEach(vehicle => {
-            tooltipContent += `- ${vehicle.name}（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）\n`;
-        });
-    } else {
-        tooltipContent = "无合适车型，请调整重量或方数。";
+// 初始化提货费提示功能
+function initPickupFeeTooltip() {
+    // 获取提货费输入框元素
+    const pickupFeeInput = document.getElementById("pickup-fee");
+    
+    if (!pickupFeeInput) {
+        console.warn('提货费提示元素未找到，将在DOM加载完成后重试');
+        return;
     }
 
-    // 设置 Tooltip 内容
-    const tooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
-    if (tooltipInstance) {
-        tooltipInstance.setContent({ '.tooltip-inner': tooltipContent });
-        tooltipInstance.show();
-    } else {
-        // 初始化 Tooltip
-        new bootstrap.Tooltip(pickupFeeInput, {
-            title: tooltipContent,
-            placement: "top", // Tooltip 显示在顶部
-            trigger: "hover"  // 鼠标悬停时显示
-        });
-    }
-});
+    // 监听鼠标悬停事件
+    pickupFeeInput.addEventListener("mouseenter", function () {
+        // 获取实重和方数
+        const totalWeight = parseFloat(document.getElementById("weight").value) || 0;
+        const totalVolume = parseFloat(document.getElementById("volume").value) || 0;
 
-// 监听鼠标离开事件
-pickupFeeInput.addEventListener("mouseleave", function () {
-    const tooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
-    if (tooltipInstance) {
-        tooltipInstance.hide();
-    }
-});
+        // 获取可选车型
+        const availableVehicles = getAvailableVehicles(totalWeight, totalVolume);
+
+        // 生成 Tooltip 内容
+        let tooltipContent = "可选车型：\n";
+        if (availableVehicles.length > 0) {
+            availableVehicles.forEach(vehicle => {
+                tooltipContent += `- ${vehicle.name}（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）\n`;
+            });
+        } else {
+            tooltipContent = "无合适车型，请调整重量或方数。";
+        }
+
+        // 设置 Tooltip 内容
+        const tooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
+        if (tooltipInstance) {
+            tooltipInstance.setContent({ '.tooltip-inner': tooltipContent });
+            tooltipInstance.show();
+        } else {
+            // 初始化 Tooltip
+            new bootstrap.Tooltip(pickupFeeInput, {
+                title: tooltipContent,
+                placement: "top", // Tooltip 显示在顶部
+                trigger: "hover"  // 鼠标悬停时显示
+            });
+        }
+    });
+
+    // 监听鼠标离开事件
+    pickupFeeInput.addEventListener("mouseleave", function () {
+        const tooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
+        if (tooltipInstance) {
+            tooltipInstance.hide();
+        }
+    });
+}
 
 /**
  * 根据重量和方数筛选可选车型
@@ -1215,9 +1231,16 @@ function saveQuoteHistory() {
             isRemote: document.getElementById('remote-address').checked || false,
             hasBattery: document.getElementById('battery_check').checked || false,
             isOversize: document.getElementById('oversize_check').checked || false,
+            oversizeFee: parseFloat(document.getElementById('oversize-input').value) || 0,
+            oversizeQuantity: parseFloat(document.getElementById('oversize-quantity').value) || 0,
             isOverweight: document.getElementById('overweight_check').checked || false,
+            overweightFee: parseFloat(document.getElementById('overweight-input').value) || 0,
+            overweightQuantity: parseFloat(document.getElementById('overweight-quantity').value) || 0,
             isMOQ: document.getElementById('MOQ').checked || false,
+            moqValue: parseFloat(document.getElementById('moq-input').value) || 0,
             hasPickupFee: document.getElementById('pickup-fee-checkbox').checked || false,
+            pickupFeeRmb: parseFloat(document.getElementById('pickup-fee').value) || 0,
+            pickupFeeUsd: parseFloat(document.getElementById('pickup-fee-USD').value) || 0,
             isDDU: document.getElementById('ddu_check').checked || false,
             isUSD: document.getElementById('USD_check').checked || false,
             
@@ -1303,6 +1326,42 @@ function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
     
     pageData.forEach(record => {
         const row = document.createElement('tr');
+        // 构建费用显示信息
+        let feeInfo = [];
+        if (record.hasPickupFee && (record.pickupFeeRmb > 0 || record.pickupFeeUsd > 0)) {
+            const fees = [];
+            if (record.pickupFeeRmb > 0) fees.push(`¥${record.pickupFeeRmb}`);
+            if (record.pickupFeeUsd > 0) fees.push(`$${record.pickupFeeUsd}`);
+            feeInfo.push(`<span class="badge bg-info">提货费: ${fees.join(' / ')}</span>`);
+        }
+        if (record.isOversize && record.oversizeFee > 0) {
+            feeInfo.push(`<span class="badge bg-warning">超尺寸: ¥${record.oversizeFee}/箱</span>`);
+        }
+        if (record.isOverweight && record.overweightFee > 0) {
+            feeInfo.push(`<span class="badge bg-danger">超重: ¥${record.overweightFee}/箱</span>`);
+        }
+        if (record.isMOQ && record.moqValue > 0) {
+            feeInfo.push(`<span class="badge bg-secondary">MOQ: ${record.moqValue}kg</span>`);
+        }
+        
+        // 构建运费、偏远、带电等状态信息
+        let statusInfo = [];
+        if (record.isRemote) {
+            statusInfo.push(`<span class="badge bg-dark text-white" style="font-size: 0.7rem;">偏远</span>`);
+        }
+        if (record.hasBattery) {
+            statusInfo.push(`<span class="badge bg-success text-white" style="font-size: 0.7rem;">带电</span>`);
+        }
+        if (record.isDDU) {
+            statusInfo.push(`<span class="badge bg-primary text-white" style="font-size: 0.7rem;">DDU</span>`);
+        }
+        if (record.isUSD) {
+            statusInfo.push(`<span class="badge bg-warning text-dark" style="font-size: 0.7rem;">USD</span>`);
+        }
+        
+        const feeInfoHtml = feeInfo.join(' ');
+        const statusInfoHtml = statusInfo.join(' ');
+        
         row.innerHTML = `
             <td>${record.timestamp}</td>
             <td>${record.address}</td>
@@ -1311,7 +1370,11 @@ function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
             <td>${record.weight}</td>
             <td>${record.volume}</td>
             <td>${record.priceUsd}</td>
-            <td>${record.totalPriceUsd}</td>
+            <td>
+                <div style="font-weight: bold; font-size: 1.1rem; color: #dc3545; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">$${record.totalPriceUsd}</div>
+                <div style="margin-top: 2px;">${statusInfoHtml}</div>
+                <div style="margin-top: 2px;">${feeInfoHtml}</div>
+            </td>
             <td>
                 <button class="btn btn-sm btn-outline-primary" onclick="loadQuoteToForm('${record.id}')" title="加载到表单">
                     <i class="bi bi-arrow-clockwise"></i>
@@ -1455,11 +1518,24 @@ function loadQuoteToForm(quoteId) {
         document.getElementById('remote-address').checked = record.isRemote;
         document.getElementById('battery_check').checked = record.hasBattery;
         document.getElementById('oversize_check').checked = record.isOversize;
+        document.getElementById('oversize-input').value = record.oversizeFee || 0;
+        document.getElementById('oversize-quantity').value = record.oversizeQuantity || 0;
         document.getElementById('overweight_check').checked = record.isOverweight;
+        document.getElementById('overweight-input').value = record.overweightFee || 0;
+        document.getElementById('overweight-quantity').value = record.overweightQuantity || 0;
         document.getElementById('MOQ').checked = record.isMOQ;
+        document.getElementById('moq-input').value = record.moqValue || 0;
         document.getElementById('pickup-fee-checkbox').checked = record.hasPickupFee;
+        document.getElementById('pickup-fee').value = record.pickupFeeRmb || 0;
+        document.getElementById('pickup-fee-USD').value = record.pickupFeeUsd || 0;
         document.getElementById('ddu_check').checked = record.isDDU;
         document.getElementById('USD_check').checked = record.isUSD;
+        
+        // 触发各种输入框的显示/隐藏
+        toggleOverSizeFeeInput();
+        toggleOverWeightFeeInput();
+        toggleMOQInput();
+        togglePickupFeeInput();
         
         document.getElementById('quote-type').value = record.quoteType;
         document.getElementById('notes').value = record.notes;
@@ -1540,6 +1616,12 @@ function showToast(message) {
 
 // 页面加载完成后初始化报价历史记录功能
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化成本提示功能
+    initCostTooltip();
+    
+    // 初始化提货费提示功能
+    initPickupFeeTooltip();
+    
     // 监听报价历史记录模态框的显示事件
     const quoteHistoryModal = document.getElementById('quoteHistoryModal');
     if (quoteHistoryModal) {

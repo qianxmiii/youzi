@@ -890,10 +890,16 @@ function initPickupFeeTooltip() {
         const availableVehicles = getAvailableVehicles(totalWeight, totalVolume);
 
         // 生成 Tooltip 内容
-        let tooltipContent = "可选车型：\n";
+        let tooltipContent = "可选车型：<br>";
         if (availableVehicles.length > 0) {
-            availableVehicles.forEach(vehicle => {
-                tooltipContent += `- ${vehicle.name}（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）\n`;
+            availableVehicles.forEach((vehicle, index) => {
+                if (index === 0) {
+                    // 第一行特殊显示 - 推荐车型
+                    tooltipContent += `<strong style="color: #ff6600;">★ ${vehicle.name}</strong><span style="color: #ff6600;">（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）</span><br>`;
+                } else {
+                    // 其他行正常显示
+                    tooltipContent += `- ${vehicle.name}（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）<br>`;
+                }
             });
         } else {
             tooltipContent = "无合适车型，请调整重量或方数。";
@@ -902,15 +908,57 @@ function initPickupFeeTooltip() {
         // 设置 Tooltip 内容
         const tooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
         if (tooltipInstance) {
-            tooltipInstance.setContent({ '.tooltip-inner': tooltipContent });
-            tooltipInstance.show();
-        } else {
-            // 初始化 Tooltip
-            new bootstrap.Tooltip(pickupFeeInput, {
-                title: tooltipContent,
-                placement: "top", // Tooltip 显示在顶部
-                trigger: "hover"  // 鼠标悬停时显示
-            });
+            tooltipInstance.dispose(); // 销毁现有实例
+        }
+        
+        // 重新初始化 Tooltip
+        new bootstrap.Tooltip(pickupFeeInput, {
+            title: tooltipContent,
+            placement: "top", // Tooltip 显示在顶部
+            trigger: "hover",  // 鼠标悬停时显示
+            html: true // 支持HTML内容
+        });
+        
+        // 显示tooltip
+        const newTooltipInstance = bootstrap.Tooltip.getInstance(pickupFeeInput);
+        if (newTooltipInstance) {
+            newTooltipInstance.show();
+            
+            // 等待tooltip显示后设置样式
+            setTimeout(() => {
+                const tooltipElement = document.querySelector('.tooltip');
+                if (tooltipElement) {
+                    const tooltipInner = tooltipElement.querySelector('.tooltip-inner');
+                    if (tooltipInner) {
+                        // 设置tooltip样式
+                        tooltipInner.style.backgroundColor = '#fff';
+                        tooltipInner.style.color = '#495057';
+                        tooltipInner.style.border = '2px solid #ff6600';
+                        tooltipInner.style.borderRadius = '8px';
+                        tooltipInner.style.boxShadow = '0 4px 12px rgba(255, 102, 0, 0.3)';
+                        tooltipInner.style.fontSize = '0.85rem';
+                        tooltipInner.style.padding = '0.75rem 1rem';
+                        tooltipInner.style.maxWidth = '500px';
+                        tooltipInner.style.minWidth = '350px';
+                        tooltipInner.style.textAlign = 'left';
+                        tooltipInner.style.lineHeight = '1.4';
+                        
+                        // 设置推荐车型的样式
+                        const strongElements = tooltipInner.querySelectorAll('strong');
+                        strongElements.forEach(strong => {
+                            strong.style.color = '#ff6600';
+                            strong.style.fontWeight = 'bold';
+                        });
+                        
+                        // 设置推荐车型信息的样式
+                        const spanElements = tooltipInner.querySelectorAll('span');
+                        spanElements.forEach(span => {
+                            span.style.color = '#ff6600';
+                            span.style.fontWeight = 'normal';
+                        });
+                    }
+                }
+            }, 10);
         }
     });
 

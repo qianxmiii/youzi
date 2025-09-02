@@ -469,40 +469,47 @@
 
                   <!-- 渠道选择 -->
                   <div class="mb-3">
-                    <label for="batch-export-channel" class="form-label">选择渠道</label>
-                    <select id="batch-export-channel" class="form-select">
-                      <option value="Sea truck" selected>Sea truck</option>
-                      <option value="Fast sea truck">Fast sea truck</option>
-                      <option value="Sea express">Sea express</option>
-                      <option value="Fast sea express">Fast sea express</option>
-                    </select>
-                    <div class="form-text">选择导出报价使用的渠道</div>
+                    <label class="form-label">选择渠道（可多选）</label>
+                    <div class="row">
+                      <div class="col-md-3">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" value="Sea truck" id="channel-sea-truck" checked>
+                          <label class="form-check-label" for="channel-sea-truck">
+                            Sea truck
+                          </label>
+                        </div>
+                      </div>
+                      <div class="col-md-3">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" value="Fast sea truck" id="channel-fast-sea-truck">
+                          <label class="form-check-label" for="channel-fast-sea-truck">
+                            Fast sea truck
+                          </label>
+                        </div>
+                      </div>
+                      <div class="col-md-3">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" value="Sea express" id="channel-sea-express">
+                          <label class="form-check-label" for="channel-sea-express">
+                            Sea express
+                          </label>
+                        </div>
+                      </div>
+                      <div class="col-md-3">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" value="Fast sea express" id="channel-fast-sea-express">
+                          <label class="form-check-label" for="channel-fast-sea-express">
+                            Fast sea express
+                          </label>
+                        </div>
+                      </div>
+                    </div>
+                    <div class="form-text">选择要生成报价的渠道，可同时选择多个</div>
                   </div>
                   
                   <!-- 批量报价结果表格 -->
-                  <div id="batch-quote-table-container" class="table-responsive" style="display: none;">
-                    <table id="batch-quote-table" class="table table-bordered table-sm">
-                      <thead>
-                        <tr>
-                          <th style="width: 10%">地址</th>
-                          <th style="width: 8%">邮编</th>
-                          <th style="width: 6%">箱数</th>
-                          <th style="width: 8%">总实重(KG)</th>
-                          <th style="width: 8%">总体积(cbm)</th>
-                          <th style="width: 8%">计费重(kg)</th>
-                          <th style="width: 6%">泡比</th>
-                          <th style="width: 8%">成本(RMB)</th>
-                          <th style="width: 8%">利润(RMB)</th>
-                          <th style="width: 8%">报价(RMB)</th>
-                          <th style="width: 8%">报价(USD)</th>
-                          <th style="width: 8%">总价(USD)</th>
-                          <th style="width: 6%">时效(天)</th>
-                        </tr>
-                      </thead>
-                      <tbody id="batch-quote-tbody">
-                        <!-- 批量报价结果将在这里动态生成 -->
-                      </tbody>
-                    </table>
+                  <div id="batch-quote-tables-container" style="display: none;">
+                    <!-- 表格将在这里动态生成 -->
                   </div>
                   
                   <!-- 空状态提示 -->
@@ -530,90 +537,8 @@
                   </div>
                   
                   <!-- 汇总信息 -->
-                  <div class="mt-3">
-                    <!-- 核心财务指标 -->
-                    <div class="row mb-3">
-                      <div class="col-md-2-4">
-                        <div class="summary-card weight-card">
-                          <div class="card-icon">⚖️</div>
-                          <div class="card-content">
-                            <div class="card-title">总计费重</div>
-                            <div class="card-value"><span id="batch-total-charge-weight">0</span> KG</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="summary-card cost-card">
-                          <div class="card-icon">💸</div>
-                          <div class="card-content">
-                            <div class="card-title">总成本 <span class="currency-unit">RMB</span></div>
-                            <div class="card-value"><span id="batch-total-cost">0</span></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="summary-card price-card">
-                          <div class="card-icon">💵</div>
-                          <div class="card-content">
-                            <div class="card-title">总报价 <span class="currency-unit">RMB</span></div>
-                            <div class="card-value"><span id="batch-total-price-rmb">0</span></div>
-                            <div class="card-subvalue">(<span id="batch-total-price-usd">0</span> USD)</div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="summary-card profit-card">
-                          <div class="card-icon">💰</div>
-                          <div class="card-content">
-                            <div class="card-title">总利润 <span class="currency-unit">RMB</span></div>
-                            <div class="card-value"><span id="batch-total-profit">0</span></div>
-                          </div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="summary-card rate-card">
-                          <div class="card-icon">📊</div>
-                          <div class="card-content">
-                            <div class="card-title">利率</div>
-                            <div class="card-value"><span id="batch-profit-rate">0</span>%</div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <!-- 基础数据统计 -->
-                    <div class="row">
-                      <div class="col-md-2-4">
-                        <div class="data-card">
-                          <div class="data-label">总箱数</div>
-                          <div class="data-value"><span id="batch-total-quantity">0</span></div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="data-card">
-                          <div class="data-label">总实重</div>
-                          <div class="data-value"><span id="batch-total-weight">0</span> KG</div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="data-card">
-                          <div class="data-label">总体积</div>
-                          <div class="data-value"><span id="batch-total-volume">0</span> cbm</div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="data-card">
-                          <div class="data-label">地址数</div>
-                          <div class="data-value"><span id="batch-address-count">0</span></div>
-                        </div>
-                      </div>
-                      <div class="col-md-2-4">
-                        <div class="data-card status-card">
-                          <div class="data-label">状态</div>
-                          <div class="data-value text-success">已生成 <span id="batch-address-count-2">0</span> 个报价</div>
-                        </div>
-                      </div>
-                    </div>
+                  <div id="batch-quote-summary" class="mt-3" style="display: none;">
+                    <!-- 汇总信息将在这里动态生成 -->
                   </div>
                 </div>
               </div>

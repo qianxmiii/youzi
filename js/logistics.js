@@ -110,7 +110,7 @@ function calculate() {
             .div(volumeRatio)
             .ceil(); // 向上取整
 
-        // 检查派送方式为“快递派”时，调整实重和材积重
+        // 检查派送方式为"快递派"时，调整实重和材积重
         if (deliveryMethod == "快递派") {
             let minWeight = new Decimal(12).mul(quantity); // 最低实重和材积重要求
             if (rowWeight.lessThan(minWeight)) rowWeight = minWeight; // 更新实重
@@ -458,7 +458,7 @@ function updateQuote() {
 
     // 计算单价(RMB) = 总报价 (RMB) / 计费重
     unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : new Decimal(0);
-    document.getElementById("unit_price_rmb").value = unitPriceRMB.toFixed(2);
+    document.getElementById("unit_price").value = unitPriceRMB.toFixed(2);
 
     let unit = 'ctns ';
     if (data.totalQuantity <= 1) unit = 'ctn ';
@@ -1688,4 +1688,320 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 });
+// ==================== 智能批量报价功能 ====================
 
+/**
+ * 批量报价数据
+ */
+let batchQuoteData = {
+    boxSpec: null,
+    addressDistribution: [],
+    results: []
+};
+
+/**
+ * 解析箱规信息
+ */
+function parseBatchBoxSpec() {
+    const input = document.getElementById('batch-box-spec').value.trim();
+    if (!input) {
+        batchQuoteData.boxSpec = null;
+        return;
+    }
+    
+    // 解析格式：45*45*50 10KG 50CTNS
+    const regex = /(\d+)\*(\d+)\*(\d+)\s+(\d+(?:\.\d+)?)\s*(?:KG|kg)?\s*(\d+)\s*(?:CTNS|ctns)?/i;
+    const match = input.match(regex);
+    
+    if (match) {
+        const [, length, width, height, weight, totalQuantity] = match;
+        const volume = (parseFloat(length) * parseFloat(width) * parseFloat(height)) / 1000000; // 转换为cbm
+        
+        batchQuoteData.boxSpec = {
+            length: parseFloat(length),
+            width: parseFloat(width),
+            height: parseFloat(height),
+            weight: parseFloat(weight),
+            volume: volume,
+            totalQuantity: parseInt(totalQuantity)
+        };
+        
+        console.log('解析箱规成功:', batchQuoteData.boxSpec);
+    } else {
+        batchQuoteData.boxSpec = null;
+        console.log('箱规格式不正确');
+    }
+}
+
+/**
+ * 解析地址分配
+ */
+function parseBatchAddressDistribution() {
+    const input = document.getElementById('batch-address-distribution').value.trim();
+    if (!input) {
+        batchQuoteData.addressDistribution = [];
+        return;
+    }
+    
+    // 解析格式：RDU4 4CTNS | AVP1 25CTNS | LAS1 20CTNS | GYR3 1CTNS
+    const addressPairs = input.split('|').map(pair => pair.trim());
+    const distribution = [];
+    
+    addressPairs.forEach(pair => {
+        const regex = /([A-Z0-9]+)\s+(\d+)\s*(?:CTNS|ctns)?/i;
+        const match = pair.match(regex);
+        
+        if (match) {
+            const [, address, quantity] = match;
+            distribution.push({
+                address: address.toUpperCase(),
+                quantity: parseInt(quantity)
+            });
+        }
+    });
+    
+    batchQuoteData.addressDistribution = distribution;
+    console.log('解析地址分配成功:', distribution);
+}
+
+/**
+ * 生成批量报价
+ */
+function generateBatchQuote() {
+    if (!batchQuoteData.boxSpec) {
+        showToast('请先输入箱规信息');
+        return;
+    }
+    
+    if (batchQuoteData.addressDistribution.length === 0) {
+        showToast('请先输入地址分配');
+        return;
+    }
+    
+    // 验证总箱数是否匹配
+    const totalDistributedQuantity = batchQuoteData.addressDistribution.reduce((sum, item) => sum + item.quantity, 0);
+    if (totalDistributedQuantity !== batchQuoteData.boxSpec.totalQuantity) {
+        showToast(`总箱数不匹配！箱规中总箱数：${batchQuoteData.boxSpec.totalQuantity}，分配箱数：${totalDistributedQuantity}`);
+        return;
+    }
+    
+    // 获取当前选择的渠道和发货地
+    const channel = document.getElementById('delivery-method-select').value;
+    const origin = document.getElementById('origin-select').value;
+    const country = document.getElementById('country-select').value;
+    
+    if (!channel || !origin) {
+        showToast('请先选择运输方式和发货地');
+        return;
+    }
+    
+    // 生成每个地址的报价
+    const results = [];
+    batchQuoteData.addressDistribution.forEach(item => {
+        const totalWeight = batchQuoteData.boxSpec.weight * item.quantity;
+        const totalVolume = batchQuoteData.boxSpec.volume * item.quantity;
+        const chargeWeight = Math.max(totalWeight, totalVolume * 1000000/6000);
+        const profit = new Decimal(document.getElementById('batch-profit').value || 0);
+
+        // 遍历所有国家查找匹配
+        let matchedCountry = "美国"; // 默认国家
+        let postcode = "";
+
+        for (const [country, postalMap] of Object.entries(window.data.addressByCountry)) {
+            if (postalMap[item.address]) {
+                matchedCountry = country;
+                postcode = postalMap[item.address];
+                break; // 找到后立即退出循环
+            }
+        }
+        
+        // 计算单价
+        let unitPrice;
+        let unitPriceRMB;
+
+        if (window.data.seaTruckPrice[item.address + (channel === 'fast sea truck' ? ' Fast' : '')] !== undefined) {
+            unitPriceRMB = window.data.seaTruckPrice[item.address + (channel === 'fast sea truck' ? ' Fast' : '')];
+        } else {
+            const priceParams = {
+                carrier: getCarrierByChannel(channel),
+                channel: channel,
+                origin: origin,
+                zipcode: postcode,
+                weight: totalWeight
+            };
+            unitPriceRMB = getCarrierPrice(priceParams) || 0;
+        }
+        unitPriceRMB = new Decimal(unitPriceRMB).plus(new Decimal(profit));
+        unitPrice = new Decimal(unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2); //转换成美元
+        const totalPrice = unitPrice * item.quantity;
+        const transitTime = getTransitTime(country, channel, postcode, item.address);
+
+        
+        results.push({
+            address: item.address,
+            postcode: postcode,
+            quantity: item.quantity,
+            singleWeight: batchQuoteData.boxSpec.weight,
+            singleVolume: batchQuoteData.boxSpec.volume,
+            totalWeight: totalWeight,
+            totalVolume: totalVolume,
+            chargeWeight: chargeWeight,
+            unitPrice: unitPrice,
+            unitPriceRMB: unitPriceRMB,
+            totalPrice: totalPrice,
+            transitTime: transitTime
+        });
+    });
+    
+    batchQuoteData.results = results;
+    renderBatchQuoteTable();
+    updateBatchQuoteSummary();
+    
+    showToast('批量报价生成完成');
+}
+
+/**
+ * 渲染批量报价表格
+ */
+function renderBatchQuoteTable() {
+    const tbody = document.getElementById('batch-quote-tbody');
+    tbody.innerHTML = '';
+    
+    batchQuoteData.results.forEach(item => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${item.address}</td>
+            <td>${item.postcode}</td>
+            <td>${item.quantity}</td>
+            <td>${item.singleWeight.toFixed(2)}</td>
+            <td>${item.singleVolume.toFixed(2)}</td>
+            <td>${Math.ceil(item.totalWeight)}</td>
+            <td>${Math.ceil(item.totalVolume * 100) / 100}</td>
+            <td>${Math.ceil(item.chargeWeight)}</td>
+            <td>${item.unitPrice}</td>
+            <td>${item.unitPriceRMB.toFixed(2)}</td>
+            <td>${item.totalPrice.toFixed(2)}</td>
+            <td>${item.transitTime}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+/**
+ * 更新批量报价汇总
+ */
+function updateBatchQuoteSummary() {
+    if (batchQuoteData.results.length === 0) return;
+    
+    const totalQuantity = batchQuoteData.results.reduce((sum, item) => sum + item.quantity, 0);
+    const totalWeight = batchQuoteData.results.reduce((sum, item) => sum + item.totalWeight, 0);
+    const totalVolume = batchQuoteData.results.reduce((sum, item) => sum + item.totalVolume, 0);
+    const totalPrice = batchQuoteData.results.reduce((sum, item) => sum + item.totalPrice, 0);
+
+    const totalChargeWeight = batchQuoteData.results.reduce(
+        (sum, item) => sum.plus(item.chargeWeight || 0),
+        new Decimal(0)
+    );
+
+    // 获取用户输入的利润（每公斤）
+    const profitPerKg  = parseFloat(document.getElementById('batch-profit').value) || 0;
+    // 总利润
+    const totalProfit = totalChargeWeight.times(profitPerKg);
+    
+    document.getElementById('batch-total-quantity').textContent = totalQuantity;
+    document.getElementById('batch-total-weight').textContent = new Decimal(totalWeight).toDecimalPlaces(0, Decimal.ROUND_UP);
+    document.getElementById('batch-total-volume').textContent = new Decimal(totalVolume).toDecimalPlaces(2, Decimal.ROUND_UP);
+    document.getElementById('batch-total-price').textContent = totalPrice.toFixed(2);
+    document.getElementById('batch-total-profit').textContent = totalProfit.toFixed(2); // 新增总利润显示   
+    document.getElementById('batch-address-count').textContent = batchQuoteData.results.length;
+}
+
+/**
+ * 导出批量报价
+ */
+function exportBatchQuote() {
+    if (batchQuoteData.results.length === 0) {
+        showToast('请先生成批量报价');
+        return;
+    }
+
+    const exportChannel = document.getElementById('batch-export-channel').value || 'Sea truck';
+
+
+    batchQuoteData.results.forEach(item => {
+        const address = item.address;
+        const quantity = item.quantity;
+        const weight = item.totalWeight;
+        const volume = item.totalVolume;
+
+        // 使用UnitPrice美元/kg
+        const unitPrice = new Decimal(item.unitPrice);
+
+        const totalCost = unitPrice.mul(weight);
+
+        exportText += `To ${address},${quantity}ctns ${weight.toFixed(0)}kg ${volume.toFixed(2)}cbm\n`;
+        exportText += `${exportChannel}: ${unitPrice.toFixed(2)} usd/kg * ${weight.toFixed(0)}kg = ${totalCost.toFixed(2)}usd ${item.transitTime} days\n\n`;
+    });
+
+    // 汇总总量
+    const totalQuantity = batchQuoteData.results.reduce((sum, item) => sum + item.quantity, 0);
+    const totalWeight = batchQuoteData.results.reduce((sum, item) => sum + item.totalWeight, 0);
+    const totalVolume = batchQuoteData.results.reduce((sum, item) => sum + item.totalVolume, 0);
+
+    let pickupFee = new Decimal(document.getElementById('batch-pickup-fee').value || 0);
+    pickupFee = Math.ceil(pickupFee.div(exchange_rate));
+
+    exportText += '---\n';
+    let exportText = `Total are ${totalQuantity}ctns ${totalWeight.toFixed(0)}kg ${totalVolume.toFixed(2)}cbm\n`;
+    exportText += `Pickup fee: ${pickupFee} usd\n`;
+    
+    // 复制到剪贴板
+    navigator.clipboard.writeText(exportText).then(() => {
+        showToast('批量报价单已复制到剪贴板');
+    }).catch(() => {
+        alert(exportText);
+    });
+}
+
+/**
+ * 清空批量报价
+ */
+function clearBatchQuote() {
+    document.getElementById('batch-box-spec').value = '';
+    document.getElementById('batch-address-distribution').value = '';
+    document.getElementById('batch-quote-tbody').innerHTML = '';
+    
+    batchQuoteData = {
+        boxSpec: null,
+        addressDistribution: [],
+        results: []
+    };
+    
+    // 清空汇总信息
+    document.getElementById('batch-total-quantity').textContent = '0';
+    document.getElementById('batch-total-weight').textContent = '0';
+    document.getElementById('batch-total-volume').textContent = '0';
+    document.getElementById('batch-total-price').textContent = '0';
+    document.getElementById('batch-avg-price').textContent = '0';
+    document.getElementById('batch-address-count').textContent = '0';
+    
+    showToast('批量报价已清空');
+}
+
+/**
+ * 快速添加常用地址组合
+ */
+function addCommonAddressCombination() {
+    // 示例：45*45*50 10KG 50CTNS
+    document.getElementById('batch-box-spec').value = '45*45*50 10KG 50CTNS';
+    parseBatchBoxSpec();
+    
+    // 示例：RDU4 4CTNS | AVP1 25CTNS | LAS1 20CTNS | GYR3 1CTNS
+    document.getElementById('batch-address-distribution').value = 'RDU4 4CTNS | AVP1 25CTNS | LAS1 20CTNS | GYR3 1CTNS';
+    parseBatchAddressDistribution();
+    
+    // 示例利润
+    document.getElementById('batch-profit-rmb').value = '50';
+    
+    showToast('已添加示例数据，请修改后点击"生成报价"');
+}

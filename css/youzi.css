@@ -551,6 +551,27 @@ td input.form-control {
   }
 }
 
+/* 同时显示单地址报价和快递派查价页面的样式 */
+#single-quote.show + #expressQueryTab.show {
+  margin-top: 30px;
+  border-top: 2px solid #007bff;
+  padding-top: 20px;
+}
+
+#expressQueryTab.show {
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 20px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 当两个页面同时显示时，调整单地址报价页面的样式 */
+#single-quote.show {
+  margin-bottom: 0;
+  border-bottom: none;
+}
+
 #usaSearchResults {
   margin-top: 20px;
 }

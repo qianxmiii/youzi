@@ -198,19 +198,19 @@ function showTab(tabId) {
 
     const channel = document.getElementById('delivery-method-select').value;
     if (channel.includes("express")) { //快递派才切换
-        // 隐藏所有 Tab
-        const tabPanes = document.querySelectorAll(".tab-pane");
-        tabPanes.forEach(tabPane => {
+        // 只隐藏第二个模块的 Tab 内容，不影响第一个模块
+        const secondModuleTabPanes = document.querySelectorAll("#myTabContent .tab-pane");
+        secondModuleTabPanes.forEach(tabPane => {
             tabPane.classList.remove("show", "active");
         });
 
-        // 移除所有 Tab 导航按钮的激活状态
-        const tabButtons = document.querySelectorAll(".nav-link");
-        tabButtons.forEach(tabButton => {
+        // 只移除第二个模块的 Tab 导航按钮的激活状态
+        const secondModuleTabButtons = document.querySelectorAll("#myTab .nav-link");
+        secondModuleTabButtons.forEach(tabButton => {
             tabButton.classList.remove("active");
         });
 
-        // 显示选中的 Tab
+        // 显示快递派查价 Tab
         const selectedTabPane = document.getElementById(tabId);
         if (selectedTabPane) {
             selectedTabPane.classList.add("show", "active");
@@ -220,6 +220,38 @@ function showTab(tabId) {
         const selectedTabButton = document.querySelector(`[data-bs-target="#${tabId}"]`);
         if (selectedTabButton) {
             selectedTabButton.classList.add("active");
+        }
+    }
+}
+
+// 监听运输方式变化，当切换回非快递派时返回到单地址报价页面
+function handleDeliveryMethodChange() {
+    const channel = document.getElementById('delivery-method-select').value;
+    
+    if (!channel.includes("express")) {
+        // 如果不是快递派，返回到单地址报价页面
+        // 只隐藏第二个模块的 Tab 内容，不影响第一个模块
+        const secondModuleTabPanes = document.querySelectorAll("#myTabContent .tab-pane");
+        secondModuleTabPanes.forEach(tabPane => {
+            tabPane.classList.remove("show", "active");
+        });
+
+        // 只移除第二个模块的 Tab 导航按钮的激活状态
+        const secondModuleTabButtons = document.querySelectorAll("#myTab .nav-link");
+        secondModuleTabButtons.forEach(tabButton => {
+            tabButton.classList.remove("active");
+        });
+
+        // 显示单地址报价页面
+        const singleQuoteTab = document.getElementById('single-quote');
+        if (singleQuoteTab) {
+            singleQuoteTab.classList.add("show", "active");
+        }
+
+        // 激活单地址报价Tab导航按钮
+        const singleQuoteTabButton = document.querySelector('[data-bs-target="#single-quote"]');
+        if (singleQuoteTabButton) {
+            singleQuoteTabButton.classList.add("active");
         }
     }
 }

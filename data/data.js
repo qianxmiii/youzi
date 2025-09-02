@@ -229,6 +229,13 @@ window.data = {
     vehicleTypes: vehicleTypes,
     deliveryLocations: deliveryLocations,
     cargoTypes: cargoTypes,
+    seaTruckPrice: {
+        "RDU4": 5.4,
+        "ONT8": 3.5,
+        "AVP1": 5.8,
+        "LAS1": 4.2,
+        "GYR3": 4.4   
+    },
     // 承运商自定义价格配置（可按需扩展/维护）
     expressPricing: {
         // 承运商下可有多个渠道；渠道可继承承运商级别的断点/分组/价格并覆盖
@@ -517,7 +524,7 @@ window.data = {
             category: "物流",
             replies: [
                 { chinese: "卫星仓不建议快递派，有拒收风险。", english: "AWD warehouse not suggest ship by express, There is a risk of rejection." },
-                { chinese: "支付方式", english: "You can make payment to us by Bank transfer, Paypal, Payoneer and alibaba link" },
+                { chinese: "支付方式", english: "You could make payment to us by Bank transfer, Paypal, Payoneer and alibaba link. " },
                 {
                     chinese: "如因节假日、码头塞港、罢工、天气、海关查验等不可抗拒因素导致延误不做任何赔偿",
                     english: "Due to force majeure factors such as holidays, port congestion, strikes, weather conditions, and customs inspections, no compensation will be made for any delays."
@@ -532,9 +539,9 @@ window.data = {
             category: "产品",
             replies: [
                 { chinese: "请确认产品无牌不侵权", english: "Please confirm that the product is not infringing."},
-                { chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告", english: "For Wooden products, pls provide the commodity inspection report. For raw wooden products, fumigation report is also required." },
-                { chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3", english: "If with batteries , please provide MSDS and the Transportation Identification Report.For lithium batteries, pls also provide the UN38.3 test report." },
-                { chinese: "儿童产品请提供CPC和CPSC.", english: "For children's products, please provide CPSC." }
+                { chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告", english: "For Wooden products, pls provide the commodity inspection report. For raw wooden products, fumigation report is also needed." },
+                { chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3", english: "For battery goods, please provide MSDS and transport report. For lithium batteries, UN38.3 is also needed." },
+                { chinese: "儿童产品请提供CPC", english: "For children's products, please provide CPC." }
 
             ]
         },
@@ -542,7 +549,8 @@ window.data = {
             category: "地址",
             replies: [
                 { chinese: "浙江省金华市义乌市稠江街道德贸路2号（2楼37号-38号）启函物流园，余乐（转May），15157953544", english: "Qihan Logistics Park, No. 2 Demao Road, Choujiang Street, Yiwu City, Jinhua City, Zhejiang Province (No. 37-38, 2nd floor platform),  Mr yu, 15157953544" },
-                { chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662", english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662" }
+                { chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662", english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662" },
+                { chinese: "纽酷美国仓库地址", english: "【美西】 10889 Tamarind Ave, Fontana, CA 92337 \n 【奥克兰】 757 E 11th St, Tracy, CA 95376 \n 【西雅图】 21846 76th Ave S, Kent, WA 98032 \n 【芝加哥】 16675 W. Prologis Parkway, Lockport, IL 60441 \n 【萨凡纳】 774 King George Blvd, Savannah, GA 31419 \n 【休斯顿】 611 S Cravens Rd #200, Missouri City, TX 77489 \n 【新泽西】 1130 State St, Perth Amboy, NJ 08861" }
             ]
         },
         {
@@ -586,22 +594,12 @@ window.data = {
                     chinese: "已提柜，等待拆柜", 
                     english: "The container has been picked up, waiting for unpacking."
                 },
-
-                // 空运
-                { 
-                    chinese: "已提柜，等待拆柜", 
-                    english: "The container has been picked up, waiting for unpacking."
-                },
                 
                 // ---
                 { 
-                    chinese: "已交付UPS，请留意官网更新", 
-                    english: "Has been handed over to UPS, please pay attention to the official website update."
-                },
-                { 
-                    chinese: "已交付Fedex，请留意官网更新", 
-                    english: "Has been handed over to Fedex, please pay attention to the official website update."
-                },
+                    chinese: "已交付UPS/Fedex，请留意官网更新", 
+                    english: "Has been handed over to UPS/Fedex, please pay attention to the official website update."
+                }
             ]
         }
     ],
@@ -1570,41 +1568,32 @@ const usaCategories = [
 
 // 特定地址的运输天数映射配置
 const specificAddressTransitTime = {
-    "RDU4": {
-        "Sea truck": "40-50",
-        "Fast sea truck": "28-32",
-        "Sea express": "35-40",
-        "Fast sea express": "25-30",
-        "Air express": "8-12"
-    },
-    "LAX1": {
-        "Sea truck": "25-30",
-        "Fast sea truck": "18-22",
-        "Sea express": "20-25",
-        "Fast sea express": "15-18",
-        "Air express": "6-8"
-    },
-    "NYC1": {
-        "Sea truck": "45-55",
-        "Fast sea truck": "30-35",
-        "Sea express": "35-40",
-        "Fast sea express": "25-30",
-        "Air express": "8-12"
-    },
-    "CHI1": {
-        "Sea truck": "35-45",
-        "Fast sea truck": "25-30",
-        "Sea express": "30-35",
-        "Fast sea express": "20-25",
-        "Air express": "7-10"
-    },
-    "MIA1": {
-        "Sea truck": "40-50",
-        "Fast sea truck": "28-32",
-        "Sea express": "35-40",
-        "Fast sea express": "25-30",
-        "Air express": "8-12"
-    }
+    "ONT8": { "Sea truck": "25-30"},
+    "LGB8": { "Sea truck": "25-30"},
+    "SBD1": { "Sea truck": "25-30"},
+    "LAX9": { "Sea truck": "25-30"},
+    // 芝加哥
+    "IND9": { "Sea truck": "38-45"},
+    "FWA4": { "Sea truck": "38-45"},
+    "MQJ1": { "Sea truck": "38-45"},
+    "PPO4": { "Sea truck": "38-45"},
+
+    // 休斯顿
+    "IAH3": { "Sea truck": "38-45"},
+    "FTW1": { "Sea truck": "38-45"},
+    "SAT1": { "Sea truck": "38-45"},
+    "SAT4": { "Sea truck": "38-45"},
+    "MEM1": { "Sea truck": "38-45"},
+    "MEM6": { "Sea truck": "38-45"},
+    "DFW6": { "Sea truck": "38-45"},
+    "HOU8": { "Sea truck": "38-45"},
+    "IUSF": { "Sea truck": "38-45"},
+
+    // 美东
+    "ABE8": { "Sea truck": "40-45"},
+    "TEB9": { "Sea truck": "40-45"},
+    "XEW5": { "Sea truck": "40-45"},
+    "ACY2": { "Sea truck": "40-45"}
 };
 
 

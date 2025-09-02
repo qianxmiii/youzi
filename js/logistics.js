@@ -1859,6 +1859,34 @@ function getPostcodeColorClass(postcode, channel) {
 }
 
 /**
+ * 检查邮编是否为偏远地区
+ */
+function isRemotePostcode(postcode) {
+    if (!postcode || !window.data || !window.data.remotePostcodes) {
+        return false;
+    }
+    return window.data.remotePostcodes.includes(postcode);
+}
+
+/**
+ * 获取地址显示内容（偏远地区添加图标）
+ */
+function getAddressDisplayContent(address, postcode, channel) {
+    if (channel !== 'Sea express' && channel !== 'Fast sea express') {
+        return `<span class="fw-bold">${address}</span>`;
+    }
+    
+    if (isRemotePostcode(postcode)) {
+        return `<span class="position-relative fw-bold">
+                    <i class="bi bi-geo-alt-fill text-danger position-absolute" style="top: -2px; left: -12px; font-size: 0.8rem;" title="偏远地区"></i>
+                    ${address}
+                </span>`;
+    }
+    
+    return `<span class="fw-bold">${address}</span>`;
+}
+
+/**
  * 生成批量报价
  */
 function generateBatchQuote() {
@@ -2011,23 +2039,23 @@ function renderBatchQuoteTable() {
         const isFirst = index === 0; // 第一个渠道默认展开
         
         // 计算该渠道的汇总数据
-        let totalQuantity = 0;
-        let totalWeight = 0;
-        let totalVolume = 0;
-        let totalPrice = 0;
-        let totalCost = 0;
-        let totalProfit = 0;
-        let totalChargeWeight = 0;
+        let totalQuantity = new Decimal(0);
+        let totalWeight = new Decimal(0);
+        let totalVolume = new Decimal(0);
+        let totalPrice = new Decimal(0);
+        let totalCost = new Decimal(0);
+        let totalProfit = new Decimal(0);
+        let totalChargeWeight = new Decimal(0);
         let addressCount = 0;
         
         items.forEach(item => {
-            totalQuantity += item.quantity;
-            totalWeight += item.totalWeight;
-            totalVolume += item.totalVolume;
-            totalPrice += parseFloat(item.totalPrice);
-            totalCost += item.unitCostRMB * item.chargeWeight;
-            totalProfit += item.unitProfitRMB * item.chargeWeight;
-            totalChargeWeight += item.chargeWeight;
+            totalQuantity = totalQuantity.plus(new Decimal(item.quantity));
+            totalWeight = totalWeight.plus(new Decimal(item.totalWeight));
+            totalVolume = totalVolume.plus(new Decimal(item.totalVolume));
+            totalPrice = totalPrice.plus(new Decimal(item.totalPrice));
+            totalCost = totalCost.plus(new Decimal(item.unitCostRMB).mul(new Decimal(item.chargeWeight)));
+            totalProfit = totalProfit.plus(new Decimal(item.unitProfitRMB).mul(new Decimal(item.chargeWeight)));
+            totalChargeWeight = totalChargeWeight.plus(new Decimal(item.chargeWeight));
         });
         
         // 计算地址数量（去重）
@@ -2035,7 +2063,7 @@ function renderBatchQuoteTable() {
         addressCount = uniqueAddresses.size;
         
         // 计算利率
-        const profitRate = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+        const profitRate = totalCost.greaterThan(0) ? totalProfit.div(totalCost).mul(100) : new Decimal(0);
         
         // 创建折叠面板
         const collapseItem = document.createElement('div');
@@ -2087,7 +2115,7 @@ function renderBatchQuoteTable() {
                                     <div class="card-icon">⚖️</div>
                                     <div class="card-content">
                                         <div class="card-title">总计费重</div>
-                                        <div class="card-value">${Math.ceil(totalChargeWeight)} KG</div>
+                                        <div class="card-value">${totalChargeWeight.ceil().toNumber()} KG</div>
                                     </div>
                                 </div>
                             </div>
@@ -2096,7 +2124,7 @@ function renderBatchQuoteTable() {
                                     <div class="card-icon">💸</div>
                                     <div class="card-content">
                                         <div class="card-title">总成本 <span class="currency-unit">RMB</span></div>
-                                        <div class="card-value">${Math.ceil(totalCost)}</div>
+                                        <div class="card-value">${totalCost.ceil().toNumber()}</div>
                                     </div>
                                 </div>
                             </div>
@@ -2105,7 +2133,7 @@ function renderBatchQuoteTable() {
                                     <div class="card-icon">💵</div>
                                     <div class="card-content">
                                         <div class="card-title">总报价 <span class="currency-unit">RMB</span></div>
-                                        <div class="card-value">${Math.ceil(totalCost + totalProfit)}</div>
+                                        <div class="card-value">${totalCost.plus(totalProfit).ceil().toNumber()}</div>
                                         <div class="card-subvalue">(${totalPrice.toFixed(2)} USD)</div>
                                     </div>
                                 </div>
@@ -2115,7 +2143,7 @@ function renderBatchQuoteTable() {
                                     <div class="card-icon">💰</div>
                                     <div class="card-content">
                                         <div class="card-title">总利润 <span class="currency-unit">RMB</span></div>
-                                        <div class="card-value">${Math.ceil(totalProfit)}</div>
+                                        <div class="card-value">${totalProfit.ceil().toNumber()}</div>
                                     </div>
                                 </div>
                             </div>
@@ -2171,18 +2199,19 @@ function renderBatchQuoteTable() {
         
         // 填充表格数据
         const tbody = collapseItem.querySelector(`#batch-quote-tbody-${channelId}`);
-        items.forEach(item => {
+                items.forEach(item => {
             const volumeRatio = item.totalVolume > 0 ? Math.round(item.totalWeight / item.totalVolume) : 0;
             const postcodeColorClass = getPostcodeColorClass(item.postcode, item.channel);
+            const addressDisplayContent = getAddressDisplayContent(item.address, item.postcode, item.channel);
             
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td>${item.address}</td>
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${addressDisplayContent}</td>
                 <td><span class="${postcodeColorClass}">${item.postcode}</span></td>
-            <td>${item.quantity}</td>
-            <td>${Math.ceil(item.totalWeight)}</td>
-            <td>${Math.ceil(item.totalVolume * 100) / 100}</td>
-            <td>${Math.ceil(item.chargeWeight)}</td>
+                <td>${item.quantity}</td>
+                <td>${Math.ceil(item.totalWeight)}</td>
+                <td>${Math.ceil(item.totalVolume * 100) / 100}</td>
+                <td>${Math.ceil(item.chargeWeight)}</td>
                 <td>${volumeRatio}</td>
                 <td>
                     <input type="number" 
@@ -2211,9 +2240,9 @@ function renderBatchQuoteTable() {
                 <td>
                     <span class="batch-total-price" data-index="${item.originalIndex}">${item.totalPrice.toFixed(2)}</span>
                 </td>
-            <td>${item.transitTime}</td>
-        `;
-        tbody.appendChild(row);
+                <td>${item.transitTime}</td>
+            `;
+            tbody.appendChild(row);
         });
     });
 }
@@ -2225,14 +2254,14 @@ function updateBatchQuoteCost(index, newCostRMB) {
     if (index < 0 || index >= batchQuoteData.results.length) return;
     
     const item = batchQuoteData.results[index];
-    const costRMB = parseFloat(newCostRMB) || 0;
+    const costRMB = new Decimal(newCostRMB || 0);
     
     // 更新数据
-    item.unitCostRMB = costRMB;
+    item.unitCostRMB = costRMB.toNumber();
     // 重新计算报价（成本 + 利润）
-    item.unitPriceRMB = costRMB + item.unitProfitRMB;
+    item.unitPriceRMB = costRMB.plus(new Decimal(item.unitProfitRMB)).toNumber();
     item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
-    item.totalPrice = new Decimal(item.unitPrice).mul(item.chargeWeight).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.quantity)).toFixed(2);
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
@@ -2248,14 +2277,14 @@ function updateBatchQuoteProfit(index, newProfitRMB) {
     if (index < 0 || index >= batchQuoteData.results.length) return;
     
     const item = batchQuoteData.results[index];
-    const profitRMB = parseFloat(newProfitRMB) || 0;
+    const profitRMB = new Decimal(newProfitRMB || 0);
     
     // 更新数据
-    item.unitProfitRMB = profitRMB;
+    item.unitProfitRMB = profitRMB.toNumber();
     // 重新计算报价（成本 + 利润）
-    item.unitPriceRMB = item.unitCostRMB + profitRMB;
+    item.unitPriceRMB = new Decimal(item.unitCostRMB).plus(profitRMB).toNumber();
     item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
-    item.totalPrice = new Decimal(item.unitPrice).mul(item.chargeWeight).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.quantity)).toFixed(2);
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
@@ -2271,19 +2300,19 @@ function updateBatchQuotePrice(index, newPriceRMB) {
     if (index < 0 || index >= batchQuoteData.results.length) return;
     
     const item = batchQuoteData.results[index];
-    const priceRMB = parseFloat(newPriceRMB) || 0;
+    const priceRMB = new Decimal(newPriceRMB || 0);
     
     // 更新数据
-    item.unitPriceRMB = priceRMB;
-    item.unitProfitRMB = priceRMB - item.unitCostRMB;
-    item.unitPrice = new Decimal(priceRMB).div(new Decimal(exchange_rate)).toFixed(2);
-    item.totalPrice = new Decimal(item.unitPrice).mul(item.quantity).toFixed(2);
+    item.unitPriceRMB = priceRMB.toNumber();
+    item.unitProfitRMB = priceRMB.minus(new Decimal(item.unitCostRMB)).toNumber();
+    item.unitPrice = priceRMB.div(new Decimal(exchange_rate)).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.quantity)).toFixed(2);
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
     
     // 更新汇总信息
-    updateBatchQuoteSummary();
+    updateCollapseSummaryInfo();
 }
 
 /**
@@ -2334,23 +2363,23 @@ function updateCollapseSummaryInfo() {
         const channelId = channel.toLowerCase().replace(/\s+/g, '-');
         
         // 计算该渠道的汇总数据
-        let totalQuantity = 0;
-        let totalWeight = 0;
-        let totalVolume = 0;
-        let totalPrice = 0;
-        let totalCost = 0;
-        let totalProfit = 0;
-        let totalChargeWeight = 0;
+        let totalQuantity = new Decimal(0);
+        let totalWeight = new Decimal(0);
+        let totalVolume = new Decimal(0);
+        let totalPrice = new Decimal(0);
+        let totalCost = new Decimal(0);
+        let totalProfit = new Decimal(0);
+        let totalChargeWeight = new Decimal(0);
         let addressCount = 0;
         
         items.forEach(item => {
-            totalQuantity += item.quantity;
-            totalWeight += item.totalWeight;
-            totalVolume += item.totalVolume;
-            totalPrice += parseFloat(item.totalPrice);
-            totalCost += item.unitCostRMB * item.chargeWeight;
-            totalProfit += item.unitProfitRMB * item.chargeWeight;
-            totalChargeWeight += item.chargeWeight;
+            totalQuantity = totalQuantity.plus(new Decimal(item.quantity));
+            totalWeight = totalWeight.plus(new Decimal(item.totalWeight));
+            totalVolume = totalVolume.plus(new Decimal(item.totalVolume));
+            totalPrice = totalPrice.plus(new Decimal(item.totalPrice));
+            totalCost = totalCost.plus(new Decimal(item.unitCostRMB).mul(new Decimal(item.chargeWeight)));
+            totalProfit = totalProfit.plus(new Decimal(item.unitProfitRMB).mul(new Decimal(item.chargeWeight)));
+            totalChargeWeight = totalChargeWeight.plus(new Decimal(item.chargeWeight));
         });
         
         // 计算地址数量（去重）
@@ -2358,7 +2387,7 @@ function updateCollapseSummaryInfo() {
         addressCount = uniqueAddresses.size;
         
         // 计算利率
-        const profitRate = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+        const profitRate = totalCost.greaterThan(0) ? totalProfit.div(totalCost).mul(100) : new Decimal(0);
         
         // 更新折叠框内的汇总信息
         const collapseElement = document.getElementById(`collapse-${channelId}`);
@@ -2373,7 +2402,7 @@ function updateCollapseSummaryInfo() {
                                 <div class="card-icon">⚖️</div>
                                 <div class="card-content">
                                     <div class="card-title">总计费重</div>
-                                    <div class="card-value">${Math.ceil(totalChargeWeight)} KG</div>
+                                    <div class="card-value">${totalChargeWeight.ceil().toNumber()} KG</div>
                                 </div>
                             </div>
                         </div>
@@ -2382,7 +2411,7 @@ function updateCollapseSummaryInfo() {
                                 <div class="card-icon">💸</div>
                                 <div class="card-content">
                                     <div class="card-title">总成本 <span class="currency-unit">RMB</span></div>
-                                    <div class="card-value">${Math.ceil(totalCost)}</div>
+                                    <div class="card-value">${totalCost.ceil().toNumber()}</div>
                                 </div>
                             </div>
                         </div>
@@ -2391,7 +2420,7 @@ function updateCollapseSummaryInfo() {
                                 <div class="card-icon">💵</div>
                                 <div class="card-content">
                                     <div class="card-title">总报价 <span class="currency-unit">RMB</span></div>
-                                    <div class="card-value">${Math.ceil(totalCost + totalProfit)}</div>
+                                    <div class="card-value">${totalCost.plus(totalProfit).ceil().toNumber()}</div>
                                     <div class="card-subvalue">(${totalPrice.toFixed(2)} USD)</div>
                                 </div>
                             </div>
@@ -2401,7 +2430,7 @@ function updateCollapseSummaryInfo() {
                                 <div class="card-icon">💰</div>
                                 <div class="card-content">
                                     <div class="card-title">总利润 <span class="currency-unit">RMB</span></div>
-                                    <div class="card-value">${Math.ceil(totalProfit)}</div>
+                                    <div class="card-value">${totalProfit.ceil().toNumber()}</div>
                                 </div>
                             </div>
                         </div>

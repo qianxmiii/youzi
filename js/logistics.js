@@ -1935,11 +1935,9 @@ function generateBatchQuote() {
     
     batchQuoteData.results = results;
     renderBatchQuoteTable();
-    updateBatchQuoteSummary();
     
-    // 显示表格和汇总信息，隐藏空状态
+    // 显示表格，隐藏空状态
     document.getElementById('batch-quote-tables-container').style.display = 'block';
-    document.getElementById('batch-quote-summary').style.display = 'block';
     document.getElementById('batch-quote-empty-state').style.display = 'none';
     
     showToast('批量报价生成完成');
@@ -1961,53 +1959,174 @@ function renderBatchQuoteTable() {
         channelGroups[item.channel].push({...item, originalIndex: index});
     });
     
-    // 为每个渠道创建独立的表格
-    Object.keys(channelGroups).forEach(channel => {
+    // 为每个渠道创建独立的折叠面板
+    const channelKeys = Object.keys(channelGroups);
+    channelKeys.forEach((channel, index) => {
         const items = channelGroups[channel];
         const channelId = channel.toLowerCase().replace(/\s+/g, '-');
+        const isFirst = index === 0; // 第一个渠道默认展开
         
-        // 创建渠道标题
-        const channelHeader = document.createElement('div');
-        channelHeader.className = 'mb-3';
-        channelHeader.innerHTML = `
-            <h5 class="d-flex align-items-center">
-                <span class="badge ${getChannelBadgeClass(channel)} me-2">${channel}</span>
-                报价详情
-            </h5>
-        `;
-        container.appendChild(channelHeader);
+        // 计算该渠道的汇总数据
+        let totalQuantity = 0;
+        let totalWeight = 0;
+        let totalVolume = 0;
+        let totalPrice = 0;
+        let totalCost = 0;
+        let totalProfit = 0;
+        let totalChargeWeight = 0;
+        let addressCount = 0;
         
-        // 创建表格
-        const tableContainer = document.createElement('div');
-        tableContainer.className = 'table-responsive mb-4';
-        tableContainer.innerHTML = `
-            <table class="table table-bordered table-sm">
-                <thead>
-                    <tr>
-                        <th style="width: 8%">地址</th>
-                        <th style="width: 6%">邮编</th>
-                        <th style="width: 5%">箱数</th>
-                        <th style="width: 7%">总实重(KG)</th>
-                        <th style="width: 7%">总体积(cbm)</th>
-                        <th style="width: 7%">计费重(kg)</th>
-                        <th style="width: 5%">泡比</th>
-                        <th style="width: 7%">成本(RMB)</th>
-                        <th style="width: 7%">利润(RMB)</th>
-                        <th style="width: 7%">报价(RMB)</th>
-                        <th style="width: 7%">报价(USD)</th>
-                        <th style="width: 7%">总价(USD)</th>
-                        <th style="width: 5%">时效(天)</th>
-                    </tr>
-                </thead>
-                <tbody id="batch-quote-tbody-${channelId}">
-                    <!-- 数据将在这里生成 -->
-                </tbody>
-            </table>
+        items.forEach(item => {
+            totalQuantity += item.quantity;
+            totalWeight += item.totalWeight;
+            totalVolume += item.totalVolume;
+            totalPrice += parseFloat(item.totalPrice);
+            totalCost += item.unitCostRMB * item.chargeWeight;
+            totalProfit += item.unitProfitRMB * item.chargeWeight;
+            totalChargeWeight += item.chargeWeight;
+        });
+        
+        // 计算地址数量（去重）
+        const uniqueAddresses = new Set(items.map(item => item.address));
+        addressCount = uniqueAddresses.size;
+        
+        // 计算利率
+        const profitRate = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+        
+        // 创建折叠面板
+        const collapseItem = document.createElement('div');
+        collapseItem.className = 'accordion-item mb-3';
+        collapseItem.innerHTML = `
+            <h2 class="accordion-header" id="heading-${channelId}">
+                <button class="accordion-button ${isFirst ? '' : 'collapsed'}" type="button" 
+                        data-bs-toggle="collapse" data-bs-target="#collapse-${channelId}" 
+                        aria-expanded="${isFirst ? 'true' : 'false'}" aria-controls="collapse-${channelId}">
+                    <span class="badge ${getChannelBadgeClass(channel)} me-2">${channel}</span>
+                    报价详情 (${items.length}个地址)
+                </button>
+            </h2>
+            <div id="collapse-${channelId}" class="accordion-collapse collapse ${isFirst ? 'show' : ''}" 
+                 aria-labelledby="heading-${channelId}" data-bs-parent="#batch-quote-tables-container">
+                <div class="accordion-body">
+                    <!-- 表格 -->
+                    <div class="table-responsive mb-4">
+                        <table class="table table-bordered table-sm">
+                            <thead>
+                                <tr>
+                                    <th style="width: 8%">地址</th>
+                                    <th style="width: 6%">邮编</th>
+                                    <th style="width: 5%">箱数</th>
+                                    <th style="width: 7%">总实重(KG)</th>
+                                    <th style="width: 7%">总体积(cbm)</th>
+                                    <th style="width: 7%">计费重(kg)</th>
+                                    <th style="width: 5%">泡比</th>
+                                    <th style="width: 7%">成本(RMB)</th>
+                                    <th style="width: 7%">利润(RMB)</th>
+                                    <th style="width: 7%">报价(RMB)</th>
+                                    <th style="width: 7%">报价(USD)</th>
+                                    <th style="width: 7%">总价(USD)</th>
+                                    <th style="width: 5%">时效(天)</th>
+                                </tr>
+                            </thead>
+                            <tbody id="batch-quote-tbody-${channelId}">
+                                <!-- 数据将在这里生成 -->
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <!-- 汇总信息 -->
+                    <div class="mt-3">
+                        <!-- 核心财务指标 -->
+                        <div class="row mb-3">
+                            <div class="col-md-2-4">
+                                <div class="summary-card weight-card">
+                                    <div class="card-icon">⚖️</div>
+                                    <div class="card-content">
+                                        <div class="card-title">总计费重</div>
+                                        <div class="card-value">${Math.ceil(totalChargeWeight)} KG</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="summary-card cost-card">
+                                    <div class="card-icon">💸</div>
+                                    <div class="card-content">
+                                        <div class="card-title">总成本 <span class="currency-unit">RMB</span></div>
+                                        <div class="card-value">${Math.ceil(totalCost)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="summary-card price-card">
+                                    <div class="card-icon">💵</div>
+                                    <div class="card-content">
+                                        <div class="card-title">总报价 <span class="currency-unit">RMB</span></div>
+                                        <div class="card-value">${Math.ceil(totalCost + totalProfit)}</div>
+                                        <div class="card-subvalue">(${totalPrice.toFixed(2)} USD)</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="summary-card profit-card">
+                                    <div class="card-icon">💰</div>
+                                    <div class="card-content">
+                                        <div class="card-title">总利润 <span class="currency-unit">RMB</span></div>
+                                        <div class="card-value">${Math.ceil(totalProfit)}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="summary-card rate-card">
+                                    <div class="card-icon">📊</div>
+                                    <div class="card-content">
+                                        <div class="card-title">利率</div>
+                                        <div class="card-value">${profitRate.toFixed(1)}%</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 基础数据统计 -->
+                        <div class="row">
+                            <div class="col-md-2-4">
+                                <div class="data-card">
+                                    <div class="data-label">总箱数</div>
+                                    <div class="data-value">${totalQuantity}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="data-card">
+                                    <div class="data-label">总实重</div>
+                                    <div class="data-value">${Math.ceil(totalWeight)} KG</div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="data-card">
+                                    <div class="data-label">总体积</div>
+                                    <div class="data-value">${(Math.ceil(totalVolume * 100) / 100).toFixed(2)} cbm</div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="data-card">
+                                    <div class="data-label">地址数</div>
+                                    <div class="data-value">${addressCount}</div>
+                                </div>
+                            </div>
+                            <div class="col-md-2-4">
+                                <div class="data-card status-card">
+                                    <div class="data-label">状态</div>
+                                    <div class="data-value text-success">已生成 ${items.length} 个报价</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         `;
-        container.appendChild(tableContainer);
+        container.appendChild(collapseItem);
         
         // 填充表格数据
-        const tbody = tableContainer.querySelector(`#batch-quote-tbody-${channelId}`);
+        const tbody = collapseItem.querySelector(`#batch-quote-tbody-${channelId}`);
         items.forEach(item => {
             const volumeRatio = item.totalVolume > 0 ? Math.round(item.totalWeight / item.totalVolume) : 0;
             const postcodeColorClass = getPostcodeColorClass(item.postcode, item.channel);
@@ -2124,157 +2243,7 @@ function updateBatchQuoteDisplay(index) {
     }
 }
 
-/**
- * 更新批量报价汇总
- */
-function updateBatchQuoteSummary() {
-    if (!batchQuoteData.results || batchQuoteData.results.length === 0) {
-        return;
-    }
-    
-    const container = document.getElementById('batch-quote-summary');
-    container.innerHTML = '';
-    
-    // 按渠道分组
-    const channelGroups = {};
-    batchQuoteData.results.forEach(item => {
-        if (!channelGroups[item.channel]) {
-            channelGroups[item.channel] = [];
-        }
-        channelGroups[item.channel].push(item);
-    });
-    
-    // 为每个渠道创建独立的汇总
-    Object.keys(channelGroups).forEach(channel => {
-        const items = channelGroups[channel];
-        const channelId = channel.toLowerCase().replace(/\s+/g, '-');
-        
-        // 计算该渠道的汇总数据
-        let totalQuantity = 0;
-        let totalWeight = 0;
-        let totalVolume = 0;
-        let totalPrice = 0;
-        let totalCost = 0;
-        let totalProfit = 0;
-        let totalChargeWeight = 0;
-        let addressCount = 0;
-        
-        items.forEach(item => {
-            totalQuantity += item.quantity;
-            totalWeight += item.totalWeight;
-            totalVolume += item.totalVolume;
-            totalPrice += parseFloat(item.totalPrice);
-            totalCost += item.unitCostRMB * item.chargeWeight;
-            totalProfit += item.unitProfitRMB * item.chargeWeight;
-            totalChargeWeight += item.chargeWeight;
-        });
-        
-        // 计算地址数量（去重）
-        const uniqueAddresses = new Set(items.map(item => item.address));
-        addressCount = uniqueAddresses.size;
-        
-        // 计算利率
-        const profitRate = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
-        
-        // 创建渠道汇总卡片
-        const channelSummary = document.createElement('div');
-        channelSummary.className = 'mb-4';
-        channelSummary.innerHTML = `
-            <!-- 渠道标题 -->
-            <div class="mb-3">
-                <h5 class="d-flex align-items-center">
-                    <span class="badge ${getChannelBadgeClass(channel)} me-2">${channel}</span>
-                    汇总信息
-                </h5>
-            </div>
-            
-            <!-- 核心财务指标 -->
-            <div class="row mb-3">
-                <div class="col-md-2-4">
-                    <div class="summary-card weight-card">
-                        <div class="card-icon">⚖️</div>
-                        <div class="card-content">
-                            <div class="card-title">总计费重</div>
-                            <div class="card-value">${Math.ceil(totalChargeWeight)} KG</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="summary-card cost-card">
-                        <div class="card-icon">💸</div>
-                        <div class="card-content">
-                            <div class="card-title">总成本 <span class="currency-unit">RMB</span></div>
-                            <div class="card-value">${Math.ceil(totalCost)}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="summary-card price-card">
-                        <div class="card-icon">💵</div>
-                        <div class="card-content">
-                            <div class="card-title">总报价 <span class="currency-unit">RMB</span></div>
-                            <div class="card-value">${Math.ceil(totalCost + totalProfit)}</div>
-                            <div class="card-subvalue">(${totalPrice.toFixed(2)} USD)</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="summary-card profit-card">
-                        <div class="card-icon">💰</div>
-                        <div class="card-content">
-                            <div class="card-title">总利润 <span class="currency-unit">RMB</span></div>
-                            <div class="card-value">${Math.ceil(totalProfit)}</div>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="summary-card rate-card">
-                        <div class="card-icon">📊</div>
-                        <div class="card-content">
-                            <div class="card-title">利率</div>
-                            <div class="card-value">${profitRate.toFixed(1)}%</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 基础数据统计 -->
-            <div class="row">
-                <div class="col-md-2-4">
-                    <div class="data-card">
-                        <div class="data-label">总箱数</div>
-                        <div class="data-value">${totalQuantity}</div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="data-card">
-                        <div class="data-label">总实重</div>
-                        <div class="data-value">${Math.ceil(totalWeight)} KG</div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="data-card">
-                        <div class="data-label">总体积</div>
-                        <div class="data-value">${(Math.ceil(totalVolume * 100) / 100).toFixed(2)} cbm</div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="data-card">
-                        <div class="data-label">地址数</div>
-                        <div class="data-value">${addressCount}</div>
-                    </div>
-                </div>
-                <div class="col-md-2-4">
-                    <div class="data-card status-card">
-                        <div class="data-label">状态</div>
-                        <div class="data-value text-success">已生成 ${items.length} 个报价</div>
-                    </div>
-                </div>
-            </div>
-        `;
-        container.appendChild(channelSummary);
-    });
-}
+
 
 /**
  * 导出批量报价
@@ -2361,9 +2330,8 @@ function clearBatchQuote() {
     document.getElementById('batch-address-count').textContent = '0';
     document.getElementById('batch-address-count-2').textContent = '0';
     
-    // 隐藏表格和汇总信息，显示空状态
+    // 隐藏表格，显示空状态
     document.getElementById('batch-quote-tables-container').style.display = 'none';
-    document.getElementById('batch-quote-summary').style.display = 'none';
     document.getElementById('batch-quote-empty-state').style.display = 'block';
     
     showToast('批量报价已清空');

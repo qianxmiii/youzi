@@ -1779,6 +1779,31 @@ function getSelectedChannels() {
 }
 
 /**
+ * 检查是否需要显示发货区域选择
+ */
+function checkShippingRegionVisibility() {
+    const selectedChannels = getSelectedChannels();
+    const hasExpressChannel = selectedChannels.some(channel => 
+        channel === 'Sea express' || channel === 'Fast sea express'
+    );
+    
+    const regionContainer = document.getElementById('batch-shipping-region-container');
+    if (regionContainer) {
+        regionContainer.style.display = hasExpressChannel ? 'block' : 'none';
+    }
+}
+
+/**
+ * 添加渠道选择事件监听器
+ */
+function addChannelSelectionListeners() {
+    const checkboxes = document.querySelectorAll('input[type="checkbox"][value*="truck"], input[type="checkbox"][value*="express"]');
+    checkboxes.forEach(checkbox => {
+        checkbox.addEventListener('change', checkShippingRegionVisibility);
+    });
+}
+
+/**
  * 获取渠道徽章样式
  */
 function getChannelBadgeClass(channel) {
@@ -1869,6 +1894,19 @@ function generateBatchQuote() {
         return;
     }
     
+    // 检查是否需要发货区域
+    const hasExpressChannel = selectedChannels.some(channel => 
+        channel === 'Sea express' || channel === 'Fast sea express'
+    );
+    
+    if (hasExpressChannel) {
+        const shippingRegion = document.getElementById('batch-shipping-region').value;
+        if (!shippingRegion) {
+            showToast('请选择发货区域');
+            return;
+        }
+    }
+    
     // 生成每个地址和每个渠道的报价
     const results = [];
     batchQuoteData.addressDistribution.forEach(item => {
@@ -1893,16 +1931,22 @@ function generateBatchQuote() {
         selectedChannels.forEach(channel => {
             // 计算成本
             let unitCostRMB;
-            if (window.data.seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')] !== undefined) {
+            
+            // 对于Sea express和Fast sea express渠道，使用showCost函数计算
+            if (channel === 'Sea express' || channel === 'Fast sea express') {
+                const shippingRegion = document.getElementById('batch-shipping-region').value;
+                const withBattery = false; // 默认不带电池
+                unitCostRMB = showCost(shippingRegion, matchedCountry, channel, postcode, totalWeight, withBattery) || 0;
+            } else if (window.data.seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')] !== undefined) {
                 unitCostRMB = window.data.seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')];
-            } else {
-                const priceParams = {
-                    carrier: getCarrierByChannel(channel),
-                    channel: channel,
-                    origin: origin,
-                    zipcode: postcode,
-                    weight: totalWeight
-                };
+        } else {
+            const priceParams = {
+                carrier: getCarrierByChannel(channel),
+                channel: channel,
+                origin: origin,
+                zipcode: postcode,
+                weight: totalWeight
+            };
                 unitCostRMB = getCarrierPrice(priceParams) || 0;
             }
             
@@ -1912,23 +1956,23 @@ function generateBatchQuote() {
             const unitPrice = new Decimal(unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2); //转换成美元
             const totalPrice = unitPrice * chargeWeight; // 使用计费重计算总价
             const transitTime = getTransitTime(matchedCountry, channel, postcode, item.address);
-
-            results.push({
-                address: item.address,
-                postcode: postcode,
+        
+        results.push({
+            address: item.address,
+            postcode: postcode,
                 channel: channel,
-                quantity: item.quantity,
-                singleWeight: batchQuoteData.boxSpec.weight,
-                singleVolume: batchQuoteData.boxSpec.volume,
-                totalWeight: totalWeight,
-                totalVolume: totalVolume,
-                chargeWeight: chargeWeight,
+            quantity: item.quantity,
+            singleWeight: batchQuoteData.boxSpec.weight,
+            singleVolume: batchQuoteData.boxSpec.volume,
+            totalWeight: totalWeight,
+            totalVolume: totalVolume,
+            chargeWeight: chargeWeight,
                 unitCostRMB: unitCostRMB, // 成本RMB
                 unitProfitRMB: unitProfitRMB.toNumber(), // 利润RMB
                 unitPriceRMB: unitPriceRMB.toNumber(), // 报价RMB
                 unitPrice: unitPrice, // 报价USD
-                totalPrice: totalPrice,
-                transitTime: transitTime
+            totalPrice: totalPrice,
+            transitTime: transitTime
             });
         });
     });
@@ -2131,14 +2175,14 @@ function renderBatchQuoteTable() {
             const volumeRatio = item.totalVolume > 0 ? Math.round(item.totalWeight / item.totalVolume) : 0;
             const postcodeColorClass = getPostcodeColorClass(item.postcode, item.channel);
             
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${item.address}</td>
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${item.address}</td>
                 <td><span class="${postcodeColorClass}">${item.postcode}</span></td>
-                <td>${item.quantity}</td>
-                <td>${Math.ceil(item.totalWeight)}</td>
-                <td>${Math.ceil(item.totalVolume * 100) / 100}</td>
-                <td>${Math.ceil(item.chargeWeight)}</td>
+            <td>${item.quantity}</td>
+            <td>${Math.ceil(item.totalWeight)}</td>
+            <td>${Math.ceil(item.totalVolume * 100) / 100}</td>
+            <td>${Math.ceil(item.chargeWeight)}</td>
                 <td>${volumeRatio}</td>
                 <td>
                     <input type="number" 
@@ -2167,9 +2211,9 @@ function renderBatchQuoteTable() {
                 <td>
                     <span class="batch-total-price" data-index="${item.originalIndex}">${item.totalPrice.toFixed(2)}</span>
                 </td>
-                <td>${item.transitTime}</td>
-            `;
-            tbody.appendChild(row);
+            <td>${item.transitTime}</td>
+        `;
+        tbody.appendChild(row);
         });
     });
 }
@@ -2192,6 +2236,9 @@ function updateBatchQuoteCost(index, newCostRMB) {
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
+    
+    // 更新折叠框内的汇总信息
+    updateCollapseSummaryInfo();
 }
 
 /**
@@ -2212,6 +2259,9 @@ function updateBatchQuoteProfit(index, newProfitRMB) {
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
+    
+    // 更新折叠框内的汇总信息
+    updateCollapseSummaryInfo();
 }
 
 /**
@@ -2261,6 +2311,150 @@ function updateBatchQuoteDisplay(index) {
     }
 }
 
+/**
+ * 更新折叠框内的汇总信息
+ */
+function updateCollapseSummaryInfo() {
+    if (!batchQuoteData.results || batchQuoteData.results.length === 0) {
+        return;
+    }
+    
+    // 按渠道分组
+    const channelGroups = {};
+    batchQuoteData.results.forEach(item => {
+        if (!channelGroups[item.channel]) {
+            channelGroups[item.channel] = [];
+        }
+        channelGroups[item.channel].push(item);
+    });
+    
+    // 为每个渠道更新汇总信息
+    Object.keys(channelGroups).forEach(channel => {
+        const items = channelGroups[channel];
+        const channelId = channel.toLowerCase().replace(/\s+/g, '-');
+        
+        // 计算该渠道的汇总数据
+        let totalQuantity = 0;
+        let totalWeight = 0;
+        let totalVolume = 0;
+        let totalPrice = 0;
+        let totalCost = 0;
+        let totalProfit = 0;
+        let totalChargeWeight = 0;
+        let addressCount = 0;
+        
+        items.forEach(item => {
+            totalQuantity += item.quantity;
+            totalWeight += item.totalWeight;
+            totalVolume += item.totalVolume;
+            totalPrice += parseFloat(item.totalPrice);
+            totalCost += item.unitCostRMB * item.chargeWeight;
+            totalProfit += item.unitProfitRMB * item.chargeWeight;
+            totalChargeWeight += item.chargeWeight;
+        });
+        
+        // 计算地址数量（去重）
+        const uniqueAddresses = new Set(items.map(item => item.address));
+        addressCount = uniqueAddresses.size;
+        
+        // 计算利率
+        const profitRate = totalCost > 0 ? (totalProfit / totalCost) * 100 : 0;
+        
+        // 更新折叠框内的汇总信息
+        const collapseElement = document.getElementById(`collapse-${channelId}`);
+        if (collapseElement) {
+            const summarySection = collapseElement.querySelector('.mt-3');
+            if (summarySection) {
+                summarySection.innerHTML = `
+                    <!-- 核心财务指标 -->
+                    <div class="row mb-3">
+                        <div class="col-md-2-4">
+                            <div class="summary-card weight-card">
+                                <div class="card-icon">⚖️</div>
+                                <div class="card-content">
+                                    <div class="card-title">总计费重</div>
+                                    <div class="card-value">${Math.ceil(totalChargeWeight)} KG</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="summary-card cost-card">
+                                <div class="card-icon">💸</div>
+                                <div class="card-content">
+                                    <div class="card-title">总成本 <span class="currency-unit">RMB</span></div>
+                                    <div class="card-value">${Math.ceil(totalCost)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="summary-card price-card">
+                                <div class="card-icon">💵</div>
+                                <div class="card-content">
+                                    <div class="card-title">总报价 <span class="currency-unit">RMB</span></div>
+                                    <div class="card-value">${Math.ceil(totalCost + totalProfit)}</div>
+                                    <div class="card-subvalue">(${totalPrice.toFixed(2)} USD)</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="summary-card profit-card">
+                                <div class="card-icon">💰</div>
+                                <div class="card-content">
+                                    <div class="card-title">总利润 <span class="currency-unit">RMB</span></div>
+                                    <div class="card-value">${Math.ceil(totalProfit)}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="summary-card rate-card">
+                                <div class="card-icon">📊</div>
+                                <div class="card-content">
+                                    <div class="card-title">利率</div>
+                                    <div class="card-value">${profitRate.toFixed(1)}%</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 基础数据统计 -->
+                    <div class="row">
+                        <div class="col-md-2-4">
+                            <div class="data-card">
+                                <div class="data-label">总箱数</div>
+                                <div class="data-value">${totalQuantity}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="data-card">
+                                <div class="data-label">总实重</div>
+                                <div class="data-value">${Math.ceil(totalWeight)} KG</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="data-card">
+                                <div class="data-label">总体积</div>
+                                <div class="data-value">${(Math.ceil(totalVolume * 100) / 100).toFixed(2)} cbm</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="data-card">
+                                <div class="data-label">地址数</div>
+                                <div class="data-value">${addressCount}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-2-4">
+                            <div class="data-card status-card">
+                                <div class="data-label">状态</div>
+                                <div class="data-value text-success">已生成 ${items.length} 个报价</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+    });
+}
+
 
 
 /**
@@ -2292,12 +2486,12 @@ function exportBatchQuote() {
         
         // 为每个渠道生成报价行
         items.forEach(item => {
-            const unitPrice = new Decimal(item.unitPrice);
+        const unitPrice = new Decimal(item.unitPrice);
             const totalCost = unitPrice.mul(item.chargeWeight);
-            
+
             exportText += `${item.channel}: ${unitPrice.toFixed(2)} usd/kg * ${item.chargeWeight.toFixed(0)}kg = ${totalCost.toFixed(2)}usd ${item.transitTime} days\n`;
         });
-        
+
         exportText += '\n';
     });
 
@@ -2354,6 +2548,12 @@ function clearBatchQuote() {
     
     showToast('批量报价已清空');
 }
+
+// 页面加载完成后初始化
+document.addEventListener('DOMContentLoaded', function() {
+    // 添加渠道选择事件监听器
+    addChannelSelectionListeners();
+});
 
 /**
  * 快速添加常用地址组合

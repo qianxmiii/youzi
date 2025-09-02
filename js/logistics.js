@@ -2150,16 +2150,16 @@ function renderBatchQuoteTable() {
                            style="min-width: 70px;" />
                 </td>
                 <td>
-                    <span class="batch-profit-rmb" data-index="${item.originalIndex}">${item.unitProfitRMB.toFixed(2)}</span>
-                </td>
-                <td>
                     <input type="number" 
-                           class="form-control form-control-sm batch-price-rmb" 
-                           value="${item.unitPriceRMB.toFixed(2)}" 
+                           class="form-control form-control-sm batch-profit-rmb" 
+                           value="${item.unitProfitRMB.toFixed(2)}" 
                            step="0.01"
                            data-index="${item.originalIndex}"
-                           onchange="updateBatchQuotePrice(${item.originalIndex}, this.value)"
+                           onchange="updateBatchQuoteProfit(${item.originalIndex}, this.value)"
                            style="min-width: 70px;" />
+                </td>
+                <td>
+                    <span class="batch-price-rmb" data-index="${item.originalIndex}">${item.unitPriceRMB.toFixed(2)}</span>
                 </td>
                 <td>
                     <span class="batch-usd-price" data-index="${item.originalIndex}">${item.unitPrice}</span>
@@ -2185,15 +2185,33 @@ function updateBatchQuoteCost(index, newCostRMB) {
     
     // 更新数据
     item.unitCostRMB = costRMB;
-    item.unitProfitRMB = item.unitPriceRMB - costRMB;
+    // 重新计算报价（成本 + 利润）
+    item.unitPriceRMB = costRMB + item.unitProfitRMB;
     item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
-    item.totalPrice = new Decimal(item.unitPrice).mul(item.quantity).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(item.chargeWeight).toFixed(2);
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
+}
+
+/**
+ * 更新批量报价利润
+ */
+function updateBatchQuoteProfit(index, newProfitRMB) {
+    if (index < 0 || index >= batchQuoteData.results.length) return;
     
-    // 更新汇总信息
-    updateBatchQuoteSummary();
+    const item = batchQuoteData.results[index];
+    const profitRMB = parseFloat(newProfitRMB) || 0;
+    
+    // 更新数据
+    item.unitProfitRMB = profitRMB;
+    // 重新计算报价（成本 + 利润）
+    item.unitPriceRMB = item.unitCostRMB + profitRMB;
+    item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(item.chargeWeight).toFixed(2);
+    
+    // 更新页面显示
+    updateBatchQuoteDisplay(index);
 }
 
 /**
@@ -2224,10 +2242,10 @@ function updateBatchQuotePrice(index, newPriceRMB) {
 function updateBatchQuoteDisplay(index) {
     const item = batchQuoteData.results[index];
     
-    // 更新利润显示
-    const profitElement = document.querySelector(`.batch-profit-rmb[data-index="${index}"]`);
-    if (profitElement) {
-        profitElement.textContent = item.unitProfitRMB.toFixed(2);
+    // 更新报价RMB显示
+    const priceRmbElement = document.querySelector(`.batch-price-rmb[data-index="${index}"]`);
+    if (priceRmbElement) {
+        priceRmbElement.textContent = item.unitPriceRMB.toFixed(2);
     }
     
     // 更新USD价格显示

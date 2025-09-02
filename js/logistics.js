@@ -1926,7 +1926,7 @@ function exportBatchQuote() {
     }
 
     const exportChannel = document.getElementById('batch-export-channel').value || 'Sea truck';
-
+    let exportText = ''; // 初始化导出文本
 
     batchQuoteData.results.forEach(item => {
         const address = item.address;
@@ -1952,7 +1952,7 @@ function exportBatchQuote() {
     pickupFee = Math.ceil(pickupFee.div(exchange_rate));
 
     exportText += '---\n';
-    let exportText = `Total are ${totalQuantity}ctns ${totalWeight.toFixed(0)}kg ${totalVolume.toFixed(2)}cbm\n`;
+    exportText += `Total are ${totalQuantity}ctns ${totalWeight.toFixed(0)}kg ${totalVolume.toFixed(2)}cbm\n`;
     exportText += `Pickup fee: ${pickupFee} usd\n`;
     
     // 复制到剪贴板

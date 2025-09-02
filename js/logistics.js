@@ -1815,12 +1815,10 @@ function generateBatchQuote() {
             }
         }
         
-        // 计算单价
-        let unitPrice;
-        let unitPriceRMB;
-
+        // 计算成本
+        let unitCostRMB;
         if (window.data.seaTruckPrice[item.address + (channel === 'fast sea truck' ? ' Fast' : '')] !== undefined) {
-            unitPriceRMB = window.data.seaTruckPrice[item.address + (channel === 'fast sea truck' ? ' Fast' : '')];
+            unitCostRMB = window.data.seaTruckPrice[item.address + (channel === 'fast sea truck' ? ' Fast' : '')];
         } else {
             const priceParams = {
                 carrier: getCarrierByChannel(channel),
@@ -1829,10 +1827,13 @@ function generateBatchQuote() {
                 zipcode: postcode,
                 weight: totalWeight
             };
-            unitPriceRMB = getCarrierPrice(priceParams) || 0;
+            unitCostRMB = getCarrierPrice(priceParams) || 0;
         }
-        unitPriceRMB = new Decimal(unitPriceRMB).plus(new Decimal(profit));
-        unitPrice = new Decimal(unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2); //转换成美元
+        
+        // 计算利润和报价
+        const unitProfitRMB = new Decimal(profit);
+        const unitPriceRMB = new Decimal(unitCostRMB).plus(unitProfitRMB);
+        const unitPrice = new Decimal(unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2); //转换成美元
         const totalPrice = unitPrice * item.quantity;
         const transitTime = getTransitTime(country, channel, postcode, item.address);
 
@@ -1846,8 +1847,10 @@ function generateBatchQuote() {
             totalWeight: totalWeight,
             totalVolume: totalVolume,
             chargeWeight: chargeWeight,
-            unitPrice: unitPrice,
-            unitPriceRMB: unitPriceRMB,
+            unitCostRMB: unitCostRMB, // 成本RMB
+            unitProfitRMB: unitProfitRMB.toNumber(), // 利润RMB
+            unitPriceRMB: unitPriceRMB.toNumber(), // 报价RMB
+            unitPrice: unitPrice, // 报价USD
             totalPrice: totalPrice,
             transitTime: transitTime
         });
@@ -1856,6 +1859,10 @@ function generateBatchQuote() {
     batchQuoteData.results = results;
     renderBatchQuoteTable();
     updateBatchQuoteSummary();
+    
+    // 显示表格，隐藏空状态
+    document.getElementById('batch-quote-table-container').style.display = 'block';
+    document.getElementById('batch-quote-empty-state').style.display = 'none';
     
     showToast('批量报价生成完成');
 }
@@ -1867,24 +1874,119 @@ function renderBatchQuoteTable() {
     const tbody = document.getElementById('batch-quote-tbody');
     tbody.innerHTML = '';
     
-    batchQuoteData.results.forEach(item => {
+    batchQuoteData.results.forEach((item, index) => {
+        // 计算泡比
+        const volumeRatio = item.totalVolume > 0 ? Math.round(item.totalWeight / item.totalVolume) : 0;
+        
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${item.address}</td>
             <td>${item.postcode}</td>
             <td>${item.quantity}</td>
-            <td>${item.singleWeight.toFixed(2)}</td>
-            <td>${item.singleVolume.toFixed(2)}</td>
             <td>${Math.ceil(item.totalWeight)}</td>
             <td>${Math.ceil(item.totalVolume * 100) / 100}</td>
             <td>${Math.ceil(item.chargeWeight)}</td>
-            <td>${item.unitPrice}</td>
-            <td>${item.unitPriceRMB.toFixed(2)}</td>
-            <td>${item.totalPrice.toFixed(2)}</td>
+            <td>${volumeRatio}</td>
+            <td>
+                <input type="number" 
+                       class="form-control form-control-sm batch-cost-rmb" 
+                       value="${item.unitCostRMB.toFixed(2)}" 
+                       step="0.01"
+                       data-index="${index}"
+                       onchange="updateBatchQuoteCost(${index}, this.value)"
+                       style="min-width: 70px;" />
+            </td>
+            <td>
+                <span class="batch-profit-rmb" data-index="${index}">${item.unitProfitRMB.toFixed(2)}</span>
+            </td>
+            <td>
+                <input type="number" 
+                       class="form-control form-control-sm batch-price-rmb" 
+                       value="${item.unitPriceRMB.toFixed(2)}" 
+                       step="0.01"
+                       data-index="${index}"
+                       onchange="updateBatchQuotePrice(${index}, this.value)"
+                       style="min-width: 70px;" />
+            </td>
+            <td>
+                <span class="batch-usd-price" data-index="${index}">${item.unitPrice}</span>
+            </td>
+            <td>
+                <span class="batch-total-price" data-index="${index}">${item.totalPrice.toFixed(2)}</span>
+            </td>
             <td>${item.transitTime}</td>
         `;
         tbody.appendChild(row);
     });
+}
+
+/**
+ * 更新批量报价成本
+ */
+function updateBatchQuoteCost(index, newCostRMB) {
+    if (index < 0 || index >= batchQuoteData.results.length) return;
+    
+    const item = batchQuoteData.results[index];
+    const costRMB = parseFloat(newCostRMB) || 0;
+    
+    // 更新数据
+    item.unitCostRMB = costRMB;
+    item.unitProfitRMB = item.unitPriceRMB - costRMB;
+    item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(item.quantity).toFixed(2);
+    
+    // 更新页面显示
+    updateBatchQuoteDisplay(index);
+    
+    // 更新汇总信息
+    updateBatchQuoteSummary();
+}
+
+/**
+ * 更新批量报价价格
+ */
+function updateBatchQuotePrice(index, newPriceRMB) {
+    if (index < 0 || index >= batchQuoteData.results.length) return;
+    
+    const item = batchQuoteData.results[index];
+    const priceRMB = parseFloat(newPriceRMB) || 0;
+    
+    // 更新数据
+    item.unitPriceRMB = priceRMB;
+    item.unitProfitRMB = priceRMB - item.unitCostRMB;
+    item.unitPrice = new Decimal(priceRMB).div(new Decimal(exchange_rate)).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(item.quantity).toFixed(2);
+    
+    // 更新页面显示
+    updateBatchQuoteDisplay(index);
+    
+    // 更新汇总信息
+    updateBatchQuoteSummary();
+}
+
+/**
+ * 更新批量报价显示
+ */
+function updateBatchQuoteDisplay(index) {
+    const item = batchQuoteData.results[index];
+    
+    // 更新利润显示
+    const profitElement = document.querySelector(`.batch-profit-rmb[data-index="${index}"]`);
+    if (profitElement) {
+        profitElement.textContent = item.unitProfitRMB.toFixed(2);
+    }
+    
+    // 更新USD价格显示
+    const usdPriceElement = document.querySelector(`.batch-usd-price[data-index="${index}"]`);
+    if (usdPriceElement) {
+        usdPriceElement.textContent = item.unitPrice;
+    }
+    
+    // 更新总价显示
+    const totalPriceElement = document.querySelector(`.batch-total-price[data-index="${index}"]`);
+    if (totalPriceElement) {
+        totalPriceElement.textContent = item.totalPrice;
+    }
 }
 
 /**
@@ -1896,24 +1998,42 @@ function updateBatchQuoteSummary() {
     const totalQuantity = batchQuoteData.results.reduce((sum, item) => sum + item.quantity, 0);
     const totalWeight = batchQuoteData.results.reduce((sum, item) => sum + item.totalWeight, 0);
     const totalVolume = batchQuoteData.results.reduce((sum, item) => sum + item.totalVolume, 0);
-    const totalPrice = batchQuoteData.results.reduce((sum, item) => sum + item.totalPrice, 0);
+    const totalPrice = batchQuoteData.results.reduce((sum, item) => sum + parseFloat(item.totalPrice), 0);
 
     const totalChargeWeight = batchQuoteData.results.reduce(
         (sum, item) => sum.plus(item.chargeWeight || 0),
         new Decimal(0)
     );
+    
+    // 计算总报价RMB
+    const totalPriceRMB = batchQuoteData.results.reduce((sum, item) => {
+        return sum + (item.unitPriceRMB * item.chargeWeight);
+    }, 0);
 
-    // 获取用户输入的利润（每公斤）
-    const profitPerKg  = parseFloat(document.getElementById('batch-profit').value) || 0;
-    // 总利润
-    const totalProfit = totalChargeWeight.times(profitPerKg);
+    // 计算总成本（基于实际成本数据）
+    const totalCost = batchQuoteData.results.reduce((sum, item) => {
+        return sum + (item.unitCostRMB * item.chargeWeight);
+    }, 0);
+
+    // 计算总利润（基于实际利润数据）
+    const totalProfit = batchQuoteData.results.reduce((sum, item) => {
+        return sum + (item.unitProfitRMB * item.chargeWeight);
+    }, 0);
+
+    // 计算利率（总利润 / 总成本 * 100）
+    const profitRate = totalCost > 0 ? ((totalProfit / totalCost) * 100).toFixed(1) : 0;
     
     document.getElementById('batch-total-quantity').textContent = totalQuantity;
     document.getElementById('batch-total-weight').textContent = new Decimal(totalWeight).toDecimalPlaces(0, Decimal.ROUND_UP);
+    document.getElementById('batch-total-charge-weight').textContent = totalChargeWeight.toFixed(0);
     document.getElementById('batch-total-volume').textContent = new Decimal(totalVolume).toDecimalPlaces(2, Decimal.ROUND_UP);
-    document.getElementById('batch-total-price').textContent = totalPrice.toFixed(2);
-    document.getElementById('batch-total-profit').textContent = totalProfit.toFixed(2); // 新增总利润显示   
+    document.getElementById('batch-total-cost').textContent = totalCost.toFixed(2);
+    document.getElementById('batch-total-profit').textContent = totalProfit.toFixed(2);
+    document.getElementById('batch-profit-rate').textContent = profitRate;
+    document.getElementById('batch-total-price-rmb').textContent = totalPriceRMB.toFixed(2);
+    document.getElementById('batch-total-price-usd').textContent = totalPrice.toFixed(2);
     document.getElementById('batch-address-count').textContent = batchQuoteData.results.length;
+    document.getElementById('batch-address-count-2').textContent = batchQuoteData.results.length;
 }
 
 /**
@@ -1934,7 +2054,7 @@ function exportBatchQuote() {
         const weight = item.totalWeight;
         const volume = item.totalVolume;
 
-        // 使用UnitPrice美元/kg
+        // 使用更新后的UnitPrice美元/kg
         const unitPrice = new Decimal(item.unitPrice);
 
         const totalCost = unitPrice.mul(weight);
@@ -1980,10 +2100,19 @@ function clearBatchQuote() {
     // 清空汇总信息
     document.getElementById('batch-total-quantity').textContent = '0';
     document.getElementById('batch-total-weight').textContent = '0';
+    document.getElementById('batch-total-charge-weight').textContent = '0';
     document.getElementById('batch-total-volume').textContent = '0';
-    document.getElementById('batch-total-price').textContent = '0';
-    document.getElementById('batch-avg-price').textContent = '0';
+    document.getElementById('batch-total-cost').textContent = '0';
+    document.getElementById('batch-total-profit').textContent = '0';
+    document.getElementById('batch-profit-rate').textContent = '0';
+    document.getElementById('batch-total-price-rmb').textContent = '0';
+    document.getElementById('batch-total-price-usd').textContent = '0';
     document.getElementById('batch-address-count').textContent = '0';
+    document.getElementById('batch-address-count-2').textContent = '0';
+    
+    // 隐藏表格，显示空状态
+    document.getElementById('batch-quote-table-container').style.display = 'none';
+    document.getElementById('batch-quote-empty-state').style.display = 'block';
     
     showToast('批量报价已清空');
 }

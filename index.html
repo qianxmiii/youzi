@@ -480,22 +480,23 @@
                   </div>
                   
                   <!-- 批量报价结果表格 -->
-                  <div class="table-responsive">
+                  <div id="batch-quote-table-container" class="table-responsive" style="display: none;">
                     <table id="batch-quote-table" class="table table-bordered table-sm">
                       <thead>
                         <tr>
-                          <th style="width: 12%">地址</th>
-                          <th style="width: 10%">邮编</th>
-                          <th style="width: 8%">箱数</th>
-                          <th style="width: 8%">单箱重(kg)</th>
-                          <th style="width: 8%">单箱体积(cbm)</th>
-                          <th style="width: 8%">总重(kg)</th>
+                          <th style="width: 10%">地址</th>
+                          <th style="width: 8%">邮编</th>
+                          <th style="width: 6%">箱数</th>
+                          <th style="width: 8%">总实重(KG)</th>
                           <th style="width: 8%">总体积(cbm)</th>
                           <th style="width: 8%">计费重(kg)</th>
-                          <th style="width: 8%">报价(USD)</th>
+                          <th style="width: 6%">泡比</th>
+                          <th style="width: 8%">成本(RMB)</th>
+                          <th style="width: 8%">利润(RMB)</th>
                           <th style="width: 8%">报价(RMB)</th>
+                          <th style="width: 8%">报价(USD)</th>
                           <th style="width: 8%">总价(USD)</th>
-                          <th style="width: 8%">时效(天)</th>
+                          <th style="width: 6%">时效(天)</th>
                         </tr>
                       </thead>
                       <tbody id="batch-quote-tbody">
@@ -504,26 +505,113 @@
                     </table>
                   </div>
                   
+                  <!-- 空状态提示 -->
+                  <div id="batch-quote-empty-state" class="text-center py-5">
+                    <div class="empty-state-icon mb-3">
+                      <i class="bi bi-calculator" style="font-size: 4rem; color: #6c757d;"></i>
+                    </div>
+                    <h5 class="text-muted mb-3">批量报价工具</h5>
+                    <p class="text-muted mb-4">请先输入箱规信息和地址分配，然后点击"生成报价"按钮</p>
+                    <div class="row justify-content-center">
+                      <div class="col-md-8">
+                        <div class="card bg-light">
+                          <div class="card-body">
+                            <h6 class="card-title text-primary">使用步骤：</h6>
+                            <ol class="text-start mb-0">
+                              <li>输入箱规信息（格式：45*45*50 10KG 50CTNS）</li>
+                              <li>输入地址分配（格式：RDU4 4CTNS | AVP1 25CTNS）</li>
+                              <li>设置利润（RMB/kg）</li>
+                              <li>点击"生成报价"按钮</li>
+                            </ol>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  
                   <!-- 汇总信息 -->
                   <div class="mt-3">
+                    <!-- 核心财务指标 -->
+                    <div class="row mb-3">
+                      <div class="col-md-2-4">
+                        <div class="summary-card weight-card">
+                          <div class="card-icon">⚖️</div>
+                          <div class="card-content">
+                            <div class="card-title">总计费重</div>
+                            <div class="card-value"><span id="batch-total-charge-weight">0</span> KG</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-2-4">
+                        <div class="summary-card cost-card">
+                          <div class="card-icon">💸</div>
+                          <div class="card-content">
+                            <div class="card-title">总成本 <span class="currency-unit">RMB</span></div>
+                            <div class="card-value"><span id="batch-total-cost">0</span></div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-2-4">
+                        <div class="summary-card price-card">
+                          <div class="card-icon">💵</div>
+                          <div class="card-content">
+                            <div class="card-title">总报价 <span class="currency-unit">RMB</span></div>
+                            <div class="card-value"><span id="batch-total-price-rmb">0</span></div>
+                            <div class="card-subvalue">(<span id="batch-total-price-usd">0</span> USD)</div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-2-4">
+                        <div class="summary-card profit-card">
+                          <div class="card-icon">💰</div>
+                          <div class="card-content">
+                            <div class="card-title">总利润 <span class="currency-unit">RMB</span></div>
+                            <div class="card-value"><span id="batch-total-profit">0</span></div>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-2-4">
+                        <div class="summary-card rate-card">
+                          <div class="card-icon">📊</div>
+                          <div class="card-content">
+                            <div class="card-title">利率</div>
+                            <div class="card-value"><span id="batch-profit-rate">0</span>%</div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                    
+                    <!-- 基础数据统计 -->
                     <div class="row">
-                      <div class="col-md-2">
-                        <strong>总箱数: <span id="batch-total-quantity">0</span></strong>
+                      <div class="col-md-2-4">
+                        <div class="data-card">
+                          <div class="data-label">总箱数</div>
+                          <div class="data-value"><span id="batch-total-quantity">0</span></div>
+                        </div>
                       </div>
-                      <div class="col-md-2">
-                        <strong>总重量: <span id="batch-total-weight">0</span> kg</strong>
+                      <div class="col-md-2-4">
+                        <div class="data-card">
+                          <div class="data-label">总实重</div>
+                          <div class="data-value"><span id="batch-total-weight">0</span> KG</div>
+                        </div>
                       </div>
-                      <div class="col-md-2">
-                        <strong>总体积: <span id="batch-total-volume">0</span> cbm</strong>
+                      <div class="col-md-2-4">
+                        <div class="data-card">
+                          <div class="data-label">总体积</div>
+                          <div class="data-value"><span id="batch-total-volume">0</span> cbm</div>
+                        </div>
                       </div>
-                      <div class="col-md-2">
-                        <strong>总报价: <span id="batch-total-price">0</span> USD</strong>
+                      <div class="col-md-2-4">
+                        <div class="data-card">
+                          <div class="data-label">地址数</div>
+                          <div class="data-value"><span id="batch-address-count">0</span></div>
+                        </div>
                       </div>
-                      <div class="col-md-2">
-                        <strong>总利润: <span id="batch-total-profit">0</span> RMB</strong>
-                      </div>
-                      <div class="col-md-2">
-                        <strong>地址数: <span id="batch-address-count">0</span></strong>
+                      <div class="col-md-2-4">
+                        <div class="data-card status-card">
+                          <div class="data-label">状态</div>
+                          <div class="data-value text-success">已生成 <span id="batch-address-count-2">0</span> 个报价</div>
+                        </div>
                       </div>
                     </div>
                   </div>

@@ -1938,9 +1938,9 @@ function generateBatchQuote() {
     // 生成每个地址和每个渠道的报价
     const results = [];
     batchQuoteData.addressDistribution.forEach(item => {
-        const totalWeight = batchQuoteData.boxSpec.weight * item.quantity;
-        const totalVolume = batchQuoteData.boxSpec.volume * item.quantity;
-        const chargeWeight = Math.max(totalWeight, totalVolume * 1000000/6000);
+        const totalWeight = new Decimal(batchQuoteData.boxSpec.weight).mul(new Decimal(item.quantity));
+        const totalVolume = new Decimal(batchQuoteData.boxSpec.volume).mul(new Decimal(item.quantity));
+        const chargeWeight = Decimal.max(totalWeight, totalVolume.mul(new Decimal(1000000)).div(new Decimal(6000)));
         const profit = new Decimal(document.getElementById('batch-profit').value || 0);
 
         // 遍历所有国家查找匹配
@@ -2175,7 +2175,7 @@ function renderBatchQuoteTable() {
                             <div class="col-md-2-4">
                                 <div class="data-card">
                                     <div class="data-label">总体积</div>
-                                    <div class="data-value">${(Math.ceil(totalVolume * 100) / 100).toFixed(2)} cbm</div>
+                                    <div class="data-value">${totalVolume.mul(100).ceil().div(100).toFixed(2)} cbm</div>
                                 </div>
                             </div>
                             <div class="col-md-2-4">
@@ -2200,7 +2200,7 @@ function renderBatchQuoteTable() {
         // 填充表格数据
         const tbody = collapseItem.querySelector(`#batch-quote-tbody-${channelId}`);
                 items.forEach(item => {
-            const volumeRatio = item.totalVolume > 0 ? Math.round(item.totalWeight / item.totalVolume) : 0;
+            const volumeRatio = new Decimal(item.totalVolume).greaterThan(0) ? new Decimal(item.totalWeight).div(new Decimal(item.totalVolume)).round() : new Decimal(0);
             const postcodeColorClass = getPostcodeColorClass(item.postcode, item.channel);
             const addressDisplayContent = getAddressDisplayContent(item.address, item.postcode, item.channel);
             
@@ -2210,9 +2210,9 @@ function renderBatchQuoteTable() {
                 <td><span class="${postcodeColorClass}">${item.postcode}</span></td>
                 <td>${item.quantity}</td>
                 <td>${Math.ceil(item.totalWeight)}</td>
-                <td>${Math.ceil(item.totalVolume * 100) / 100}</td>
+                <td>${new Decimal(item.totalVolume).mul(100).ceil().div(100).toFixed(2)}</td>
                 <td>${Math.ceil(item.chargeWeight)}</td>
-                <td>${volumeRatio}</td>
+                <td>${volumeRatio.toNumber()}</td>
                 <td>
                     <input type="number" 
                            class="form-control form-control-sm batch-cost-rmb" 
@@ -2462,7 +2462,7 @@ function updateCollapseSummaryInfo() {
                         <div class="col-md-2-4">
                             <div class="data-card">
                                 <div class="data-label">总体积</div>
-                                <div class="data-value">${(Math.ceil(totalVolume * 100) / 100).toFixed(2)} cbm</div>
+                                <div class="data-value">${totalVolume.mul(100).ceil().div(100).toFixed(2)} cbm</div>
                             </div>
                         </div>
                         <div class="col-md-2-4">
@@ -2495,8 +2495,31 @@ function exportBatchQuote() {
         return;
     }
 
-    let exportText = ''; // 初始化导出文本
+    // 获取导出格式
+    const exportFormat = document.getElementById('batch-export-format').value;
+    
+    let exportText = '';
+    
+    if (exportFormat === 'by-address') {
+        exportText = exportByAddress();
+    } else if (exportFormat === 'by-channel') {
+        exportText = exportByChannel();
+    }
+    
+    // 复制到剪贴板
+    navigator.clipboard.writeText(exportText).then(() => {
+        showToast('批量报价单已复制到剪贴板');
+    }).catch(() => {
+        alert(exportText);
+    });
+}
 
+/**
+ * 按地址导出格式
+ */
+function exportByAddress() {
+    let exportText = '';
+    
     // 按地址分组
     const addressGroups = {};
     batchQuoteData.results.forEach(item => {
@@ -2511,37 +2534,82 @@ function exportBatchQuote() {
         const items = addressGroups[address];
         const firstItem = items[0];
         
-        exportText += `To ${address},${firstItem.quantity}ctns ${firstItem.totalWeight.toFixed(0)}kg ${firstItem.totalVolume.toFixed(2)}cbm\n`;
+        exportText += `To ${address},${firstItem.quantity}ctns ${Math.ceil(firstItem.totalWeight)}kg ${firstItem.totalVolume.toFixed(2)}cbm\n`;
         
         // 为每个渠道生成报价行
         items.forEach(item => {
-        const unitPrice = new Decimal(item.unitPrice);
-            const totalCost = unitPrice.mul(item.chargeWeight);
+            const unitPrice = new Decimal(item.unitPrice);
+            const totalCost = unitPrice.mul(new Decimal(item.chargeWeight));
 
-            exportText += `${item.channel}: ${unitPrice.toFixed(2)} usd/kg * ${item.chargeWeight.toFixed(0)}kg = ${totalCost.toFixed(2)}usd ${item.transitTime} days\n`;
+            exportText += `${item.channel}: ${unitPrice.toFixed(2)} usd/kg * ${Math.ceil(item.chargeWeight)}kg = ${totalCost.toFixed(2)}usd ${item.transitTime} days\n`;
         });
 
         exportText += '\n';
     });
 
-    // 汇总总量
-    const totalQuantity = batchQuoteData.results.reduce((sum, item) => sum + item.quantity, 0);
-    const totalWeight = batchQuoteData.results.reduce((sum, item) => sum + item.totalWeight, 0);
-    const totalVolume = batchQuoteData.results.reduce((sum, item) => sum + item.totalVolume, 0);
+    // 添加汇总信息
+    exportText += getExportSummary();
+    
+    return exportText;
+}
+
+/**
+ * 按渠道导出格式
+ */
+function exportByChannel() {
+    let exportText = '';
+    
+    // 按渠道分组
+    const channelGroups = {};
+    batchQuoteData.results.forEach(item => {
+        if (!channelGroups[item.channel]) {
+            channelGroups[item.channel] = [];
+        }
+        channelGroups[item.channel].push(item);
+    });
+
+    // 为每个渠道生成报价
+    Object.keys(channelGroups).forEach(channel => {
+        const items = channelGroups[channel];
+        
+        // 为每个地址生成报价行
+        items.forEach(item => {
+            const unitPrice = new Decimal(item.unitPrice);
+            const totalCost = unitPrice.mul(new Decimal(item.chargeWeight));
+
+            exportText += `To ${item.address},${item.quantity}ctns ${Math.ceil(item.totalWeight)}kg ${item.totalVolume.toFixed(2)}cbm\n`;
+            exportText += `${item.channel}: ${unitPrice.toFixed(2)} usd/kg * ${Math.ceil(item.chargeWeight)}kg = ${totalCost.toFixed(2)}usd ${item.transitTime} days\n\n`;
+        });
+    });
+
+    // 添加汇总信息
+    exportText += getExportSummary();
+    
+    return exportText;
+}
+
+/**
+ * 获取导出汇总信息
+ */
+function getExportSummary() {
+    // 直接使用箱规信息计算汇总
+    if (!batchQuoteData.boxSpec) {
+        return '---\nTotal are 0ctns 0kg 0.00cbm\nPickup fee: 0 usd\n';
+    }
+    
+    const boxSpec = batchQuoteData.boxSpec;
+    const totalQuantity = new Decimal(boxSpec.totalQuantity);
+    const totalWeight = new Decimal(boxSpec.weight).mul(totalQuantity);
+    const totalVolume = new Decimal(boxSpec.volume).mul(totalQuantity);
 
     let pickupFee = new Decimal(document.getElementById('batch-pickup-fee').value || 0);
-    pickupFee = Math.ceil(pickupFee.div(exchange_rate));
+    pickupFee = pickupFee.div(new Decimal(exchange_rate)).ceil();
 
-    exportText += '---\n';
-    exportText += `Total are ${totalQuantity}ctns ${totalWeight.toFixed(0)}kg ${totalVolume.toFixed(2)}cbm\n`;
-    exportText += `Pickup fee: ${pickupFee} usd\n`;
+    let summaryText = '---\n';
+    summaryText += `Total are ${totalQuantity.toNumber()}ctns ${totalWeight.ceil().toNumber()}kg ${totalVolume.mul(100).ceil().div(100).toFixed(2)}cbm\n`;
+    summaryText += `Pickup fee: ${pickupFee.toNumber()} usd\n`;
     
-    // 复制到剪贴板
-    navigator.clipboard.writeText(exportText).then(() => {
-        showToast('批量报价单已复制到剪贴板');
-    }).catch(() => {
-        alert(exportText);
-    });
+    return summaryText;
 }
 
 /**

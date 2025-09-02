@@ -1215,6 +1215,42 @@ td input.form-control {
   line-height: 1.2;
 }
 
+/* 折叠面板动画优化 */
+.accordion-collapse {
+  transition: height 0.5s ease-in-out !important;
+}
+
+.accordion-button {
+  transition: all 0.3s ease-in-out;
+}
+
+.accordion-button:not(.collapsed) {
+  background-color: #f8f9fa;
+  border-color: #dee2e6;
+}
+
+.accordion-button:focus {
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+}
+
+/* 输入框悬停效果 */
+.batch-cost-rmb,
+.batch-profit-rmb {
+  transition: border-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.batch-cost-rmb:hover,
+.batch-profit-rmb:hover {
+  border-color: #0d6efd !important;
+  box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15) !important;
+}
+
+.batch-cost-rmb:focus,
+.batch-profit-rmb:focus {
+  border-color: #0d6efd !important;
+  box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25) !important;
+}
+
 /* 响应式设计 */
 @media (max-width: 768px) {
   .summary-card {

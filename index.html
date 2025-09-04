@@ -8,6 +8,15 @@
   <link href="css/common/bootstrap.min.css" rel="stylesheet" />
   <link href="css/common/bootstrap-icons.min.css" rel="stylesheet" />
   <link href="css/youzi.css" rel="stylesheet" />
+  <!-- 数字字体 -->
+  <style>
+    @font-face {
+      font-family: 'Digital-7';
+      src: url('font/digital-7-mono-3.ttf') format('truetype');
+      font-weight: normal;
+      font-style: normal;
+    }
+  </style>
   <!-- 网站图标 -->
   <link rel="icon" href="img/favicon.png" type="image/png">
   <!-- Excel生成库 -->
@@ -38,10 +47,10 @@
           <div class="col-md-4">
             <div class="form-floating">
               <select class="form-select" id="cal-country" oninput="calculate();">
-                <option value="US">美国</option>
-                <option value="CA">加拿大</option>
-                <option value="EU">欧洲</option>
-                <option value="UK">英国</option>
+                <option value="美国">美国</option>
+                <option value="加拿大">加拿大</option>
+                <option value="欧洲">欧洲</option>
+                <option value="英国">英国</option>
               </select>
               <label for="cal-country">国家</label>
             </div>
@@ -624,6 +633,10 @@
                 id="openAddressBook">
                 <i class="bi bi-bookmarks"></i> 客户地址簿
               </button>
+              <!-- 4. 世界时钟 -->
+              <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#worldClockModal">
+                <i class="bi bi-clock"></i> 世界时钟
+              </button>
             </div>
 
             <!-- 模态框-常用术语-->
@@ -749,6 +762,28 @@
                           <!-- 动态加载数据 -->
                         </tbody>
                       </table>
+                    </div>
+                  </div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 世界时钟模态框 -->
+            <div class="modal fade" id="worldClockModal" tabindex="-1" aria-labelledby="worldClockModalLabel" aria-hidden="true">
+              <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="worldClockModalLabel">
+                      <i class="bi bi-globe"></i> 世界时钟
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">
+                    <div class="row" id="worldClockContainer">
+                      <!-- 时钟将通过 JavaScript 动态生成 -->
                     </div>
                   </div>
                   <div class="modal-footer">

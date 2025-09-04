@@ -791,6 +791,11 @@ document.addEventListener('DOMContentLoaded', function () {
     // 初始化搜索功能
     initSearchFunction();
     
+    // 初始化世界时钟
+    try {
+        initWorldClock();
+    } catch (e) { console.warn('initWorldClock error', e); }
+    
     try {
         initCarrierSelect();
     } catch (e) { console.warn('initCarrierSelect error', e); }
@@ -890,6 +895,211 @@ function highlightCarrierPriceCell(zipLabel, weightIdx) {
             }
         });
     });
+}
+
+/**
+ * 世界时钟功能
+ */
+// 世界时钟配置
+const worldClockConfig = [
+  { 
+    name: '洛杉矶', 
+    timezone: 'America/Los_Angeles', 
+    country: '美国',
+    timezoneName: '西八区',
+    offsetFromBeijing: -16 // 比北京时间慢16小时（夏令时-15小时）
+  },
+  { 
+    name: '纽约', 
+    timezone: 'America/New_York', 
+    country: '美国',
+    timezoneName: '西五区',
+    offsetFromBeijing: -13 // 比北京时间慢13小时（夏令时-12小时）
+  },
+  { 
+    name: '温哥华', 
+    timezone: 'America/Vancouver', 
+    country: '加拿大',
+    timezoneName: '西八区',
+    offsetFromBeijing: -16 // 比北京时间慢16小时（夏令时-15小时）
+  },
+  { 
+    name: '多伦多', 
+    timezone: 'America/Toronto', 
+    country: '加拿大',
+    timezoneName: '西五区',
+    offsetFromBeijing: -13 // 比北京时间慢13小时（夏令时-12小时）
+  },
+  { 
+    name: '悉尼', 
+    timezone: 'Australia/Sydney', 
+    country: '澳大利亚',
+    timezoneName: '东十区',
+    offsetFromBeijing: +2 // 比北京时间快2小时（夏令时+3小时）
+  },
+  { 
+    name: '柏林', 
+    timezone: 'Europe/Berlin', 
+    country: '德国',
+    timezoneName: '东一区',
+    offsetFromBeijing: -7 // 比北京时间慢7小时（夏令时-6小时）
+  },
+  { 
+    name: '伦敦', 
+    timezone: 'Europe/London', 
+    country: '英国',
+    timezoneName: '零时区',
+    offsetFromBeijing: -8 // 比北京时间慢8小时（夏令时-7小时）
+  },
+  { 
+    name: '耶路撒冷', 
+    timezone: 'Asia/Jerusalem', 
+    country: '以色列',
+    timezoneName: '东二区',
+    offsetFromBeijing: -6 // 比北京时间慢6小时（夏令时-5小时）
+  },
+  { 
+    name: '卡拉奇', 
+    timezone: 'Asia/Karachi', 
+    country: '巴基斯坦',
+    timezoneName: '东五区',
+    offsetFromBeijing: -3 // 比北京时间慢3小时
+  }
+];
+
+let worldClockInterval = null;
+
+// 初始化世界时钟
+function initWorldClock() {
+  const modal = document.getElementById('worldClockModal');
+  
+  // 当模态框显示时启动时钟
+  modal.addEventListener('shown.bs.modal', function() {
+    renderWorldClocks();
+    startWorldClock();
+  });
+  
+  // 当模态框隐藏时停止时钟
+  modal.addEventListener('hidden.bs.modal', function() {
+    stopWorldClock();
+  });
+}
+
+// 渲染世界时钟
+function renderWorldClocks() {
+  const container = document.getElementById('worldClockContainer');
+  container.innerHTML = '';
+  
+  worldClockConfig.forEach(config => {
+    const clockCard = document.createElement('div');
+    clockCard.className = 'col-md-4 col-lg-3 mb-4';
+    clockCard.innerHTML = `
+      <div class="card world-clock-card">
+        <div class="card-body text-center">
+          <div class="clock-country mb-2">${config.country} (${config.name})</div>
+          <div class="timezone-info mb-2">
+            <span class="timezone-name">${config.timezoneName}</span>
+          </div>
+          <div class="clock-time-container">
+            <div class="clock-time digital-clock" data-timezone="${config.timezone}">
+              <span class="time-digit">--</span>:<span class="time-digit">--</span>:<span class="time-digit">--</span>
+            </div>
+          </div>
+          <div class="clock-date" data-timezone="${config.timezone}">
+            --/--/----
+          </div>
+          <div class="time-difference" data-timezone="${config.timezone}">
+            --小时
+          </div>
+        </div>
+      </div>
+    `;
+    container.appendChild(clockCard);
+  });
+}
+
+// 启动世界时钟
+function startWorldClock() {
+  // 立即更新一次
+  updateWorldClocks();
+  
+  // 每秒更新一次
+  worldClockInterval = setInterval(updateWorldClocks, 1000);
+}
+
+// 停止世界时钟
+function stopWorldClock() {
+  if (worldClockInterval) {
+    clearInterval(worldClockInterval);
+    worldClockInterval = null;
+  }
+}
+
+// 更新世界时钟显示
+function updateWorldClocks() {
+  const beijingTime = new Date();
+  
+  worldClockConfig.forEach(config => {
+    const timeElement = document.querySelector(`[data-timezone="${config.timezone}"].clock-time`);
+    const dateElement = document.querySelector(`[data-timezone="${config.timezone}"].clock-date`);
+    const diffElement = document.querySelector(`[data-timezone="${config.timezone}"].time-difference`);
+    
+    if (timeElement && dateElement && diffElement) {
+      try {
+        const timeInTimezone = new Date(beijingTime.toLocaleString("en-US", {timeZone: config.timezone}));
+        
+        // 格式化时间
+        const hours = timeInTimezone.getHours().toString().padStart(2, '0');
+        const minutes = timeInTimezone.getMinutes().toString().padStart(2, '0');
+        const seconds = timeInTimezone.getSeconds().toString().padStart(2, '0');
+        
+        // 格式化日期
+        const dateString = timeInTimezone.toLocaleDateString('zh-CN', {
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        });
+        
+        // 计算时差
+        const timeDiff = calculateTimeDifference(beijingTime, timeInTimezone);
+        
+        // 更新电子表显示
+        const timeDigits = timeElement.querySelectorAll('.time-digit');
+        if (timeDigits.length === 3) {
+          timeDigits[0].textContent = hours;
+          timeDigits[1].textContent = minutes;
+          timeDigits[2].textContent = seconds;
+        }
+        
+        dateElement.textContent = dateString;
+        diffElement.textContent = timeDiff;
+      } catch (error) {
+        console.error(`更新时区 ${config.timezone} 时间失败:`, error);
+        timeElement.textContent = '--:--:--';
+        dateElement.textContent = '--/--/----';
+        diffElement.textContent = '--h';
+      }
+    }
+  });
+}
+
+
+// 计算时差
+function calculateTimeDifference(beijingTime, targetTime) {
+  // 计算两个时间的差值（毫秒）
+  const diffMs = targetTime.getTime() - beijingTime.getTime();
+  
+  // 转换为小时
+  const diffHours = Math.round(diffMs / (1000 * 60 * 60));
+  
+  // 格式化显示
+  if (diffHours === 0) {
+    return '±0小时';
+  } else if (diffHours > 0) {
+    return `+${diffHours}小时`;
+  } else {
+    return `${diffHours}小时`;
+  }
 }
 
 /**

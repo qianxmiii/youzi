@@ -65,7 +65,7 @@ function getTransitTimeUSA(channel, postcode, address) {
         }
     }
 
-    const usaTransitData = transitTimeData["USA"]; // 获取美国时效数据
+    const usaTransitData = transitTimeData["美国"]; // 获取美国时效数据
     if (!usaTransitData || !usaTransitData[channel]) {
         return ""; // 如果渠道不存在，返回空字符串
     }
@@ -103,7 +103,7 @@ function getTransitTimeUSA(channel, postcode, address) {
  * 获取加拿大时效
  */
 function getTransitTimeCA(channel, postcode) {
-    const caTransitData = transitTimeData["Canada"]; // 获取加拿大时效数据
+    const caTransitData = transitTimeData["加拿大"]; // 获取加拿大时效数据
     if (!caTransitData || !caTransitData[channel]) {
         return ""; // 如果渠道不存在，返回空字符串
     }
@@ -119,7 +119,7 @@ function getTransitTimeCA(channel, postcode) {
  */
 function getTransitTimeEU(channel, postcode) {
 
-    const transitData = transitTimeData["Europe"]; // 获取加拿大时效数据
+    const transitData = transitTimeData["欧洲"]; // 获取欧洲时效数据
     if (!transitData || !transitData[channel]) {
         return ""; // 如果渠道不存在，返回空字符串
     }
@@ -134,7 +134,7 @@ function getTransitTimeEU(channel, postcode) {
  * 获取英国时效
  */
 function getTransitTimeUK(channel, postcode) {
-    const transitData = transitTimeData["UK"]; // 获取加拿大时效数据
+    const transitData = transitTimeData["英国"]; // 获取英国时效数据
     if (!transitData || !transitData[channel]) {
         return ""; // 如果渠道不存在，返回空字符串
     }
@@ -149,7 +149,7 @@ function getTransitTimeUK(channel, postcode) {
  * 获取加拿大时效
  */
 function getTransitTimeAU(channel, postcode) {
-    const transitData = transitTimeData["Austrilia"]; // 获取加拿大时效数据
+    const transitData = transitTimeData["澳大利亚"]; // 获取澳大利亚时效数据
     if (!transitData || !transitData[channel]) {
         return ""; // 如果渠道不存在，返回空字符串
     }

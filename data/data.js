@@ -1258,7 +1258,7 @@ const termsByCategory = {
 
 
 const transitTimeData = {
-    "USA": {
+    "美国": {
         "Sea truck": {
             "0-4": "40-50",
             "5-7": "35-40",
@@ -1320,7 +1320,7 @@ const transitTimeData = {
             "default": "6-8"
         }
     },
-    "Canada": {
+    "加拿大": {
         "Sea truck": {
             "default": "35-45"
         },
@@ -1346,7 +1346,7 @@ const transitTimeData = {
             "default": "10-15"
         }
     },
-    "Europe": {
+    "欧洲": {
         "Sea truck": {
             "default": "50-55"
         },
@@ -1372,7 +1372,7 @@ const transitTimeData = {
             "default": "5-8"
         }
     },
-    "UK": {
+    "英国": {
         "Sea truck": {
             "default": "45-55"
         },
@@ -1398,7 +1398,7 @@ const transitTimeData = {
             "default": "5-8"
         }
     },
-    "Austrilia": {
+    "澳大利亚": {
         "Sea truck": {
             "default": "30-35"
         },
@@ -1424,7 +1424,7 @@ const tagColors = {
 
 
 const boxRules = {
-    "US": {
+    "美国": {
         "UPS": {
             maxWeight: 22, // 单件最大重量
             maxLength: 120, // 最长边
@@ -1444,7 +1444,7 @@ const boxRules = {
             rejectPerimeter: 320
         }
     },
-    "CA": {
+    "加拿大": {
         "UPS": {
             maxWeight: 22,
             maxLength: 120,
@@ -1464,7 +1464,7 @@ const boxRules = {
             rejectPerimeter: 320
         }
     },
-    "EU": {
+    "欧洲": {
         "UPS": {
             maxWeight: 25,
             maxLength: 100,
@@ -1497,7 +1497,7 @@ const boxRules = {
             rejectPerimeter: 300
         }
     },
-    "UK": {
+    "英国": {
         "DPD": {
             maxWeight: 30,
             maxLength: 100,

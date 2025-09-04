@@ -2504,6 +2504,9 @@ function exportBatchQuote() {
         exportText = exportByAddress();
     } else if (exportFormat === 'by-channel') {
         exportText = exportByChannel();
+    } else if (exportFormat === 'excel') {
+        exportExcel();
+        return; // Excel导出不需要复制到剪贴板
     }
     
     // 复制到剪贴板
@@ -2586,6 +2589,200 @@ function exportByChannel() {
     exportText += getExportSummary();
     
     return exportText;
+}
+
+/**
+ * 导出Excel格式
+ */
+function exportExcel() {
+    if (!batchQuoteData.boxSpec) {
+        showToast('请先生成批量报价');
+        return;
+    }
+    
+    // 创建工作簿
+    const wb = XLSX.utils.book_new();
+    
+    // 准备数据
+    const data = [];
+    
+    // 添加表头
+    data.push([
+        'AD',           // 地址
+        'CTNS',         // 箱数
+        'Size',         // 箱规尺寸
+        'Weight',       // 单箱实重
+        'Volume',       // 总体积
+        'Volume weight', // 总材积重
+        'Actual weight', // 总实重
+        'Chargeable weight', // 总计费重
+        'unit price',   // 报价(USD)
+        'total cost',   // 总价(USD)
+        'transit time', // 时效
+        '泡比',         // 泡比
+        'Remark'        // 详细备注信息
+    ]);
+    
+    // 按渠道分组数据
+    const channelGroups = {};
+    batchQuoteData.results.forEach(item => {
+        if (!channelGroups[item.channel]) {
+            channelGroups[item.channel] = [];
+        }
+        channelGroups[item.channel].push(item);
+    });
+    
+    // 生成数据行
+    Object.keys(channelGroups).forEach(channel => {
+        const items = channelGroups[channel];
+        
+        items.forEach(item => {
+            const boxSpec = batchQuoteData.boxSpec;
+            const size = `${boxSpec.length}*${boxSpec.width}*${boxSpec.height}`;
+            const singleWeight = boxSpec.weight; // 单箱实重
+            const totalVolume = new Decimal(item.totalVolume).mul(100).ceil().div(100); // 总体积
+            const volumeWeight = new Decimal(item.totalVolume).mul(new Decimal(1000000)).div(new Decimal(6000)).ceil(); // 总材积重
+            const actualWeight = new Decimal(item.totalWeight).ceil(); // 总实重
+            const chargeableWeight = new Decimal(item.chargeWeight).ceil(); // 总计费重
+            const unitPrice = new Decimal(item.unitPrice).toFixed(2); // 报价(USD)
+            const totalCost = new Decimal(item.unitPrice).mul(new Decimal(item.chargeWeight)).toFixed(2); // 总价(USD)
+            const transitTime = item.transitTime + ' days'; // 时效
+            const volumeRatio = new Decimal(item.totalVolume).greaterThan(0) ? 
+                new Decimal(item.totalWeight).div(new Decimal(item.totalVolume)).round().toNumber() : 0; // 泡比
+            
+            // 生成备注信息
+            const remark = `To ${item.address},${item.quantity}ctns ${Math.ceil(item.totalWeight)}kg ${totalVolume.toFixed(2)}cbm\n${item.channel}: ${unitPrice} usd/kg * ${Math.ceil(item.chargeWeight)}kg = ${totalCost}usd ${transitTime}`;
+            
+            // 添加数据行
+            data.push([
+                item.address,           // AD - 地址
+                item.quantity,          // CTNS - 箱数
+                size,                   // Size - 箱规尺寸
+                singleWeight,           // Weight - 单箱实重
+                parseFloat(totalVolume.toFixed(2)), // Volume - 总体积
+                volumeWeight.toNumber(), // Volume weight - 总材积重
+                actualWeight.toNumber(), // Actual weight - 总实重
+                chargeableWeight.toNumber(), // Chargeable weight - 总计费重
+                parseFloat(unitPrice),  // unit price - 报价(USD)
+                parseFloat(totalCost),  // total cost - 总价(USD)
+                transitTime,            // transit time - 时效
+                volumeRatio,            // 泡比
+                remark                  // Remark - 详细信息
+            ]);
+        });
+    });
+    
+    // 添加汇总行
+    const boxSpec = batchQuoteData.boxSpec;
+    const totalQuantity = boxSpec.totalQuantity;
+    const totalVolume = new Decimal(boxSpec.volume).mul(new Decimal(totalQuantity));
+    const totalWeight = new Decimal(boxSpec.weight).mul(new Decimal(totalQuantity));
+    
+    // 计算基础总成本（不含提货费）
+    let baseTotalCost = new Decimal(0);
+    batchQuoteData.results.forEach(item => {
+        const itemCost = new Decimal(item.unitPrice).mul(new Decimal(item.chargeWeight));
+        baseTotalCost = baseTotalCost.plus(itemCost);
+    });
+    
+    // 获取提货费
+    let pickupFee = new Decimal(document.getElementById('batch-pickup-fee').value || 0);
+    pickupFee = pickupFee.div(new Decimal(exchange_rate)).ceil();
+    
+    // 计算最终总价（基础总成本 + 提货费）
+    const totalCost = baseTotalCost.plus(pickupFee);
+    
+    // 如果有提货费，先添加提货费行
+    if (pickupFee.greaterThan(0)) {
+        data.push([
+            '',                             // AD
+            '',                             // CTNS
+            '',                             // Size
+            '',                             // Weight
+            '',                             // Volume
+            '',                             // Volume weight
+            '',                             // Actual weight
+            '',                             // Chargeable weight
+            'Pickup fee',                             // unit price
+            parseFloat(pickupFee.toFixed(2)), // Pickup fee - 提货费
+            '',                             // transit time
+            '',                             // 泡比
+            ''                    // Remark
+        ]);
+    }
+    
+    // 添加总价行
+    data.push([
+        '',                             // AD
+        totalQuantity,                  // CTNS - 总箱数
+        'boxes',                        // Size
+        '',                             // Weight
+        parseFloat(totalVolume.mul(100).ceil().div(100).toFixed(2)), // Volume - 总体积
+        'cbm',                          // Volume weight
+        '',                             // Actual weight - 总实重
+        '',                             // Chargeable weight
+        'Total',                        // unit price
+        parseFloat(totalCost.toFixed(2)), // total cost - 总价
+        '',                             // transit time
+        '',                             // 泡比
+        ''                              // Remark
+    ]);
+    
+    // 创建工作表
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    
+    // 设置列宽
+    ws['!cols'] = [
+        { wch: 10 }, // AD
+        { wch: 8 },  // CTNS
+        { wch: 12 }, // Size
+        { wch: 10 }, // Weight
+        { wch: 10 }, // Volume
+        { wch: 12 }, // Volume weight
+        { wch: 12 }, // Actual weight
+        { wch: 15 }, // Chargeable weight
+        { wch: 10 }, // unit price
+        { wch: 10 }, // total cost
+        { wch: 12 }, // transit time
+        { wch: 8 },  // 泡比
+        { wch: 50 }  // Remark
+    ];
+    
+    // 添加工作表到工作簿
+    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+    
+    // 生成文件名：XXctns_quote_月日
+    const now = new Date();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const fileName = `${totalQuantity}ctns_quote_${month}${day}.xlsx`;
+    
+    // 生成并下载Excel文件
+    XLSX.writeFile(wb, fileName);
+    
+    showToast('Excel文件已下载');
+}
+
+/**
+ * 下载CSV文件
+ */
+function downloadCSV(csvContent, filename) {
+    const blob = new Blob(['\ufeff' + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    
+    if (link.download !== undefined) {
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', filename);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        showToast('Excel文件已下载');
+    } else {
+        showToast('浏览器不支持文件下载');
+    }
 }
 
 /**

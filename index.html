@@ -10,6 +10,8 @@
   <link href="css/youzi.css" rel="stylesheet" />
   <!-- 网站图标 -->
   <link rel="icon" href="img/favicon.png" type="image/png">
+  <!-- Excel生成库 -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 </head>
 
 <body>
@@ -430,6 +432,7 @@
                         <select id="batch-export-format" class="form-select form-select-sm" style="width: auto; border-radius: 0.375rem 0 0 0.375rem;">
                           <option value="by-address">按地址导出</option>
                           <option value="by-channel">按渠道导出</option>
+                          <option value="excel">导出Excel</option>
                         </select>
                         <button type="button" class="btn btn-sm btn-outline-info" onclick="exportBatchQuote()" style="border-radius: 0 0.375rem 0.375rem 0;">
                           <i class="bi bi-download"></i> 导出报价

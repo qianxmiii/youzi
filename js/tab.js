@@ -1185,6 +1185,158 @@ function resetTime(timezone) {
 }
 
 /**
+ * 日期计算功能
+ */
+
+// 日期加减计算
+function calculateDateFromDays() {
+  const baseDate = document.getElementById('baseDate').value;
+  const daysInput = document.getElementById('daysInput').value;
+  const resultElement = document.getElementById('dateResult1');
+  
+  if (!baseDate || !daysInput) {
+    resultElement.innerHTML = '请选择日期并输入天数';
+    resultElement.className = 'alert alert-warning';
+    return;
+  }
+  
+  const baseDateObj = new Date(baseDate);
+  const days = parseInt(daysInput);
+  
+  if (isNaN(days)) {
+    resultElement.innerHTML = '请输入有效的天数';
+    resultElement.className = 'alert alert-danger';
+    return;
+  }
+  
+  // 计算新日期
+  const newDate = new Date(baseDateObj);
+  newDate.setDate(baseDateObj.getDate() + days);
+  
+  // 格式化日期
+  const formattedDate = newDate.toLocaleDateString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    weekday: 'long'
+  });
+  
+  const direction = days > 0 ? '往后' : days < 0 ? '往前' : '';
+  const absDays = Math.abs(days);
+  
+  resultElement.innerHTML = `
+    <strong>计算结果：</strong><br>
+    基准日期：${baseDate}<br>
+    计算天数：${daysInput}天 (${direction}${absDays}天)<br>
+    结果日期：${formattedDate}
+  `;
+  resultElement.className = 'alert alert-success';
+}
+
+// 日期差计算
+function calculateDateDifference() {
+  const startDate = document.getElementById('startDate').value;
+  const endDate = document.getElementById('endDate').value;
+  const resultElement = document.getElementById('dateResult2');
+  
+  if (!startDate || !endDate) {
+    resultElement.innerHTML = '请选择开始日期和结束日期';
+    resultElement.className = 'alert alert-warning';
+    return;
+  }
+  
+  const startDateObj = new Date(startDate);
+  const endDateObj = new Date(endDate);
+  
+  if (startDateObj > endDateObj) {
+    resultElement.innerHTML = '开始日期不能晚于结束日期';
+    resultElement.className = 'alert alert-danger';
+    return;
+  }
+  
+  // 计算日期差
+  const timeDiff = endDateObj.getTime() - startDateObj.getTime();
+  const daysDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+  
+  // 计算年、月、日
+  const years = Math.floor(daysDiff / 365);
+  const months = Math.floor((daysDiff % 365) / 30);
+  const days = daysDiff % 30;
+  
+  let resultText = `<strong>计算结果：</strong><br>`;
+  resultText += `开始日期：${startDate}<br>`;
+  resultText += `结束日期：${endDate}<br>`;
+  resultText += `相差天数：${daysDiff}天<br>`;
+  
+  if (years > 0) {
+    resultText += `约 ${years}年`;
+    if (months > 0) resultText += ` ${months}个月`;
+    if (days > 0) resultText += ` ${days}天`;
+  } else if (months > 0) {
+    resultText += `约 ${months}个月`;
+    if (days > 0) resultText += ` ${days}天`;
+  } else {
+    resultText += `共 ${daysDiff}天`;
+  }
+  
+  resultElement.innerHTML = resultText;
+  resultElement.className = 'alert alert-success';
+}
+
+// 清空日期计算1
+function clearDateCalc1() {
+  document.getElementById('baseDate').value = '';
+  document.getElementById('daysInput').value = '';
+  document.getElementById('dateResult1').innerHTML = '请选择日期并输入天数';
+  document.getElementById('dateResult1').className = 'alert alert-info';
+}
+
+// 清空日期计算2
+function clearDateCalc2() {
+  document.getElementById('startDate').value = '';
+  document.getElementById('endDate').value = '';
+  document.getElementById('dateResult2').innerHTML = '请选择开始日期和结束日期';
+  document.getElementById('dateResult2').className = 'alert alert-info';
+}
+
+// 设为今天
+function setToday() {
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('baseDate').value = today;
+  document.getElementById('startDate').value = today;
+  calculateDateFromDays();
+  calculateDateDifference();
+}
+
+// 设为明天
+function setTomorrow() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toISOString().split('T')[0];
+  document.getElementById('baseDate').value = tomorrowStr;
+  document.getElementById('endDate').value = tomorrowStr;
+  calculateDateFromDays();
+  calculateDateDifference();
+}
+
+// 设为昨天
+function setYesterday() {
+  const yesterday = new Date();
+  yesterday.setDate(yesterday.getDate() - 1);
+  const yesterdayStr = yesterday.toISOString().split('T')[0];
+  document.getElementById('baseDate').value = yesterdayStr;
+  document.getElementById('startDate').value = yesterdayStr;
+  calculateDateFromDays();
+  calculateDateDifference();
+}
+
+// 全部清空
+function clearAllDateCalc() {
+  clearDateCalc1();
+  clearDateCalc2();
+}
+
+/**
  * 初始化地址簿功能
  */
 function initAddressBook() {

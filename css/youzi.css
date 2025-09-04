@@ -1467,6 +1467,33 @@ td input.form-control {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
+/* 时钟编辑功能样式 */
+.editable-time {
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.editable-time:hover {
+  background: #f0f8ff;
+  border-color: #007bff;
+}
+
+.time-edit-container {
+  margin-top: 10px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e0e0e0;
+}
+
+.time-edit-container input {
+  margin-bottom: 8px;
+}
+
+.time-edit-container .btn {
+  margin: 2px;
+}
+
 /* 世界时钟模态框样式 */
 #worldClockModal .modal-dialog {
   max-width: 1200px;
@@ -1478,6 +1505,10 @@ td input.form-control {
   color: white;
   border-bottom: none;
   border-radius: 8px 8px 0 0;
+}
+
+#worldClockModal .btn-close {
+  filter: invert(1);
 }
 
 #worldClockModal .modal-title {

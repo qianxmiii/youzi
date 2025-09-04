@@ -903,6 +903,14 @@ function highlightCarrierPriceCell(zipLabel, weightIdx) {
 // 世界时钟配置
 const worldClockConfig = [
   { 
+    name: '北京', 
+    timezone: 'Asia/Shanghai', 
+    country: '中国',
+    timezoneName: '东八区',
+    offsetFromBeijing: 0, // 基准时间
+    isEditable: true // 可编辑标记
+  },
+  { 
     name: '洛杉矶', 
     timezone: 'America/Los_Angeles', 
     country: '美国',
@@ -968,6 +976,7 @@ const worldClockConfig = [
 ];
 
 let worldClockInterval = null;
+let customBeijingTime = null; // 自定义的北京时间
 
 // 初始化世界时钟
 function initWorldClock() {
@@ -993,6 +1002,27 @@ function renderWorldClocks() {
   worldClockConfig.forEach(config => {
     const clockCard = document.createElement('div');
     clockCard.className = 'col-md-4 col-lg-3 mb-4';
+    // 如果是可编辑的时钟（中国时钟），添加点击编辑功能
+    const isEditable = config.isEditable;
+    const timeDisplay = isEditable ? `
+      <div class="clock-time-container">
+        <div class="clock-time digital-clock editable-time" data-timezone="${config.timezone}" onclick="toggleTimeEdit('${config.timezone}')" style="cursor: pointer;">
+          <span class="time-digit">--</span>:<span class="time-digit">--</span>:<span class="time-digit">--</span>
+        </div>
+        <div class="time-edit-container" id="edit-${config.timezone}" style="display: none;">
+          <input type="datetime-local" class="form-control form-control-sm" id="time-input-${config.timezone}" onchange="updateCustomTime('${config.timezone}')">
+          <button type="button" class="btn btn-sm btn-success mt-1" onclick="applyCustomTime('${config.timezone}')">应用</button>
+          <button type="button" class="btn btn-sm btn-secondary mt-1" onclick="resetTime('${config.timezone}')">重置</button>
+        </div>
+      </div>
+    ` : `
+      <div class="clock-time-container">
+        <div class="clock-time digital-clock" data-timezone="${config.timezone}">
+          <span class="time-digit">--</span>:<span class="time-digit">--</span>:<span class="time-digit">--</span>
+        </div>
+      </div>
+    `;
+
     clockCard.innerHTML = `
       <div class="card world-clock-card">
         <div class="card-body text-center">
@@ -1000,11 +1030,7 @@ function renderWorldClocks() {
           <div class="timezone-info mb-2">
             <span class="timezone-name">${config.timezoneName}</span>
           </div>
-          <div class="clock-time-container">
-            <div class="clock-time digital-clock" data-timezone="${config.timezone}">
-              <span class="time-digit">--</span>:<span class="time-digit">--</span>:<span class="time-digit">--</span>
-            </div>
-          </div>
+          ${timeDisplay}
           <div class="clock-date" data-timezone="${config.timezone}">
             --/--/----
           </div>
@@ -1037,7 +1063,8 @@ function stopWorldClock() {
 
 // 更新世界时钟显示
 function updateWorldClocks() {
-  const beijingTime = new Date();
+  // 获取基准时间（自定义北京时间或当前北京时间）
+  const baseTime = customBeijingTime || new Date();
   
   worldClockConfig.forEach(config => {
     const timeElement = document.querySelector(`[data-timezone="${config.timezone}"].clock-time`);
@@ -1046,7 +1073,19 @@ function updateWorldClocks() {
     
     if (timeElement && dateElement && diffElement) {
       try {
-        const timeInTimezone = new Date(beijingTime.toLocaleString("en-US", {timeZone: config.timezone}));
+        let timeInTimezone;
+        
+        if (config.isEditable && customBeijingTime) {
+          // 如果是可编辑的时钟且有自定义时间，直接使用自定义时间
+          timeInTimezone = new Date(customBeijingTime);
+        } else if (config.isEditable) {
+          // 如果是可编辑的时钟但没有自定义时间，使用当前北京时间
+          timeInTimezone = new Date();
+        } else {
+          // 其他时钟根据与北京时间的时差计算
+          const offsetMs = config.offsetFromBeijing * 60 * 60 * 1000;
+          timeInTimezone = new Date(baseTime.getTime() + offsetMs);
+        }
         
         // 格式化时间
         const hours = timeInTimezone.getHours().toString().padStart(2, '0');
@@ -1060,7 +1099,8 @@ function updateWorldClocks() {
           day: '2-digit'
         });
         
-        // 计算时差
+        // 计算时差（相对于北京时间）
+        const beijingTime = customBeijingTime || new Date();
         const timeDiff = calculateTimeDifference(beijingTime, timeInTimezone);
         
         // 更新电子表显示
@@ -1077,7 +1117,7 @@ function updateWorldClocks() {
         console.error(`更新时区 ${config.timezone} 时间失败:`, error);
         timeElement.textContent = '--:--:--';
         dateElement.textContent = '--/--/----';
-        diffElement.textContent = '--h';
+        diffElement.textContent = '--小时';
       }
     }
   });
@@ -1100,6 +1140,48 @@ function calculateTimeDifference(beijingTime, targetTime) {
   } else {
     return `${diffHours}小时`;
   }
+}
+
+// 切换时间编辑模式
+function toggleTimeEdit(timezone) {
+  const editContainer = document.getElementById(`edit-${timezone}`);
+  if (editContainer.style.display === 'none') {
+    editContainer.style.display = 'block';
+    // 设置当前时间到输入框
+    const now = customBeijingTime || new Date();
+    const timeString = now.toISOString().slice(0, 16);
+    document.getElementById(`time-input-${timezone}`).value = timeString;
+  } else {
+    editContainer.style.display = 'none';
+  }
+}
+
+// 更新自定义时间
+function updateCustomTime(timezone) {
+  const timeInput = document.getElementById(`time-input-${timezone}`);
+  const selectedTime = new Date(timeInput.value);
+  if (!isNaN(selectedTime.getTime())) {
+    customBeijingTime = selectedTime;
+    updateWorldClocks();
+  }
+}
+
+// 应用自定义时间
+function applyCustomTime(timezone) {
+  const timeInput = document.getElementById(`time-input-${timezone}`);
+  const selectedTime = new Date(timeInput.value);
+  if (!isNaN(selectedTime.getTime())) {
+    customBeijingTime = selectedTime;
+    updateWorldClocks();
+    document.getElementById(`edit-${timezone}`).style.display = 'none';
+  }
+}
+
+// 重置时间
+function resetTime(timezone) {
+  customBeijingTime = null;
+  updateWorldClocks();
+  document.getElementById(`edit-${timezone}`).style.display = 'none';
 }
 
 /**

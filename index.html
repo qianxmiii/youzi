@@ -850,50 +850,70 @@
           <!-- Tab 3 成本计算 -->
           <div class="tab-pane fade" id="costCalTab" role="tabpanel" aria-labelledby="tab3-tab">
             <div class="container mt-4">
-              <!-- 报价识别：箱数、重量、体积 -->
-          <div class="mb-4">
-            <label for="cargo-input" class = "subtitle">报价识别</label>
-            <input type="text" id="cargo-input" class="form-control" placeholder="例如: 21ctns 8.3 kg 2.126 cbm"
-              oninput="parseCalTabCargoInfo()" />
-          </div>
-          <div class="mb-3 d-flex align-items-center gap-2">
-            <label for="product-select" class="subtitle mb-0">常用产品选择</label>
-            <select id="product-select" class="form-select w-auto" onchange="onProductChange()">
-              <option value="" selected>请选择产品</option>
-              <option data-hscode="7317000000" data-taxrate="12.5">脚轮</option>
-              <option data-hscode="1234567890" data-taxrate="10.0">示例产品A</option>
-              <option data-hscode="0987654321" data-taxrate="15.0">示例产品B</option>
-            </select>
-            <input type="text" id="product-hscode" class="form-control w-auto" readonly placeholder="海关编码" />
-            <label for="weight-ratio-select" class="subtitle mb-0 ms-3">重量比</label>
-            <select id="weight-ratio-select" class="form-select w-auto" onchange="calculateCostDDU(); calculateCostDDP();">
-              <option value="363" selected>363</option>
-              <option value="360">360</option>
-              <option value="400">400</option>
-              <option value="450">450</option>
-              <option value="500">500</option>
-              <option value="actual">实际方</option>
-            </select>
-          </div>
-              <h4>自税成本</h4>
-              <table class="table table-bordered" id="DDUTable">
-                <thead>
+              <!-- 输入区域 -->
+              <div class="card mb-4">
+                <div class="card-header bg-light">
+                  <h5 class="card-title mb-0"><i class="bi bi-calculator me-2"></i>成本计算参数</h5>
+                </div>
+                <div class="card-body">
+                  <!-- 报价识别：箱数、重量、体积 -->
+                  <div class="mb-4">
+                    <label for="cargo-input" class="form-label fw-bold">报价识别</label>
+                    <input type="text" id="cargo-input" class="form-control form-control-lg" placeholder="例如: 21ctns 8.3 kg 2.126 cbm"
+                      oninput="parseCalTabCargoInfo()" />
+                    <div class="form-text">支持自动识别箱数、重量、体积信息</div>
+                  </div>
+                  
+                  <!-- 产品选择和重量比 -->
+                  <div class="row g-3">
+                    <div class="col-md-6">
+                      <label for="product-select" class="form-label fw-bold">常用产品选择</label>
+                      <div class="input-group">
+                        <select id="product-select" class="form-select" onchange="onProductChange()">
+                          <option value="" selected>请选择产品</option>
+                        </select>
+                        <input type="text" id="product-hscode" class="form-control" readonly placeholder="海关编码" />
+                      </div>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="weight-ratio-select" class="form-label fw-bold">重量比</label>
+                      <select id="weight-ratio-select" class="form-select" onchange="calculateCostDDU(); calculateCostDDP();">
+                        <option value="363" selected>363</option>
+                        <option value="360">360</option>
+                        <option value="400">400</option>
+                        <option value="450">450</option>
+                        <option value="500">500</option>
+                        <option value="actual">实际方</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <!-- 自税成本表格 -->
+              <div class="card mb-4">
+                <div class="card-header bg-secondary">
+                  <h5 class="card-title mb-0 text-white fw-bold"><i class="bi bi-receipt me-2"></i>自税成本计算</h5>
+                </div>
+                <div class="card-body p-0">
+                  <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0" id="DDUTable">
+                <thead class="table-secondary">
                   <tr>
-                    <th class="hidden">箱数</th>
-                    <th width="6.5%">实重(kg)</th>
-                    <th width="6%">体积(cbm)</th>
-                    <th width="6%">计费方(cbm)</th>
-                    <th width="4.5%">泡比</th>
-                    <th width="6%">按方表价(RMB)</th>
-                    <th width="5%">货值(USD)</th>
-                    <th width="6%" data-bs-toggle="tooltip" data-bs-title="美国基础关税加征 30%">税率 (%)</th>
-                    <th width="6%">派送费(USD)</th>
-                    <th width="5%">头程费(RMB)</th>
-                    <th width="4%" class="hidden">派送费(RMB)</th>
-                    <th width="4%">税金(RMB)</th>
-                    <th width="4.5%">总成本(RMB)</th>
-                    <th width="4%">单价(cbm)</th>
-                    <th width="4%">单价(kg)</th>
+                    <th class="hidden text-dark">箱数</th>
+                    <th width="6.5%" class="text-center text-dark">实重(kg)</th>
+                    <th width="6%" class="text-center text-dark">体积(cbm)</th>
+                    <th width="6%" class="text-center text-dark">计费方(cbm)</th>
+                    <th width="4.5%" class="text-center text-dark">泡比</th>
+                    <th width="6%" class="text-center text-dark">按方表价(RMB)</th>
+                    <th width="5%" class="text-center text-dark">货值(USD)</th>
+                    <th width="6%" class="text-center text-dark" data-bs-toggle="tooltip" data-bs-title="美国基础关税加征 30%">税率 (%)</th>
+                    <th width="6%" class="text-center text-dark">派送费(USD)</th>
+                    <th width="5%" class="text-center text-dark">头程费(RMB)</th>
+                    <th width="4%" class="hidden text-center text-dark">派送费(RMB)</th>
+                    <th width="4%" class="text-center text-dark">税金(RMB)</th>
+                    <th width="4.5%" class="text-center fw-bold text-dark">总成本(RMB)</th>
+                    <th width="4%" class="text-center text-dark">单价(cbm)</th>
+                    <th width="4%" class="text-center text-dark">单价(kg)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -915,25 +935,35 @@
                     <td><span id="t_unit-price-kg">0.00</span></td>
                   </tr>
                 </tbody>
-              </table>
-              <h4>包税成本</h4>
-              <table class="table table-bordered" id="DDPTable">
-                <thead>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- 包税成本表格 -->
+              <div class="card">
+                <div class="card-header bg-secondary">
+                  <h5 class="card-title mb-0 text-white fw-bold"><i class="bi bi-box-seam me-2"></i>包税成本计算</h5>
+                </div>
+                <div class="card-body p-0">
+                  <div class="table-responsive">
+                    <table class="table table-bordered table-hover mb-0" id="DDPTable">
+                <thead class="table-secondary">
                   <tr>
-                    <th width="6%" style="display: none;">箱数</th>
-                    <th width="6.5%">实重 (kg)</th>
-                    <th width="6%">体积 (cbm)</th>
-                    <th width="6%">计费重 (kg)</th>
-                    <th width="5.5%">计费方 (cbm)</th>
-                    <th width="5%">泡比</th>
-                    <th width="6%">按kg表价</th>
-                    <th width="6%">派送费(USD)</th>
-                    <th width="6%">派送费(RMB)</th>
-                    <th width="6%">头程费(RMB)</th>
-                    <th width="6%">派送费(RMB)</th>
-                    <th width="6%">总成本 (RMB)</th>
-                    <th width="5%">单价(cbm)</th>
-                    <th width="5%">单价(kg)</th>
+                    <th width="6%" style="display: none;" class="text-dark">箱数</th>
+                    <th width="6.5%" class="text-center text-dark">实重 (kg)</th>
+                    <th width="6%" class="text-center text-dark">体积 (cbm)</th>
+                    <th width="6%" class="text-center text-dark">计费重 (kg)</th>
+                    <th width="5.5%" class="text-center text-dark">计费方 (cbm)</th>
+                    <th width="5%" class="text-center text-dark">泡比</th>
+                    <th width="6%" class="text-center text-dark">按kg表价</th>
+                    <th width="6%" class="text-center text-dark">派送费(USD)</th>
+                    <th width="6%" class="text-center text-dark">派送费(RMB)</th>
+                    <th width="6%" class="text-center text-dark">头程费(RMB)</th>
+                    <th width="6%" class="text-center text-dark">派送费(RMB)</th>
+                    <th width="6%" class="text-center fw-bold text-dark">总成本 (RMB)</th>
+                    <th width="5%" class="text-center text-dark">单价(cbm)</th>
+                    <th width="5%" class="text-center text-dark">单价(kg)</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -954,7 +984,10 @@
                     <td><span id="tp_unit-price-kg">0.00</span></td>
                   </tr>
                 </tbody>
-              </table>
+                    </table>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 

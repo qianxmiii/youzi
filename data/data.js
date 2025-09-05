@@ -224,11 +224,19 @@ const vehicleTypes = [
 const deliveryLocations = ["深圳仓", "义乌仓"]; // 收货地
 const cargoTypes = ["纸箱", "托盘"]; // 货物类型
 
+// 常用产品数据
+const commonProducts = [
+    {name: "脚轮", hscode: "3926909985", taxrate: "12.8" },
+    {name: "门把手", hscode: "8302426000", taxrate: "10.9" },
+    {name: "游戏卡牌", hscode: "9504904000", taxrate: "0" }
+];
+
 // 将数组数据挂载到 window 对象上
 window.data = {
     vehicleTypes: vehicleTypes,
     deliveryLocations: deliveryLocations,
     cargoTypes: cargoTypes,
+    commonProducts: commonProducts,
     seaTruckPrice: {
         "RDU4": 5.4,
         "ONT8": 3.5,

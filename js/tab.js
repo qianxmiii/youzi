@@ -581,7 +581,7 @@ function onProductChange() {
         const taxRate = selectedOption.getAttribute('data-taxrate');
         const hscode = selectedOption.getAttribute('data-hscode');
 
-        // 填入自税成本税率输入框
+        // 填入税率输入框
         document.getElementById('t_tax-rate').value = taxRate;
 
         // 显示海关编码
@@ -603,11 +603,21 @@ function calculateCostDDU() {
     const volume = new Decimal(parseFloat(document.getElementById('t_volume').value) || 0);
     const pricePerCbm = new Decimal(parseFloat(document.getElementById('t_price-per-cbm').value) || 0);
     const goodsValue = new Decimal(parseFloat(document.getElementById('t_goods-value').value) || 0);
+    // 获取税率值
     const taxRate = new Decimal(parseFloat(document.getElementById('t_tax-rate').value) || 0);
     const deliveryFeeUSD = new Decimal(parseFloat(document.getElementById('t_delivery-fee-usd').value) || 0);
 
     // 计算计费方
-    let chargeVolume = Decimal.max(volume, weight.dividedBy(363).toDecimalPlaces(2, Decimal.ROUND_UP));
+    const weightRatio = document.getElementById('weight-ratio-select').value;
+    let chargeVolume;
+    if (weightRatio === 'actual') {
+        // 实际方：只使用体积
+        chargeVolume = volume;
+    } else {
+        // 使用选择的重量比计算
+        const ratio = parseFloat(weightRatio);
+        chargeVolume = Decimal.max(volume, weight.dividedBy(ratio).toDecimalPlaces(2, Decimal.ROUND_UP));
+    }
     document.getElementById('t_charge-volume').textContent = chargeVolume.toFixed(2);
 
     // 计算泡比 泡比 = 实重 / 体积
@@ -634,11 +644,11 @@ function calculateCostDDU() {
     document.getElementById('t_total-cost').textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
 
     // 计算单价 (RMB/cbm)
-    const unitPriceCbm = totalCost.dividedBy(chargeVolume);
+    const unitPriceCbm = chargeVolume.greaterThan(0) ? totalCost.dividedBy(chargeVolume) : new Decimal(0);
     document.getElementById('t_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
 
     // 计算单价 (RMD/kg)
-    const unitPriceKg = totalCost.dividedBy(weight);
+    const unitPriceKg = weight.greaterThan(0) ? totalCost.dividedBy(weight) : new Decimal(0);
     document.getElementById('t_unit-price-kg').textContent = unitPriceKg.toFixed(2);
 }
 
@@ -657,7 +667,16 @@ function calculateCostDDP() {
     document.getElementById('tp_charge-weight').textContent = chargeWeight;
 
     // 计算计费方
-    let chargeVolume = Decimal.max(volume, weight.dividedBy(363).toDecimalPlaces(2, Decimal.ROUND_UP));
+    const weightRatio = document.getElementById('weight-ratio-select').value;
+    let chargeVolume;
+    if (weightRatio === 'actual') {
+        // 实际方：只使用体积
+        chargeVolume = volume;
+    } else {
+        // 使用选择的重量比计算
+        const ratio = parseFloat(weightRatio);
+        chargeVolume = Decimal.max(volume, weight.dividedBy(ratio).toDecimalPlaces(2, Decimal.ROUND_UP));
+    }
     document.getElementById('tp_charge-cbm').textContent = chargeVolume.toDecimalPlaces(2, Decimal.ROUND_UP);
 
 
@@ -682,11 +701,11 @@ function calculateCostDDP() {
     document.getElementById('tp_total-cost').textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
     
     // 计算单价 (RMB/cbm)
-    const unitPriceCbm = totalCost.dividedBy(chargeVolume);
+    const unitPriceCbm = chargeVolume.greaterThan(0) ? totalCost.dividedBy(chargeVolume) : new Decimal(0);
     document.getElementById('tp_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
 
     // 计算单价 (RMD/kg)
-    const unitPriceKg = totalCost.dividedBy(chargeWeight);
+    const unitPriceKg = chargeWeight.greaterThan(0) ? totalCost.dividedBy(chargeWeight) : new Decimal(0);
     document.getElementById('tp_unit-price-kg').textContent = unitPriceKg.toFixed(2);
 }
 

@@ -716,6 +716,9 @@ function parsePackageInfo() {
         const addressCode = addressMatch[0].toUpperCase();
         let found = false;
         
+        // 记录当前国家，用于检测是否发生变化
+        const currentCountry = document.getElementById('country-select').value;
+        
         // 遍历所有国家查找匹配
         for (const country in addressByCountry) {
             if (addressByCountry[country][addressCode]) {
@@ -723,6 +726,11 @@ function parsePackageInfo() {
                 document.getElementById('postcode').value = addressByCountry[country][addressCode];
                 document.getElementById('country-select').value = country;
                 found = true;
+                
+                // 只有国家发生变化时才更新运输方式
+                if (currentCountry !== country) {
+                    updateDeliveryMethods();
+                }
                 break;
             }
         }
@@ -730,7 +738,13 @@ function parsePackageInfo() {
         // 未匹配时的处理（可选）
         if (!found) {
             document.getElementById('address').value = addressCode;
-            document.getElementById('country-select').value = "美国"; // 默认国家
+            const defaultCountry = "美国";
+            document.getElementById('country-select').value = defaultCountry;
+            
+            // 只有国家发生变化时才更新运输方式
+            if (currentCountry !== defaultCountry) {
+                updateDeliveryMethods();
+            }
         }
     }
 

@@ -84,6 +84,9 @@ function updatePostcode() {
     const postcodeInput = document.getElementById("postcode");
     const countrySelect = document.getElementById("country-select");
 
+    // 记录当前国家，用于检测是否发生变化
+    const currentCountry = countrySelect.value;
+
     // 1. 遍历所有国家查找匹配
     let matchedCountry = "美国"; // 默认国家
     let matchedPostcode = "";
@@ -95,12 +98,16 @@ function updatePostcode() {
             break; // 找到后立即退出循环
         }
     }
+    
     // 2. 更新界面
     countrySelect.value = matchedCountry;
     postcodeInput.value = matchedPostcode || addressInput; // 无匹配时直接显示输入的地址
 
-    // 3.后续处理
-    updateDeliveryMethods();
+    // 3. 只有国家发生变化时才更新运输方式
+    if (currentCountry !== matchedCountry) {
+        updateDeliveryMethods();
+    }
+    
     // 检查邮编是否为偏远地区
     checkRemoteAddress();
     // 触发更新

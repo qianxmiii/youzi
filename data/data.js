@@ -1340,58 +1340,6 @@ const boxRules = {
     }
 };
 
-// 分类配置
-const usaCategories = [
-    {
-        id: "zipCodes",
-        title: "美国州邮编分布",
-        data: [
-            { area: "美东", state: "加利福尼亚", short: "CA", prefix: "90-96" },
-            { area: "美东", state: "纽约", short: "NY", prefix: "10-14" },
-            { area: "美东", state: "德克萨斯", short: "TX", prefix: "75-79" },
-            { area: "美东", state: "佛罗里达", short: "FL", prefix: "32-34" },
-            // 其他州数据...
-        ],
-        render: (data) => `
-            <table class="table table-bordered">
-                <thead>
-                    <tr>
-                        <th>州</th>
-                        <th>邮编前缀</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    ${data.map(item => `
-                        <tr>
-                            <td>${item.area}</td>
-                            <td>${item.state}</td>
-                            <td>${item.short}</td>
-                            <td>${item.prefix}</td>
-                        </tr>
-                    `).join("")}
-                </tbody>
-            </table>
-        `
-    },
-    {
-        id: "prohibitedItems",
-        title: "美国禁运品",
-        data: [
-            "易燃易爆物品",
-            "毒品及违禁药品",
-            "武器及弹药",
-            "活体动物",
-            "假冒伪劣商品",
-            // 其他禁运品...
-        ],
-        render: (data) => `
-            <ul>
-                ${data.map(item => `<li>${item}</li>`).join("")}
-            </ul>
-        `
-    },
-    // 其他分类...
-];
 
 // 特定地址的运输天数映射配置
 const specificAddressTransitTime = {

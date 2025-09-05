@@ -6,60 +6,246 @@
  // 获取所有术语
  const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
 
- // 分页相关变量
- let currentPage = 1;
- const termsPerPage = 10; // 每页显示的术语数量
+ // 术语统计相关变量
+let totalTermsCount = 0;
+let filteredTermsCount = 0;
 
- function renderTerms(filteredTerms = allTerms) {
+// 术语视图模式
+let termViewMode = 'list'; // 'list' 或 'grid'
+
+// 切换术语视图模式
+function switchTermView(view) {
+    termViewMode = view;
+    
+    // 更新按钮状态
+    document.getElementById('termListView').classList.toggle('active', view === 'list');
+    document.getElementById('termGridView').classList.toggle('active', view === 'grid');
+    
+    // 重新渲染术语列表
+    const searchKeyword = document.getElementById('searchInput').value.toLowerCase();
+    const activeCategory = document.querySelector('.category-buttons .btn.active')?.textContent || '全部';
+    const filteredTerms = getFilteredTerms(searchKeyword, activeCategory);
+    renderTerms(filteredTerms);
+}
+
+function renderTerms(filteredTerms = allTerms) {
     const termList = document.getElementById("termList");
     termList.innerHTML = ''; // 清空列表
+
+    // 更新术语统计
+    totalTermsCount = allTerms.length;
+    filteredTermsCount = filteredTerms.length;
+    updateTermsStatistics();
 
     if (filteredTerms.length === 0) {
         document.getElementById("noResults").style.display = 'block';
     } else {
         document.getElementById("noResults").style.display = 'none';
 
-        // 计算当前页的术语
-        const startIndex = (currentPage - 1) * termsPerPage;
-        const endIndex = startIndex + termsPerPage;
-        const termsToShow = filteredTerms.slice(startIndex, endIndex);
+        // 根据视图模式设置容器样式
+        if (termViewMode === 'grid') {
+            termList.className = 'row';
+        } else {
+            termList.className = 'term-list';
+        }
 
-        termsToShow.forEach(term => {
+        // 渲染所有术语（无限滚动）
+        filteredTerms.forEach(term => {
             const card = document.createElement('div');
-            card.className = 'term-card';
-            card.setAttribute('data-term', term.chinese);
-            card.innerHTML = `
-                <div class="card-body">
-                    <h5 data-bs-toggle="tooltip" data-bs-title="${term.definition || '暂无释义'}">${term.chinese}</h5>
-                    <p data-bs-toggle="tooltip" data-bs-title="${term.definition || '暂无释义'}">
-                        ${term.english}
-                        <span class="copy-btn" onclick="copyTerm(this, '${term.english}')">
-                            <i class="bi bi-clipboard"></i>
-                        </span>
-                    </p>
-                    <div class="tags">
-                        ${term.tags.map(tag => {
-                            const color = tagColors[tag] || "#6c757d"; // 默认灰色
-                            return `<span class="badge" style="background-color: ${color}; color: white;">${tag}</span>`;
-                        }).join('')}
+            
+            if (termViewMode === 'grid') {
+                // 网格样式 - 支持可展开卡片设计
+                card.className = 'col-md-4 col-lg-3 col-xl-2 mb-3';
+                const hasDefinition = term.definition && typeof term.definition === 'string' && term.definition.trim() !== '';
+                card.innerHTML = `
+                    <div class="card h-100 term-card-grid">
+                        <div class="card-body">
+                            <div class="term-header-grid">
+                                <h6 class="card-title" data-bs-toggle="tooltip" data-bs-title="${(typeof term.definition === 'string' ? term.definition : '暂无释义').replace(/"/g, '&quot;')}">${term.chinese}</h6>
+                                ${hasDefinition ? `<button class="btn btn-sm btn-outline-info definition-toggle-grid" onclick="toggleDefinitionGrid(this)" data-bs-toggle="tooltip" data-bs-title="点击查看详细说明">
+                                    <i class="bi bi-info-circle"></i>
+                                </button>` : ''}
+                            </div>
+                            <p class="card-text" data-bs-toggle="tooltip" data-bs-title="${(typeof term.definition === 'string' ? term.definition : '暂无释义').replace(/"/g, '&quot;')}">
+                                ${term.english}
+                                <span class="copy-btn" onclick="copyTerm(this, '${term.english}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </span>
+                            </p>
+                            ${hasDefinition ? `<div class="term-definition-grid" style="display: none;">
+                                <div class="definition-content-grid">
+                                    <strong>详细说明：</strong>
+                                    <p>${typeof term.definition === 'string' ? term.definition : '暂无详细说明'}</p>
+                                </div>
+                            </div>` : ''}
+                            <div class="tags">
+                                ${term.tags.map(tag => {
+                                    const color = tagColors[tag] || "#6c757d"; // 默认灰色
+                                    return `<span class="badge" style="background-color: ${color}; color: white;">${tag}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
                     </div>
-                </div>
-            `;
+                `;
+            } else {
+                // 列表样式 - 直接显示释义内容，适合批量复习
+                card.className = 'term-card';
+                card.setAttribute('data-term', term.chinese);
+                const hasDefinition = term.definition && typeof term.definition === 'string' && term.definition.trim() !== '';
+                card.innerHTML = `
+                    <div class="card-body">
+                        <div class="term-header-list">
+                            <h5>${term.chinese}</h5>
+                            <p class="term-english">
+                                ${term.english}
+                                <span class="copy-btn" onclick="copyTerm(this, '${term.english}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </span>
+                            </p>
+                        </div>
+                        ${hasDefinition ? `<div class="term-definition-list">
+                            <div class="definition-content-list">
+                                <strong>释义：</strong>
+                                <span>${typeof term.definition === 'string' ? term.definition : '暂无详细说明'}</span>
+                            </div>
+                        </div>` : ''}
+                        <div class="tags">
+                            ${term.tags.map(tag => {
+                                const color = tagColors[tag] || "#6c757d"; // 默认灰色
+                                return `<span class="badge" style="background-color: ${color}; color: white;">${tag}</span>`;
+                            }).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+            
             termList.appendChild(card);
         });
 
         // 初始化 Tooltip
         const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
-        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => new bootstrap.Tooltip(tooltipTriggerEl));
+        const tooltipList = [...tooltipTriggerList].map(tooltipTriggerEl => {
+            // 先销毁已存在的tooltip实例
+            const existingTooltip = bootstrap.Tooltip.getInstance(tooltipTriggerEl);
+            if (existingTooltip) {
+                existingTooltip.dispose();
+            }
+            
+            // 确保元素有正确的属性
+            const title = tooltipTriggerEl.getAttribute('data-bs-title');
+            if (!title) {
+                return null;
+            }
+            
+            try {
+                return new bootstrap.Tooltip(tooltipTriggerEl, {
+                    trigger: 'hover focus',
+                    placement: 'top',
+                    delay: { show: 500, hide: 100 },
+                    html: false
+                });
+            } catch (error) {
+                console.error('Error creating tooltip:', error, tooltipTriggerEl);
+                return null;
+            }
+        }).filter(tooltip => tooltip !== null);
     }
-
-    // 更新翻页按钮状态
-    updatePaginationButtons(filteredTerms.length);
 }
 
-  
+// 更新术语统计
+function updateTermsStatistics() {
+    const termsCountElement = document.getElementById('termsCount');
+    if (termsCountElement) {
+        if (filteredTermsCount === totalTermsCount) {
+            termsCountElement.textContent = `共 ${totalTermsCount} 个术语`;
+        } else {
+            termsCountElement.textContent = `共找到 ${filteredTermsCount} 个术语（共 ${totalTermsCount} 个）`;
+        }
+    }
+}
 
- // 分类筛选
+// 回到顶部功能
+function scrollToTop() {
+    const modalBody = document.querySelector('#termModal .modal-body');
+    if (modalBody) {
+        modalBody.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
+}
+
+// 监听滚动事件，显示/隐藏回到顶部按钮
+function initBackToTopButton() {
+    const modalBody = document.querySelector('#termModal .modal-body');
+    const backToTopBtn = document.getElementById('backToTop');
+    
+    if (modalBody && backToTopBtn) {
+        modalBody.addEventListener('scroll', function() {
+            if (modalBody.scrollTop > 300) {
+                backToTopBtn.style.display = 'block';
+            } else {
+                backToTopBtn.style.display = 'none';
+            }
+        });
+    }
+}
+
+// 切换列表视图中的定义显示
+function toggleDefinition(button) {
+    const card = button.closest('.term-card');
+    const definition = card.querySelector('.term-definition');
+    const icon = button.querySelector('i');
+    
+    if (definition.style.display === 'none') {
+        definition.style.display = 'block';
+        icon.className = 'bi bi-chevron-up';
+        button.setAttribute('data-bs-title', '点击收起详细说明');
+    } else {
+        definition.style.display = 'none';
+        icon.className = 'bi bi-info-circle';
+        button.setAttribute('data-bs-title', '点击查看详细说明');
+    }
+    
+    // 重新初始化tooltip
+    const tooltip = bootstrap.Tooltip.getInstance(button);
+    if (tooltip) {
+        tooltip.dispose();
+    }
+    new bootstrap.Tooltip(button);
+}
+
+// 切换网格视图中的定义显示
+function toggleDefinitionGrid(button) {
+    const card = button.closest('.term-card-grid');
+    const definition = card.querySelector('.term-definition-grid');
+    const icon = button.querySelector('i');
+    
+    if (definition.style.display === 'none') {
+        definition.style.display = 'block';
+        icon.className = 'bi bi-chevron-up';
+        button.setAttribute('data-bs-title', '点击收起详细说明');
+        
+        // 调整卡片高度以适应展开内容
+        card.style.height = 'auto';
+    } else {
+        definition.style.display = 'none';
+        icon.className = 'bi bi-info-circle';
+        button.setAttribute('data-bs-title', '点击查看详细说明');
+        
+        // 恢复卡片高度
+        card.style.height = '100%';
+    }
+    
+    // 重新初始化tooltip
+    const tooltip = bootstrap.Tooltip.getInstance(button);
+    if (tooltip) {
+        tooltip.dispose();
+    }
+    new bootstrap.Tooltip(button);
+}
+
+// 分类筛选
  function filterTerms(category, button) {
      const searchInput = document.getElementById('searchInput');
      searchInput.value = ''; // 清空搜索框
@@ -83,8 +269,6 @@
          renderTerms(filteredTerms);
      }
 
-     // 重置当前页为第一页
-     currentPage = 1;
  }
 
  // 初始化搜索功能
@@ -103,8 +287,6 @@ function initSearchFunction() {
         );
         renderTerms(filteredTerms);
 
-        // 重置当前页为第一页
-        currentPage = 1;
     });
 }
 
@@ -113,26 +295,8 @@ function initSearchFunction() {
      searchInput.value = '';
      renderTerms(allTerms); // 重置为全部术语
 
-     // 重置当前页为第一页
-     currentPage = 1;
  }
 
- // 翻页功能
- function prevPage() {
-     if (currentPage > 1) {
-         currentPage--;
-         renderTerms(getFilteredTerms());
-     }
- }
-
- function nextPage() {
-     const filteredTerms = getFilteredTerms();
-     const totalPages = Math.ceil(filteredTerms.length / termsPerPage);
-     if (currentPage < totalPages) {
-         currentPage++;
-         renderTerms(filteredTerms);
-     }
- }
 
  // 获取当前筛选后的术语列表
  function getFilteredTerms() {
@@ -152,18 +316,6 @@ function initSearchFunction() {
      }
  }
 
- // 更新翻页按钮状态
- function updatePaginationButtons(totalTerms) {
-     const prevButton = document.getElementById('prevPage');
-     const nextButton = document.getElementById('nextPage');
-
-     if (prevButton && nextButton) {
-        prevButton.disabled = currentPage === 1;
-        nextButton.disabled = currentPage === Math.ceil(totalTerms / termsPerPage);
-    } else {
-        console.error('翻页按钮未找到');
-    }
- }
 
  let selectedTags = []; // 存储当前选中的标签
 
@@ -265,81 +417,7 @@ function renderTagButtons() {
 }
 
 
-// 动态加载分类数据
-function loadUSAData() {
-    const accordion = document.getElementById("usaAccordion");
-    accordion.innerHTML = usaCategories
-        .map(
-            (category, index) => `
-            <div class="accordion-item">
-                <h2 class="accordion-header" id="heading${category.id}">
-                    <button class="accordion-button ${index === 0 ? "" : ""}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse${category.id}" aria-expanded="${index === 0 ? "true" : "false"}" aria-controls="collapse${category.id}">
-                        ${category.title}
-                    </button>
-                </h2>
-                <div id="collapse${category.id}" class="accordion-collapse collapse ${index === 0 ? "show" : ""}" aria-labelledby="heading${category.id}" data-bs-parent="#usaAccordion">
-                    <div class="accordion-body" id="content${category.id}">
-                        ${category.render(category.data)}
-                    </div>
-                </div>
-            </div>
-        `
-        )
-        .join("");
-}
 
-// 搜索功能
-function searchUSAData() {
-    const keyword = document.getElementById("usaSearchInput").value.trim().toLowerCase();
-    const resultsContainer = document.getElementById("usaSearchResults");
-    resultsContainer.innerHTML = ''; // 清空之前的结果
-
-    if (!keyword) {
-        // 如果关键词为空，显示所有数据
-        usaCategories.forEach(category => {
-            const contentElement = document.getElementById(`content${category.id}`);
-            if (contentElement) {
-                contentElement.innerHTML = category.render(category.data);
-            }
-        });
-        return;
-    }
-
-    // 遍历所有分类
-    usaCategories.forEach(category => {
-        const filteredData = category.data.filter(item => {
-            if (typeof item === "string") {
-                return item.toLowerCase().includes(keyword);
-            } else if (typeof item === "object") {
-                return Object.values(item).some(value =>
-                    String(value).toLowerCase().includes(keyword)
-                );
-            }
-            return false;
-        });
-
-        // 如果有匹配结果，渲染该分类
-        if (filteredData.length > 0) {
-            const categoryElement = document.createElement("div");
-            categoryElement.className = "search-category";
-            categoryElement.innerHTML = `
-                <h3>${category.title} <span class="match-count">(${filteredData.length} 条结果)</span></h3>
-                <div class="search-results">
-                    ${category.render(filteredData)}
-                </div>
-            `;
-            resultsContainer.appendChild(categoryElement);
-
-            // 高亮关键词
-            highlightKeyword(categoryElement, keyword);
-        }
-    });
-
-    // 如果没有匹配结果，显示提示
-    if (resultsContainer.innerHTML === '') {
-        resultsContainer.innerHTML = '<p>未找到匹配的结果。</p>';
-    }
-}
 
 // 高亮关键词
 function highlightKeyword(element, keyword) {
@@ -347,14 +425,7 @@ function highlightKeyword(element, keyword) {
     element.innerHTML = element.innerHTML.replace(regex, match => `<span class="highlight">${match}</span>`);
 }
 
-// 实时搜索
-document.getElementById("usaSearchInput").addEventListener("input", searchUSAData);
 
-// 清除搜索
-function clearUSASearch() {
-    document.getElementById("usaSearchInput").value = "";
-    loadUSAData(); // 重新加载所有数据
-}
 
 /**
  * Tab2 - 快捷回复
@@ -372,13 +443,15 @@ function initQuickReplyCategories() {
     categoriesContainer.appendChild(allButton);
 
     // 添加其他分类按钮
-    quickReplies.forEach(category => {
-        const button = document.createElement("button");
-        button.className = "btn btn-outline-primary me-2 mb-2";
-        button.textContent = category.category;
-        button.onclick = () => loadQuickReplies(category.category);
-        categoriesContainer.appendChild(button);
-    });
+    if (window.data && window.data.quickReplies) {
+        window.data.quickReplies.forEach(category => {
+            const button = document.createElement("button");
+            button.className = "btn btn-outline-primary me-2 mb-2";
+            button.textContent = category.category;
+            button.onclick = () => loadQuickReplies(category.category);
+            categoriesContainer.appendChild(button);
+        });
+    }
 
     // 默认加载“全部”分类的回复
     loadQuickReplies("全部");
@@ -399,9 +472,14 @@ function loadQuickReplies(selectedCategory) {
         }
     });
 
+    if (!window.data || !window.data.quickReplies) {
+        console.error('快捷回复数据未加载');
+        return;
+    }
+
     if (selectedCategory === "全部") {
         // 加载所有分类的回复
-        quickReplies.forEach(category => {
+        window.data.quickReplies.forEach(category => {
             category.replies.forEach(reply => {
                 const option = document.createElement("option");
                 option.value = reply.chinese; // 中文作为值
@@ -412,7 +490,7 @@ function loadQuickReplies(selectedCategory) {
         });
     } else {
         // 加载指定分类的回复
-        const selectedCategoryData = quickReplies.find(category => category.category === selectedCategory);
+        const selectedCategoryData = window.data.quickReplies.find(category => category.category === selectedCategory);
         if (selectedCategoryData) {
             selectedCategoryData.replies.forEach(reply => {
                 const option = document.createElement("option");
@@ -438,9 +516,11 @@ function filterQuickReplies() {
 
     // 获取所有分类的回复
     let allReplies = [];
-    quickReplies.forEach(category => {
-        allReplies.push(...category.replies);
-    });
+    if (window.data && window.data.quickReplies) {
+        window.data.quickReplies.forEach(category => {
+            allReplies.push(...category.replies);
+        });
+    }
 
     // 过滤匹配的回复
     const filteredReplies = allReplies.filter(reply =>
@@ -516,14 +596,68 @@ function copyTerm(button, text) {
         button.innerHTML = '<i class="bi bi-check"></i>';
         button.classList.add('copied');
 
+        // 显示成功提示tooltip
+        showCopyTooltip(button, '复制成功！', 'success');
+
         // 2 秒后恢复按钮样式
         setTimeout(() => {
             button.innerHTML = '<i class="bi bi-clipboard"></i>';
             button.classList.remove('copied');
+            hideCopyTooltip(button);
         }, 2000);
     }).catch(err => {
         console.error('复制失败：', err);
+        
+        // 显示失败提示tooltip
+        showCopyTooltip(button, '复制失败，请手动复制', 'error');
+        
+        // 3 秒后隐藏tooltip
+        setTimeout(() => {
+            hideCopyTooltip(button);
+        }, 3000);
     });
+}
+
+/* 显示复制提示tooltip */
+function showCopyTooltip(button, message, type) {
+    // 移除已存在的tooltip
+    hideCopyTooltip(button);
+    
+    // 创建tooltip元素
+    const tooltip = document.createElement('div');
+    tooltip.className = `copy-tooltip copy-tooltip-${type}`;
+    tooltip.textContent = message;
+    
+    // 添加到按钮的父元素
+    const parent = button.closest('.card-body') || button.parentElement;
+    parent.style.position = 'relative';
+    parent.appendChild(tooltip);
+    
+    // 计算位置
+    const buttonRect = button.getBoundingClientRect();
+    const parentRect = parent.getBoundingClientRect();
+    
+    tooltip.style.left = `${buttonRect.left - parentRect.left + buttonRect.width / 2}px`;
+    tooltip.style.top = `${buttonRect.top - parentRect.top - 35}px`;
+    
+    // 添加显示动画
+    setTimeout(() => {
+        tooltip.classList.add('show');
+    }, 10);
+}
+
+/* 隐藏复制提示tooltip */
+function hideCopyTooltip(button) {
+    const parent = button.closest('.card-body') || button.parentElement;
+    const existingTooltip = parent.querySelector('.copy-tooltip');
+    if (existingTooltip) {
+        existingTooltip.classList.remove('show');
+        setTimeout(() => {
+            if (existingTooltip.parentNode) {
+                existingTooltip.parentNode.removeChild(existingTooltip);
+            }
+        }, 200);
+    }
 }
 
 /**

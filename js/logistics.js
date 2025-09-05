@@ -50,8 +50,6 @@ function init() {
 function eventListener() {
     // 监听渠道下拉选项的变化
     document.getElementById("t4_channel").addEventListener("change", renderPriceTable());
-    // 监听搜索框输入
-    document.getElementById("usaSearchInput").addEventListener("input", searchUSAData);
     
     // 监听备注框 Ctrl+C 复制触发保存报价历史
     const notesEl = document.getElementById('notes');

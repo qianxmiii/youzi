@@ -149,7 +149,7 @@ function renderCategoryButtons() {
     categoryButtonsContainer.appendChild(allButton);
 
     // 从 data.js 中获取分类并生成按钮
-    const categories = Object.keys(termsByCategory);
+    const categories = Object.keys(window.logisticsData.termsByCategory);
     categories.forEach(category => {
         const button = document.createElement('button');
         button.className = 'btn btn-outline-primary';

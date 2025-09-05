@@ -637,6 +637,10 @@
               <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#worldClockModal">
                 <i class="bi bi-clock"></i> 世界时钟
               </button>
+              <!-- 5. 物流备忘录 -->
+              <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#logisticsMemoModal">
+                <i class="bi bi-globe"></i> 物流备忘录
+              </button>
             </div>
 
             <!-- 模态框-常用术语-->
@@ -1381,6 +1385,94 @@
       </div>
   </div>
 
+  <!-- 物流备忘录模态框 -->
+  <div class="modal fade" id="logisticsMemoModal" tabindex="-1" aria-labelledby="logisticsMemoModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="logisticsMemoModalLabel">
+            <i class="bi bi-globe"></i> 物流备忘录
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- 搜索和筛选区域 -->
+          <div class="row mb-3">
+            <div class="col-md-6">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="logisticsSearch" placeholder="搜索国家、术语或问题...">
+              </div>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="logisticsFilter">
+                <option value="all">全部</option>
+                <option value="countries">国家信息</option>
+                <option value="terms">术语词典</option>
+                <option value="questions">常见问题</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary active" id="viewList" onclick="switchView('list')">
+                  <i class="bi bi-list"></i> 列表
+                </button>
+                <button type="button" class="btn btn-outline-primary" id="viewGrid" onclick="switchView('grid')">
+                  <i class="bi bi-grid"></i> 网格
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 主内容区域 -->
+          <div class="row">
+            <!-- 左侧导航 -->
+            <div class="col-md-3">
+              <div class="card">
+                <div class="card-header">
+                  <h6 class="mb-0">分类导航</h6>
+                </div>
+                <div class="card-body p-0">
+                  <ul class="list-group list-group-flush">
+                    <li class="list-group-item list-group-item-action" onclick="showGeneralInfo()">
+                      <i class="bi bi-info-circle"></i> 通用信息
+                    </li>
+                    <li class="list-group-item list-group-item-action" onclick="showCountryInfo()">
+                      <i class="bi bi-globe"></i> 国家信息
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            <!-- 右侧内容区 -->
+            <div class="col-md-9">
+              <div id="logisticsContent">
+                <!-- 默认显示国家信息 -->
+                <div class="card">
+                  <div class="card-header">
+                    <h5 class="mb-0">国家信息</h5>
+                  </div>
+                  <div class="card-body">
+                    <div id="countryList" class="row">
+                      <!-- 国家列表将通过JavaScript动态生成 -->
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+          <button type="button" class="btn btn-primary" onclick="exportLogisticsInfo()">
+            <i class="bi bi-download"></i> 导出
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 引入 Bootstrap JS -->
   <script src="js/common/popper.min.js"></script>
   <script src="js/common/bootstrap.min.js"></script>
@@ -1389,6 +1481,7 @@
   <!-- 引入 数据配置文件 data.js -->
   <script src="data/private_data.js"></script>
   <script src="data/data.js"></script>
+  <script src="data/data_logistics.js"></script>
   <!-- 引入初始化文件 -->
   <script src="js/tab.js"></script>
   <!-- 引入外部脚本文件 -->
@@ -1397,6 +1490,7 @@
   <script src="js/ui.js"></script>
   <script src="js/rules.js"></script>
   <script src="js/logistics.js"></script>
+  <script src="js/logistics_memo.js"></script>
 </body>
 
 </html>

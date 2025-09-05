@@ -175,7 +175,7 @@ function getCN(channel) {
 
 // 获取每个标签的术语数量
 function getTagCounts() {
-    const allTerms = Object.values(termsByCategory).flat();
+    const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
     const tagCounts = {};
 
     allTerms.forEach(term => {

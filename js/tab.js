@@ -4,7 +4,7 @@
   */
 
  // 获取所有术语
- const allTerms = Object.values(termsByCategory).flat();
+ const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
 
  // 分页相关变量
  let currentPage = 1;
@@ -79,7 +79,7 @@
          document.getElementById('termTotal').classList.add('active');
          renderTerms(allTerms);
      } else {
-         const filteredTerms = termsByCategory[category] || [];
+         const filteredTerms = window.logisticsData.termsByCategory[category] || [];
          renderTerms(filteredTerms);
      }
 
@@ -145,7 +145,7 @@ function initSearchFunction() {
              term.english.toLowerCase().includes(searchKeyword)
          );
      } else {
-         return (termsByCategory[activeCategory] || []).filter(term => 
+         return (window.logisticsData.termsByCategory[activeCategory] || []).filter(term => 
              term.chinese.toLowerCase().includes(searchKeyword) || 
              term.english.toLowerCase().includes(searchKeyword)
          );
@@ -203,7 +203,7 @@ function updateTagButtonStyles() {
     });
 }
 function filterTermsByTags() {
-    const allTerms = Object.values(termsByCategory).flat();
+    const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
 
     // 如果没有选中任何标签，则显示所有术语
     if (selectedTags.length === 0) {
@@ -228,7 +228,7 @@ function filterTermsByTags() {
 
 // 获取所有术语的标签
 function getAllTags() {
-    const allTerms = Object.values(termsByCategory).flat();
+    const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
     const tags = new Set();
     allTerms.forEach(term => {
         if (term.tags && Array.isArray(term.tags)) {

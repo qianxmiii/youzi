@@ -39,6 +39,8 @@ function init() {
     initVehicleTab();
     // 初始化Tab 常用地址簿
     initAddressBook();
+    // 初始化产品选择下拉框
+    initProductSelect();
 }
 
 

@@ -574,6 +574,25 @@ function parseCalTabCargoInfo() {
     calculateCostDDP();
 }
 
+// 初始化产品选择下拉框
+function initProductSelect() {
+    const select = document.getElementById('product-select');
+    if (!select || !window.data || !window.data.commonProducts) return;
+    
+    // 清空现有选项（保留默认选项）
+    select.innerHTML = '<option value="" selected>请选择产品</option>';
+    
+    // 添加产品选项
+    window.data.commonProducts.forEach(product => {
+        const option = document.createElement('option');
+        option.value = product.name;
+        option.setAttribute('data-hscode', product.hscode);
+        option.setAttribute('data-taxrate', product.taxrate);
+        option.textContent = product.name;
+        select.appendChild(option);
+    });
+}
+
 function onProductChange() {
     const select = document.getElementById('product-select');
     const selectedOption = select.options[select.selectedIndex];

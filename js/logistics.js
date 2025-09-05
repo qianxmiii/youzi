@@ -468,7 +468,7 @@ function updateQuote() {
     if (data.quoteType === "通用") {
         // 构建备注内容
         notes = `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        if (data.isDDU) notes += 'DDU ';
+        if (data.isDDU) notes += 'DDU '; else notes += 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;

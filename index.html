@@ -851,7 +851,7 @@
           <div class="tab-pane fade" id="costCalTab" role="tabpanel" aria-labelledby="tab3-tab">
             <div class="container mt-4">
               <!-- 报价识别：箱数、重量、体积 -->
-          <div>
+          <div class="mb-4">
             <label for="cargo-input" class = "subtitle">报价识别</label>
             <input type="text" id="cargo-input" class="form-control" placeholder="例如: 21ctns 8.3 kg 2.126 cbm"
               oninput="parseCalTabCargoInfo()" />
@@ -865,41 +865,50 @@
               <option data-hscode="0987654321" data-taxrate="15.0">示例产品B</option>
             </select>
             <input type="text" id="product-hscode" class="form-control w-auto" readonly placeholder="海关编码" />
+            <label for="weight-ratio-select" class="subtitle mb-0 ms-3">重量比</label>
+            <select id="weight-ratio-select" class="form-select w-auto" onchange="calculateCostDDU(); calculateCostDDP();">
+              <option value="363" selected>363</option>
+              <option value="360">360</option>
+              <option value="400">400</option>
+              <option value="450">450</option>
+              <option value="500">500</option>
+              <option value="actual">实际方</option>
+            </select>
           </div>
               <h4>自税成本</h4>
               <table class="table table-bordered" id="DDUTable">
                 <thead>
                   <tr>
-                    <th>箱数</th>
-                    <th>实重 (kg)</th>
-                    <th>体积 (cbm)</th>
-                    <th>计费方 (cbm)</th>
-                    <th>泡比</th>
-                    <th>按方表价</th>
-                    <th>货值(USD)</th>
-                    <th data-bs-toggle="tooltip" data-bs-title="美国基础关税加征 145%">税率 (%)</th>
-                    <th>派送费(USD)</th>
-                    <th>头程费</th>
-                    <th>派送费</th>
-                    <th>税金</th>
-                    <th>总成本</th>
-                    <th>单价(cbm)</th>
-                    <th>单价(kg)</th>
+                    <th class="hidden">箱数</th>
+                    <th width="6.5%">实重(kg)</th>
+                    <th width="6%">体积(cbm)</th>
+                    <th width="6%">计费方(cbm)</th>
+                    <th width="4.5%">泡比</th>
+                    <th width="6%">按方表价(RMB)</th>
+                    <th width="5%">货值(USD)</th>
+                    <th width="6%" data-bs-toggle="tooltip" data-bs-title="美国基础关税加征 30%">税率 (%)</th>
+                    <th width="6%">派送费(USD)</th>
+                    <th width="5%">头程费(RMB)</th>
+                    <th width="4%" class="hidden">派送费(RMB)</th>
+                    <th width="4%">税金(RMB)</th>
+                    <th width="4.5%">总成本(RMB)</th>
+                    <th width="4%">单价(cbm)</th>
+                    <th width="4%">单价(kg)</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td><input type="number" class="form-control" id="t_quantity" oninput="calculateCostDDU()" /></td>
+                    <td class="hidden"><input type="number" class="form-control" id="t_quantity" oninput="calculateCostDDU()" /></td>
                     <td><input type="number" class="form-control" id="t_weight" oninput="calculateCostDDU()" /></td>
                     <td><input type="number" class="form-control" id="t_volume" oninput="calculateCostDDU()" /></td>
                     <td><span id="t_charge-volume">0.00</span></td>
                     <td><span id="t_volume-ratio">0</span></td>
                     <td><input type="number" class="form-control" id="t_price-per-cbm" oninput="calculateCostDDU()" /></td>
                     <td><input type="number" class="form-control" id="t_goods-value" oninput="calculateCostDDU()" value="167" /></td>
-                    <td><input type="number" class="form-control" id="t_tax-rate" oninput="calculateCostDDU()" /></td>
+                    <td><input type="number" class="form-control" id="t_tax-rate" oninput="calculateCostDDU()" step="0.1" placeholder="输入" /></td>
                     <td><input type="number" class="form-control" id="t_delivery-fee-usd" oninput="calculateCostDDU()" /></td>
                     <td><span id="t_freight-forwarding-cost">0.00</span></td>
-                    <td><span id="t_delivery-fee-rmb">0.00</span></td>
+                    <td class="hidden"><span id="t_delivery-fee-rmb">0.00</span></td>
                     <td><span id="t_tax-amount">0.00</span></td>
                     <td><span id="t_total-cost">0.00</span></td>
                     <td><span id="t_unit-price-cbm">0.00</span></td>
@@ -911,25 +920,25 @@
               <table class="table table-bordered" id="DDPTable">
                 <thead>
                   <tr>
-                    <th>箱数</th>
-                    <th>实重 (kg)</th>
-                    <th>体积 (cbm)</th>
-                    <th>计费重 (kg)</th>
-                    <th>计费方 (cbm)</th>
-                    <th>泡比</th>
-                    <th>按kg表价</th>
-                    <th>派送费(USD)</th>
-                    <th>派送费(RMB)</th>
-                    <th>头程费</th>
-                    <th>派送费</th>
-                    <th>总成本</th>
-                    <th>单价(cbm)</th>
-                    <th>单价(kg)</th>
+                    <th width="6%" style="display: none;">箱数</th>
+                    <th width="6.5%">实重 (kg)</th>
+                    <th width="6%">体积 (cbm)</th>
+                    <th width="6%">计费重 (kg)</th>
+                    <th width="5.5%">计费方 (cbm)</th>
+                    <th width="5%">泡比</th>
+                    <th width="6%">按kg表价</th>
+                    <th width="6%">派送费(USD)</th>
+                    <th width="6%">派送费(RMB)</th>
+                    <th width="6%">头程费(RMB)</th>
+                    <th width="6%">派送费(RMB)</th>
+                    <th width="6%">总成本 (RMB)</th>
+                    <th width="5%">单价(cbm)</th>
+                    <th width="5%">单价(kg)</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr>
-                    <td><input type="number" class="form-control" id="tp_quantity" oninput="calculateCostDDP()" /></td>
+                    <td style="display: none;"><input type="number" class="form-control" id="tp_quantity" oninput="calculateCostDDP()" /></td>
                     <td><input type="number" class="form-control" id="tp_weight" oninput="calculateCostDDP()" /></td>
                     <td><input type="number" class="form-control" id="tp_volume" oninput="calculateCostDDP()" /></td>
                     <td><span id="tp_charge-weight">0.00</span></td>

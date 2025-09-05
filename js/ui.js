@@ -140,7 +140,7 @@ function renderCategoryButtons() {
     // 清空现有按钮
     categoryButtonsContainer.innerHTML = '';
 
-    // 添加“全部”按钮
+    // 添加"全部"按钮
     const allButton = document.createElement('button');
     allButton.className = 'btn btn-outline-primary';
     allButton.textContent = '全部';
@@ -157,6 +157,11 @@ function renderCategoryButtons() {
         button.onclick = () => filterTerms(category, button);
         categoryButtonsContainer.appendChild(button);
     });
+    
+    // 初始化回到顶部按钮
+    if (typeof initBackToTopButton === 'function') {
+        initBackToTopButton();
+    }
 }
 
 // 突出显示对应的单元格

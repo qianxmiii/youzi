@@ -244,70 +244,6 @@ const countryLogisticsInfo = [
             seaFreight: "¥60000-90000/20ft, ¥90000-140000/40ft"
         },
         notes: "日本对产品质量要求极高，建议选择可靠的供应商和物流商。"
-    },
-    {
-        code: "KR",
-        name: "韩国",
-        flag: "🇰🇷",
-        generalInfo: {
-            currency: "KRW",
-            timezone: "UTC+9",
-            language: "韩语",
-            capital: "首尔"
-        },
-        logistics: {
-            majorPorts: ["釜山", "仁川", "光阳", "蔚山"],
-            majorAirports: ["ICN", "GMP", "PUS", "CJU"],
-            customs: {
-                clearanceTime: "1-2个工作日",
-                requiredDocs: ["商业发票", "装箱单", "提单", "原产地证"],
-                restrictions: ["食品需要KFDA认证", "电子产品需要KC认证"],
-                duties: "根据HSCode确定，一般0-8%"
-            },
-            shipping: {
-                express: ["DHL", "FedEx", "UPS", "TNT"],
-                airFreight: ["大韩航空", "韩亚航空", "国泰航空"],
-                seaFreight: ["马士基", "中远海运", "长荣海运"]
-            }
-        },
-        pricing: {
-            express: "首重₩30000-40000，续重₩5000-8000/kg",
-            airFreight: "₩400-800/kg",
-            seaFreight: "₩50000-80000/20ft, ₩80000-120000/40ft"
-        },
-        notes: "韩国与中国有自贸协定，部分产品享受关税优惠。"
-    },
-    {
-        code: "SG",
-        name: "新加坡",
-        flag: "🇸🇬",
-        generalInfo: {
-            currency: "SGD",
-            timezone: "UTC+8",
-            language: "英语/中文/马来语/泰米尔语",
-            capital: "新加坡"
-        },
-        logistics: {
-            majorPorts: ["新加坡港"],
-            majorAirports: ["SIN"],
-            customs: {
-                clearanceTime: "1-2个工作日",
-                requiredDocs: ["商业发票", "装箱单", "提单", "原产地证"],
-                restrictions: ["食品需要AVA认证", "电子产品需要IMDA认证"],
-                duties: "根据HSCode确定，一般0-7%"
-            },
-            shipping: {
-                express: ["DHL", "FedEx", "UPS", "TNT"],
-                airFreight: ["新航", "国泰航空", "马航"],
-                seaFreight: ["马士基", "中远海运", "长荣海运"]
-            }
-        },
-        pricing: {
-            express: "首重S$25-35，续重S$5-8/kg",
-            airFreight: "S$4-8/kg",
-            seaFreight: "S$400-700/20ft, S$700-1100/40ft"
-        },
-        notes: "新加坡是重要的转口贸易中心，清关效率高，适合作为东南亚分拨中心。"
     }
 ];
 
@@ -403,7 +339,7 @@ const termsByCategory = {
         { chinese: "熏蒸证书", english: "fumigation certificate", tags: ["基础", "物流"]}
     ],
     "海关类": [
-        { chinese: "清关", english: "customs clearance",definition: {} ,tags: ["基础", "物流"]},
+        { chinese: "清关", english: "customs clearance", definition: "货物通过海关检查并完成相关手续的过程", tags: ["基础", "物流"]},
         { chinese: "自动舱单系统", english: "AMS", definition: "Automated Manifest System: 美国海关用于预先录入和审查货物数据的系统", tags: ["基础", "物流"]},
         { chinese: "滞期费", english: "demurrage", definition: "集装箱在目的地码头或堆场的超期使用费，通常发生在收货人清关提货前", tags: ["基础", "物流"]},
         { chinese: "滞箱费", english: "detention", definition: "如果清关后将集装箱提出堆场或码头，但未在规定期限内返还空箱，就会产生集装箱超期使用费用", tags: ["基础", "物流"]},

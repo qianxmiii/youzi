@@ -476,8 +476,8 @@ function updateQuote() {
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd`;
 
@@ -504,8 +504,8 @@ function updateQuote() {
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
         if (data.isDDU) notes += getDDUFee(data.country, 0);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB");
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "RMB");
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "RMB");
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "RMB", data.overSizeFee);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "RMB", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
         notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
 
@@ -530,8 +530,8 @@ function updateQuote() {
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
         if (data.isDDU) notes += getDDUFee(data.country, 1);
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
     } else if (data.quoteType === "PROBOXX-CBM") {
@@ -554,8 +554,8 @@ function updateQuote() {
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
 
     } else if (data.quoteType === "161") {
@@ -567,8 +567,8 @@ function updateQuote() {
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity);
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity);
+        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
+        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\n`;
     }
@@ -778,8 +778,10 @@ function getInputData() {
         isDDU: document.getElementById('ddu_check').checked,
         isOverSize: document.getElementById('oversize_check').checked,
         overSizeQuantity: new Decimal(document.getElementById('oversize-quantity').value || 0),
+        overSizeFee: parseFloat(document.getElementById('oversize-input').value) || 0,
         isOverWeight: document.getElementById('overweight_check').checked,
         overWeightQuantity: new Decimal(document.getElementById('overweight-quantity').value || 0),
+        overWeightFee: parseFloat(document.getElementById('overweight-input').value) || 0,
         isUSD: document.getElementById('USD_check').checked,
         pickupFeeCheck: document.getElementById("pickup-fee-checkbox").checked,
         pickUpFeeRaw: parseFloat(document.getElementById("pickup-fee").value) || 0,
@@ -911,7 +913,7 @@ function initPickupFeeTooltip() {
             availableVehicles.forEach((vehicle, index) => {
                 if (index === 0) {
                     // 第一行特殊显示 - 推荐车型
-                    tooltipContent += `<strong style="color: #ff6600;">★ ${vehicle.name}</strong><span style="color: #ff6600;">（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）</span><br>`;
+                    tooltipContent += `<strong style="color:rgb(181, 176, 174);">★ ${vehicle.name}</strong><span style="color: #ff6600;">（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）</span><br>`;
                 } else {
                     // 其他行正常显示
                     tooltipContent += `- ${vehicle.name}（载重：${vehicle.loadWeightRange[0]}~${vehicle.loadWeightRange[1]}kg，载方：${vehicle.loadVolumeRange[0]}~${vehicle.loadVolumeRange[1]}cbm）<br>`;
@@ -949,9 +951,9 @@ function initPickupFeeTooltip() {
                         // 设置tooltip样式
                         tooltipInner.style.backgroundColor = '#fff';
                         tooltipInner.style.color = '#495057';
-                        tooltipInner.style.border = '2px solid #ff6600';
+                        tooltipInner.style.border = '2px solidrgb(164, 159, 156)';
                         tooltipInner.style.borderRadius = '8px';
-                        tooltipInner.style.boxShadow = '0 4px 12px rgba(255, 102, 0, 0.3)';
+                        tooltipInner.style.boxShadow = '0 4px 12px rgba(175, 166, 161, 0.3)';
                         tooltipInner.style.fontSize = '0.85rem';
                         tooltipInner.style.padding = '0.75rem 1rem';
                         tooltipInner.style.maxWidth = '500px';

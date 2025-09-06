@@ -250,7 +250,18 @@ const countryLogisticsInfo = [
 
 // 术语分类数据
 const termsByCategory = {
+    
     "物流类": [
+        {
+            chinese: "中欧卡航完整流程",
+            english: "Complete China-Europe Trucking Process",
+            definition: `1.货物接收与装柜：客户将货物送至指定地点，由中欧卡航进行接收并装柜。
+          \n 2.内陆运输：货物通过卡车进行内陆运输至新疆口岸。
+          \n 3.换装与报关出境：货物在新疆口岸进行换装，并办理报关出境手续。
+          \n 4.国际运输：货物通过哈萨克斯坦、俄罗斯、白俄罗斯等国家进行国际运输。
+          \n 5.清关与派送：货物在波兰、匈牙利或比利时等清关地点进行清关，并由当地合作伙伴进行末端派送。`,
+            tags: ["流程", "卡航", "完整", "步骤"],
+        },
         { chinese: "货运代理", english: "freight forwarder", definition: "受托处理货物运输的代理人，负责安排运输及相关服务", tags: ["基础", "物流"]},
         { chinese: "报价", english: "quotation", definition: "卖方根据买方需求提供的价格信息", tags: ["基础", "物流"]},
         { chinese: "发货人", english: "SHPR/Shipper", definition: "货物的实际出口方或安排货物出口的一方", tags: ["基础", "物流"]},
@@ -373,6 +384,7 @@ const termsByCategory = {
         { chinese: "化妆品", english: "cosmetics", definition: "包括护肤品、彩妆、香水等", tags: ["基础", "物流"]}
     ],
     "航线类": [
+        { chinese: "OA联盟", english: "Ocean Alliance", definition: "OA联盟（Ocean Alliance）是由四家船公司组成的强大联盟，分别是法国达飞轮船（CMA CGM）、中远海运（COSCO）、长荣海运（EMC）和东方海外（OOCL）", tags: ["物流","航线"]},
         // 美国
         { chinese: "洛杉矶", english: "LA/Los Angeles", definition: "位于加利福尼亚州西南部，是美国最大的集装箱港口", tags: ["港口", "美国", "美西"]},
         { chinese: "长滩", english: "LB/Long Beach", definition: "紧邻洛杉矶码头，拥堵情况相对较少。美森轮船的独立码头就位于此处", tags: ["港口", "美国", "美西"]},

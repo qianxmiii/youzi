@@ -132,6 +132,66 @@ function checkRemoteAddress() {
     updateQuote();
 }
 
+// 常见问题数据
+const faqData = [
+    {
+        id: 1,
+        question: "如何选择合适的运输方式？",
+        answer: "根据货物重量、体积、时效要求、成本预算等因素综合考虑。小件货物选择快递，大件货物选择空运或海运。",
+        category: "运输方式",
+        icon: "bi-truck"
+    },
+    {
+        id: 2,
+        question: "清关需要多长时间？",
+        answer: "一般3-7个工作日，具体时间取决于目的国海关效率和文件完整性。",
+        category: "清关流程",
+        icon: "bi-shield-check"
+    },
+    {
+        id: 3,
+        question: "如何降低物流成本？",
+        answer: "1. 合理包装减少体积重\n2. 选择合适的运输方式\n3. 批量发货享受优惠\n4. 提前规划避免加急费用",
+        category: "成本控制",
+        icon: "bi-currency-dollar"
+    },
+    {
+        id: 4,
+        question: "什么是DDP和DDU？",
+        answer: "DDP (Delivered Duty Paid): 包税到门，卖方承担所有费用和风险\nDDU (Delivered Duty Unpaid): 自税到门，买方承担进口关税和税费",
+        category: "贸易术语",
+        icon: "bi-file-text"
+    },
+    {
+        id: 5,
+        question: "如何计算体积重？",
+        answer: "体积重 = 长×宽×高÷6000 (空运) 或 ÷5000 (快递)\n计费重 = max(实重, 体积重)",
+        category: "重量计算",
+        icon: "bi-calculator"
+    },
+    {
+        id: 6,
+        question: "货物丢失如何索赔？",
+        answer: "1. 立即联系承运商\n2. 提供相关文件证明\n3. 填写索赔申请表\n4. 等待调查结果\n5. 获得赔偿",
+        category: "理赔流程",
+        icon: "bi-exclamation-triangle"
+    },
+    {
+        id: 7,
+        question: "哪些物品不能邮寄？",
+        answer: "易燃易爆品、液体、粉末、电池、食品、药品、动植物制品等。具体限制请咨询承运商。",
+        category: "禁运物品",
+        icon: "bi-x-circle"
+    },
+    {
+        id: 8,
+        question: "如何跟踪货物状态？",
+        answer: "使用承运商提供的运单号在官网或APP上查询，或联系客服获取最新状态。",
+        category: "货物跟踪",
+        icon: "bi-geo-alt"
+    }
+];
+
 // 动态生成分类按钮
 function renderCategoryButtons() {
     const categoryButtonsContainer = document.getElementById('categoryButtons');
@@ -161,6 +221,94 @@ function renderCategoryButtons() {
     // 初始化回到顶部按钮
     if (typeof initBackToTopButton === 'function') {
         initBackToTopButton();
+    }
+}
+
+// 初始化常见问题手风琴
+function initFaqAccordion() {
+    const accordionContainer = document.getElementById('faqAccordion');
+    if (!accordionContainer) return;
+
+    accordionContainer.innerHTML = '';
+
+    faqData.forEach((faq, index) => {
+        const accordionItem = document.createElement('div');
+        accordionItem.className = 'accordion-item';
+        accordionItem.innerHTML = `
+            <h2 class="accordion-header" id="faq-heading-${index}">
+                <button class="accordion-button collapsed" type="button" 
+                        data-bs-toggle="collapse" data-bs-target="#faq-collapse-${index}" 
+                        aria-expanded="false" aria-controls="faq-collapse-${index}">
+                    <i class="bi ${faq.icon} me-2"></i>
+                    ${faq.question}
+                </button>
+            </h2>
+            <div id="faq-collapse-${index}" class="accordion-collapse collapse" 
+                 aria-labelledby="faq-heading-${index}" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                    <i class="bi bi-lightbulb me-2 text-warning"></i>
+                    ${faq.answer.replace(/\n/g, '<br>')}
+                </div>
+            </div>
+        `;
+        accordionContainer.appendChild(accordionItem);
+    });
+}
+
+// 切换FAQ卡片翻转状态
+function toggleFaqCard(card) {
+    card.classList.toggle('flipped');
+}
+
+// 搜索常见问题
+function searchFaq() {
+    const searchInput = document.getElementById('faqSearchInput');
+    const searchTerm = searchInput.value.toLowerCase().trim();
+    const accordionItems = document.querySelectorAll('.accordion-item');
+    const noResults = document.getElementById('faqNoResults');
+    
+    let visibleCount = 0;
+    
+    accordionItems.forEach(item => {
+        const question = item.querySelector('.accordion-button').textContent.toLowerCase();
+        const answer = item.querySelector('.accordion-body').textContent.toLowerCase();
+        
+        if (question.includes(searchTerm) || answer.includes(searchTerm)) {
+            item.style.display = 'block';
+            visibleCount++;
+        } else {
+            item.style.display = 'none';
+        }
+    });
+    
+    // 显示/隐藏无结果提示
+    if (visibleCount === 0 && searchTerm !== '') {
+        noResults.style.display = 'block';
+    } else {
+        noResults.style.display = 'none';
+    }
+}
+
+// 清空FAQ搜索
+function clearFaqSearch() {
+    const searchInput = document.getElementById('faqSearchInput');
+    searchInput.value = '';
+    searchFaq();
+}
+
+// 初始化术语模态框
+function initTermModal() {
+    // 初始化常用术语
+    renderCategoryButtons();
+    filterTerms('全部');
+    
+    // 初始化常见问题
+    initFaqAccordion();
+    
+    // 添加搜索事件监听器
+    const faqSearchInput = document.getElementById('faqSearchInput');
+    if (faqSearchInput) {
+        faqSearchInput.addEventListener('input', searchFaq);
     }
 }
 

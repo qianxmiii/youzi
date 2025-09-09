@@ -31,8 +31,6 @@ function init() {
     renderPriceTable();
     // 初始化时渲染标签按钮
     renderTagButtons();
-    // 加载美国数据
-    loadUSAData();
     // 初始化
     initQuickReplyCategories();
     // 初始化车型查询 Tab

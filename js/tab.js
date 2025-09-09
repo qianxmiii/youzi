@@ -334,6 +334,9 @@ function toggleTagFilter(tag) {
 
     // 根据选中的标签筛选术语
     filterTermsByTags();
+    
+    // 更新清除按钮的显示状态
+    updateClearTagsButton();
 }
 
 // 更新标签按钮样式
@@ -414,6 +417,29 @@ function renderTagButtons() {
         button.onclick = () => toggleTagFilter(tag);
         tagButtonsContainer.appendChild(button);
     });
+    
+    // 更新清除按钮的显示状态
+    updateClearTagsButton();
+}
+
+// 清除所有选中的标签
+function clearAllTags() {
+    selectedTags = [];
+    updateTagButtonStyles();
+    filterTermsByTags();
+    updateClearTagsButton();
+}
+
+// 更新清除标签按钮的显示状态
+function updateClearTagsButton() {
+    const clearBtn = document.getElementById('clearTagsBtn');
+    if (clearBtn) {
+        if (selectedTags.length > 0) {
+            clearBtn.style.display = 'block';
+        } else {
+            clearBtn.style.display = 'none';
+        }
+    }
 }
 
 

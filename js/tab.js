@@ -55,7 +55,7 @@ function renderTerms(filteredTerms = allTerms) {
             
             if (termViewMode === 'grid') {
                 // 网格样式 - 支持可展开卡片设计
-                card.className = 'col-md-4 col-lg-3 col-xl-2 mb-3';
+                card.className = 'col-md-4 mb-3';
                 const hasDefinition = term.definition && typeof term.definition === 'string' && term.definition.trim() !== '';
                 card.innerHTML = `
                     <div class="card h-100 term-card-grid">
@@ -293,8 +293,23 @@ function initSearchFunction() {
  // 清除搜索
  function clearSearch() {
      searchInput.value = '';
+     
+     // 重置分类选择到"全部"
+     document.querySelectorAll('.category-buttons .btn').forEach(btn => {
+         btn.classList.remove('active');
+     });
+     // 激活"全部"分类按钮
+     const allCategoryBtn = document.querySelector('.category-buttons .btn[data-category="全部"]');
+     if (allCategoryBtn) {
+         allCategoryBtn.classList.add('active');
+     }
+     
+     // 清除所有选中的标签
+     selectedTags = [];
+     updateTagButtonStyles();
+     updateClearTagsButton();
+     
      renderTerms(allTerms); // 重置为全部术语
-
  }
 
 
@@ -343,16 +358,36 @@ function toggleTagFilter(tag) {
 function updateTagButtonStyles() {
     const tagButtons = document.querySelectorAll("#termTagBtns button");
     tagButtons.forEach(button => {
-        const match = button.innerText.match(/^[^\(]+/);
-        if (match) {
-            const tag = match[0].trim().toLowerCase(); // 统一小写
-            const tagMatch = selectedTags.some(selectedTag => selectedTag.trim().toLowerCase() === tag);
-
-            // 修改选中效果
-            if (tagMatch) {
-                button.classList.add("selected");
+        const dataTag = button.getAttribute("data-tag");
+        
+        // 处理"全部"按钮
+        if (dataTag === "all") {
+            if (selectedTags.length === 0) {
+                // 没有选中任何标签时，"全部"按钮保持蓝色高亮
+                button.style.color = "#fff";
+                button.style.borderColor = "#007bff";
+                button.style.backgroundColor = "#007bff";
+                button.style.fontWeight = "bold";
             } else {
-                button.classList.remove("selected");
+                // 有选中标签时，"全部"按钮变为普通样式
+                button.style.color = "#333";
+                button.style.borderColor = "#ccc";
+                button.style.backgroundColor = "#f8f9fa";
+                button.style.fontWeight = "normal";
+            }
+        } else {
+            // 处理其他标签按钮
+            const match = button.innerText.match(/^[^\(]+/);
+            if (match) {
+                const tag = match[0].trim().toLowerCase(); // 统一小写
+                const tagMatch = selectedTags.some(selectedTag => selectedTag.trim().toLowerCase() === tag);
+
+                // 修改选中效果
+                if (tagMatch) {
+                    button.classList.add("selected");
+                } else {
+                    button.classList.remove("selected");
+                }
             }
         }
     });
@@ -401,6 +436,21 @@ function renderTagButtons() {
 
     // 清空现有按钮
     tagButtonsContainer.innerHTML = '';
+
+    // 添加"全部"选项按钮
+    const allButton = document.createElement("button");
+    allButton.className = "btn btn-sm me-2 mb-2";
+    allButton.innerText = "全部";
+    allButton.setAttribute("data-tag", "all");
+    
+    // 全部按钮的特殊样式
+    allButton.style.color = "#fff";
+    allButton.style.borderColor = "#007bff";
+    allButton.style.backgroundColor = "#007bff";
+    allButton.style.fontWeight = "bold";
+    
+    allButton.onclick = () => clearAllTags();
+    tagButtonsContainer.appendChild(allButton);
 
     // 为每个标签生成按钮
     tags.forEach(tag => {

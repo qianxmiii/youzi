@@ -143,8 +143,9 @@ function renderCategoryButtons() {
 
     // 添加"全部"按钮
     const allButton = document.createElement('button');
-    allButton.className = 'btn btn-outline-primary';
+    allButton.className = 'btn btn-outline-primary active';
     allButton.textContent = '全部';
+    allButton.setAttribute('data-category', '全部');
     allButton.onclick = () => filterTerms('全部', allButton);
     allButton.id = 'termTotal';
     categoryButtonsContainer.appendChild(allButton);
@@ -155,6 +156,7 @@ function renderCategoryButtons() {
         const button = document.createElement('button');
         button.className = 'btn btn-outline-primary';
         button.textContent = category;
+        button.setAttribute('data-category', category);
         button.onclick = () => filterTerms(category, button);
         categoryButtonsContainer.appendChild(button);
     });

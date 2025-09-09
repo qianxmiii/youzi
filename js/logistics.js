@@ -14,7 +14,7 @@ window.onload = function () {
 
     // 获取下一个星期五的日期
     valid_date = getNextFriday();
-    // valid_date = "08/01";
+    valid_date = "09/12";
 
     init(); // 初始化
     eventListener();
@@ -1775,7 +1775,6 @@ function parseBatchAddressDistribution() {
     });
     
     batchQuoteData.addressDistribution = distribution;
-    console.log('解析地址分配成功:', distribution);
 }
 
 /**
@@ -1981,15 +1980,8 @@ function generateBatchQuote() {
                 unitCostRMB = showCost(shippingRegion, matchedCountry, channel, postcode, totalWeight, withBattery) || 0;
             } else if (window.data.seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')] !== undefined) {
                 unitCostRMB = window.data.seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')];
-        } else {
-            const priceParams = {
-                carrier: getCarrierByChannel(channel),
-                channel: channel,
-                origin: origin,
-                zipcode: postcode,
-                weight: totalWeight
-            };
-                unitCostRMB = getCarrierPrice(priceParams) || 0;
+            } else {
+                unitCostRMB = 0;
             }
             
             // 计算利润和报价
@@ -2101,7 +2093,7 @@ function renderBatchQuoteTable() {
                                 <tr>
                                     <th style="width: 8%">地址</th>
                                     <th style="width: 6%">邮编</th>
-                                    <th style="width: 5%">箱数</th>
+                                    <th style="width: 4%">箱数</th>
                                     <th style="width: 7%">总实重(KG)</th>
                                     <th style="width: 7%">总体积(cbm)</th>
                                     <th style="width: 7%">计费重(kg)</th>
@@ -2111,7 +2103,7 @@ function renderBatchQuoteTable() {
                                     <th style="width: 7%">报价(RMB)</th>
                                     <th style="width: 7%">报价(USD)</th>
                                     <th style="width: 7%">总价(USD)</th>
-                                    <th style="width: 5%">时效(天)</th>
+                                    <th style="width: 6%">时效(天)</th>
                                 </tr>
                             </thead>
                             <tbody id="batch-quote-tbody-${channelId}">

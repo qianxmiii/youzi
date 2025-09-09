@@ -76,6 +76,9 @@ function calculate() {
     let deliveryMethod = document.getElementById("delivery-method").value;
     let calCountry = document.getElementById("cal-country").value;
     let calChannel = document.getElementById("cal-channel").value;
+    
+    // 显示派送方式提示信息
+    showDeliveryMethodHint(deliveryMethod);
     const rules = boxRules[calCountry]?.[calChannel]; // 获取当前国家和渠道的规则
     let warnings = [];
     let sizeinfo ='';
@@ -2876,4 +2879,27 @@ function addCommonAddressCombination() {
     document.getElementById('batch-profit').value = '50';
     
     showToast('已添加示例数据，请修改后点击"生成报价"');
+}
+
+// 显示派送方式提示信息
+function showDeliveryMethodHint(deliveryMethod) {
+    const hintElement = document.getElementById('delivery-method-hint');
+    const hintTextElement = document.getElementById('delivery-hint-text');
+    
+    if (!hintElement || !hintTextElement) return;
+    
+    // 根据派送方式显示不同的提示信息
+    switch(deliveryMethod) {
+        case '海派':
+            hintTextElement.textContent = '单箱最低计费重为12kg';
+            hintElement.style.display = 'block';
+            break;
+        case '空派':
+            hintTextElement.textContent = '单箱最低计费重为10kg';
+            hintElement.style.display = 'block';
+            break;
+        default:
+            hintElement.style.display = 'none';
+            break;
+    }
 }

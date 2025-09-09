@@ -109,11 +109,16 @@ function calculate() {
             .ceil(); // 向上取整
 
         // 检查派送方式为"快递派"时，调整实重和材积重
-        if (deliveryMethod == "快递派") {
+        if (deliveryMethod == "海派") {
             let minWeight = new Decimal(12).mul(quantity); // 最低实重和材积重要求
             if (rowWeight.lessThan(minWeight)) rowWeight = minWeight; // 更新实重
             if (dimensionWeight.lessThan(minWeight)) dimensionWeight = minWeight; // 更新材积重
+        } else if (deliveryMethod == "空派") {
+            let minWeight = new Decimal(10).mul(quantity); // 最低实重和材积重要求
+            if (rowWeight.lessThan(minWeight)) rowWeight = minWeight; // 更新实重
+            if (dimensionWeight.lessThan(minWeight)) dimensionWeight = minWeight; // 更新材积重
         }
+
 
         // 计算周长 (cm)
         let sides = [length, width, height].sort((a, b) => a.minus(b).toNumber()); // 排序：从小到大
@@ -2868,7 +2873,7 @@ function addCommonAddressCombination() {
     parseBatchAddressDistribution();
     
     // 示例利润
-    document.getElementById('batch-profit-rmb').value = '50';
+    document.getElementById('batch-profit').value = '50';
     
     showToast('已添加示例数据，请修改后点击"生成报价"');
 }

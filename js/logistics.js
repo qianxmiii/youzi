@@ -1,3 +1,7 @@
+/**
+ * logistics.js 物流相关功能
+ */
+
 // 新增常量 exchange_rate
 const exchange_rate = 7.1; //美元汇率
 const cost_exchange_rate = 7.18; //美元汇率
@@ -7,7 +11,7 @@ let addFee = new Decimal(0); //其他费用
 const receiver = "Tal";
 
 // 引入 data.js 中的数组
-const {deliveryMethodsByCountry, quickReplies, addressByCountry, remotePostcodes} = window.data;
+const {deliveryMethodsByCountry, quickReplies} = window.data;
 
 // 页面加载时初始化
 window.onload = function () {
@@ -1883,10 +1887,10 @@ function getPostcodeColorClass(postcode, channel) {
  * 检查邮编是否为偏远地区
  */
 function isRemotePostcode(postcode) {
-    if (!postcode || !window.data || !window.data.remotePostcodes) {
+    if (!postcode || !window.data || !remotePostcodes) {
         return false;
     }
-    return window.data.remotePostcodes.includes(postcode);
+    return remotePostcodes.includes(postcode);
 }
 
 /**
@@ -1968,7 +1972,7 @@ function generateBatchQuote() {
         let matchedCountry = "美国"; // 默认国家
         let postcode = "";
 
-        for (const [country, postalMap] of Object.entries(window.data.addressByCountry)) {
+        for (const [country, postalMap] of Object.entries(addressByCountry)) {
             if (postalMap[item.address]) {
                 matchedCountry = country;
                 postcode = postalMap[item.address];
@@ -1986,8 +1990,8 @@ function generateBatchQuote() {
                 const shippingRegion = document.getElementById('batch-shipping-region').value;
                 const withBattery = false; // 默认不带电池
                 unitCostRMB = showCost(shippingRegion, matchedCountry, channel, postcode, totalWeight, withBattery) || 0;
-            } else if (window.data.seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')] !== undefined) {
-                unitCostRMB = window.data.seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')];
+            } else if (seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')] !== undefined) {
+                unitCostRMB = seaTruckPrice[item.address + (channel === 'Fast sea truck' ? ' Fast' : '')];
             } else {
                 unitCostRMB = 0;
             }

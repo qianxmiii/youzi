@@ -1,3 +1,7 @@
+/**
+ * caltools.js 计算工具
+ */
+
 // 计算材积重
 function calCBMWeight(totalVolume) {
     if (totalVolume.greaterThan(0)) {

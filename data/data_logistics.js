@@ -355,8 +355,7 @@ const termsByCategory = {
         { chinese: "滞期费", english: "demurrage", definition: "集装箱在目的地码头或堆场的超期使用费，通常发生在收货人清关提货前", tags: ["基础", "物流"]},
         { chinese: "滞箱费", english: "detention", definition: "如果清关后将集装箱提出堆场或码头，但未在规定期限内返还空箱，就会产生集装箱超期使用费用", tags: ["基础", "物流"]},
         { chinese: "堆存费", english: "storage", definition: "码头允许免费堆存的时间，超过这个时间后，每天每柜会产生一定的堆存费或滞港费", tags: ["基础", "物流"]},  
-        
-        { chinese: "码头费", english: "THC", definition: "terminal handling charge: 码头费", tags: ["基础", "物流"]}    
+        { chinese: "码头费", english: "THC", definition: "terminal handling charge: 码头费", tags: ["基础", "物流"]},
     ],
     "税务类": [
         { chinese: "汇率", english: "exchange rate", definition: "不同货币之间的兑换比率", tags: ["基础", "物流"]},
@@ -364,7 +363,7 @@ const termsByCategory = {
         { chinese: "关税", english: "duty", definition: "进口货物需要缴纳的税款", tags: ["基础", "物流"]},
         { chinese: "关税税率", english: "tariff", definition: "用于计算关税的税率", tags: ["基础", "物流"]},
         { chinese: "增值税", english: "VAT", definition: "Value Added Tax: 对商品增值部分征收的税款", tags: ["基础", "物流"]},
-        { chinese: "海关编码", english: "HS Code", definition: "Harmonized System Code: 海关编码，用于商品分类和监管", tags: ["基础", "物流"]},
+        { chinese: "海关编码", english: "HS Code", definition: "Harmonized System Code: 海关编码其实是依据《商品名称及编码协调制度的国际公约》（简称HS），用科学系统的方法将商品分类。HS采用六位数编码，把全部国际贸易商品分为22类，98章。章以下再分为目和子目。商品编码第一、二位数码代表“章”，第三、四位数码代表“目”（Heading），第五、六位数码代表“子目”（Subheading）。前6位数是HS国际标准编码，后2-4位数是各个国家海关按照实际情况再进行延伸，所以大家才会常说前6位海关编码是国际通用的。", tags: ["基础", "物流"]},
         { chinese: "退税", english: "tax refund", tags: ["基础", "物流"]},
         { chinese: "报关行", english: "customs broker", definition: "负责货物进出口通关手续", tags: ["基础", "物流"]}
     ],

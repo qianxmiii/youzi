@@ -1,3 +1,6 @@
+/**
+ * tab.js 标签相关功能
+ */
 
  /**
   * Tab1 - 常用功能
@@ -945,8 +948,8 @@ function calculateCostDDP() {
 // 动态生成快递派价格表格
 function initCarrierSelect() {
     const sel = document.getElementById('t4_carrier');
-    if (!sel || !window.data || !window.data.expressPricing) return;
-    const carriers = Object.keys(window.data.expressPricing);
+    if (!sel || !window.data || !expressPricing) return;
+    const carriers = Object.keys(expressPricing);
     sel.innerHTML = carriers.map(c => `<option value="${c}">${c}</option>`).join('');
     sel.addEventListener('change', function() {
         syncChannelWithCarrier();
@@ -966,36 +969,6 @@ function renderPriceTable() {
 
     const carrier = (document.getElementById('t4_carrier') || {}).value;
     const cfg = typeof getCarrierCfg === 'function' ? getCarrierCfg(carrier) : null;
-
-    // 如果未配置承运商，则回退到原有 channel 表逻辑
-    if (!cfg) {
-        const channel = document.getElementById("t4_channel").value;
-        const currentPriceTable = priceTable[channel] || {};
-        Object.keys(currentPriceTable).forEach(area => {
-            const southRow = document.createElement("tr");
-            southRow.innerHTML = `
-                <td>${area}</td>
-                <td>${currentPriceTable[area]["华南"][0]}</td>
-                <td>${currentPriceTable[area]["华南"][1]}</td>
-                <td>${currentPriceTable[area]["华南"][2]}</td>
-                <td>${currentPriceTable[area]["华南"][3]}</td>
-                <td>${currentPriceTable[area]["华南"][4]}</td>
-            `;
-            southTbody.appendChild(southRow);
-
-            const eastRow = document.createElement("tr");
-            eastRow.innerHTML = `
-                <td>${area}</td>
-                <td>${currentPriceTable[area]["华东"][0]}</td>
-                <td>${currentPriceTable[area]["华东"][1]}</td>
-                <td>${currentPriceTable[area]["华东"][2]}</td>
-                <td>${currentPriceTable[area]["华东"][3]}</td>
-                <td>${currentPriceTable[area]["华东"][4]}</td>
-            `;
-            eastTbody.appendChild(eastRow);
-        });
-        return;
-    }
 
     // 基于承运商配置动态渲染
     const channel = (document.getElementById("t4_channel") || {}).value;
@@ -1103,21 +1076,6 @@ function calculatePrice(region,channel,zipcode,weight) {
             return price;
         }
     }
-
-    // 回退到旧逻辑
-    const area = getRegionByZip(zipcode);
-    if (!area || !priceTable[channel] || !priceTable[channel][area] || !priceTable[channel][area][region]) {
-        document.getElementById("t4_priceResult").innerHTML = "单价：邮编不在配送范围内";
-        console.log(JSON.stringify(priceTable, null, 2));
-        return;
-    }
-
-    renderPriceTable();
-    const weightIndex = getWeightIndex(weight);
-    const price = priceTable[channel][area][region][weightIndex];
-    document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
-    highlightPriceCell(area, region, weightIndex);
-    return price;
 }
 
 // 高亮承运商动态表格的单元格（根据 zipLabel 行与 weightIdx 列）

@@ -224,6 +224,51 @@ const bookmarksData = [
     category: "其他工具",
     icon: "📄",
     tags: ["PDF", "转换", "工具"]
+  } ,
+  {
+    id: 25,
+    name: "欧盟进口税率查询",
+    url: "http://ec.europa.eu",
+    description: "欧盟进口税率查询",
+    category: "税率查询",
+    icon: "📄",
+    tags: ["税率", "欧盟"]  
+  },
+  {
+    id: 26,
+    name: "美国进口税率查询",
+    url: "https://hts.usitc.gov",
+    description: "美国进口税率查询",
+    category: "税率查询",
+    icon: "📄",
+    tags: ["税率", "美国"]
+  },
+  {
+    id: 27,
+    name: "加拿大进口税率查询",
+    url: "http://www.cbsa-asfc.gc.ca",
+    description: "加拿大进口税率查询",
+    category: "税率查询",
+    icon: "📄",
+    tags: ["税率", "加拿大"]
+  },
+  {
+    id: 28,
+    name: "澳大利亚进口税率查询",
+    url: "https://ftaportal.dfat.gov.au",
+    description: "澳大利亚进口税率查询",
+    category: "税率查询",
+    icon: "📄",
+    tags: ["税率", "澳大利亚"]
+  },
+  {
+    id: 29,
+    name: "日本进口税率查询",
+    url: "http://www.customs.go.jp",
+    description: "日本进口税率查询",
+    category: "税率查询",
+    icon: "📄",
+    tags: ["税率", "日本"]
   }
 ];
 

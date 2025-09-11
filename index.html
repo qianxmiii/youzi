@@ -642,6 +642,10 @@
               <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#logisticsMemoModal">
                 <i class="bi bi-globe"></i> 物流备忘录
               </button>
+              <!-- 6. 常用网址 -->
+              <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bookmarksModal">
+                <i class="bi bi-bookmark-star"></i> 常用网址
+              </button>
             </div>
 
             <!-- 模态框-常用术语-->
@@ -1497,6 +1501,79 @@
     </div>
   </div>
 
+  <!-- 常用网址模态框 -->
+  <div class="modal fade" id="bookmarksModal" tabindex="-1" aria-labelledby="bookmarksModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="bookmarksModalLabel">
+            <i class="bi bi-bookmark-star"></i> 常用网址
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- 分类和视图切换区域 -->
+          <div class="row mb-3 align-items-center bookmark-layout-row">
+            <div class="col-md-8">
+              <div class="btn-group" role="group" id="bookmarkCategoryButtons">
+                <button type="button" class="btn btn-outline-secondary active" data-category="all">全部分类</button>
+                <button type="button" class="btn btn-outline-secondary" data-category="快递公司">快递公司</button>
+                <button type="button" class="btn btn-outline-secondary" data-category="物流工具">物流工具</button>
+                <button type="button" class="btn btn-outline-secondary" data-category="海关查询">海关查询</button>
+                <button type="button" class="btn btn-outline-secondary" data-category="汇率查询">汇率查询</button>
+                <button type="button" class="btn btn-outline-secondary" data-category="其他工具">其他工具</button>
+              </div>
+            </div>
+            <div class="col-md-4 text-end">
+              <div class="btn-group" role="group">
+                <button type="button" class="btn btn-outline-primary" id="bookmarkListView" onclick="switchBookmarkView('list')">
+                  <i class="bi bi-list"></i> 列表
+                </button>
+                <button type="button" class="btn btn-outline-primary active" id="bookmarkGridView" onclick="switchBookmarkView('grid')">
+                  <i class="bi bi-grid"></i> 网格
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- 搜索区域 -->
+          <div class="row mb-3">
+            <div class="col-md-8">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="bookmarkSearch" placeholder="搜索网址名称、描述或网址...">
+              </div>
+            </div>
+          </div>
+
+          <!-- 网址统计 -->
+          <div class="bookmark-statistics mb-3">
+            <small class="text-muted" id="bookmarkCount">共找到 0 个网址</small>
+          </div>
+
+          <!-- 网址列表容器 - 移除Bootstrap列限制 -->
+          <div class="container-fluid p-0">
+            <div id="bookmarkList" class="bookmark-list">
+              <!-- 网址将通过 JavaScript 动态生成 -->
+            </div>
+          </div>
+
+          <!-- 无结果提示 -->
+          <div id="noBookmarkResults" class="no-results" style="display: none;">
+            <div class="text-center py-5">
+              <i class="bi bi-bookmark" style="font-size: 3rem; color: #6c757d;"></i>
+              <h5 class="text-muted mt-3">没有找到匹配的网址</h5>
+              <p class="text-muted">请尝试其他搜索关键词或分类</p>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- 引入 Bootstrap JS -->
   <script src="js/common/popper.min.js"></script>
   <script src="js/common/bootstrap.min.js"></script>
@@ -1508,6 +1585,7 @@
   <script src="data/data_price.js"></script>
   <script src="data/data.js"></script>
   <script src="data/data_logistics.js"></script>
+  <script src="data/data_bookmarks.js"></script>
   <!-- 引入样式配置文件 -->
   <script src="config/style.js"></script>
   <!-- 引入初始化文件 -->
@@ -1519,6 +1597,7 @@
   <script src="js/rules.js"></script>
   <script src="js/logistics.js"></script>
   <script src="js/logistics_memo.js"></script>
+  <script src="js/bookmarks.js"></script>
   
   <!-- 页面加载完成后初始化 -->
   <script>
@@ -1531,6 +1610,11 @@
       // 初始化其他功能
       if (typeof initLogisticsMemo === 'function') {
         initLogisticsMemo();
+      }
+      
+      // 初始化常用网址功能
+      if (typeof initBookmarks === 'function') {
+        initBookmarks();
       }
       
     });

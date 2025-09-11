@@ -380,7 +380,9 @@ const termsByCategory = {
         { chinese: "电子产品", english: "electronics", definition: "包括手机、电脑、电视等", tags: ["基础", "物流"]},
         { chinese: "金属产品", english: "metals", definition: "包括钢铁、铝、铜等", tags: ["基础", "物流"]},
         { chinese: "家用电器", english: "home appliances", definition: "包括冰箱、洗衣机、空调等", tags: ["基础", "物流"]},
-        { chinese: "化妆品", english: "cosmetics", definition: "包括护肤品、彩妆、香水等", tags: ["基础", "物流"]}
+        { chinese: "化妆品", english: "cosmetics", definition: "包括护肤品、彩妆、香水等", tags: ["基础", "物流"]},
+        { chinese: "带磁性货物空运注意事项", english: "Magnetic Goods Air Shipping Requirements", definition: "带磁性货物不属于普通货物，因磁场的干扰可能影响飞行安全，所以航空公司要求带磁性的货物必须出具磁性检测报告，合理才可以上飞机。", tags: ["空运", "安全", "检测", "磁性"]},
+        { chinese: "FDA认证", english: "FDA Certification", definition: "FDA是美国食品药品监督管理局（Food and Drug Administration）的简称，所有与人体直接接触或跟食物接触的产品都可能涉及FDA认证。FDA认证分强制认证和非强制认证两种。强制认证的必须提供FDA注册证明，常见产品有太阳镜、陶瓷产品、体温计、血压计等医疗相关产品。非强制认证的产品只需要提供产品制造商信息和收发货人信息，由报关行提供给FDA备案审查即可通过，常见产品有厨房用具、水杯等。", tags: ["认证", "美国", "FDA", "医疗", "食品"]}
     ],
     "航线类": [
         { chinese: "OA联盟", english: "Ocean Alliance", definition: "OA联盟（Ocean Alliance）是由四家船公司组成的强大联盟，分别是法国达飞轮船（CMA CGM）、中远海运（COSCO）、长荣海运（EMC）和东方海外（OOCL）", tags: ["物流","航线"]},

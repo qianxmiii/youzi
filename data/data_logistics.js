@@ -382,7 +382,22 @@ const termsByCategory = {
         { chinese: "家用电器", english: "home appliances", definition: "包括冰箱、洗衣机、空调等", tags: ["基础", "物流"]},
         { chinese: "化妆品", english: "cosmetics", definition: "包括护肤品、彩妆、香水等", tags: ["基础", "物流"]},
         { chinese: "带磁性货物空运注意事项", english: "Magnetic Goods Air Shipping Requirements", definition: "带磁性货物不属于普通货物，因磁场的干扰可能影响飞行安全，所以航空公司要求带磁性的货物必须出具磁性检测报告，合理才可以上飞机。", tags: ["空运", "安全", "检测", "磁性"]},
-        { chinese: "FDA认证", english: "FDA Certification", definition: "FDA是美国食品药品监督管理局（Food and Drug Administration）的简称，所有与人体直接接触或跟食物接触的产品都可能涉及FDA认证。FDA认证分强制认证和非强制认证两种。强制认证的必须提供FDA注册证明，常见产品有太阳镜、陶瓷产品、体温计、血压计等医疗相关产品。非强制认证的产品只需要提供产品制造商信息和收发货人信息，由报关行提供给FDA备案审查即可通过，常见产品有厨房用具、水杯等。", tags: ["认证", "美国", "FDA", "医疗", "食品"]}
+        { chinese: "FDA认证", english: "FDA Certification", definition: "FDA是美国食品药品监督管理局（Food and Drug Administration）的简称，所有与人体直接接触或跟食物接触的产品都可能涉及FDA认证。FDA认证分强制认证和非强制认证两种。强制认证的必须提供FDA注册证明，常见产品有太阳镜、陶瓷产品、体温计、血压计等医疗相关产品。非强制认证的产品只需要提供产品制造商信息和收发货人信息，由报关行提供给FDA备案审查即可通过，常见产品有厨房用具、水杯等。", tags: ["认证", "美国", "FDA", "医疗", "食品"]},
+        
+        // 新增商品分类术语
+        { chinese: "贱金属及其制品", english: "Base Metals and Articles", definition: "包括钢钉、钢管、碳合金钢丝条、金属硅、金刚石锯片、不锈钢货架、不锈钢加压管、定尺碳素钢板、石油专用管材、冷轴碳钢、薄壁矩形钢管、熨衣架及部件、螺纹钢筋、弹簧垫圈、非封闭内置弹簧部件、不锈钢拉制深水槽、冷轧钢板、无缝碳钢和合金钢标准管、管线管和压力管、圆锥滚子轴承、铸铁件、金属镁、镀锌板、重锻造手动工具（斧子、撬杠、锤子、镐头）、钢制高压气瓶等", tags: ["反倾销"]},
+        { chinese: "化学产品", english: "Chemical Products", definition: "包括己内酰胺（又称碳酸锂）、聚对苯二甲酸乙二酯膜片和条、聚乙烯醇、高锰酸钾、三聚氰胺、天然猪鬃油漆刷及刷头等", tags: ["反倾销"]},
+        { chinese: "杂项制品", english: "Miscellaneous Manufactured Articles", definition: "包括木制卧室家具、复合木地板、硬木胶合板产品，非晶硅织物、晶体硅光伏电池、小直径石墨电极等", tags: ["反倾销"]},
+        { chinese: "机械电气设备及部件", english: "Machinery and Electrical Equipment", definition: "包括滚球轴承、汽车挡风玻璃、刹车鼓与刹车转子，轮毂，轮胎等", tags: ["反倾销"]},
+        { chinese: "纸及纸制品", english: "Paper and Paper Products", definition: "包括铜版纸、格记录纸、薄绵纸、折叠礼品盒、皱纹纸、无涂层纸，低克重热敏纸等", tags: ["反倾销"]},
+        { chinese: "纺织制品", english: "Textile Products", definition: "包括聚酯纤维、画布、编织电热毯，原聚酯棉印花布，窄幅梭织缎带等", tags: ["反倾销"]},
+        { chinese: "预制食品与饮料", english: "Prepared Food and Beverages", definition: "包括淹渍蘑菇罐头、柠檬酸与柠檬酸盐、华糖醇、冷冻的和罐装的暖水虾等", tags: ["反倾销"]},
+        { chinese: "塑料与橡胶制品", english: "Plastic and Rubber Products", definition: "包括复合编织袋、聚乙烯手提袋、新充气工程机械轮胎等", tags: ["反倾销"]},
+        { chinese: "日常生活用品", english: "Daily Life Articles", definition: "包括折叠金属椅子，搪瓷厨具，钢丝衣架，蜡烛（所有石蜡制品），曲别针，铅笔等", tags: ["反倾销"]},
+        { chinese: "家用电器", english: "Household Appliances", definition: "包括彩色电视机、家用大型洗衣机等", tags: ["反倾销"]},
+        { chinese: "车船运输设备及部件", english: "Vehicle and Transport Equipment", definition: "包括自行车、手推车等", tags: ["反倾销"]},
+        { chinese: "建材与玻璃制品", english: "Building Materials and Glass Products", definition: "包括铝型材、双轴土工格栅、镁碳砖等", tags: ["反倾销"]},
+        { chinese: "蔬菜产品", english: "Vegetable Products", definition: "包括蜂蜜等", tags: ["反倾销"]}
     ],
     "航线类": [
         { chinese: "OA联盟", english: "Ocean Alliance", definition: "OA联盟（Ocean Alliance）是由四家船公司组成的强大联盟，分别是法国达飞轮船（CMA CGM）、中远海运（COSCO）、长荣海运（EMC）和东方海外（OOCL）", tags: ["物流","航线"]},

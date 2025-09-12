@@ -1,4 +1,8 @@
- // 匹配邮编前缀到区域
+/**
+ * rules.js 规则相关功能
+ */
+
+// 匹配邮编前缀到区域
 function getRegionByZip(zip) {
     if (/^(0|1|2|3)/.test(zip)) return "美东0.1.2.3";
     else if (/^(4|5|6|7)/.test(zip)) return "美中4.5.6.7";

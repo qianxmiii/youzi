@@ -547,6 +547,8 @@ window.data = {
             category: "产品",
             replies: [
                 { chinese: "请确认产品无牌不侵权", english: "Please confirm that the product is not infringing."},
+                { chinese: "不带电带磁", english: "Without battery, without magnet."},
+                { chinese: "带电带磁", english: "With battery or magnet."},
                 { chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告", english: "For Wooden products, pls provide the commodity inspection report. For raw wooden products, fumigation report is also needed." },
                 { chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3", english: "For battery goods, please provide MSDS and transport report. For lithium batteries, UN38.3 is also needed." },
                 { chinese: "儿童产品请提供CPC", english: "For children's products, please provide CPC." }
@@ -556,8 +558,6 @@ window.data = {
         {
             category: "地址",
             replies: [
-                { chinese: "浙江省金华市义乌市稠江街道德贸路2号（2楼37号-38号）启函物流园，余乐（转May），15157953544", english: "Qihan Logistics Park, No. 2 Demao Road, Choujiang Street, Yiwu City, Jinhua City, Zhejiang Province (No. 37-38, 2nd floor platform),  Mr yu, 15157953544" },
-                { chinese: "深圳市宝安区福海街道和平社区富桥工业区二区北(加运美旁) 虎哥（转May） 15920082662", english: "Building A4, 1st Floor, Zone 2, Fuqiao Industrial Zone, Fuhai Street, Bao'an District, Shenzhen City, Guangdong Province HuGe 15920082662" },
                 { chinese: "纽酷美国仓库地址", english: "【美西】 10889 Tamarind Ave, Fontana, CA 92337 \n 【奥克兰】 757 E 11th St, Tracy, CA 95376 \n 【西雅图】 21846 76th Ave S, Kent, WA 98032 \n 【芝加哥】 16675 W. Prologis Parkway, Lockport, IL 60441 \n 【萨凡纳】 774 King George Blvd, Savannah, GA 31419 \n 【休斯顿】 611 S Cravens Rd #200, Missouri City, TX 77489 \n 【新泽西】 1130 State St, Perth Amboy, NJ 08861" }
             ]
         },
@@ -645,6 +645,7 @@ window.data = {
             "OAK3": "95363",
             "OAK4": "95304",
             "MCE1": "95380",
+            "MCC1": "95742",
             "HLI2": "95023",
             "SJC7": "95377",
             "SJC8": "94538",

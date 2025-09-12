@@ -1,3 +1,6 @@
+/**
+ * ui.js UI相关功能
+ */
 
 // 根据国家显示不同派送方式
 function updateDeliveryMethods() {
@@ -91,7 +94,7 @@ function updatePostcode() {
     let matchedCountry = "美国"; // 默认国家
     let matchedPostcode = "";
 
-    for (const [country, postalMap] of Object.entries(window.data.addressByCountry)) {
+    for (const [country, postalMap] of Object.entries(addressByCountry)) {
         if (postalMap[addressInput]) {
             matchedCountry = country;
             matchedPostcode = postalMap[addressInput];

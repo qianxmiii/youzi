@@ -1,3 +1,7 @@
+/**
+ * common.js 通用功能
+ */
+
 // 初始化Bootstrap tooltips
 function initBootstrapTooltips() {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
@@ -491,7 +495,7 @@ function updateSummaryFromHistory(data) {
 
 // === 承运商定制查价通用函数 ===
 function getCarrierCfg(carrier) {
-    return (window.data && window.data.expressPricing && window.data.expressPricing[carrier]) || null;
+    return (window.data && expressPricing && expressPricing[carrier]) || null;
 }
 
 function getWeightIndexByBreaks(breaks, weight) {

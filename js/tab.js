@@ -746,10 +746,12 @@ function hideCopyTooltip(button) {
 // 识别地址、箱数、重量、体积信息
 function parseCalTabCargoInfo() {
     const input = document.getElementById("cargo-input").value.trim();
-    // 使用正则表达式解析箱数、重量、体积
+    // 使用正则表达式解析箱数、重量、体积、尺寸
     const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+    // 尺寸识别正则表达式，支持各种分隔符和单位
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|inch|in|英寸)?/i;
     const addressRegex = /(?:To \s+)?([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字 前缀支持带To
     
 
@@ -771,6 +773,28 @@ function parseCalTabCargoInfo() {
         // 如果是磅单位，转换为千克
         if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
             weight *= 0.453592;
+        }
+    }
+
+    // 提取尺寸信息
+    const dimensionMatch = input.match(dimensionRegex);
+    let length = 0, width = 0, height = 0;
+    if (dimensionMatch) {
+        length = parseFloat(dimensionMatch[1]);
+        width = parseFloat(dimensionMatch[2]);
+        height = parseFloat(dimensionMatch[3]);
+        const unit = (dimensionMatch[4] || '').toLowerCase();
+        
+        // 如果是英寸单位，转换为厘米
+        if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+            length *= 2.54;
+            width *= 2.54;
+            height *= 2.54;
+        }
+        
+        // 如果识别到尺寸但没有识别到体积，自动计算体积
+        if (volume === 0 && quantity > 0) {
+            volume = (length * width * height * quantity) / 1000000; // 转换为cbm
         }
     }
 

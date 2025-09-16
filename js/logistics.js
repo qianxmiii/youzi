@@ -690,10 +690,12 @@ function parseDimensions() {
 // 识别地址、箱数、重量、体积信息
 function parsePackageInfo() {
     const input = document.getElementById("package-info-input").value.trim();
-    // 使用正则表达式解析箱数、重量、体积
+    // 使用正则表达式解析箱数、重量、体积、尺寸
     const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
-    const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;  
+    const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+    // 尺寸识别正则表达式，支持各种分隔符和单位
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|inch|in|英寸)?/i;
     // 前缀支持带To
     // 识别 1.通用亚马逊仓库 == 开头3个字母 + 1个数字 2. AWD仓库 == IUS 开头 + 一个字母（例如：IUSA）
     const addressRegex = /(?:To \s+)?((?:[A-Z]{3}\d)|IUS[A-Z])\b/i;
@@ -716,6 +718,28 @@ function parsePackageInfo() {
         // 如果是磅单位，转换为千克
         if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
             weight *= 0.453592;
+        }
+    }
+
+    // 提取尺寸信息
+    const dimensionMatch = input.match(dimensionRegex);
+    let length = 0, width = 0, height = 0;
+    if (dimensionMatch) {
+        length = parseFloat(dimensionMatch[1]);
+        width = parseFloat(dimensionMatch[2]);
+        height = parseFloat(dimensionMatch[3]);
+        const unit = (dimensionMatch[4] || '').toLowerCase();
+        
+        // 如果是英寸单位，转换为厘米
+        if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+            length *= 2.54;
+            width *= 2.54;
+            height *= 2.54;
+        }
+        
+        // 如果识别到尺寸但没有识别到体积，自动计算体积
+        if (volume === 0 && quantity > 0) {
+            volume = (length * width * height * quantity) / 1000000; // 转换为cbm
         }
     }
 
@@ -1735,27 +1759,66 @@ function parseBatchBoxSpec() {
         return;
     }
     
-    // 解析格式：45*45*50 10KG 50CTNS
-    const regex = /(\d+)\*(\d+)\*(\d+)\s+(\d+(?:\.\d+)?)\s*(?:KG|kg)?\s*(\d+)\s*(?:CTNS|ctns)?/i;
-    const match = input.match(regex);
+    // 使用更灵活的正则表达式解析箱规信息
+    // 支持多种格式：45*45*50 10KG 50CTNS 或 45x45x50 10kg 50箱 等
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|inch|in|英寸)?/i;
+    const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
+    const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     
-    if (match) {
-        const [, length, width, height, weight, totalQuantity] = match;
-        const volume = (parseFloat(length) * parseFloat(width) * parseFloat(height)) / 1000000; // 转换为cbm
+    // 提取尺寸信息
+    const dimensionMatch = input.match(dimensionRegex);
+    let length = 0, width = 0, height = 0;
+    if (dimensionMatch) {
+        length = parseFloat(dimensionMatch[1]);
+        width = parseFloat(dimensionMatch[2]);
+        height = parseFloat(dimensionMatch[3]);
+        const unit = (dimensionMatch[4] || '').toLowerCase();
+        
+        // 如果是英寸单位，转换为厘米
+        if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+            length *= 2.54;
+            width *= 2.54;
+            height *= 2.54;
+        }
+    }
+    
+    // 提取重量信息
+    const weightMatch = input.match(weightRegex);
+    let weight = 0;
+    if (weightMatch) {
+        weight = parseFloat(weightMatch[1]);
+        const unit = (weightMatch[2] || '').toLowerCase();
+        
+        // 如果是磅单位，转换为千克
+        if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
+            weight *= 0.453592;
+        }
+    }
+    
+    // 提取箱数信息
+    const quantityMatch = input.match(quantityRegex);
+    let totalQuantity = 0;
+    if (quantityMatch) {
+        totalQuantity = parseInt(quantityMatch[1]);
+    }
+    
+    // 验证是否成功解析了所有必要信息
+    if (length > 0 && width > 0 && height > 0 && weight > 0 && totalQuantity > 0) {
+        const volume = (length * width * height) / 1000000; // 转换为cbm
         
         batchQuoteData.boxSpec = {
-            length: parseFloat(length),
-            width: parseFloat(width),
-            height: parseFloat(height),
-            weight: parseFloat(weight),
+            length: length,
+            width: width,
+            height: height,
+            weight: weight,
             volume: volume,
-            totalQuantity: parseInt(totalQuantity)
+            totalQuantity: totalQuantity
         };
         
         console.log('解析箱规成功:', batchQuoteData.boxSpec);
     } else {
         batchQuoteData.boxSpec = null;
-        console.log('箱规格式不正确');
+        console.log('箱规格式不正确，请确保包含：长*宽*高 重量 总箱数');
     }
 }
 

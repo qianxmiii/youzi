@@ -56,7 +56,57 @@ function renderTerms(filteredTerms = allTerms) {
         filteredTerms.forEach(term => {
             const card = document.createElement('div');
             
-            if (termViewMode === 'grid') {
+            // 检查是否为流程类型术语
+            if (term.type === 'process' && term.steps) {
+                // 流程步骤卡片 - 可折叠设计
+                console.log('渲染流程卡片:', term.chinese);
+                card.className = 'col-md-4 mb-3';
+                card.innerHTML = `
+                    <div class="card h-100 process-card-compact" data-process-id="${term.chinese}">
+                        <div class="card-body">
+                            <div class="process-header-compact">
+                                <h6 class="card-title process-title-compact">
+                                    <i class="bi bi-diagram-3 process-icon"></i>
+                                    ${term.chinese}
+                                </h6>
+                            </div>
+                            <p class="card-text process-subtitle-compact">
+                                ${term.english}
+                                <span class="copy-btn" onclick="copyTerm(this, '${term.english}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </span>
+                            </p>
+                            <div class="process-summary process-summary-clickable" onclick="toggleProcessSteps(this)" data-bs-toggle="tooltip" data-bs-title="点击查看详细流程">
+                                <small class="text-muted">
+                                    <i class="bi bi-list-ol"></i>
+                                    共 ${term.steps.length} 个步骤
+                                    <i class="bi bi-chevron-down process-chevron"></i>
+                                </small>
+                            </div>
+                            <div class="process-steps-detail" style="display: none;">
+                                ${term.steps.map(step => `
+                                    <div class="step-item-compact">
+                                        <div class="step-number-compact">${step.step}</div>
+                                        <div class="step-content-compact">
+                                            <h6 class="step-title-compact">
+                                                <i class="bi ${step.icon} step-icon-compact"></i>
+                                                ${step.title}
+                                            </h6>
+                                            <p class="step-description-compact">${step.description}</p>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="tags">
+                                ${term.tags.map(tag => {
+                                    const color = tagColors[tag] || "#6c757d";
+                                    return `<span class="badge" style="background-color: ${color}; color: white;">${tag}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (termViewMode === 'grid') {
                 // 网格样式 - 支持可展开卡片设计
                 card.className = 'col-md-4 mb-3';
                 const hasDefinition = term.definition && typeof term.definition === 'string' && term.definition.trim() !== '';
@@ -1696,4 +1746,73 @@ function copyAddress(id) {
       document.getElementById('toastMessage').textContent = '地址已复制(兼容模式)';
       toast.show();
     });
+}
+
+/**
+ * 切换流程步骤显示/隐藏
+ */
+function toggleProcessSteps(element) {
+  const card = element.closest('.process-card-compact');
+  const stepsDetail = card.querySelector('.process-steps-detail');
+  const chevron = element.querySelector('.process-chevron');
+  
+  if (stepsDetail.style.display === 'none' || !stepsDetail.style.display) {
+    // 展开
+    stepsDetail.style.display = 'block';
+    stepsDetail.style.maxHeight = '0';
+    stepsDetail.style.overflow = 'hidden';
+    stepsDetail.style.opacity = '0';
+    stepsDetail.style.transform = 'translateY(-10px)';
+    
+    // 立即更新箭头和提示
+    chevron.className = 'bi bi-chevron-up process-chevron';
+    element.setAttribute('data-bs-title', '点击收起详细流程');
+    
+    // 强制重排，然后开始动画
+    stepsDetail.offsetHeight;
+    
+    stepsDetail.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+    stepsDetail.style.maxHeight = '1000px';
+    stepsDetail.style.opacity = '1';
+    stepsDetail.style.transform = 'translateY(0)';
+    
+    // 动画完成后清理样式
+    setTimeout(() => {
+      stepsDetail.style.maxHeight = 'none';
+      stepsDetail.style.overflow = 'visible';
+    }, 400);
+  } else {
+    // 收起
+    stepsDetail.style.maxHeight = stepsDetail.scrollHeight + 'px';
+    stepsDetail.style.overflow = 'hidden';
+    stepsDetail.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+    
+    // 强制重排
+    stepsDetail.offsetHeight;
+    
+    // 开始收起动画
+    stepsDetail.style.maxHeight = '0';
+    stepsDetail.style.opacity = '0';
+    stepsDetail.style.transform = 'translateY(-10px)';
+    
+    // 动画完成后隐藏元素
+    setTimeout(() => {
+      stepsDetail.style.display = 'none';
+      stepsDetail.style.maxHeight = 'none';
+      stepsDetail.style.overflow = 'visible';
+      stepsDetail.style.opacity = '1';
+      stepsDetail.style.transform = 'translateY(0)';
+    }, 300);
+    
+    // 立即更新箭头和提示
+    chevron.className = 'bi bi-chevron-down process-chevron';
+    element.setAttribute('data-bs-title', '点击查看详细流程');
+  }
+  
+  // 更新tooltip
+  const tooltip = bootstrap.Tooltip.getInstance(element);
+  if (tooltip) {
+    tooltip.dispose();
+    new bootstrap.Tooltip(element);
+  }
 }

@@ -3,8 +3,8 @@
  */
 
 // 新增常量 exchange_rate
-const exchange_rate = 7.1; //美元汇率
-const cost_exchange_rate = 7.18; //美元汇率
+const exchange_rate = 7.05; //美元汇率
+const cost_exchange_rate = 7.15; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 let addFee = new Decimal(0); //其他费用
@@ -17,8 +17,8 @@ const {deliveryMethodsByCountry, quickReplies} = window.data;
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    valid_date = getNextFriday();
-    valid_date = "09/12";
+    // valid_date = getNextFriday();
+    valid_date = "09/19";
 
     init(); // 初始化
     eventListener();

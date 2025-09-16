@@ -400,6 +400,13 @@
                     <input type="checkbox" id="USD_check" class="form-check-input" onchange="updateQuote()" />
                     <label for="USD_check" class="form-check-label">美元</label>
                   </div>
+                  <!-- 承运商选择 -->
+                  <div class="form-floating mr-3" style="width: 150px;">
+                    <select id="carrier-select" class="form-select" onchange="updateCarrierTooltip()">
+                      <!-- 选项将通过JavaScript动态生成 -->
+                    </select>
+                    <label for="carrier-select">承运商</label>
+                  </div>
                 </div>
               
                 <!-- 报价 - 报价格式下拉选项框 -->
@@ -1617,6 +1624,11 @@
       // 初始化常用网址功能
       if (typeof initBookmarks === 'function') {
         initBookmarks();
+      }
+      
+      // 初始化承运商选择器
+      if (typeof initCarrierSelector === 'function') {
+        initCarrierSelector();
       }
       
     });

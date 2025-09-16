@@ -390,14 +390,50 @@ function updateQuote() {
         document.getElementById('volumeRatio').value = 0;
     }
 
-    // 泡比颜色设置
+    // 泡比颜色设置和tooltip
     let volumeRatioInput = document.getElementById('volumeRatio');
     if (volumeRatio.greaterThanOrEqualTo(200)) { // 大于等于200时字体为绿色
         volumeRatioInput.style.color = 'green';
+        
+        // 从配置中获取tooltip内容
+        const billingWeight = new Decimal(document.getElementById('chargeWeight').value || 0);
+        const tooltipContent = getCarrierDiscountTooltip(volumeRatio, billingWeight);
+        volumeRatioInput.setAttribute('data-bs-toggle', 'tooltip');
+        volumeRatioInput.setAttribute('data-bs-placement', 'top');
+        volumeRatioInput.setAttribute('data-bs-title', tooltipContent);
+        volumeRatioInput.setAttribute('title', tooltipContent);
+        
+        // 初始化或更新tooltip
+        const existingTooltip = bootstrap.Tooltip.getInstance(volumeRatioInput);
+        if (existingTooltip) {
+            existingTooltip.dispose();
+        }
+        new bootstrap.Tooltip(volumeRatioInput, {
+            html: true,
+            placement: 'top'
+        });
     } else if (volumeRatio.lessThan(167)) { // 小于167时字体为蓝色
         volumeRatioInput.style.color = 'blue';
+        // 移除tooltip
+        volumeRatioInput.removeAttribute('data-bs-toggle');
+        volumeRatioInput.removeAttribute('data-bs-placement');
+        volumeRatioInput.removeAttribute('data-bs-title');
+        volumeRatioInput.removeAttribute('title');
+        const existingTooltip = bootstrap.Tooltip.getInstance(volumeRatioInput);
+        if (existingTooltip) {
+            existingTooltip.dispose();
+        }
     } else {
         volumeRatioInput.style.color = ''; // 恢复默认颜色
+        // 移除tooltip
+        volumeRatioInput.removeAttribute('data-bs-toggle');
+        volumeRatioInput.removeAttribute('data-bs-placement');
+        volumeRatioInput.removeAttribute('data-bs-title');
+        volumeRatioInput.removeAttribute('title');
+        const existingTooltip = bootstrap.Tooltip.getInstance(volumeRatioInput);
+        if (existingTooltip) {
+            existingTooltip.dispose();
+        }
     }
 
 
@@ -2968,5 +3004,131 @@ function showDeliveryMethodHint(deliveryMethod) {
         default:
             hintElement.style.display = 'none';
             break;
+    }
+}
+
+/**
+ * 获取承运商货重比减tooltip内容
+ * @param {Decimal} volumeRatio - 泡比值
+ * @param {Decimal} billingWeight - 计费重
+ * @returns {string} - tooltip内容
+ */
+function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
+    // 获取当前选择的承运商
+    const currentCarrier = getCurrentCarrier();
+    const carrierConfig = carrierWeightRatioDiscounts[currentCarrier] || carrierWeightRatioDiscounts[defaultCarrier];
+    
+    // 检查是否满足最低计费重要求
+    if (billingWeight && carrierConfig.minBillingWeight) {
+        if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
+            return `${carrierConfig.name}货重比减：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG`;
+        }
+    }
+    
+    // 构建tooltip内容
+    let tooltipContent = `${carrierConfig.name}货重比减：\n`;
+    
+    carrierConfig.discounts.forEach(item => {
+        tooltipContent += `1:${item.ratio}减${item.discount}\n`;
+    });
+    
+    // 移除最后的换行符
+    tooltipContent = tooltipContent.trim();
+    
+    return tooltipContent;
+}
+
+/**
+ * 获取当前选择的承运商
+ * @returns {string} - 承运商名称
+ */
+function getCurrentCarrier() {
+    const carrierSelect = document.getElementById('carrier-select');
+    if (carrierSelect && carrierSelect.value) {
+        return carrierSelect.value;
+    }
+    return defaultCarrier;
+}
+
+/**
+ * 根据泡比获取适用的折扣
+ * @param {Decimal} volumeRatio - 泡比值
+ * @param {string} carrier - 承运商名称
+ * @param {Decimal} billingWeight - 计费重
+ * @returns {number} - 折扣值
+ */
+function getApplicableDiscount(volumeRatio, carrier = null, billingWeight = null) {
+    const carrierName = carrier || getCurrentCarrier();
+    const carrierConfig = carrierWeightRatioDiscounts[carrierName] || carrierWeightRatioDiscounts[defaultCarrier];
+    
+    // 检查是否满足最低计费重要求
+    if (billingWeight && carrierConfig.minBillingWeight) {
+        if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
+            return 0; // 不满足最低计费重要求，无折扣
+        }
+    }
+    
+    // 找到适用的最大折扣
+    let applicableDiscount = 0;
+    for (const item of carrierConfig.discounts) {
+        if (volumeRatio.greaterThanOrEqualTo(item.ratio)) {
+            applicableDiscount = item.discount;
+        } else {
+            break;
+        }
+    }
+    
+    return applicableDiscount;
+}
+
+/**
+ * 更新承运商tooltip
+ * 当用户切换承运商时调用
+ */
+function updateCarrierTooltip() {
+    // 重新计算泡比tooltip
+    const volumeRatioInput = document.getElementById('volumeRatio');
+    const volumeRatio = new Decimal(volumeRatioInput.value || 0);
+    
+    if (volumeRatio.greaterThanOrEqualTo(200)) {
+        // 更新tooltip内容
+        const billingWeight = new Decimal(document.getElementById('chargeWeight').value || 0);
+        const tooltipContent = getCarrierDiscountTooltip(volumeRatio, billingWeight);
+        volumeRatioInput.setAttribute('data-bs-title', tooltipContent);
+        volumeRatioInput.setAttribute('title', tooltipContent);
+        
+        // 重新初始化tooltip
+        const existingTooltip = bootstrap.Tooltip.getInstance(volumeRatioInput);
+        if (existingTooltip) {
+            existingTooltip.dispose();
+        }
+        new bootstrap.Tooltip(volumeRatioInput, {
+            html: true,
+            placement: 'top'
+        });
+    }
+}
+
+/**
+ * 初始化承运商选择器
+ * 页面加载时调用
+ */
+function initCarrierSelector() {
+    const carrierSelect = document.getElementById('carrier-select');
+    if (carrierSelect) {
+        // 设置默认承运商
+        carrierSelect.value = defaultCarrier;
+        
+        // 动态生成选项（从配置中读取）
+        carrierSelect.innerHTML = '';
+        Object.keys(carrierWeightRatioDiscounts).forEach(carrierName => {
+            const option = document.createElement('option');
+            option.value = carrierName;
+            option.textContent = carrierWeightRatioDiscounts[carrierName].name;
+            carrierSelect.appendChild(option);
+        });
+        
+        // 设置默认选中项
+        carrierSelect.value = defaultCarrier;
     }
 }

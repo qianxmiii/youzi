@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>解析功能测试</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .test-section { margin: 20px 0; padding: 15px; border: 1px solid #ddd; border-radius: 5px; }
+        .test-input { width: 100%; padding: 10px; margin: 10px 0; }
+        .result { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 3px; }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>解析功能测试</h1>
+    
+    <div class="test-section">
+        <h3>单地址报价解析测试 (parsePackageInfo)</h3>
+        <input type="text" id="package-info-input" class="test-input" placeholder="输入测试文本，例如: 45*45*50 10kg 21箱" />
+        <div id="package-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>智能批量报价解析测试 (parseBatchBoxSpec)</h3>
+        <input type="text" id="batch-box-spec" class="test-input" placeholder="输入测试文本，例如: 45x45x50 10KG 50CTNS" />
+        <div id="batch-result" class="result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>成本计算解析测试 (parseCalTabCargoInfo)</h3>
+        <input type="text" id="cargo-input" class="test-input" placeholder="输入测试文本，例如: 45×45×50 10磅 21件" />
+        <div id="cargo-result" class="result"></div>
+    </div>
+
+    <script src="js/common/decimal.min.js"></script>
+    <script>
+        // 模拟必要的全局变量和函数
+        const addressByCountry = {
+            "美国": {
+                "RDU4": "27601",
+                "AVP1": "18702",
+                "LAS1": "89081"
+            }
+        };
+        
+        function updateDeliveryMethods() {
+            console.log('更新运输方式');
+        }
+        
+        function updateQuote() {
+            console.log('更新报价');
+        }
+        
+        function calculateCostDDU() {
+            console.log('计算DDU成本');
+        }
+        
+        function calculateCostDDP() {
+            console.log('计算DDP成本');
+        }
+        
+        // 包含解析函数
+        function parsePackageInfo() {
+            const input = document.getElementById("package-info-input").value.trim();
+            const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
+            const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
+            const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+            const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|inch|in|英寸)?/i;
+            const addressRegex = /(?:To \s+)?((?:[A-Z]{3}\d)|IUS[A-Z])\b/i;
+
+            const quantityMatch = input.match(quantityRegex);
+            let quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
+
+            const volumeMatch = input.match(volumeRegex);
+            let volume = volumeMatch ? parseFloat(volumeMatch[1]) : 0;
+
+            const weightMatch = input.match(weightRegex);
+            let weight = 0;
+            if (weightMatch) {
+                weight = parseFloat(weightMatch[1]);
+                const unit = (weightMatch[2] || '').toLowerCase();
+                if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
+                    weight *= 0.453592;
+                }
+            }
+
+            const dimensionMatch = input.match(dimensionRegex);
+            let length = 0, width = 0, height = 0;
+            if (dimensionMatch) {
+                length = parseFloat(dimensionMatch[1]);
+                width = parseFloat(dimensionMatch[2]);
+                height = parseFloat(dimensionMatch[3]);
+                const unit = (dimensionMatch[4] || '').toLowerCase();
+                
+                if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+                    length *= 2.54;
+                    width *= 2.54;
+                    height *= 2.54;
+                }
+                
+                if (volume === 0 && quantity > 0) {
+                    volume = (length * width * height * quantity) / 1000000;
+                }
+            }
+
+            const addressMatch = input.match(addressRegex);
+            let address = '';
+            if (addressMatch) {
+                address = addressMatch[0].toUpperCase();
+            }
+
+            const result = {
+                quantity: quantity,
+                weight: Math.ceil(weight),
+                volume: volume.toFixed(3),
+                length: length,
+                width: width,
+                height: height,
+                address: address
+            };
+
+            document.getElementById('package-result').innerHTML = 
+                `<div class="success">解析成功！</div>
+                <pre>${JSON.stringify(result, null, 2)}</pre>`;
+        }
+        
+        function parseBatchBoxSpec() {
+            const input = document.getElementById('batch-box-spec').value.trim();
+            if (!input) {
+                document.getElementById('batch-result').innerHTML = '<div class="error">请输入箱规信息</div>';
+                return;
+            }
+            
+            const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|inch|in|英寸)?/i;
+            const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
+            const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+            
+            const dimensionMatch = input.match(dimensionRegex);
+            let length = 0, width = 0, height = 0;
+            if (dimensionMatch) {
+                length = parseFloat(dimensionMatch[1]);
+                width = parseFloat(dimensionMatch[2]);
+                height = parseFloat(dimensionMatch[3]);
+                const unit = (dimensionMatch[4] || '').toLowerCase();
+                
+                if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+                    length *= 2.54;
+                    width *= 2.54;
+                    height *= 2.54;
+                }
+            }
+            
+            const weightMatch = input.match(weightRegex);
+            let weight = 0;
+            if (weightMatch) {
+                weight = parseFloat(weightMatch[1]);
+                const unit = (weightMatch[2] || '').toLowerCase();
+                
+                if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
+                    weight *= 0.453592;
+                }
+            }
+            
+            const quantityMatch = input.match(quantityRegex);
+            let totalQuantity = 0;
+            if (quantityMatch) {
+                totalQuantity = parseInt(quantityMatch[1]);
+            }
+            
+            if (length > 0 && width > 0 && height > 0 && weight > 0 && totalQuantity > 0) {
+                const volume = (length * width * height) / 1000000;
+                
+                const result = {
+                    length: length,
+                    width: width,
+                    height: height,
+                    weight: weight,
+                    volume: volume.toFixed(6),
+                    totalQuantity: totalQuantity
+                };
+                
+                document.getElementById('batch-result').innerHTML = 
+                    `<div class="success">解析成功！</div>
+                    <pre>${JSON.stringify(result, null, 2)}</pre>`;
+            } else {
+                document.getElementById('batch-result').innerHTML = 
+                    `<div class="error">解析失败！请确保包含：长*宽*高 重量 总箱数</div>
+                    <div>已识别到：长度=${length}, 宽度=${width}, 高度=${height}, 重量=${weight}, 箱数=${totalQuantity}</div>`;
+            }
+        }
+        
+        function parseCalTabCargoInfo() {
+            const input = document.getElementById("cargo-input").value.trim();
+            const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
+            const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
+            const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+            const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|inch|in|英寸)?/i;
+
+            const quantityMatch = input.match(quantityRegex);
+            let quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
+
+            const volumeMatch = input.match(volumeRegex);
+            let volume = volumeMatch ? parseFloat(volumeMatch[1]) : 0;
+
+            const weightMatch = input.match(weightRegex);
+            let weight = 0;
+            if (weightMatch) {
+                weight = parseFloat(weightMatch[1]);
+                const unit = (weightMatch[2] || '').toLowerCase();
+                if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
+                    weight *= 0.453592;
+                }
+            }
+
+            const dimensionMatch = input.match(dimensionRegex);
+            let length = 0, width = 0, height = 0;
+            if (dimensionMatch) {
+                length = parseFloat(dimensionMatch[1]);
+                width = parseFloat(dimensionMatch[2]);
+                height = parseFloat(dimensionMatch[3]);
+                const unit = (dimensionMatch[4] || '').toLowerCase();
+                
+                if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+                    length *= 2.54;
+                    width *= 2.54;
+                    height *= 2.54;
+                }
+                
+                if (volume === 0 && quantity > 0) {
+                    volume = (length * width * height * quantity) / 1000000;
+                }
+            }
+
+            const result = {
+                quantity: quantity,
+                weight: Math.ceil(weight),
+                volume: volume.toFixed(3),
+                length: length,
+                width: width,
+                height: height
+            };
+
+            document.getElementById('cargo-result').innerHTML = 
+                `<div class="success">解析成功！</div>
+                <pre>${JSON.stringify(result, null, 2)}</pre>`;
+        }
+        
+        // 绑定事件
+        document.getElementById('package-info-input').addEventListener('input', parsePackageInfo);
+        document.getElementById('batch-box-spec').addEventListener('input', parseBatchBoxSpec);
+        document.getElementById('cargo-input').addEventListener('input', parseCalTabCargoInfo);
+    </script>
+</body>
+</html>

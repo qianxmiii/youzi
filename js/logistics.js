@@ -3025,12 +3025,21 @@ function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
         }
     }
     
-    // 构建tooltip内容
+    // 构建tooltip内容 - 只显示当前泡比能满足的折扣
     let tooltipContent = `${carrierConfig.name}货重比减：\n`;
     
-    carrierConfig.discounts.forEach(item => {
-        tooltipContent += `1:${item.ratio}减${item.discount}\n`;
-    });
+    // 找到当前泡比能满足的所有折扣
+    const applicableDiscounts = carrierConfig.discounts.filter(item => 
+        volumeRatio.greaterThanOrEqualTo(item.ratio)
+    );
+    
+    if (applicableDiscounts.length > 0) {
+        applicableDiscounts.forEach(item => {
+            tooltipContent += `1:${item.ratio}减${item.discount}\n`;
+        });
+    } else {
+        tooltipContent += `当前泡比${volumeRatio}不满足任何折扣条件`;
+    }
     
     // 移除最后的换行符
     tooltipContent = tooltipContent.trim();

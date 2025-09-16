@@ -6,8 +6,42 @@
   * Tab1 - 常用功能
   */
 
- // 获取所有术语
- const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
+// 获取所有术语
+const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
+
+/**
+ * 通用术语搜索函数
+ * @param {Object} term - 术语对象
+ * @param {string} keyword - 搜索关键字
+ * @returns {boolean} - 是否匹配
+ */
+function searchInTerm(term, keyword) {
+    if (!keyword) return true;
+    
+    const lowerKeyword = keyword.toLowerCase();
+    
+    // 搜索中文名称
+    if (term.chinese.toLowerCase().includes(lowerKeyword)) return true;
+    
+    // 搜索英文名称
+    if (term.english.toLowerCase().includes(lowerKeyword)) return true;
+    
+    // 搜索描述内容
+    if (term.definition && term.definition.toLowerCase().includes(lowerKeyword)) return true;
+    
+    // 搜索流程步骤内容
+    if (term.type === 'process' && term.steps) {
+        return term.steps.some(step => 
+            step.title.toLowerCase().includes(lowerKeyword) || 
+            step.description.toLowerCase().includes(lowerKeyword)
+        );
+    }
+    
+    // 搜索标签
+    if (term.tags && term.tags.some(tag => tag.toLowerCase().includes(lowerKeyword))) return true;
+    
+    return false;
+}
 
  // 术语统计相关变量
 let totalTermsCount = 0;
@@ -333,13 +367,9 @@ function initSearchFunction() {
     }
     
     searchInput.addEventListener('input', function () {
-        const keyword = this.value.trim().toLowerCase();
-        const filteredTerms = allTerms.filter(term => 
-            term.chinese.toLowerCase().includes(keyword) || 
-            term.english.toLowerCase().includes(keyword)
-        );
+        const keyword = this.value.trim();
+        const filteredTerms = allTerms.filter(term => searchInTerm(term, keyword));
         renderTerms(filteredTerms);
-
     });
 }
 
@@ -368,19 +398,13 @@ function initSearchFunction() {
 
  // 获取当前筛选后的术语列表
  function getFilteredTerms() {
-     const searchKeyword = document.getElementById('searchInput').value.trim().toLowerCase();
+     const searchKeyword = document.getElementById('searchInput').value.trim();
      const activeCategory = document.querySelector('.category-buttons .btn.active').textContent;
 
      if (activeCategory === '全部') {
-         return allTerms.filter(term => 
-             term.chinese.toLowerCase().includes(searchKeyword) || 
-             term.english.toLowerCase().includes(searchKeyword)
-         );
+         return allTerms.filter(term => searchInTerm(term, searchKeyword));
      } else {
-         return (window.logisticsData.termsByCategory[activeCategory] || []).filter(term => 
-             term.chinese.toLowerCase().includes(searchKeyword) || 
-             term.english.toLowerCase().includes(searchKeyword)
-         );
+         return (window.logisticsData.termsByCategory[activeCategory] || []).filter(term => searchInTerm(term, searchKeyword));
      }
  }
 

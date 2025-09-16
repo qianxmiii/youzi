@@ -290,7 +290,7 @@ const termsByCategory = {
                     icon: "bi-house-check"
                 }
             ],
-            tags: ["流程"],
+            tags: ["流程","欧洲"],
         },
         { chinese: "货运代理", english: "freight forwarder", definition: "受托处理货物运输的代理人，负责安排运输及相关服务", tags: ["基础", "物流"]},
         { chinese: "报价", english: "quotation", definition: "卖方根据买方需求提供的价格信息", tags: ["基础", "物流"]},
@@ -357,8 +357,17 @@ const termsByCategory = {
         { chinese: "超重费", english: "Overweight fee", definition: "超重附加费：由于货物单件重量超过规定标准，运输方对超出部分加收的费用，以弥补额外的运输成本和风险", tags: ["基础", "物流"]},   
         { chinese: "超大费", english: "Oversize fee", definition: "超大附加费：针对货物的尺寸超过运输工具或装卸设备的标准尺寸而征收的额外费用，确保特殊规格货物的顺利运输", tags: ["基础", "物流"]},   
 
-        { chinese: "文件费", english: "DOC/Document Fee", definition: "办理运输文件所需支付的费用", tags: ["基础", "物流"]},          
-        { chinese: "旺季附加费", english: "PSS/peak season surcharge", definition: "peak season surcharge", tags: ["基础", "物流"]}        
+        { chinese: "旺季附加费", english: "PSS/peak season surcharge", definition: "peak season surcharge", tags: ["基础", "物流"]},
+        
+        { chinese: "文件费", english: "Documentation Fee/D/O Fee", definition: "制单、签发提单或到货通知的费用", tags: ["基础", "物流"]},          
+        { chinese: "订舱费", english: "Booking Fee", definition: "船公司/货代为客户预留舱位时收取的费用", tags: ["基础", "物流"]},
+        { chinese: "EDI费", english: "EDI Fee", definition: "电子数据交换费，用于船公司将订舱信息传输到海关、码头系统", tags: ["基础", "物流"]},
+        { chinese: "电子装箱单", english: "VGM/E-Manifest/Electronic Packing List", definition: "通过电子方式提交的装箱清单或总运单数据", tags: ["基础", "物流"]},
+        { chinese: "THC", english: "Terminal Handling Charge", definition: "码头操作费，码头收取的装卸、搬运、堆存等综合费用", tags: ["基础", "物流"]},
+        { chinese: "堆存费", english: "Storage/Demurrage Fee", definition: "集装箱在码头超过免费堆存期后产生的费用", tags: ["基础", "物流"]},
+        { chinese: "电放费", english: "Telex Release Fee", definition: "无需正本提单，电放放货所需费用", tags: ["基础", "物流"]},
+        { chinese: "箱单费", english: "Packing List Fee", definition: "制作、打印或系统提交装箱单的费用", tags: ["基础", "物流"]},
+        { chinese: "吊机费", english: "Crane Fee/Lifting Charge", definition: "使用码头吊机装卸集装箱的费用", tags: ["基础", "物流"]}        
     ],
     "单证类": [
         { chinese: "提单", english: "BL/BOL", definition: "Bill of Lading: 是海上货物运输的重要单据，具有物权凭证等作用", tags: ["基础", "物流"]},

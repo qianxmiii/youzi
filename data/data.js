@@ -553,4 +553,129 @@ const boxRules = {
     }
 };
 
+// 承运商货重比减配置
+const carrierWeightRatioDiscounts = {
+    "鑫鲲鹏": {
+        name: "鑫鲲鹏",
+        minBillingWeight: 100, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 200, discount: 0.5 },
+            { ratio: 250, discount: 0.8 },
+            { ratio: 300, discount: 1.5 },
+            { ratio: 350, discount: 1.8 },
+            { ratio: 400, discount: 2.0 },  
+            { ratio: 500, discount: 2.7 },
+            { ratio: 600, discount: 3.0 },
+            { ratio: 700, discount: 3.2 },
+        ],
+        description: "100KG+货重比减：1:200减0.5，1:250减0.8，1:300减1.5，1:350减1.8，1:400减2.0，1:500减2.7，1:600减3.0，1:700减3.2"
+    },
+    "壹合": {
+        name: "壹合",
+        minBillingWeight: 0, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 200, discount: 0.5 },
+            { ratio: 250, discount: 1.0 },
+            { ratio: 300, discount: 2.0 }
+        ],
+        description: "货重比减：1:200减0.5，1:250减1.0，1:300减2.0"
+    },
+    "森磊": {
+        name: "森磊",
+        minBillingWeight: 0, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 200, discount: 0.5 },
+            { ratio: 250, discount: 1.0 },
+            { ratio: 300, discount: 1.5 },
+            { ratio: 500, discount: 2.0 }
+        ],
+        description: "货重比减：1:200减0.5，1:250减1.0，1:300减1.5，1:500减2.0"
+    },
+    "腾信": {
+        name: "腾信",
+        minBillingWeight: 101, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 210, discount: 0.1 },
+            { ratio: 220, discount: 0.2 },
+            { ratio: 230, discount: 0.3 },
+            { ratio: 240, discount: 0.4 },
+            { ratio: 250, discount: 0.5 },
+            { ratio: 300, discount: 1.0 },
+            { ratio: 350, discount: 1.3 },
+            { ratio: 400, discount: 1.7 },
+            { ratio: 500, discount: 2.2 },
+            { ratio: 600, discount: 2.5 },
+            { ratio: 700, discount: 2.7 }
+        ],
+        description: "101KG+货重比减：1:210减0.1，1:220减0.2，1:230减0.3，1:240减0.4，1:250减0.5，1:300减1.0，1:350减1.3，1:400减1.7，1:500减2.2，1:600减2.5，1:700减2.7"
+    },
+    "纽酷": {
+        name: "纽酷",
+        minBillingWeight: 100, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 250, discount: 0.5 },
+            { ratio: 300, discount: 1.0 },
+            { ratio: 400, discount: 1.5 },
+            { ratio: 500, discount: 2.0 }
+        ],
+        description: "100KG+货重比减：1:250减0.5，1:300减1.0，1:400减1.5，1:500减2.0"
+    },
+    "拓普达供应链": {
+        name: "拓普达供应链",
+        minBillingWeight: 167, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 200, discount: 0.5 },
+            { ratio: 250, discount: 0.8 },
+            { ratio: 300, discount: 1.2 },
+            { ratio: 350, discount: 1.5 },
+            { ratio: 400, discount: 1.8 },
+            { ratio: 450, discount: 2.0 },
+            { ratio: 500, discount: 2.5 }
+        ],
+        description: "1CBM+货重比减：1:200减0.5，1:250减0.8，1:300减1.2，1:350减1.5，1:400减1.8，1:450减2.0，1:500减2.5"
+    },
+    "物友": {
+        name: "物友",
+        minBillingWeight: 100, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 210, discount: 0.2 },
+            { ratio: 250, discount: 0.5 },
+            { ratio: 300, discount: 1.0 },
+            { ratio: 400, discount: 1.5 },
+            { ratio: 500, discount: 2.0 }
+        ],
+        description: "100KG+货重比减：1:210减0.2，1:250减0.5，1:300减1.0，1:400减1.5，1:500减2.0"
+    },
+    "新胜": {
+        name: "新胜",
+        minBillingWeight: 100, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 250, discount: 0.5 },
+            { ratio: 500, discount: 0.8 }
+        ],
+        description: "100KG+货重比减：1:250减0.5，1:500减0.8"
+    },
+    "鑫城": {
+        name: "鑫城",
+        minBillingWeight: 100, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 250, discount: 0.3 },
+            { ratio: 300, discount: 0.5 },
+            { ratio: 350, discount: 1.0 }
+        ],
+        description: "100KG+货重比减：1:250减0.3，1:300减0.5，1:350减1.0"
+    },
+    "其他承运商": {
+        name: "其他承运商",
+        minBillingWeight: 100, // 最低计费重，该计费重及以上才有货重比减
+        discounts: [
+            { ratio: 200, discount: 0.5 }
+        ],
+        description: "100KG+货重比减：1:200减0.5"
+    }
+};
+
+// 默认承运商
+const defaultCarrier = "鑫鲲鹏";
+
 

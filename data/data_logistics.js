@@ -28,6 +28,7 @@ const logisticsGeneralInfo = {
         { term: "Air Waybill", meaning: "空运单", category: "运输术语" },
         { term: "Customs Clearance", meaning: "清关", category: "清关术语" },
         { term: "Duty", meaning: "关税", category: "清关术语" },
+        { term: "Import Entry Number", meaning: "进口报关单号 - 海关为每批进口货物分配的唯一识别号码", category: "清关术语" },
         { term: "VAT", meaning: "Value Added Tax - 增值税", category: "税务术语" },
         { term: "GST", meaning: "Goods and Services Tax - 商品服务税", category: "税务术语" },
         { term: "TNT", meaning: "TNT Express - 快递公司", category: "快递公司" },
@@ -255,12 +256,41 @@ const termsByCategory = {
         {
             chinese: "中欧卡航完整流程",
             english: "Complete China-Europe Trucking Process",
-            definition: `1.货物接收与装柜：客户将货物送至指定地点，由中欧卡航进行接收并装柜。
-          \n 2.内陆运输：货物通过卡车进行内陆运输至新疆口岸。
-          \n 3.换装与报关出境：货物在新疆口岸进行换装，并办理报关出境手续。
-          \n 4.国际运输：货物通过哈萨克斯坦、俄罗斯、白俄罗斯等国家进行国际运输。
-          \n 5.清关与派送：货物在波兰、匈牙利或比利时等清关地点进行清关，并由当地合作伙伴进行末端派送。`,
-            tags: ["流程", "卡航", "完整", "步骤"],
+            definition: "中欧卡航的完整运输流程，从货物接收到最终派送的全过程",
+            type: "process",
+            steps: [
+                {
+                    step: 1,
+                    title: "货物接收与装柜",
+                    description: "客户将货物送至指定地点，由中欧卡航进行接收并装柜",
+                    icon: "bi-box-seam"
+                },
+                {
+                    step: 2,
+                    title: "内陆运输",
+                    description: "货物通过卡车进行内陆运输至新疆口岸",
+                    icon: "bi-truck"
+                },
+                {
+                    step: 3,
+                    title: "换装与报关出境",
+                    description: "货物在新疆口岸进行换装，并办理报关出境手续",
+                    icon: "bi-file-earmark-check"
+                },
+                {
+                    step: 4,
+                    title: "国际运输",
+                    description: "货物通过哈萨克斯坦、俄罗斯、白俄罗斯等国家进行国际运输",
+                    icon: "bi-globe"
+                },
+                {
+                    step: 5,
+                    title: "清关与派送",
+                    description: "货物在波兰、匈牙利或比利时等清关地点进行清关，并由当地合作伙伴进行末端派送",
+                    icon: "bi-house-check"
+                }
+            ],
+            tags: ["流程","欧洲"],
         },
         { chinese: "货运代理", english: "freight forwarder", definition: "受托处理货物运输的代理人，负责安排运输及相关服务", tags: ["基础", "物流"]},
         { chinese: "报价", english: "quotation", definition: "卖方根据买方需求提供的价格信息", tags: ["基础", "物流"]},
@@ -327,8 +357,17 @@ const termsByCategory = {
         { chinese: "超重费", english: "Overweight fee", definition: "超重附加费：由于货物单件重量超过规定标准，运输方对超出部分加收的费用，以弥补额外的运输成本和风险", tags: ["基础", "物流"]},   
         { chinese: "超大费", english: "Oversize fee", definition: "超大附加费：针对货物的尺寸超过运输工具或装卸设备的标准尺寸而征收的额外费用，确保特殊规格货物的顺利运输", tags: ["基础", "物流"]},   
 
-        { chinese: "文件费", english: "DOC/Document Fee", definition: "办理运输文件所需支付的费用", tags: ["基础", "物流"]},          
-        { chinese: "旺季附加费", english: "PSS/peak season surcharge", definition: "peak season surcharge", tags: ["基础", "物流"]}        
+        { chinese: "旺季附加费", english: "PSS/peak season surcharge", definition: "peak season surcharge", tags: ["基础", "物流"]},
+        
+        { chinese: "文件费", english: "Documentation Fee/D/O Fee", definition: "制单、签发提单或到货通知的费用", tags: ["基础", "物流"]},          
+        { chinese: "订舱费", english: "Booking Fee", definition: "船公司/货代为客户预留舱位时收取的费用", tags: ["基础", "物流"]},
+        { chinese: "EDI费", english: "EDI Fee", definition: "电子数据交换费，用于船公司将订舱信息传输到海关、码头系统", tags: ["基础", "物流"]},
+        { chinese: "电子装箱单", english: "VGM/E-Manifest/Electronic Packing List", definition: "通过电子方式提交的装箱清单或总运单数据", tags: ["基础", "物流"]},
+        { chinese: "THC", english: "Terminal Handling Charge", definition: "码头操作费，码头收取的装卸、搬运、堆存等综合费用", tags: ["基础", "物流"]},
+        { chinese: "堆存费", english: "Storage/Demurrage Fee", definition: "集装箱在码头超过免费堆存期后产生的费用", tags: ["基础", "物流"]},
+        { chinese: "电放费", english: "Telex Release Fee", definition: "无需正本提单，电放放货所需费用", tags: ["基础", "物流"]},
+        { chinese: "箱单费", english: "Packing List Fee", definition: "制作、打印或系统提交装箱单的费用", tags: ["基础", "物流"]},
+        { chinese: "吊机费", english: "Crane Fee/Lifting Charge", definition: "使用码头吊机装卸集装箱的费用", tags: ["基础", "物流"]}        
     ],
     "单证类": [
         { chinese: "提单", english: "BL/BOL", definition: "Bill of Lading: 是海上货物运输的重要单据，具有物权凭证等作用", tags: ["基础", "物流"]},
@@ -365,7 +404,8 @@ const termsByCategory = {
         { chinese: "增值税", english: "VAT", definition: "Value Added Tax: 对商品增值部分征收的税款", tags: ["基础", "物流"]},
         { chinese: "海关编码", english: "HS Code", definition: "Harmonized System Code: 海关编码其实是依据《商品名称及编码协调制度的国际公约》（简称HS），用科学系统的方法将商品分类。HS采用六位数编码，把全部国际贸易商品分为22类，98章。章以下再分为目和子目。商品编码第一、二位数码代表“章”，第三、四位数码代表“目”（Heading），第五、六位数码代表“子目”（Subheading）。前6位数是HS国际标准编码，后2-4位数是各个国家海关按照实际情况再进行延伸，所以大家才会常说前6位海关编码是国际通用的。", tags: ["基础", "物流"]},
         { chinese: "退税", english: "tax refund", tags: ["基础", "物流"]},
-        { chinese: "报关行", english: "customs broker", definition: "负责货物进出口通关手续", tags: ["基础", "物流"]}
+        { chinese: "报关行", english: "customs broker", definition: "负责货物进出口通关手续", tags: ["基础", "物流"]},
+        { chinese: "进口报关单号 / 进口备案号", english: "IEN(Import Entry Number)", definition: "每一票货物进入英国时，HMRC（英国海关）会生成的唯一编号，用于追踪进口申报和缴税情况.通常是数字或字母+数字组合(前两位：年份,中间两位：国家代码,后十位：系统生成的顺序号)", tags: ["基础", "物流", "清关", "海关"]}
     ],
     "保险类": [
         { chinese: "保险费", english: "insurance premium", definition: "保险的费用", tags: ["基础", "物流"]},
@@ -381,8 +421,8 @@ const termsByCategory = {
         { chinese: "金属产品", english: "metals", definition: "包括钢铁、铝、铜等", tags: ["基础", "物流"]},
         { chinese: "家用电器", english: "home appliances", definition: "包括冰箱、洗衣机、空调等", tags: ["基础", "物流"]},
         { chinese: "化妆品", english: "cosmetics", definition: "包括护肤品、彩妆、香水等", tags: ["基础", "物流"]},
-        { chinese: "带磁性货物空运注意事项", english: "Magnetic Goods Air Shipping Requirements", definition: "带磁性货物不属于普通货物，因磁场的干扰可能影响飞行安全，所以航空公司要求带磁性的货物必须出具磁性检测报告，合理才可以上飞机。", tags: ["空运", "安全", "检测", "磁性"]},
-        { chinese: "FDA认证", english: "FDA Certification", definition: "FDA是美国食品药品监督管理局（Food and Drug Administration）的简称，所有与人体直接接触或跟食物接触的产品都可能涉及FDA认证。FDA认证分强制认证和非强制认证两种。强制认证的必须提供FDA注册证明，常见产品有太阳镜、陶瓷产品、体温计、血压计等医疗相关产品。非强制认证的产品只需要提供产品制造商信息和收发货人信息，由报关行提供给FDA备案审查即可通过，常见产品有厨房用具、水杯等。", tags: ["认证", "美国", "FDA", "医疗", "食品"]},
+        { chinese: "带磁性货物空运注意事项", english: "Magnetic Goods Air Shipping Requirements", definition: "带磁性货物不属于普通货物，因磁场的干扰可能影响飞行安全，所以航空公司要求带磁性的货物必须出具磁性检测报告，合理才可以上飞机。", tags: []},
+        { chinese: "FDA认证", english: "FDA Certification", definition: "FDA是美国食品药品监督管理局（Food and Drug Administration）的简称，所有与人体直接接触或跟食物接触的产品都可能涉及FDA认证。FDA认证分强制认证和非强制认证两种。强制认证的必须提供FDA注册证明，常见产品有太阳镜、陶瓷产品、体温计、血压计等医疗相关产品。非强制认证的产品只需要提供产品制造商信息和收发货人信息，由报关行提供给FDA备案审查即可通过，常见产品有厨房用具、水杯等。", tags: ["美国", "FDA"]},
         
         // 新增商品分类术语
         { chinese: "贱金属及其制品", english: "Base Metals and Articles", definition: "包括钢钉、钢管、碳合金钢丝条、金属硅、金刚石锯片、不锈钢货架、不锈钢加压管、定尺碳素钢板、石油专用管材、冷轴碳钢、薄壁矩形钢管、熨衣架及部件、螺纹钢筋、弹簧垫圈、非封闭内置弹簧部件、不锈钢拉制深水槽、冷轧钢板、无缝碳钢和合金钢标准管、管线管和压力管、圆锥滚子轴承、铸铁件、金属镁、镀锌板、重锻造手动工具（斧子、撬杠、锤子、镐头）、钢制高压气瓶等", tags: ["反倾销"]},
@@ -402,20 +442,20 @@ const termsByCategory = {
     "航线类": [
         { chinese: "OA联盟", english: "Ocean Alliance", definition: "OA联盟（Ocean Alliance）是由四家船公司组成的强大联盟，分别是法国达飞轮船（CMA CGM）、中远海运（COSCO）、长荣海运（EMC）和东方海外（OOCL）", tags: ["物流","航线"]},
         // 美国
-        { chinese: "洛杉矶", english: "LA/Los Angeles", definition: "位于加利福尼亚州西南部，是美国最大的集装箱港口", tags: ["港口", "美国", "美西"]},
-        { chinese: "长滩", english: "LB/Long Beach", definition: "紧邻洛杉矶码头，拥堵情况相对较少。美森轮船的独立码头就位于此处", tags: ["港口", "美国", "美西"]},
-        { chinese: "奥克兰", english: "OAK/Oakland", definition: "位于加利福尼亚州", tags: ["港口", "美国", "美西"]},
-        { chinese: "旧金山", english: "SFO/San Francisco", definition: "也称为三藩市，是加利福尼亚州的重要港口", tags: ["港口", "美国", "美西"]},
-        { chinese: "西雅图", english: "SEA/Seattle", definition: "位于华盛顿州", tags: ["港口", "美国", "美西"]},
-        { chinese: "塔科玛", english: "TAC/Tacoma", definition: "位于华盛顿州", tags: ["港口", "美国", "美西"]},
+        { chinese: "洛杉矶", english: "LA/Los Angeles", definition: "位于加利福尼亚州西南部，是美国最大的集装箱港口", tags: ["港口", "美国"]},
+        { chinese: "长滩", english: "LB/Long Beach", definition: "紧邻洛杉矶码头，拥堵情况相对较少。美森轮船的独立码头就位于此处", tags: ["港口", "美国"]},
+        { chinese: "奥克兰", english: "OAK/Oakland", definition: "位于加利福尼亚州", tags: ["港口", "美国"]},
+        { chinese: "旧金山", english: "SFO/San Francisco", definition: "也称为三藩市，是加利福尼亚州的重要港口", tags: ["港口", "美国"]},
+        { chinese: "西雅图", english: "SEA/Seattle", definition: "位于华盛顿州", tags: ["港口", "美国"]},
+        { chinese: "塔科玛", english: "TAC/Tacoma", definition: "位于华盛顿州", tags: ["港口", "美国"]},
         
-        { chinese: "芝加哥", english: "CHI/Chicago", definition: "位于伊利诺伊州,美国中部", tags: ["港口", "美国", "美中"]},
+        { chinese: "芝加哥", english: "CHI/Chicago", definition: "位于伊利诺伊州,美国中部", tags: ["港口", "美国"]},
 
-        { chinese: "纽约", english: "NY/New York", definition: "位于华盛顿州", tags: ["港口", "美国", "美东"]},
-        { chinese: "休斯敦", english: "HOU/Houston", definition: "位于德克萨斯州，是重要的能源和物流中心", tags: ["港口", "美国", "美东"]},
-        { chinese: "迈阿密", english: "MIA/Miami", definition: "位于佛罗里达州，是热带水果和海产品的集散地", tags: ["港口", "美国", "美东"]},
-        { chinese: "萨凡纳", english: "SAV/Savanah", definition: "位于乔治亚州", tags: ["港口", "美国", "美东"]},
-        { chinese: "查尔斯顿", english: "CHA/Charleston", definition: "位于南卡罗来纳州", tags: ["港口", "美国", "美东"]},
+        { chinese: "纽约", english: "NY/New York", definition: "位于华盛顿州", tags: ["港口", "美国"]},
+        { chinese: "休斯敦", english: "HOU/Houston", definition: "位于德克萨斯州，是重要的能源和物流中心", tags: ["港口", "美国"]},
+        { chinese: "迈阿密", english: "MIA/Miami", definition: "位于佛罗里达州，是热带水果和海产品的集散地", tags: ["港口", "美国"]},
+        { chinese: "萨凡纳", english: "SAV/Savanah", definition: "位于乔治亚州", tags: ["港口", "美国"]},
+        { chinese: "查尔斯顿", english: "CHA/Charleston", definition: "位于南卡罗来纳州", tags: ["港口", "美国"]},
 
         // 加拿大
         { chinese: "温哥华", english: "Vancouver", definition: "位于加拿大西海岸，也是北美西海岸最重要的港口之一，也是北美太平洋沿岸最大的港口之一", tags: ["港口", "加拿大"]},

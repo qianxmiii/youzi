@@ -6,8 +6,42 @@
   * Tab1 - 常用功能
   */
 
- // 获取所有术语
- const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
+// 获取所有术语
+const allTerms = Object.values(window.logisticsData.termsByCategory).flat();
+
+/**
+ * 通用术语搜索函数
+ * @param {Object} term - 术语对象
+ * @param {string} keyword - 搜索关键字
+ * @returns {boolean} - 是否匹配
+ */
+function searchInTerm(term, keyword) {
+    if (!keyword) return true;
+    
+    const lowerKeyword = keyword.toLowerCase();
+    
+    // 搜索中文名称
+    if (term.chinese.toLowerCase().includes(lowerKeyword)) return true;
+    
+    // 搜索英文名称
+    if (term.english.toLowerCase().includes(lowerKeyword)) return true;
+    
+    // 搜索描述内容
+    if (term.definition && term.definition.toLowerCase().includes(lowerKeyword)) return true;
+    
+    // 搜索流程步骤内容
+    if (term.type === 'process' && term.steps) {
+        return term.steps.some(step => 
+            step.title.toLowerCase().includes(lowerKeyword) || 
+            step.description.toLowerCase().includes(lowerKeyword)
+        );
+    }
+    
+    // 搜索标签
+    if (term.tags && term.tags.some(tag => tag.toLowerCase().includes(lowerKeyword))) return true;
+    
+    return false;
+}
 
  // 术语统计相关变量
 let totalTermsCount = 0;
@@ -56,7 +90,57 @@ function renderTerms(filteredTerms = allTerms) {
         filteredTerms.forEach(term => {
             const card = document.createElement('div');
             
-            if (termViewMode === 'grid') {
+            // 检查是否为流程类型术语
+            if (term.type === 'process' && term.steps) {
+                // 流程步骤卡片 - 可折叠设计
+                console.log('渲染流程卡片:', term.chinese);
+                card.className = 'col-md-4 mb-3';
+                card.innerHTML = `
+                    <div class="card h-100 process-card-compact" data-process-id="${term.chinese}">
+                        <div class="card-body">
+                            <div class="process-header-compact">
+                                <h6 class="card-title process-title-compact">
+                                    <i class="bi bi-diagram-3 process-icon"></i>
+                                    ${term.chinese}
+                                </h6>
+                            </div>
+                            <p class="card-text process-subtitle-compact">
+                                ${term.english}
+                                <span class="copy-btn" onclick="copyTerm(this, '${term.english}')">
+                                    <i class="bi bi-clipboard"></i>
+                                </span>
+                            </p>
+                            <div class="process-summary process-summary-clickable" onclick="toggleProcessSteps(this)" data-bs-toggle="tooltip" data-bs-title="点击查看详细流程">
+                                <small class="text-muted">
+                                    <i class="bi bi-list-ol"></i>
+                                    共 ${term.steps.length} 个步骤
+                                    <i class="bi bi-chevron-down process-chevron"></i>
+                                </small>
+                            </div>
+                            <div class="process-steps-detail" style="display: none;">
+                                ${term.steps.map(step => `
+                                    <div class="step-item-compact">
+                                        <div class="step-number-compact">${step.step}</div>
+                                        <div class="step-content-compact">
+                                            <h6 class="step-title-compact">
+                                                <i class="bi ${step.icon} step-icon-compact"></i>
+                                                ${step.title}
+                                            </h6>
+                                            <p class="step-description-compact">${step.description}</p>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="tags">
+                                ${term.tags.map(tag => {
+                                    const color = tagColors[tag] || "#6c757d";
+                                    return `<span class="badge" style="background-color: ${color}; color: white;">${tag}</span>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            } else if (termViewMode === 'grid') {
                 // 网格样式 - 支持可展开卡片设计
                 card.className = 'col-md-4 mb-3';
                 const hasDefinition = term.definition && typeof term.definition === 'string' && term.definition.trim() !== '';
@@ -283,13 +367,9 @@ function initSearchFunction() {
     }
     
     searchInput.addEventListener('input', function () {
-        const keyword = this.value.trim().toLowerCase();
-        const filteredTerms = allTerms.filter(term => 
-            term.chinese.toLowerCase().includes(keyword) || 
-            term.english.toLowerCase().includes(keyword)
-        );
+        const keyword = this.value.trim();
+        const filteredTerms = allTerms.filter(term => searchInTerm(term, keyword));
         renderTerms(filteredTerms);
-
     });
 }
 
@@ -318,19 +398,13 @@ function initSearchFunction() {
 
  // 获取当前筛选后的术语列表
  function getFilteredTerms() {
-     const searchKeyword = document.getElementById('searchInput').value.trim().toLowerCase();
+     const searchKeyword = document.getElementById('searchInput').value.trim();
      const activeCategory = document.querySelector('.category-buttons .btn.active').textContent;
 
      if (activeCategory === '全部') {
-         return allTerms.filter(term => 
-             term.chinese.toLowerCase().includes(searchKeyword) || 
-             term.english.toLowerCase().includes(searchKeyword)
-         );
+         return allTerms.filter(term => searchInTerm(term, searchKeyword));
      } else {
-         return (window.logisticsData.termsByCategory[activeCategory] || []).filter(term => 
-             term.chinese.toLowerCase().includes(searchKeyword) || 
-             term.english.toLowerCase().includes(searchKeyword)
-         );
+         return (window.logisticsData.termsByCategory[activeCategory] || []).filter(term => searchInTerm(term, searchKeyword));
      }
  }
 
@@ -746,10 +820,12 @@ function hideCopyTooltip(button) {
 // 识别地址、箱数、重量、体积信息
 function parseCalTabCargoInfo() {
     const input = document.getElementById("cargo-input").value.trim();
-    // 使用正则表达式解析箱数、重量、体积
+    // 使用正则表达式解析箱数、重量、体积、尺寸
     const volumeRegex = /([\d.]+)\s*(cbm|方)/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+    // 尺寸识别正则表达式，支持各种分隔符和单位
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|inch|in|英寸)?/i;
     const addressRegex = /(?:To \s+)?([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字 前缀支持带To
     
 
@@ -771,6 +847,28 @@ function parseCalTabCargoInfo() {
         // 如果是磅单位，转换为千克
         if (unit === 'lb' || unit === 'lbs' || unit === '磅') {
             weight *= 0.453592;
+        }
+    }
+
+    // 提取尺寸信息
+    const dimensionMatch = input.match(dimensionRegex);
+    let length = 0, width = 0, height = 0;
+    if (dimensionMatch) {
+        length = parseFloat(dimensionMatch[1]);
+        width = parseFloat(dimensionMatch[2]);
+        height = parseFloat(dimensionMatch[3]);
+        const unit = (dimensionMatch[4] || '').toLowerCase();
+        
+        // 如果是英寸单位，转换为厘米
+        if (unit === 'inch' || unit === 'in' || unit === '英寸') {
+            length *= 2.54;
+            width *= 2.54;
+            height *= 2.54;
+        }
+        
+        // 如果识别到尺寸但没有识别到体积，自动计算体积
+        if (volume === 0 && quantity > 0) {
+            volume = (length * width * height * quantity) / 1000000; // 转换为cbm
         }
     }
 
@@ -1672,4 +1770,73 @@ function copyAddress(id) {
       document.getElementById('toastMessage').textContent = '地址已复制(兼容模式)';
       toast.show();
     });
+}
+
+/**
+ * 切换流程步骤显示/隐藏
+ */
+function toggleProcessSteps(element) {
+  const card = element.closest('.process-card-compact');
+  const stepsDetail = card.querySelector('.process-steps-detail');
+  const chevron = element.querySelector('.process-chevron');
+  
+  if (stepsDetail.style.display === 'none' || !stepsDetail.style.display) {
+    // 展开
+    stepsDetail.style.display = 'block';
+    stepsDetail.style.maxHeight = '0';
+    stepsDetail.style.overflow = 'hidden';
+    stepsDetail.style.opacity = '0';
+    stepsDetail.style.transform = 'translateY(-10px)';
+    
+    // 立即更新箭头和提示
+    chevron.className = 'bi bi-chevron-up process-chevron';
+    element.setAttribute('data-bs-title', '点击收起详细流程');
+    
+    // 强制重排，然后开始动画
+    stepsDetail.offsetHeight;
+    
+    stepsDetail.style.transition = 'all 0.4s cubic-bezier(0.4, 0, 0.2, 1)';
+    stepsDetail.style.maxHeight = '1000px';
+    stepsDetail.style.opacity = '1';
+    stepsDetail.style.transform = 'translateY(0)';
+    
+    // 动画完成后清理样式
+    setTimeout(() => {
+      stepsDetail.style.maxHeight = 'none';
+      stepsDetail.style.overflow = 'visible';
+    }, 400);
+  } else {
+    // 收起
+    stepsDetail.style.maxHeight = stepsDetail.scrollHeight + 'px';
+    stepsDetail.style.overflow = 'hidden';
+    stepsDetail.style.transition = 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)';
+    
+    // 强制重排
+    stepsDetail.offsetHeight;
+    
+    // 开始收起动画
+    stepsDetail.style.maxHeight = '0';
+    stepsDetail.style.opacity = '0';
+    stepsDetail.style.transform = 'translateY(-10px)';
+    
+    // 动画完成后隐藏元素
+    setTimeout(() => {
+      stepsDetail.style.display = 'none';
+      stepsDetail.style.maxHeight = 'none';
+      stepsDetail.style.overflow = 'visible';
+      stepsDetail.style.opacity = '1';
+      stepsDetail.style.transform = 'translateY(0)';
+    }, 300);
+    
+    // 立即更新箭头和提示
+    chevron.className = 'bi bi-chevron-down process-chevron';
+    element.setAttribute('data-bs-title', '点击查看详细流程');
+  }
+  
+  // 更新tooltip
+  const tooltip = bootstrap.Tooltip.getInstance(element);
+  if (tooltip) {
+    tooltip.dispose();
+    new bootstrap.Tooltip(element);
+  }
 }

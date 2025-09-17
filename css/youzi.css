@@ -2292,6 +2292,13 @@ td input.form-control {
   overflow-x: hidden !important; /* 隐藏水平滚动条 */
 }
 
+/* 确保流程卡片在flex容器中正确显示 */
+#termList .process-card {
+  flex-shrink: 0 !important;
+  flex-grow: 0 !important;
+  flex-basis: auto !important;
+}
+
 /* 术语网格容器样式 */
 #termList.row {
   display: grid !important;
@@ -2299,6 +2306,18 @@ td input.form-control {
   gap: 1rem !important;
   justify-content: start !important;
   align-content: start !important;
+}
+
+/* 流程卡片在网格中的特殊处理 */
+#termList .process-card,
+#termList .col-12.process-card {
+  grid-column: 1 / -1 !important;
+  width: 100% !important;
+  max-width: none !important;
+  min-width: auto !important;
+  display: block !important;
+  flex: none !important;
+  margin-bottom: 1rem !important;
 }
 
 /* 术语网格卡片列样式重置 */
@@ -3477,4 +3496,438 @@ td input.form-control {
   .bookmark-list {
     max-height: 400px;
   }
+}
+
+/* 流程步骤卡片样式 */
+.process-card,
+.col-12.process-card {
+    border: 1px solid #dee2e6;
+    border-radius: 0.75rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    overflow: hidden;
+    margin-bottom: 1rem;
+    /* 突破网格布局限制 */
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-width: auto !important;
+    /* 确保显示 */
+    display: block !important;
+    position: relative;
+    z-index: 1;
+    /* 强制覆盖Bootstrap样式 */
+    flex: none !important;
+    padding: 0 !important;
+}
+
+.process-card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+}
+
+.process-header {
+    background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
+    color: white;
+    padding: 1.5rem;
+    text-align: center;
+}
+
+.process-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+}
+
+.process-subtitle {
+    font-size: 1rem;
+    opacity: 0.9;
+    margin-bottom: 0;
+}
+
+.process-steps {
+    padding: 1.5rem;
+}
+
+.step-item {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 1.5rem;
+    position: relative;
+}
+
+.step-item:last-child {
+    margin-bottom: 0;
+}
+
+.step-number {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 1.1rem;
+    margin-right: 1rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 8px rgba(13, 110, 253, 0.3);
+}
+
+.step-content {
+    flex: 1;
+    padding-top: 0.25rem;
+}
+
+.step-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+}
+
+.step-icon {
+    margin-right: 0.5rem;
+    color: #0d6efd;
+    font-size: 1.2rem;
+}
+
+.step-description {
+    color: #6c757d;
+    line-height: 1.6;
+    margin-bottom: 0;
+}
+
+/* 连接线样式 */
+.step-item:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 19px;
+    top: 40px;
+    width: 2px;
+    height: calc(100% + 0.5rem);
+    background: linear-gradient(to bottom, #0d6efd, #0dcaf0);
+    opacity: 0.3;
+}
+
+/* 流程标签样式 */
+.process-tags {
+    padding: 1rem 1.5rem;
+    background-color: #f8f9fa;
+    border-top: 1px solid #dee2e6;
+}
+
+/* 动画效果 */
+.step-item {
+    animation: slideInUp 0.6s ease forwards;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.step-item:nth-child(1) { animation-delay: 0.1s; }
+.step-item:nth-child(2) { animation-delay: 0.2s; }
+.step-item:nth-child(3) { animation-delay: 0.3s; }
+.step-item:nth-child(4) { animation-delay: 0.4s; }
+.step-item:nth-child(5) { animation-delay: 0.5s; }
+
+@keyframes slideInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 泡比tooltip样式 */
+.tooltip {
+    font-size: 0.875rem;
+    line-height: 1.4;
+    white-space: pre-line;
+    max-width: 200px;
+}
+
+.tooltip-inner {
+    text-align: left;
+    padding: 0.5rem 0.75rem;
+    background-color: #2c3e50;
+    color: #ecf0f1;
+    border-radius: 0.375rem;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* 泡比输入框悬停效果 */
+#volumeRatio[data-bs-toggle="tooltip"] {
+    cursor: help;
+    position: relative;
+}
+
+#volumeRatio[data-bs-toggle="tooltip"]:hover {
+    background-color: #f8f9fa;
+    border-color: #0d6efd;
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+    .process-header {
+        padding: 1rem;
+    }
+    
+    .process-title {
+        font-size: 1.2rem;
+    }
+    
+    .process-steps {
+        padding: 1rem;
+    }
+    
+    .step-item {
+        margin-bottom: 1rem;
+    }
+    
+    .step-number {
+        width: 35px;
+        height: 35px;
+        font-size: 1rem;
+        margin-right: 0.75rem;
+    }
+    
+    .step-item:not(:last-child)::after {
+        left: 17px;
+        top: 35px;
+    }
+}
+
+/* 强制流程卡片全宽显示 - 最高优先级 */
+#termModal #termList .process-card,
+#termModal #termList .col-12.process-card,
+#termModal #termList .process-card-container {
+    grid-column: 1 / -1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 100% !important;
+    flex: none !important;
+    display: block !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    clear: both !important;
+    float: none !important;
+}
+
+/* 流程卡片容器样式 */
+.process-card-container {
+    width: 100% !important;
+    margin-bottom: 1rem !important;
+    grid-column: 1 / -1 !important;
+    display: block !important;
+    position: relative !important;
+}
+
+/* 紧凑型流程卡片样式 */
+.process-card-compact {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+    overflow: hidden;
+    position: relative;
+}
+
+.process-card-compact:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+}
+
+.process-header-compact {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.75rem;
+}
+
+.process-title-compact {
+    font-size: 1rem;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0;
+    display: flex;
+    align-items: center;
+    flex: 1;
+    margin-right: 0.5rem;
+}
+
+.process-icon {
+    margin-right: 0.5rem;
+    color: #0d6efd;
+    font-size: 1.1rem;
+}
+
+/* 移除不再需要的toggle按钮样式 */
+
+.process-subtitle-compact {
+    font-size: 0.9rem;
+    color: #6c757d;
+    margin-bottom: 0.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.process-summary {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem;
+    background-color: #e9ecef;
+    border-radius: 0.375rem;
+    border-left: 3px solid #0d6efd;
+}
+
+.process-summary small {
+    display: flex;
+    align-items: center;
+    margin: 0;
+}
+
+.process-summary i {
+    margin-right: 0.25rem;
+    color: #0d6efd;
+}
+
+/* 可点击的流程摘要样式 */
+.process-summary-clickable {
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: none;
+}
+
+.process-summary-clickable:hover {
+    background-color: #d1ecf1;
+    border-left-color: #0dcaf0;
+    transform: translateX(2px);
+}
+
+.process-summary-clickable:active {
+    transform: translateX(1px) scale(0.98);
+}
+
+.process-chevron {
+    margin-left: auto;
+    transition: transform 0.2s ease;
+    color: #6c757d;
+}
+
+.process-summary-clickable:hover .process-chevron {
+    color: #0d6efd;
+    transform: scale(1.1);
+}
+
+/* 流程步骤详情样式 */
+.process-steps-detail {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid #dee2e6;
+}
+
+.step-item-compact {
+    display: flex;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    position: relative;
+}
+
+.step-item-compact:last-child {
+    margin-bottom: 0;
+}
+
+.step-number-compact {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #0d6efd 0%, #0dcaf0 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 0.85rem;
+    margin-right: 0.75rem;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(13, 110, 253, 0.3);
+}
+
+.step-content-compact {
+    flex: 1;
+    padding-top: 0.1rem;
+}
+
+.step-title-compact {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+}
+
+.step-icon-compact {
+    margin-right: 0.4rem;
+    color: #0d6efd;
+    font-size: 1rem;
+}
+
+.step-description-compact {
+    color: #6c757d;
+    line-height: 1.4;
+    margin-bottom: 0;
+    font-size: 0.85rem;
+}
+
+/* 连接线样式 - 紧凑版 */
+.step-item-compact:not(:last-child)::after {
+    content: '';
+    position: absolute;
+    left: 13px;
+    top: 28px;
+    width: 2px;
+    height: calc(100% + 0.5rem);
+    background: linear-gradient(to bottom, #0d6efd, #0dcaf0);
+    opacity: 0.3;
+}
+
+/* 展开/收起动画 */
+.process-steps-detail {
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow: hidden;
+    will-change: max-height, opacity, transform;
+}
+
+/* 箭头旋转动画 */
+.process-chevron {
+    transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 步骤项进入动画 */
+.step-item-compact {
+    animation: slideInUp 0.5s ease forwards;
+    opacity: 0;
+    transform: translateY(20px);
+}
+
+.step-item-compact:nth-child(1) { animation-delay: 0.1s; }
+.step-item-compact:nth-child(2) { animation-delay: 0.15s; }
+.step-item-compact:nth-child(3) { animation-delay: 0.2s; }
+.step-item-compact:nth-child(4) { animation-delay: 0.25s; }
+.step-item-compact:nth-child(5) { animation-delay: 0.3s; }
+.step-item-compact:nth-child(6) { animation-delay: 0.35s; }
+
+@keyframes slideInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }

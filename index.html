@@ -219,8 +219,9 @@
                   <!-- 报价识别：箱数、重量、体积 -->
                   <div>
                     <label for="package-info-input" class = "subtitle">报价识别</label>
-                    <input type="text" id="package-info-input" class="form-control" placeholder="例如: 21ctns 8.3 kg 2.126 cbm"
+                    <input type="text" id="package-info-input" class="form-control" placeholder="例如: 21ctns 8.3 kg 2.126 cbm 或 45*45*50 10kg 21箱"
                       oninput="parsePackageInfo()" />
+                    <div class="form-text">支持格式：箱数 重量 体积 或 长*宽*高 重量 箱数（支持多种分隔符和单位）</div>
                   </div>
                   <div class="table-overflow shrink-on-small">
                   <table id="additional-info-table" class="table table-fixed">
@@ -399,6 +400,13 @@
                     <input type="checkbox" id="USD_check" class="form-check-input" onchange="updateQuote()" />
                     <label for="USD_check" class="form-check-label">美元</label>
                   </div>
+                  <!-- 承运商选择 -->
+                  <div class="form-floating mr-3" style="width: 150px;">
+                    <select id="carrier-select" class="form-select" onchange="updateCarrierTooltip()">
+                      <!-- 选项将通过JavaScript动态生成 -->
+                    </select>
+                    <label for="carrier-select">承运商</label>
+                  </div>
                 </div>
               
                 <!-- 报价 - 报价格式下拉选项框 -->
@@ -462,9 +470,9 @@
                   <div class="mb-3">
                     <label for="batch-box-spec" class="form-label">箱规信息</label>
                     <input type="text" id="batch-box-spec" class="form-control" 
-                           placeholder="例如: 45*45*50 10KG 50CTNS" 
+                           placeholder="例如: 45*45*50 10KG 50CTNS 或 45x45x50 10kg 50箱" 
                            oninput="parseBatchBoxSpec()" />
-                    <div class="form-text">格式：长*宽*高 重量 总箱数</div>
+                    <div class="form-text">格式：长*宽*高 重量 总箱数（支持 *、x、× 分隔符，支持 kg/kg/lb/磅 单位，支持 箱/ctn/件 等箱数单位）</div>
                   </div>
                   
                   <!-- 地址分配输入 -->
@@ -1616,6 +1624,11 @@
       // 初始化常用网址功能
       if (typeof initBookmarks === 'function') {
         initBookmarks();
+      }
+      
+      // 初始化承运商选择器
+      if (typeof initCarrierSelector === 'function') {
+        initCarrierSelector();
       }
       
     });

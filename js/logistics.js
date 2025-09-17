@@ -1887,10 +1887,10 @@ function getPostcodeColorClass(postcode, channel) {
  * 检查邮编是否为偏远地区
  */
 function isRemotePostcode(postcode) {
-    if (!postcode || !window.data || !remotePostcodes) {
+    if (!postcode || !window.remotePostcodes) {
         return false;
     }
-    return remotePostcodes.includes(postcode);
+    return window.remotePostcodes.includes(postcode);
 }
 
 /**

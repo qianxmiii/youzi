@@ -125,7 +125,7 @@ function checkRemoteAddress() {
     const remoteAddressCheckbox = document.getElementById("remote-address");
 
     // 如果邮编在偏远地区列表中，选中 checkbox
-    if (remotePostcodes.includes(postcodeInput)) {
+    if (window.remotePostcodes && window.remotePostcodes.includes(postcodeInput)) {
         remoteAddressCheckbox.checked = true;
     } else {
         remoteAddressCheckbox.checked = false;

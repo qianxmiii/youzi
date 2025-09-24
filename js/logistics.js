@@ -17,8 +17,8 @@ const {deliveryMethodsByCountry, quickReplies} = window.data;
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    // valid_date = getNextFriday();
-    valid_date = "09/19";
+    valid_date = getNextFriday();
+    valid_date = "09/26";
 
     init(); // 初始化
     eventListener();

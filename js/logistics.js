@@ -826,6 +826,83 @@ function parsePackageInfo() {
     updateQuote();
 }
 
+// 检查成本输入，当渠道不为Air express且美元复选框选中时，如果成本超过3显示友好提示
+function checkCostInput() {
+    const channel = document.getElementById("delivery-method-select").value;
+    const isUSD = document.getElementById('USD_check').checked;
+    const costValue = parseFloat(document.getElementById("cost_rmb").value) || 0;
+    const costInput = document.getElementById("cost_rmb");
+    
+    // 当渠道不为Air express且美元复选框选中时
+    if (!channel.includes("Air express") && isUSD && costValue > 3) {
+        // 显示友好提示
+        showCostInputWarning();
+        // 同时给输入框添加视觉提示
+        costInput.style.borderColor = "#ffc107";
+        costInput.style.backgroundColor = "#fff3cd";
+    } else {
+        // 隐藏提示
+        hideCostInputWarning();
+        // 恢复输入框样式
+        costInput.style.borderColor = "";
+        costInput.style.backgroundColor = "";
+    }
+}
+
+// 显示成本输入警告
+function showCostInputWarning() {
+    const existingWarning = document.getElementById("cost-input-warning");
+    
+    if (!existingWarning) {
+        // 创建toast通知
+        const toast = document.createElement("div");
+        toast.id = "cost-input-warning";
+        toast.className = "toast align-items-center text-bg-warning border-0";
+        toast.setAttribute("role", "alert");
+        toast.setAttribute("aria-live", "assertive");
+        toast.setAttribute("aria-atomic", "true");
+        toast.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1050;
+            min-width: 300px;
+        `;
+        toast.innerHTML = `
+            <div class="d-flex">
+                <div class="toast-body">
+                    <i class="bi bi-exclamation-triangle me-2"></i>
+                    您输入的是RMB但美元复选框已勾选，请检查是否需要取消美元复选框
+                </div>
+                <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+            </div>
+        `;
+        
+        // 将toast添加到body中
+        document.body.appendChild(toast);
+        
+        // 初始化并显示toast
+        const bsToast = new bootstrap.Toast(toast, {
+            autohide: true,
+            delay: 3000
+        });
+        bsToast.show();
+        
+        // toast隐藏后自动移除元素
+        toast.addEventListener('hidden.bs.toast', function () {
+            toast.remove();
+        });
+    }
+}
+
+// 隐藏成本输入警告
+function hideCostInputWarning() {
+    const existingWarning = document.getElementById("cost-input-warning");
+    if (existingWarning) {
+        existingWarning.remove();
+    }
+}
+
 // 获取数据
 function getInputData() {
     return {

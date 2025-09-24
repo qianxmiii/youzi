@@ -236,7 +236,7 @@
                       <tr>
                         <!-- 派送方式 -->
                         <td>
-                          <select id="delivery-method-select" class="form-control" oninput="updateQuote()" onchange="handleDeliveryMethodChange(); showTab('expressQueryTab');"></select>
+                          <select id="delivery-method-select" class="form-control" oninput="updateQuote()" onchange="handleDeliveryMethodChange(); showTab('expressQueryTab'); checkCostInput()"></select>
                         </td>
                         <!-- 国家 -->
                         <td>
@@ -308,7 +308,7 @@
                         <!-- 成本 (RMB) -->
                         <td>
                           <span id="cost-tooltip" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="我在思考...">
-                            <input type="number" id="cost_rmb" class="form-control" value="0" oninput="updateQuote()" />
+                            <input type="number" id="cost_rmb" class="form-control" value="0" oninput="updateQuote(); checkCostInput()" />
                           </span>
                         </td>
                         <!-- 利润 (RMB) -->
@@ -397,7 +397,7 @@
                   </div>
                   <!-- 美元 -->
                   <div class="form-check mr-3">
-                    <input type="checkbox" id="USD_check" class="form-check-input" onchange="updateQuote()" />
+                    <input type="checkbox" id="USD_check" class="form-check-input" onchange="updateQuote(); checkCostInput()" />
                     <label for="USD_check" class="form-check-label">美元</label>
                   </div>
                   <!-- 承运商选择 -->

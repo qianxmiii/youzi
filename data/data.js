@@ -274,8 +274,8 @@ window.data = {
     ],
     // 派送方式按国家分类
     deliveryMethodsByCountry: {
-        "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",
-            "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck","Express", "Sea ups/fedex", 
+        "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Normal sea express", "Air truck","Fast sea truck","Normal sea truck","Fast Maston express", "Super sea express",
+             "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","Express", "Sea ups/fedex", 
             "Fast sea ups/fedex", "Air ups/fedex","UPS/Fedex/DHL"
         ],
         "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",

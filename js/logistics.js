@@ -17,7 +17,7 @@ const {deliveryMethodsByCountry, quickReplies} = window.data;
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    valid_date = getNextFriday();
+    // valid_date = getNextFriday();
     valid_date = "09/26";
 
     init(); // 初始化
@@ -1986,10 +1986,10 @@ function getPostcodeColorClass(postcode, channel) {
  * 检查邮编是否为偏远地区
  */
 function isRemotePostcode(postcode) {
-    if (!postcode || !window.data || !remotePostcodes) {
+    if (!postcode || !window.remotePostcodes) {
         return false;
     }
-    return remotePostcodes.includes(postcode);
+    return window.remotePostcodes.includes(postcode);
 }
 
 /**

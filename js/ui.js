@@ -27,6 +27,11 @@ function updateDeliveryMethods() {
 
     // 更新报价
     updateQuote();
+    
+    // 更新分泡比例显示
+    if (typeof toggleVolumeRatioVisibility === 'function') {
+        toggleVolumeRatioVisibility();
+    }
 }
 
 // 添加新的一行

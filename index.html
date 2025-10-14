@@ -407,6 +407,15 @@
                     </select>
                     <label for="carrier-select">承运商</label>
                   </div>
+                  <!-- 分泡比例 -->
+                  <div class="form-floating mr-3" id="volume-ratio-container" style="width: 150px; display: none;">
+                    <select id="volume-ratio-select" class="form-select" onchange="updateQuote()">
+                      <option value="" selected>不分泡</option>
+                      <option value="30">分泡30%</option>
+                      <option value="50">分泡50%</option>
+                    </select>
+                    <label for="volume-ratio-select">分泡比例</label>
+                  </div>
                 </div>
               
                 <!-- 报价 - 报价格式下拉选项框 -->

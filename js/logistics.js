@@ -43,6 +43,8 @@ function init() {
     initAddressBook();
     // 初始化产品选择下拉框
     initProductSelect();
+    // 初始化分泡比例控制
+    initVolumeRatioControl();
 }
 
 
@@ -349,6 +351,23 @@ function updateQuote() {
 
     // 计算计费重 (kg)：取总实重与材积重的较大者
     chargeWeight = Decimal.max(data.totalWeight, dimensionWeight);
+    
+    // 分泡计算
+    const volumeRatioSelect = document.getElementById("volume-ratio-select");
+    if (volumeRatioSelect && volumeRatioSelect.value) {
+        const volumeRatio = parseFloat(volumeRatioSelect.value) / 100; // 转换为小数
+        const actualWeight = new Decimal(data.totalWeight);
+        const volumeWeight = new Decimal(dimensionWeight);
+        
+        // 应用分泡公式：实重 + (泡重 - 实重) × (1 - 分泡比例)
+        if (volumeWeight.greaterThan(actualWeight)) {
+            const volumeDifference = volumeWeight.minus(actualWeight);
+            const discountFactor = new Decimal(1).minus(volumeRatio);
+            const discountedVolume = volumeDifference.mul(discountFactor);
+            chargeWeight = actualWeight.plus(discountedVolume).ceil(); // 向上取整
+        }
+    }
+    
     if (data.channel.includes('express')) {
         let moqWeight = 0;
         let moqUnit = 0;
@@ -388,6 +407,11 @@ function updateQuote() {
     } else {
         volumeRatio = new Decimal(0);
         document.getElementById('volumeRatio').value = 0;
+    }
+    
+    // 更新分泡比例显示
+    if (typeof toggleVolumeRatioVisibility === 'function') {
+        toggleVolumeRatioVisibility();
     }
 
     // 泡比颜色设置和tooltip
@@ -3216,5 +3240,52 @@ function initCarrierSelector() {
         
         // 设置默认选中项
         carrierSelect.value = defaultCarrier;
+    }
+}
+
+/**
+ * 初始化分泡比例控制
+ */
+function initVolumeRatioControl() {
+    // 监听派送方式变化
+    const deliveryMethodSelect = document.getElementById("delivery-method-select");
+    if (deliveryMethodSelect) {
+        deliveryMethodSelect.addEventListener("change", toggleVolumeRatioVisibility);
+    }
+    
+    // 初始检查
+    toggleVolumeRatioVisibility();
+}
+
+/**
+ * 切换分泡比例选项的显示/隐藏
+ */
+function toggleVolumeRatioVisibility() {
+    const deliveryMethodSelect = document.getElementById("delivery-method-select");
+    const volumeRatioContainer = document.getElementById("volume-ratio-container");
+    
+    if (!deliveryMethodSelect || !volumeRatioContainer) return;
+    
+    const selectedMethod = deliveryMethodSelect.value;
+    
+    // 检查是否为快递派渠道
+    const isExpressDelivery = shippingChannels["快递派"].includes(selectedMethod);
+    
+    // 获取当前泡比
+    const volumeRatioElement = document.getElementById("volumeRatio");
+    const currentVolumeRatio = volumeRatioElement ? parseFloat(volumeRatioElement.value) || 0 : 0;
+    
+    // 判断是否显示分泡选项：快递派渠道 且 泡比小于167
+    const shouldShowVolumeRatio = isExpressDelivery && currentVolumeRatio < 167;
+    
+    if (shouldShowVolumeRatio) {
+        volumeRatioContainer.style.display = "block";
+    } else {
+        volumeRatioContainer.style.display = "none";
+        // 重置选择
+        const volumeRatioSelect = document.getElementById("volume-ratio-select");
+        if (volumeRatioSelect) {
+            volumeRatioSelect.value = ""; // 重置为默认值（不分泡）
+        }
     }
 }

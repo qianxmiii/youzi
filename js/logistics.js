@@ -3289,3 +3289,129 @@ function toggleVolumeRatioVisibility() {
         }
     }
 }
+
+/**
+ * 导出客户地址簿为Excel文件
+ */
+function exportAddressBook() {
+    try {
+        // 获取地址数据
+        const addressData = getAddressBookData();
+        
+        console.log('地址数据:', addressData);
+        console.log('数据长度:', addressData.length);
+        
+        if (!addressData || addressData.length === 0) {
+            showToast('没有地址数据可导出。请确保customerAddresses变量中有数据。', 'warning');
+            return;
+        }
+        
+        // 创建工作簿
+        const wb = XLSX.utils.book_new();
+        
+        // 准备数据
+        const wsData = [
+            ['客户', '邮编', '详细地址', '公司名', '联系人', '电话', '商业/住宅', '偏远地址']
+        ];
+        
+        addressData.forEach(address => {
+            wsData.push([
+                address.customer || '',
+                address.postcode || '',
+                address.address || '',
+                address.company || '',
+                address.contact || '',
+                address.phone || '',
+                address.type === 'commercial' ? 'commercial' : 'personal',
+                address.region === 'remote' ? 'remote' : 'non-remote'
+            ]);
+        });
+        
+        // 创建工作表
+        const ws = XLSX.utils.aoa_to_sheet(wsData);
+        
+        // 设置列宽
+        ws['!cols'] = [
+            { wch: 10 }, // 客户
+            { wch: 8 },  // 邮编
+            { wch: 30 }, // 详细地址
+            { wch: 20 }, // 公司名
+            { wch: 15 }, // 联系人
+            { wch: 15 }, // 电话
+            { wch: 8 },  // 类型
+            { wch: 8 }   // 区域
+        ];
+        
+        // 添加工作表到工作簿
+        XLSX.utils.book_append_sheet(wb, ws, '客户地址簿');
+        
+        // 生成文件名
+        const now = new Date();
+        const timestamp = now.getFullYear() + 
+                         String(now.getMonth() + 1).padStart(2, '0') + 
+                         String(now.getDate()).padStart(2, '0') + '_' +
+                         String(now.getHours()).padStart(2, '0') + 
+                         String(now.getMinutes()).padStart(2, '0');
+        const fileName = `客户地址簿_${timestamp}.xlsx`;
+        
+        // 导出文件
+        XLSX.writeFile(wb, fileName);
+        
+        showToast('地址簿导出成功', 'success');
+        
+    } catch (error) {
+        console.error('导出地址簿失败:', error);
+        showToast('导出失败，请重试', 'error');
+    }
+}
+
+
+/**
+ * 获取地址簿数据
+ */
+function getAddressBookData() {
+    try {
+        // 只从全局变量customerAddresses获取数据
+        if (typeof customerAddresses !== 'undefined' && customerAddresses && customerAddresses.length > 0) {
+            // 转换数据格式以匹配导出需求
+            return customerAddresses.map(addr => ({
+                customer: addr.customer || '',
+                postcode: addr.postalCode || '',
+                address: addr.address || '',
+                company: addr.company || '',
+                contact: addr.contact || '',
+                phone: addr.phone || '',
+                type: addr.isCommercial ? 'commercial' : 'personal',
+                region: addr.isRemote ? 'remote' : 'non-remote'
+            }));
+        }
+        
+        return [];
+    } catch (error) {
+        console.error('获取地址簿数据失败:', error);
+        return [];
+    }
+}
+
+
+/**
+ * 显示提示消息
+ */
+function showToast(message, type = 'info') {
+    const toastElement = document.getElementById('copyToast');
+    const toastMessage = document.getElementById('toastMessage');
+    
+    if (toastElement && toastMessage) {
+        toastMessage.textContent = message;
+        
+        // 设置样式
+        const toastHeader = toastElement.querySelector('.toast-header');
+        if (toastHeader) {
+            toastHeader.className = `toast-header ${type === 'success' ? 'bg-success' : type === 'error' ? 'bg-danger' : type === 'warning' ? 'bg-warning' : 'bg-info'} text-white`;
+        }
+        
+        // 显示toast
+        const toast = new bootstrap.Toast(toastElement);
+        toast.show();
+    }
+}

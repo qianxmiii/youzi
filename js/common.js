@@ -19,7 +19,17 @@ function getBeijingTime() {
 function getNextFriday() {
     const beijingTime = getBeijingTime();
     const currentDay = beijingTime.getDay();
-    const daysToFriday = 7+((5 - currentDay + 7) % 7);  // 星期五是5
+    
+    // 计算到下一个周五的天数（总是返回下周五）
+    let daysToFriday;
+    if (currentDay === 5) {
+        // 如果今天是周五，返回下周五（7天后）
+        daysToFriday = 7;
+    } else {
+        // 其他情况，计算到下周五的天数
+        daysToFriday = (5 - currentDay + 7) % 7 + 7;
+    }
+    
     const nextFriday = new Date(beijingTime);
     nextFriday.setDate(beijingTime.getDate() + daysToFriday);
 

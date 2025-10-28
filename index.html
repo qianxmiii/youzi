@@ -510,8 +510,8 @@
                   <!-- 渠道选择 -->
                   <div class="mb-3">
                     <label class="form-label">选择渠道（可多选）</label>
-                    <div class="row">
-                      <div class="col-md-3">
+                    <div class="row row-cols-5">
+                      <div class="col">
                         <div class="form-check">
                           <input class="form-check-input" type="checkbox" value="Sea truck" id="channel-sea-truck" checked>
                           <label class="form-check-label" for="channel-sea-truck">
@@ -519,7 +519,7 @@
                           </label>
                         </div>
                       </div>
-                      <div class="col-md-3">
+                      <div class="col">
                         <div class="form-check">
                           <input class="form-check-input" type="checkbox" value="Fast sea truck" id="channel-fast-sea-truck">
                           <label class="form-check-label" for="channel-fast-sea-truck">
@@ -527,7 +527,7 @@
                           </label>
                         </div>
                       </div>
-                      <div class="col-md-3">
+                      <div class="col">
                         <div class="form-check">
                           <input class="form-check-input" type="checkbox" value="Sea express" id="channel-sea-express">
                           <label class="form-check-label" for="channel-sea-express">
@@ -535,11 +535,19 @@
                           </label>
                         </div>
                       </div>
-                      <div class="col-md-3">
+                      <div class="col">
                         <div class="form-check">
                           <input class="form-check-input" type="checkbox" value="Fast sea express" id="channel-fast-sea-express">
                           <label class="form-check-label" for="channel-fast-sea-express">
                             Fast sea express
+                          </label>
+                        </div>
+                      </div>
+                      <div class="col">
+                        <div class="form-check">
+                          <input class="form-check-input" type="checkbox" value="Air express" id="channel-air-express">
+                          <label class="form-check-label" for="channel-air-express">
+                            Air express
                           </label>
                         </div>
                       </div>
@@ -554,7 +562,7 @@
                       <option value="华南">华南</option>
                       <option value="华东">华东</option>
                     </select>
-                    <div class="form-text">Sea express和Fast sea express渠道需要选择发货区域</div>
+                    <div class="form-text">Sea express、Fast sea express、Air express 渠道需要选择发货区域</div>
                   </div>
                   
                   <!-- 批量报价结果表格 -->

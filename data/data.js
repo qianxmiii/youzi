@@ -2,31 +2,47 @@
  * data.js 数据配置文件
  */
 
+// 基础运输渠道列表
+const basicChannels = [
+    "Sea truck",           // 普船卡派
+    "Fast sea truck",      // 快船卡派
+    "Normal sea truck",    // 加班卡派
+    "Air truck",           // 空卡
+    "Train truck",         // 铁路卡派
+    "Road truck",          // 卡航卡派
+    "Sea express",         // 海运快递派
+    "Air express",         // 空派
+    "Fast sea express",    // 快船快递派
+    "Normal sea express",  // 加班快递派
+    "Train express",       // 铁路快递派
+    "Road express",        // 卡航快递派
+    "Express"              // 快递
+];
+
 const shippingChannels = {
     "卡派": [
-      "Sea truck", 
-      "Fast sea truck", 
-      "Fast Maston truck",
-      "Super Maston truck",
-      "Normal Maston truck",
-      "Normal sea truck",
-      "Train truck",
-      "Road truck",
+      "Sea truck",           // 普船卡派
+      "Fast sea truck",      // 快船卡派
+      "Fast Maston truck",   // 美森卡派
+      "Super Sea truck",  // 快船卡派
+      "Normal Maston truck", // 加班美森卡派
+      "Normal sea truck",    // 加班卡派
+      "Air truck",           // 空卡
+      "Train truck",         // 铁路卡派
+      "Road truck"           // 卡航卡派
     ],
     "快递派": [
-      "Sea express", 
-      "Air express", 
-      "Air ups/fedex", 
-      "Fast sea ups/fedex",
-      "Fast sea express",
-      "Fast Maston express",
-      "Fast sea ups/fedex",
-      "Super sea express",
-      "Normal Maston express",
-      "Normal sea express",
-      "Normal sea ups/fedex",
-      "Train express",
-      "Road express"
+      "Sea express",         // 普船快递派
+      "Air express",         // 空派
+      "Fast sea express",    // 快船快递派
+      "Fast Maston express", // 美森快递派
+      "Super sea express",   // 超级快递派
+      "Normal Maston express", // 加班美森快递派
+      "Normal sea express",  // 加班快递派
+      "Train express",       // 铁路快递派
+      "Road express",        // 卡航快递派
+      "UPS/Fedex/DHL",       // UPS/Fedex/DHL
+      "Express"              // 快递
     ]
   };
 // 车型数据
@@ -274,11 +290,10 @@ window.data = {
     ],
     // 派送方式按国家分类
     deliveryMethodsByCountry: {
-        "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Normal sea express", "Air truck","Fast sea truck","Normal sea truck","Fast Maston express", "Super sea express",
-             "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","Express", "Sea ups/fedex", 
-            "Fast sea ups/fedex", "Air ups/fedex","UPS/Fedex/DHL"
+        "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Normal sea express", "Air truck","Fast sea truck","Normal sea truck","Fast Maston express", "Super sea express","Super sea truck",
+             "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","Express", "UPS/Fedex/DHL"
         ],
-        "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express",
+        "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express","Super sea truck",
             "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck", "Express"
         ],
         "欧洲": ["Sea truck", "Sea express", "Air truck", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
@@ -287,9 +302,10 @@ window.data = {
         "其他": ["Express"]
     },
 
+
     // 渠道名称中英文映射
     channelNames: {
-        'Sea express': '普船快递派',
+        'Sea express': '海运快递派',
         'Fast sea express': '快船快递派',
         'Fast Maston express': '美森快递派',
         'Fast Maston truck': '美森卡派',
@@ -305,6 +321,9 @@ window.data = {
         'Train truck': '铁路卡派',
         'Road express': '卡航快递派',
         'Road truck': '卡航卡派',
+        'Super sea express': '快船快递派',
+        'Super sea truck': '快船卡派',
+        'Express': '快递',
         // 默认值
         '_default': '普船卡派'
     }
@@ -322,13 +341,7 @@ const transitTimeData = {
         "Sea express": {
             "default": "30-35"
         },
-        "Sea ups/fedex": {
-            "default": "30-35"
-        },
         "Air express": {
-            "default": "8-12"
-        },
-        "Air ups/fedex": {
             "default": "8-12"
         },
         "Fast sea express": {
@@ -342,11 +355,6 @@ const transitTimeData = {
             "8-9": "16-20"
         },
         "Super sea express": {
-            "0-3": "20-25",
-            "4-7": "18-22",
-            "8-9": "16-20"
-        },
-        "Fast sea ups/fedex": {
             "0-3": "20-25",
             "4-7": "18-22",
             "8-9": "16-20"
@@ -366,13 +374,18 @@ const transitTimeData = {
             "4-7": "20-24",
             "8-9": "18-22"
         },
+        "Super sea truck": {
+            "0-3": "25-28",
+            "4-7": "20-24",
+            "8-9": "18-22"
+        },
         "Fast Maston truck": {
             "0-3": "25-28",
             "4-7": "20-24",
             "8-9": "18-22" 
         },
         "Express": {
-            "default": "6-8"
+            "default": "5-8"
         }
     },
     "加拿大": {
@@ -388,6 +401,9 @@ const transitTimeData = {
         "Fast sea truck": {
             "default": "22-28"
         },
+        "Super sea truck": {
+            "default": "22-28"
+        },
         "Fast Maston express": {
             "default": "20-28"
         },
@@ -399,6 +415,9 @@ const transitTimeData = {
         },
         "Air express": {
             "default": "10-15"
+        },
+        "Express": {
+            "default": "5-8"
         }
     },
     "欧洲": {
@@ -455,10 +474,10 @@ const transitTimeData = {
     },
     "澳大利亚": {
         "Sea truck": {
-            "default": "30-35"
+            "default": "30-40"
         },
         "Sea express": {
-            "default": "30-35"
+            "default": "30-40"
         }
     }
 };

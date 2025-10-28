@@ -671,6 +671,10 @@
               <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#bookmarksModal">
                 <i class="bi bi-bookmark-star"></i> 常用网址
               </button>
+              <!-- 7. 派送时间查询 -->
+              <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#deliveryTimeModal">
+                <i class="bi bi-truck"></i> 派送时间查询
+              </button>
             </div>
 
             <!-- 模态框-常用术语-->
@@ -1219,11 +1223,6 @@
                 </div>
                 <div class="col-md-4 mb-3">
                   <button type="button" class="btn btn-outline-secondary w-100" disabled>
-                    <i class="bi bi-tools"></i> 更多工具
-                  </button>
-                </div>
-                <div class="col-md-4 mb-3">
-                  <button type="button" class="btn btn-outline-secondary w-100" disabled>
                     <i class="bi bi-gear"></i> 设置
                   </button>
                 </div>
@@ -1653,8 +1652,130 @@
         initCarrierSelector();
       }
       
+      // 初始化派送时间查询的运输渠道选项
+      const deliveryChannelSelect = document.getElementById('deliveryChannel');
+      const deliveryETDInput = document.getElementById('deliveryETD');
+      
+      if (deliveryChannelSelect && deliveryETDInput) {
+        // 动态生成运输渠道选项
+        if (typeof basicChannels !== 'undefined') {
+          deliveryChannelSelect.innerHTML = '';
+          basicChannels.forEach(channel => {
+            const option = document.createElement('option');
+            option.value = channel;
+            option.textContent = channel;
+            deliveryChannelSelect.appendChild(option);
+          });
+        }
+        
+        deliveryChannelSelect.addEventListener('change', function() {
+          const defaultETD = getDefaultETDByChannel(this.value);
+          deliveryETDInput.value = defaultETD.toISOString().slice(0, 10);
+        });
+        
+        // 设置初始默认值
+        const defaultETD = getDefaultETDByChannel('Sea truck');
+        deliveryETDInput.value = defaultETD.toISOString().slice(0, 10);
+      }
+      
     });
   </script>
+  
+  <!-- 派送时间查询模态框 -->
+  <div class="modal fade" id="deliveryTimeModal" tabindex="-1" aria-labelledby="deliveryTimeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="deliveryTimeModalLabel">
+            <i class="bi bi-truck"></i> 派送时间查询
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- 输入区域 -->
+          <div class="row mb-4">
+            <div class="col-md-12">
+              <div class="card">
+                <div class="card-header">
+                  <h6 class="mb-0">批量查询参数</h6>
+                </div>
+                <div class="card-body">
+                  <div class="row">
+                    <div class="col-md-4">
+                      <div class="mb-3">
+                        <label for="deliveryAddresses" class="form-label">地址代码（多个用逗号分隔）</label>
+                        <textarea class="form-control" id="deliveryAddresses" rows="3" placeholder="例如: RDU4, AVP1, LAS1, GYR3" oninput="convertAddressesToUpper()"></textarea>
+                        <div class="form-text">输入多个FBA地址代码，用逗号分隔</div>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="mb-3">
+                        <label for="deliveryChannel" class="form-label">运输渠道</label>
+                        <select class="form-select" id="deliveryChannel">
+                          <!-- 选项将通过JavaScript动态生成 -->
+                        </select>
+                      </div>
+                    </div>
+                    <div class="col-md-4">
+                      <div class="mb-3">
+                        <label for="deliveryETD" class="form-label">ETD (开船日期)</label>
+                        <input type="date" class="form-control" id="deliveryETD">
+                        <div class="form-text">留空则使用默认规则</div>
+                      </div>
+                    </div>
+                  </div>
+                  
+                  <div class="text-center">
+                    <button type="button" class="btn btn-primary" onclick="batchQueryDeliveryTime()">
+                      <i class="bi bi-search"></i> 批量查询
+                    </button>
+                    <button type="button" class="btn btn-secondary ms-2" onclick="resetDeliveryQuery()">
+                      <i class="bi bi-arrow-clockwise"></i> 重置
+                    </button>
+                    <button type="button" class="btn btn-outline-primary ms-2" onclick="copyAllTableEN()">
+                      <i class="bi bi-clipboard"></i> 复制表格
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 结果表格 -->
+          <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+              <h6 class="mb-0">查询结果</h6>
+              <span id="deliveryResultCount" class="badge bg-secondary">0 条记录</span>
+            </div>
+            <div class="card-body p-0">
+              <div class="table-responsive">
+                <table class="table table-hover mb-0" id="deliveryResultTable">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 10%">地址</th>
+                      <th style="width: 8%">邮编</th>
+                      <th style="width: 12%">渠道</th>
+                      <th style="width: 10%">ETD</th>
+                      <th style="width: 10%">运输时间</th>
+                      <th style="width: 15%">预计派送</th>
+                      <th style="width: 20%">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="deliveryResultBody">
+                    <tr>
+                      <td colspan="7" class="text-center text-muted py-4">
+                        <i class="bi bi-info-circle"></i> 请输入地址代码并点击"批量查询"
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
 </body>
 
 </html>

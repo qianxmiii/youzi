@@ -633,6 +633,539 @@ function showToast(message, type = 'info') {
 
 
 
+// ==================== 批量派送时间查询功能 ====================
+
+/**
+ * 获取下周的指定工作日（0-6：日-六），北京时间
+ */
+function getNextWeekdayBJ(targetDow) {
+    const now = getBeijingTime();
+    const dow = now.getDay();
+    // 确保是"下周"的该星期
+    const daysToNextWeek = 7 - dow;           // 到下周日的天数
+    const nextWeekSunday = new Date(now);
+    nextWeekSunday.setDate(now.getDate() + daysToNextWeek);
+    const delta = (targetDow + 7) % 7;        // 从下周日偏移到目标周几
+    const next = new Date(nextWeekSunday);
+    next.setDate(nextWeekSunday.getDate() + delta);
+    return next; // Date
+}
+
+/**
+ * Fast sea → 下周三，其它 → 下周四
+ */
+function getDefaultETDByChannel(channel) {
+    const isFast = channel === 'Fast sea truck' || channel === 'Fast sea express';
+    const targetDow = isFast ? 3 : 4; // 3:周三, 4:周四
+    return getNextWeekdayBJ(targetDow);
+}
+
+function formatDateMMDD(date) {
+    const m = (date.getMonth() + 1).toString().padStart(2, '0');
+    const d = date.getDate().toString().padStart(2, '0');
+    return `${m}/${d}`;
+}
+
+/**
+ * 解析"35-45"或"35-45 days"→ {min:35, max:45}
+ */
+function parseTransitRange(str) {
+    if (!str) return null;
+    const m = String(str).match(/(\d+)\s*[-~到]\s*(\d+)/);
+    if (m) return { min: parseInt(m[1], 10), max: parseInt(m[2], 10) };
+    const n = String(str).match(/(\d+)/g);
+    if (n && n.length === 1) return { min: parseInt(n[0], 10), max: parseInt(n[0], 10) };
+    return null;
+}
+
+function addDaysDate(date, days) {
+    const d = new Date(date);
+    d.setDate(d.getDate() + days);
+    return d;
+}
+
+/**
+ * 输入：Date etd, '35-45' → {etaStart:Date, etaEnd:Date}
+ */
+function calcEtaRange(etdDate, transitStr) {
+    const r = parseTransitRange(transitStr);
+    if (!r) return null;
+    return {
+        etaStart: addDaysDate(etdDate, r.min),
+        etaEnd: addDaysDate(etdDate, r.max)
+    };
+}
+
+/**
+ * 格式化英文日期 (Dec 5th)
+ */
+function formatDateEN(date) {
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    
+    const month = months[date.getMonth()];
+    const day = date.getDate();
+    
+    // 添加序数后缀
+    let dayStr = day.toString();
+    if (day === 1 || day === 21 || day === 31) {
+        dayStr += 'st';
+    } else if (day === 2 || day === 22) {
+        dayStr += 'nd';
+    } else if (day === 3 || day === 23) {
+        dayStr += 'rd';
+    } else {
+        dayStr += 'th';
+    }
+    
+    return `${month} ${dayStr}`;
+}
+
+/**
+ * 解析ETD字符串为日期输入格式 (MM/DD -> YYYY-MM-DD)
+ */
+function parseETDToDateInput(etdStr) {
+    if (!etdStr) return '';
+    
+    // 解析 MM/DD 格式
+    const match = etdStr.match(/(\d{1,2})\/(\d{1,2})/);
+    if (match) {
+        const month = parseInt(match[1], 10);
+        const day = parseInt(match[2], 10);
+        
+        // 假设是当前年份，如果日期已过则用下一年
+        const currentYear = new Date().getFullYear();
+        const date = new Date(currentYear, month - 1, day);
+        
+        // 如果日期已过，使用下一年
+        if (date < new Date()) {
+            date.setFullYear(currentYear + 1);
+        }
+        
+        return date.toISOString().slice(0, 10);
+    }
+    
+    return '';
+}
+
+/**
+ * 批量查询派送时间
+ */
+function batchQueryDeliveryTime() {
+    const addressesInput = document.getElementById('deliveryAddresses').value.trim();
+    const channel = document.getElementById('deliveryChannel').value;
+    const etdInput = document.getElementById('deliveryETD').value;
+    
+    if (!addressesInput) {
+        showToast('请输入地址代码', 'warning');
+        return;
+    }
+    
+    // 解析地址列表
+    const addresses = addressesInput.split(',').map(addr => addr.trim()).filter(addr => addr);
+    if (addresses.length === 0) {
+        showToast('请输入有效的地址代码', 'warning');
+        return;
+    }
+    
+    // 确定ETD
+    let etdDate;
+    if (etdInput) {
+        etdDate = new Date(etdInput + 'T00:00:00');
+    } else {
+        etdDate = getDefaultETDByChannel(channel);
+        // 更新输入框显示默认ETD
+        document.getElementById('deliveryETD').value = etdDate.toISOString().slice(0, 10);
+    }
+    
+    // 批量查询结果
+    const results = [];
+    
+    addresses.forEach(address => {
+        // 查找地址对应的国家和邮编
+        let matchedCountry = "美国";
+        let postcode = "";
+        
+        for (const [country, postalMap] of Object.entries(addressByCountry)) {
+            if (postalMap[address]) {
+                matchedCountry = country;
+                postcode = postalMap[address];
+                break;
+            }
+        }
+        
+        // 获取时效
+        const transitTime = getTransitTime(matchedCountry, channel, postcode, address);
+        
+        // 计算ETA
+        const eta = calcEtaRange(etdDate, transitTime);
+        
+        // 格式化结果
+        const channelCN = getCN(channel);
+        const etdStr = formatDateMMDD(etdDate);
+        const etaStr = eta ? `${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}` : '无法计算';
+        
+        // 生成复制格式
+        const enFormat = eta ? `${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.` : `${address} estimate delivery time: 无法计算`;
+        const cnFormat = eta ? `${address} 预计派送时间: ${etaStr}` : `${address} 预计派送时间: 无法计算`;
+        
+        results.push({
+            address,
+            postcode,
+            channel: channelCN,
+            etd: etdStr,
+            transitTime,
+            eta: etaStr,
+            enFormat,
+            cnFormat
+        });
+    });
+    
+    // 渲染表格
+    renderDeliveryResultTable(results);
+    
+    // 更新计数
+    document.getElementById('deliveryResultCount').textContent = `${results.length} 条记录`;
+    
+    showToast(`批量查询完成，共 ${results.length} 条记录`, 'success');
+}
+
+/**
+ * 渲染查询结果表格
+ */
+function renderDeliveryResultTable(results) {
+    const tbody = document.getElementById('deliveryResultBody');
+    
+    if (results.length === 0) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="9" class="text-center text-muted py-4">
+                    <i class="bi bi-info-circle"></i> 请输入地址代码并点击"批量查询"
+                </td>
+            </tr>
+        `;
+        return;
+    }
+    
+    const rows = results.map((result, index) => `
+        <tr data-index="${index}">
+            <td><strong>${result.address}</strong></td>
+            <td>${result.postcode}</td>
+            <td>${result.channel}</td>
+            <td>
+                <input type="date" class="form-control form-control-sm" 
+                       value="${parseETDToDateInput(result.etd)}" 
+                       onchange="updateRowETD(${index}, this.value)"
+                       style="min-width: 120px;">
+            </td>
+            <td>
+                <input type="text" class="form-control form-control-sm" 
+                       value="${result.transitTime}" 
+                       onchange="updateRowTransitTime(${index}, this.value)"
+                       style="min-width: 100px;">
+            </td>
+            <td class="text-success fw-bold" id="eta-${index}">${result.eta}</td>
+            <td>
+                <div class="d-flex gap-1">
+                  <button class="btn btn-outline-primary btn-sm" onclick="copyRowEN(${index})" title="复制英文" style="min-width: 50px;">
+                      EN
+                  </button>
+                  <button class="btn btn-outline-success btn-sm" onclick="copyRowCN(${index})" title="复制中文" style="min-width: 50px;">
+                      中文
+                  </button>
+                </div>
+            </td>
+        </tr>
+    `).join('');
+    
+    tbody.innerHTML = rows;
+}
+
+/**
+ * 更新行的ETD
+ */
+function updateRowETD(index, newETD) {
+    const row = document.querySelector(`tr[data-index="${index}"]`);
+    if (!row) return;
+    
+    const transitTimeInput = row.querySelector('input[type="text"]');
+    const transitTime = transitTimeInput.value;
+    
+    const etdDate = new Date(newETD + 'T00:00:00');
+    const eta = calcEtaRange(etdDate, transitTime);
+    
+    if (eta) {
+        const etaStr = `${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`;
+        document.getElementById(`eta-${index}`).textContent = etaStr;
+    } else {
+        document.getElementById(`eta-${index}`).textContent = '无法计算';
+    }
+}
+
+/**
+ * 更新行的运输时间
+ */
+function updateRowTransitTime(index, newTransitTime) {
+    const row = document.querySelector(`tr[data-index="${index}"]`);
+    if (!row) return;
+    
+    const etdInput = row.querySelector('input[type="date"]');
+    const etdDate = new Date(etdInput.value + 'T00:00:00');
+    const eta = calcEtaRange(etdDate, newTransitTime);
+    
+    if (eta) {
+        const etaStr = `${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`;
+        document.getElementById(`eta-${index}`).textContent = etaStr;
+    } else {
+        document.getElementById(`eta-${index}`).textContent = '无法计算';
+    }
+}
+
+/**
+ * 复制单行结果
+ */
+function copyRowEN(index) {
+    const row = document.querySelector(`tr[data-index="${index}"]`);
+    if (!row) return;
+    const address = row.cells[0].textContent.trim();
+    const etdInput = row.querySelector('input[type="date"]').value;
+    const transit = row.querySelector('input[type="text"]').value;
+    const etdDate = new Date(etdInput + 'T00:00:00');
+    const eta = calcEtaRange(etdDate, transit);
+    if (!eta) { showToast('无法计算ETA', 'error'); return; }
+    const text = `${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.`;
+    navigator.clipboard.writeText(text).then(() => showToast('英文结果已复制到剪贴板','success')).catch(()=>showToast('复制失败','error'));
+}
+
+function copyRowCN(index) {
+    const row = document.querySelector(`tr[data-index="${index}"]`);
+    if (!row) return;
+    const address = row.cells[0].textContent.trim();
+    const etdInput = row.querySelector('input[type="date"]').value;
+    const transit = row.querySelector('input[type="text"]').value;
+    const etdDate = new Date(etdInput + 'T00:00:00');
+    const eta = calcEtaRange(etdDate, transit);
+    if (!eta) { showToast('无法计算ETA', 'error'); return; }
+    const text = `${address} 预计派送时间: ${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`;
+    navigator.clipboard.writeText(text).then(() => showToast('中文结果已复制到剪贴板','success')).catch(()=>showToast('复制失败','error'));
+}
+
+/**
+ * 复制批量结果 - 英文格式
+ */
+function copyBatchResultEN() {
+    const tbody = document.getElementById('deliveryResultBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    if (rows.length === 0 || rows[0].querySelector('td').colSpan) {
+        showToast('没有查询结果可复制', 'warning');
+        return;
+    }
+    
+    const results = [];
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+            const address = cells[0].textContent.trim();
+            const etdStr = row.querySelector('input[type="date"]').value;
+            const transit = row.querySelector('input[type="text"]').value;
+            const etdDate = new Date(etdStr + 'T00:00:00');
+            const eta = calcEtaRange(etdDate, transit);
+            if (eta) {
+                results.push(`${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.`);
+            }
+        }
+    });
+    
+    if (results.length === 0) {
+        showToast('没有有效结果可复制', 'warning');
+        return;
+    }
+    
+    const copyText = results.join('\n');
+    
+    navigator.clipboard.writeText(copyText).then(() => {
+        showToast(`已复制 ${results.length} 条英文结果到剪贴板`, 'success');
+    }).catch(() => {
+        showToast('复制失败', 'error');
+    });
+}
+
+/**
+ * 复制批量结果 - 中文格式
+ */
+function copyBatchResultCN() {
+    const tbody = document.getElementById('deliveryResultBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    if (rows.length === 0 || rows[0].querySelector('td').colSpan) {
+        showToast('没有查询结果可复制', 'warning');
+        return;
+    }
+    
+    const results = [];
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+            const address = cells[0].textContent.trim();
+            const etdStr = row.querySelector('input[type="date"]').value;
+            const transit = row.querySelector('input[type="text"]').value;
+            const etdDate = new Date(etdStr + 'T00:00:00');
+            const eta = calcEtaRange(etdDate, transit);
+            if (eta) {
+                results.push(`${address} 预计派送时间: ${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`);
+            }
+        }
+    });
+    
+    if (results.length === 0) {
+        showToast('没有有效结果可复制', 'warning');
+        return;
+    }
+    
+    const copyText = results.join('\n');
+    
+    navigator.clipboard.writeText(copyText).then(() => {
+        showToast(`已复制 ${results.length} 条中文结果到剪贴板`, 'success');
+    }).catch(() => {
+        showToast('复制失败', 'error');
+    });
+}
+
+/**
+ * 复制批量结果 - 表格格式
+ */
+function copyBatchResultTable() {
+    const tbody = document.getElementById('deliveryResultBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    if (rows.length === 0 || rows[0].querySelector('td').colSpan) {
+        showToast('没有查询结果可复制', 'warning');
+        return;
+    }
+    
+    const results = [];
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+            const address = cells[0].textContent.trim();
+            const postcode = cells[1].textContent.trim();
+            const channel = cells[2].textContent.trim();
+            const etd = row.querySelector('input[type="date"]').value;
+            const transitTime = row.querySelector('input[type="text"]').value;
+            const eta = cells[5].textContent.trim();
+            results.push(`${address}\t${postcode}\t${channel}\t${etd}\t${transitTime}\t${eta}`);
+        }
+    });
+    
+    if (results.length === 0) {
+        showToast('没有有效结果可复制', 'warning');
+        return;
+    }
+    
+    const header = '地址\t邮编\t渠道\tETD\t运输时间\t预计派送';
+    const copyText = header + '\n' + results.join('\n');
+    
+    navigator.clipboard.writeText(copyText).then(() => {
+        showToast(`已复制 ${results.length} 条表格结果到剪贴板`, 'success');
+    }).catch(() => {
+        showToast('复制失败', 'error');
+    });
+}
+
+/**
+ * 地址输入自动转大写
+ */
+function convertAddressesToUpper() {
+    const textarea = document.getElementById('deliveryAddresses');
+    const cursorPos = textarea.selectionStart;
+    const oldValue = textarea.value;
+    const newValue = oldValue.toUpperCase();
+    
+    if (oldValue !== newValue) {
+        textarea.value = newValue;
+        // 恢复光标位置
+        textarea.setSelectionRange(cursorPos, cursorPos);
+    }
+}
+
+/**
+ * 复制表格所有英文结果
+ */
+function copyAllTableEN() {
+    const tbody = document.getElementById('deliveryResultBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    if (rows.length === 0) {
+        showToast('没有查询结果可复制', 'warning');
+        return;
+    }
+    
+    // 检查是否有空状态行
+    const firstRow = rows[0];
+    if (firstRow.querySelector('td[colspan]')) {
+        showToast('没有查询结果可复制', 'warning');
+        return;
+    }
+    
+    const results = [];
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('td');
+        if (cells.length >= 7) {
+            const address = cells[0].textContent.trim();
+            const etdInput = row.querySelector('input[type="date"]');
+            const transitInput = row.querySelector('input[type="text"]');
+            
+            if (etdInput && transitInput) {
+                const etdStr = etdInput.value;
+                const transit = transitInput.value;
+                const etdDate = new Date(etdStr + 'T00:00:00');
+                const eta = calcEtaRange(etdDate, transit);
+                if (eta) {
+                    results.push(`${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.`);
+                }
+            }
+        }
+    });
+    
+    if (results.length === 0) {
+        showToast('没有有效结果可复制', 'warning');
+        return;
+    }
+    
+    const copyText = results.join('\n');
+    
+    navigator.clipboard.writeText(copyText).then(() => {
+        showToast(`已复制 ${results.length} 条英文结果到剪贴板`, 'success');
+    }).catch(() => {
+        showToast('复制失败', 'error');
+    });
+}
+
+/**
+ * 重置查询
+ */
+function resetDeliveryQuery() {
+    document.getElementById('deliveryAddresses').value = '';
+    document.getElementById('deliveryChannel').value = 'Sea truck';
+    document.getElementById('deliveryETD').value = '';
+    document.getElementById('deliveryResultCount').textContent = '0 条记录';
+    
+    // 清空表格
+    const tbody = document.getElementById('deliveryResultBody');
+    tbody.innerHTML = `
+        <tr>
+            <td colspan="7" class="text-center text-muted py-4">
+                <i class="bi bi-info-circle"></i> 请输入地址代码并点击"批量查询"
+            </td>
+        </tr>
+    `;
+    
+    // 重新设置默认ETD
+    const defaultETD = getDefaultETDByChannel('Sea truck');
+    document.getElementById('deliveryETD').value = defaultETD.toISOString().slice(0, 10);
+}
+
 // 页面加载完成后初始化历史记录显示
 document.addEventListener('DOMContentLoaded', function() {
     // 初始化Bootstrap tooltips

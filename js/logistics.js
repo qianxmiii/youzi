@@ -371,7 +371,7 @@ function updateQuote() {
     if (data.channel.includes('express')) {
         let moqWeight = 0;
         let moqUnit = 0;
-        if (data.channel == 'Air express' || data.channel == 'Air ups/fedex') {
+        if (data.channel == 'Air express') {
             moqWeight = data.totalQuantity.mul(10);
             moqUnit = 10;
         } else {
@@ -964,13 +964,13 @@ function showCost(origin,country,channel,postcode,weight,withBattery){
     let cost = 0;
     if(origin && country && channel.includes('express')){
         if (channel == 'Fast sea express' || channel == 'Fast Maston express' 
-             || channel == 'Fast sea ups/fedex' || channel == 'Super sea express'){
+             || channel == 'Super sea express'){
                 channel = "美森正班";
         } else if (channel == 'Normal sea express' || channel == 'Normal Maston express') {
             channel = "美森加班";
-        } else if (channel == 'Sea express' || channel == 'Sea ups/fedex') {
+        } else if (channel == 'Sea express') {
             channel = "普船";
-        } else if (channel == 'Air express' || channel == 'Air ups/fedex') {
+        } else if (channel == 'Air express') {
             if (withBattery) {
                 channel = "空派带电";
             } else {

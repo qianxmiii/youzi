@@ -2009,7 +2009,7 @@ function getSelectedChannels() {
 function checkShippingRegionVisibility() {
     const selectedChannels = getSelectedChannels();
     const hasExpressChannel = selectedChannels.some(channel => 
-        channel === 'Sea express' || channel === 'Fast sea express'
+        channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express'
     );
     
     const regionContainer = document.getElementById('batch-shipping-region-container');
@@ -2041,6 +2041,8 @@ function getChannelBadgeClass(channel) {
             return 'bg-success';
         case 'Fast sea express':
             return 'bg-warning';
+        case 'Air express':
+            return 'bg-danger';
         default:
             return 'bg-secondary';
     }
@@ -2050,7 +2052,7 @@ function getChannelBadgeClass(channel) {
  * 获取邮编颜色编码
  */
 function getPostcodeColorClass(postcode, channel) {
-    if (channel !== 'Sea express' && channel !== 'Fast sea express') {
+    if (channel !== 'Sea express' && channel !== 'Fast sea express' && channel !== 'Air express') {
         return '';
     }
     
@@ -2097,7 +2099,7 @@ function isRemotePostcode(postcode) {
  * 获取地址显示内容（偏远地区添加图标）
  */
 function getAddressDisplayContent(address, postcode, channel) {
-    if (channel !== 'Sea express' && channel !== 'Fast sea express') {
+    if (channel !== 'Sea express' && channel !== 'Fast sea express' && channel !== 'Air express') {
         return `<span class="fw-bold">${address}</span>`;
     }
     
@@ -2149,7 +2151,7 @@ function generateBatchQuote() {
     
     // 检查是否需要发货区域
     const hasExpressChannel = selectedChannels.some(channel => 
-        channel === 'Sea express' || channel === 'Fast sea express'
+        channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express'
     );
     
     if (hasExpressChannel) {
@@ -2185,8 +2187,8 @@ function generateBatchQuote() {
             // 计算成本
             let unitCostRMB;
             
-            // 对于Sea express和Fast sea express渠道，使用showCost函数计算
-            if (channel === 'Sea express' || channel === 'Fast sea express') {
+            // 对于Sea/Air express类渠道，使用showCost函数计算
+            if (channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express') {
                 const shippingRegion = document.getElementById('batch-shipping-region').value;
                 const withBattery = false; // 默认不带电池
                 unitCostRMB = showCost(shippingRegion, matchedCountry, channel, postcode, totalWeight, withBattery) || 0;
@@ -3080,7 +3082,7 @@ function addCommonAddressCombination() {
     parseBatchAddressDistribution();
     
     // 示例利润
-    document.getElementById('batch-profit').value = '50';
+    document.getElementById('batch-profit').value = '0.5';
     
     showToast('已添加示例数据，请修改后点击"生成报价"');
 }

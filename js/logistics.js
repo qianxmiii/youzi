@@ -17,8 +17,8 @@ const {deliveryMethodsByCountry, quickReplies} = window.data;
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    // valid_date = getNextFriday();
-    valid_date = "10/30";
+    valid_date = getNextFriday();
+    // valid_date = "10/30";
 
     init(); // 初始化
     eventListener();
@@ -1485,7 +1485,7 @@ function saveQuoteHistory() {
             volumeRatio: parseFloat(document.getElementById('volumeRatio').value) || 0,
             totalPriceUsd: parseFloat(document.getElementById('total_price_usd').value) || 0,
             totalPriceRmb: parseFloat(document.getElementById('total_price_rmb').value) || 0,
-            unitPriceRmb: parseFloat(document.getElementById('unit_price_rmb').value) || 0,
+            unitPriceRmb: parseFloat(document.getElementById('unit_price').value) || 0,
             
             // 报价格式
             quoteType: document.getElementById('quote-type').value || '通用',

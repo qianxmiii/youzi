@@ -538,7 +538,7 @@ function updateQuote() {
     if (data.quoteType === "通用") {
         // 构建备注内容
         notes = `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        if (data.isDDU) notes += 'DDU '; else notes += 'DDP ';
+        notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
@@ -552,7 +552,7 @@ function updateQuote() {
     } else if (data.quoteType === "通用-CBM") {
         // 构建备注内容
         notes = `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        if (data.isDDU) notes += 'DDU ';
+        notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
@@ -567,7 +567,7 @@ function updateQuote() {
     } else if (data.quoteType === "通用-RMB") {
         // 构建备注内容
         notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        if (data.isDDU) notes += 'DDU ';
+        notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
         if (data.isDDU) notes += getDDUFee(data.country, 0);
@@ -580,7 +580,7 @@ function updateQuote() {
     } else if (data.quoteType === "通用-RMB-CBM") {
         // 构建备注内容
         notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        if (data.isDDU) notes += 'DDU ';
+        notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/cbm * ${chargeCBM}cbm = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
         if (data.isDDU) notes += getDDUFee(data.country, 0); 
@@ -2167,7 +2167,7 @@ function generateBatchQuote() {
     batchQuoteData.addressDistribution.forEach(item => {
         const totalWeight = new Decimal(batchQuoteData.boxSpec.weight).mul(new Decimal(item.quantity));
         const totalVolume = new Decimal(batchQuoteData.boxSpec.volume).mul(new Decimal(item.quantity));
-        const chargeWeight = Decimal.max(totalWeight, totalVolume.mul(new Decimal(1000000)).div(new Decimal(6000)));
+        const chargeWeight = Decimal.max(totalWeight, totalVolume.mul(new Decimal(1000000)).div(new Decimal(6000))).ceil();
         const profit = new Decimal(document.getElementById('batch-profit').value || 0);
 
         // 遍历所有国家查找匹配
@@ -2202,7 +2202,7 @@ function generateBatchQuote() {
             const unitProfitRMB = new Decimal(profit);
             const unitPriceRMB = new Decimal(unitCostRMB).plus(unitProfitRMB);
             const unitPrice = new Decimal(unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2); //转换成美元
-            const totalPrice = unitPrice * chargeWeight; // 使用计费重计算总价
+            const totalPrice = new Decimal(unitPrice).mul(new Decimal(chargeWeight)); // 使用计费重计算总价
             const transitTime = getTransitTime(matchedCountry, channel, postcode, item.address);
         
         results.push({
@@ -2481,7 +2481,7 @@ function updateBatchQuoteCost(index, newCostRMB) {
     // 重新计算报价（成本 + 利润）
     item.unitPriceRMB = costRMB.plus(new Decimal(item.unitProfitRMB)).toNumber();
     item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
-    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.quantity)).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.chargeWeight)).toFixed(2);
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
@@ -2504,7 +2504,8 @@ function updateBatchQuoteProfit(index, newProfitRMB) {
     // 重新计算报价（成本 + 利润）
     item.unitPriceRMB = new Decimal(item.unitCostRMB).plus(profitRMB).toNumber();
     item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
-    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.quantity)).toFixed(2);
+    console.log("item.unitPrice", item.unitPrice);
+    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.chargeWeight)).toFixed(2);
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);
@@ -2526,7 +2527,7 @@ function updateBatchQuotePrice(index, newPriceRMB) {
     item.unitPriceRMB = priceRMB.toNumber();
     item.unitProfitRMB = priceRMB.minus(new Decimal(item.unitCostRMB)).toNumber();
     item.unitPrice = priceRMB.div(new Decimal(exchange_rate)).toFixed(2);
-    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.quantity)).toFixed(2);
+    item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.chargeWeight)).toFixed(2);
     
     // 更新页面显示
     updateBatchQuoteDisplay(index);

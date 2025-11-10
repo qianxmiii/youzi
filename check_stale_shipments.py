@@ -635,7 +635,7 @@ function filterByTrackingNumbers() {
         return;
     }
     
-    const trackingNumbers = input.split(/\s+/).map(num => num.trim());
+    const trackingNumbers = input.split(/\\s+/).map(num => num.trim());
     const rows = document.querySelectorAll('#logisticsTable tbody tr');
     
     rows.forEach(row => {

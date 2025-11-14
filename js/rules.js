@@ -38,13 +38,16 @@ function getRemoteAddressfee(totalQuantity, unit) {
     } else {
         remoteAddressStr = LINE_BREAK + 'Remote address fee: ';
         remoteAddressFee = new Decimal(3.5).mul(totalQuantity);
-        if (remoteAddressFee.lessThan(21)) {
-            remoteAddressStr += 'MOQ is 21usd ';
-            addFee = addFee.add(21);
-        } else {
-            remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
+        remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
             addFee = addFee.add(remoteAddressFee);
-        }
+        // 去掉偏远费低消
+        // if (remoteAddressFee.lessThan(21)) {
+        //     remoteAddressStr += 'MOQ is 21usd ';
+        //     addFee = addFee.add(21);
+        // } else {
+        //     remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
+        //     addFee = addFee.add(remoteAddressFee);
+        // }
     }
     return remoteAddressStr;
 }

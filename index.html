@@ -82,6 +82,23 @@
               <i class="bi bi-trash"></i> 清空
             </button>
           </div>
+          <div class="mt-2">
+            <label class="form-label mb-2" style="font-size: 0.9rem; color: #6c757d;">尺寸调整（运输后尺寸增加）</label>
+            <div class="dimension-adjust-buttons">
+              <button type="button" class="btn btn-dimension-adjust" onclick="adjustDimensions(1)" title="所有箱规的长宽高各增加1cm">
+                <span class="btn-text">+1</span>
+                <span class="btn-unit">cm</span>
+              </button>
+              <button type="button" class="btn btn-dimension-adjust" onclick="adjustDimensions(2)" title="所有箱规的长宽高各增加2cm">
+                <span class="btn-text">+2</span>
+                <span class="btn-unit">cm</span>
+              </button>
+              <button type="button" class="btn btn-dimension-adjust" onclick="adjustDimensions(3)" title="所有箱规的长宽高各增加3cm">
+                <span class="btn-text">+3</span>
+                <span class="btn-unit">cm</span>
+              </button>
+            </div>
+          </div>
         </div>
 
         <!-- 箱规输出表格 -->

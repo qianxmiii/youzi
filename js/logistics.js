@@ -747,6 +747,39 @@ function parseDimensions() {
     });
 }
 
+// 调整所有箱规的尺寸（运输后尺寸增加）
+function adjustDimensions(increment) {
+    // 获取所有输入行
+    const rows = document.querySelectorAll('.input-row');
+    
+    // 遍历每一行
+    rows.forEach(row => {
+        // 获取长、宽、高输入框
+        const lengthInput = row.querySelector('.length');
+        const widthInput = row.querySelector('.width');
+        const heightInput = row.querySelector('.height');
+        
+        // 获取当前值并增加（只处理有值的输入框）
+        if (lengthInput && lengthInput.value && !isNaN(parseFloat(lengthInput.value))) {
+            const currentLength = parseFloat(lengthInput.value);
+            lengthInput.value = (currentLength + increment).toFixed(1);
+        }
+        
+        if (widthInput && widthInput.value && !isNaN(parseFloat(widthInput.value))) {
+            const currentWidth = parseFloat(widthInput.value);
+            widthInput.value = (currentWidth + increment).toFixed(1);
+        }
+        
+        if (heightInput && heightInput.value && !isNaN(parseFloat(heightInput.value))) {
+            const currentHeight = parseFloat(heightInput.value);
+            heightInput.value = (currentHeight + increment).toFixed(1);
+        }
+    });
+    
+    // 重新计算
+    calculate();
+}
+
 // 识别地址、箱数、重量、体积信息
 function parsePackageInfo() {
     const input = document.getElementById("package-info-input").value.trim();

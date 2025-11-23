@@ -4036,3 +4036,79 @@ td input.form-control {
         transform: translateY(0);
     }
 }
+
+/* 自定义 Toast 弹窗样式 */
+.custom-toast {
+    animation: slideIn 0.3s ease-out;
+}
+
+.custom-toast-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+}
+
+.custom-toast-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Toast 类型颜色 */
+.custom-toast-icon.success {
+    background-color: #28a745; /* 绿色 */
+}
+
+.custom-toast-icon.error {
+    background-color: #dc3545; /* 红色 */
+}
+
+.custom-toast-icon.warning {
+    background-color: #ffc107; /* 黄色 */
+}
+
+.custom-toast-icon.info {
+    background-color: #0dcaf0; /* 蓝色 */
+}
+
+.custom-toast-message {
+    color: #333;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 淡出动画 */
+.custom-toast.fade-out {
+    animation: slideOut 0.3s ease-in forwards;
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-100%);
+    }
+}

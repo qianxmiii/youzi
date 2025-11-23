@@ -611,20 +611,64 @@ function clearHistory() {
 }
 
 /**
- * 显示提示消息
+ * 获取 Toast 图标 SVG
  */
-function showToast(message, type = 'info') {
+function getToastIcon(type) {
+    const icons = {
+        success: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M16.7071 5.29289C17.0976 5.68342 17.0976 6.31658 16.7071 6.70711L8.70711 14.7071C8.31658 15.0976 7.68342 15.0976 7.29289 14.7071L3.29289 10.7071C2.90237 10.3166 2.90237 9.68342 3.29289 9.29289C3.68342 8.90237 4.31658 8.90237 4.70711 9.29289L8 12.5858L15.2929 5.29289C15.6834 4.90237 16.3166 4.90237 16.7071 5.29289Z" fill="white"/>
+        </svg>`,
+        error: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="9" fill="white"/>
+            <path d="M6 6L14 14M14 6L6 14" stroke="#dc3545" stroke-width="2" stroke-linecap="round"/>
+        </svg>`,
+        warning: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M10 2L2 18H18L10 2Z" fill="white"/>
+            <path d="M10 7V11M10 15H10.01" stroke="#ffc107" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>`,
+        info: `<svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="10" cy="10" r="9" fill="white"/>
+            <path d="M10 6V10M10 14H10.01" stroke="#0dcaf0" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>`
+    };
+    return icons[type] || icons.success;
+}
+
+/**
+ * 显示提示消息（支持多种类型）
+ * @param {string} message - 提示消息
+ * @param {string} type - 类型: 'success', 'error', 'warning', 'info'，默认为 'success'
+ */
+function showToast(message, type = 'success') {
     // 如果页面中有toast组件，使用它
-    const toast = document.getElementById('copyToast');
-    if (toast) {
+    const toastElement = document.getElementById('copyToast');
+    if (toastElement) {
         const toastMessage = document.getElementById('toastMessage');
-        if (toastMessage) {
+        const toastIcon = document.getElementById('toastIcon');
+        if (toastMessage && toastIcon) {
+            // 设置消息内容
             toastMessage.textContent = message;
+            
+            // 设置图标和类型
+            toastIcon.innerHTML = getToastIcon(type);
+            // 移除所有类型类，然后添加当前类型
+            toastIcon.classList.remove('success', 'error', 'warning', 'info');
+            toastIcon.classList.add(type);
+            
+            // 清除之前的淡出动画类
+            toastElement.classList.remove('fade-out');
+            
+            // 显示弹窗
+            toastElement.style.display = 'block';
+            
+            // 3秒后自动隐藏
+            setTimeout(() => {
+                toastElement.classList.add('fade-out');
+                setTimeout(() => {
+                    toastElement.style.display = 'none';
+                }, 300);
+            }, 3000);
         }
-        
-        // 显示toast
-        const bsToast = new bootstrap.Toast(toast);
-        bsToast.show();
     } else {
         // 简单的alert提示
         alert(message);

@@ -69,7 +69,7 @@ function deleteRow(event) {
 
     // 如果只有一行，弹出提示并阻止删除
     if (rows.length <= 1) {
-        alert("无法删除最后一行！");
+        showToast('无法删除最后一行！', 'error');
         return; // 不进行删除
     }
 

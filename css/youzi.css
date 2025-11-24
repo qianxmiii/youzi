@@ -15,18 +15,40 @@
   --text-muted: #6c757d; /* 次要文字颜色 */
 }
 
+/* 页面基础样式 - 确保页面占满整个视口 */
+html {
+  height: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  height: 100%;
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+  background-color: var(--background-light) !important;
+}
+
 /* 基础样式 */
 /* 通用容器样式 */
 .container {
   margin-top: 20px;
+  min-height: calc(100vh - 20px);
+  padding-bottom: 20px;
+  width: 100%;
+  max-width: 100%; /* 覆盖Bootstrap的max-width限制 */
 }
 
 /* 功能模块样式 */
 .module {
+  width: 100%;
   padding: 20px;
   background-color: #f8f9fa; /* 浅灰色背景 */
   border-radius: 8px; /* 圆角边框 */
   box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* 阴影效果 */
+  box-sizing: border-box; /* 确保padding不会增加总宽度 */
 }
 
 /* 小标题样式 */

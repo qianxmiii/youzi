@@ -1764,7 +1764,7 @@ function loadQuoteToForm(quoteId) {
         const record = history.find(item => item.id === quoteId);
         
         if (!record) {
-            alert('未找到该报价记录');
+            showToast('未找到该报价记录', 'warning');
             return;
         }
         
@@ -1822,7 +1822,7 @@ function loadQuoteToForm(quoteId) {
         
     } catch (error) {
         console.error('加载报价记录失败:', error);
-        alert('加载报价记录失败');
+        showToast('加载报价记录失败', 'error');
     }
 }
 
@@ -1845,7 +1845,7 @@ function deleteQuoteHistory(quoteId) {
         
     } catch (error) {
         console.error('删除报价记录失败:', error);
-        alert('删除报价记录失败');
+        showToast('删除报价记录失败', 'error');
     }
 }
 
@@ -1864,7 +1864,7 @@ function clearQuoteHistory() {
         
     } catch (error) {
         console.error('清空报价历史记录失败:', error);
-        alert('清空报价历史记录失败');
+        showToast('清空报价历史记录失败', 'error');
     }
 }
 

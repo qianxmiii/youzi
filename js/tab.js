@@ -1257,6 +1257,13 @@ const worldClockConfig = [
     offsetFromBeijing: -7 // 比北京时间慢7小时（夏令时-6小时）
   },
   { 
+    name: '巴黎', 
+    timezone: 'Europe/Paris', 
+    country: '法国',
+    timezoneName: '东一区',
+    offsetFromBeijing: -7 // 比北京时间慢7小时（夏令时-6小时）
+  },
+  { 
     name: '伦敦', 
     timezone: 'Europe/London', 
     country: '英国',

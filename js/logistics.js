@@ -17,8 +17,8 @@ const {deliveryMethodsByCountry, quickReplies} = window.data;
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    valid_date = getNextFriday();
-    // valid_date = "11/14";
+    // valid_date = getNextFriday();
+    valid_date = "11/28";
 
     init(); // 初始化
     eventListener();
@@ -653,7 +653,7 @@ function parseDimensions() {
     
     // 使用正则表达式分割输入，支持 '|' 或 'LCL Load Item' 或 或 'Air Load Item'作为分隔符
     // const rows = input.split(/\||== LCL Load Item/).map(row => row.trim());
-    const rows = input.split(/\||== LCL Load Item|== Air Load Item/).map(row => row.trim());
+    const rows = input.split(/\||== LCL Load Item|== Air Load Item/).map(row => row.trim()).filter(row => row); // 过滤掉空字符串
 
     // 获取表格的 tbody 元素
     const tableBody = document.getElementById("box-table");
@@ -663,14 +663,11 @@ function parseDimensions() {
         tableBody.deleteRow(1);
     }
 
+    // 行号计数器，用于正确编号
+    let rowNumber = 0;
 
     // 处理每一行数据
     rows.forEach((row, index) => {
-
-        // 如果当前行是空的，跳过
-        if (!row) {
-            return; // 跳过空行
-        }
 
         // 使用正则表达式解析长、宽、高、重量和箱数
         const dimensionRegex = /(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*(cm|inch|in|英寸)?/i;
@@ -709,15 +706,20 @@ function parseDimensions() {
         const quantityMatch = row.match(quantityRegex);
         const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
 
+        // 增加行号计数器
+        rowNumber++;
+
         // 获取当前行（如果需要，添加新行）
         let currentRow;
-        if (index === 0 || (index == 1 && !rows[0])) {
+        if (rowNumber === 1) {
             currentRow = tableBody.rows[0]; // 第一行直接使用
+            // 更新第一行的编号
+            currentRow.querySelector('.index-cell').textContent = rowNumber;
         } else {
             currentRow = tableBody.insertRow(); // 添加新行
             currentRow.classList.add('input-row');
             currentRow.innerHTML = `
-                <td class="index-cell">${index + 1}</td>
+                <td class="index-cell">${rowNumber}</td>
                 <td><input type="number" class="form-control length" oninput="calculate()"></td>
                 <td><input type="number" class="form-control width" oninput="calculate()"></td>
                 <td><input type="number" class="form-control height" oninput="calculate()"></td>

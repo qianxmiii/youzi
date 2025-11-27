@@ -68,6 +68,18 @@ textarea {
   text-align: center;
 }
 
+/* 自税成本计算和包税成本计算表格 - 白底黑字 */
+#DDUTable thead,
+#DDPTable thead {
+  background-color: white !important;
+}
+
+#DDUTable thead th,
+#DDPTable thead th {
+  background-color: white !important;
+  color: #212529 !important; /* 黑色文字 */
+}
+
 /* 隐藏列 */
 td.hidden,
 th.hidden {

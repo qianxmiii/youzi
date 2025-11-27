@@ -860,6 +860,8 @@ function parsePackageInfo() {
                 if (currentCountry !== country) {
                     updateDeliveryMethods();
                 }
+                // 检查邮编是否为偏远地区
+                checkRemoteAddress();
                 break;
             }
         }
@@ -874,6 +876,8 @@ function parsePackageInfo() {
             if (currentCountry !== defaultCountry) {
                 updateDeliveryMethods();
             }
+            // 检查邮编是否为偏远地区（即使未匹配，也可能输入的是邮编）
+            checkRemoteAddress();
         }
     }
 

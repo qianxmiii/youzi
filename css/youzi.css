@@ -372,8 +372,8 @@ td input.form-control {
 }
 
 .nav-tabs .nav-link:hover {
-  background-color: var(--hover-color);
-  border-color: var(--hover-color);
+  background-color: var(--primary-color);
+  border-color: var(--primary-color);
   color: #fff;
 }
 
@@ -889,10 +889,10 @@ td input.form-control {
 }
 
 .history-item:hover {
-  background-color: #e9ecef;
-  border-color: #adb5bd;
+  background-color: rgba(44, 62, 80, 0.1); /* 主题色浅色版本 */
+  border-color: var(--primary-color);
   transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: 0 2px 4px rgba(44, 62, 80, 0.15);
 }
 
 .history-time {
@@ -914,8 +914,8 @@ td input.form-control {
 }
 
 .history-item.selected {
-  background-color: #d1ecf1;
-  border-color: #bee5eb;
+  background-color: rgba(44, 62, 80, 0.15); /* 主题色浅色版本 */
+  border-color: var(--primary-color);
 }
 
 /* 历史记录为空时的提示 */
@@ -949,7 +949,7 @@ td input.form-control {
 }
 
 #quoteHistoryModal .table-hover tbody tr:hover {
-    background-color: var(--light-bg);
+    background-color: rgba(44, 62, 80, 0.1); /* 主题色浅色版本 */
 }
 
 #quoteHistoryModal .search-controls {

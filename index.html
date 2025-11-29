@@ -164,12 +164,18 @@
           </div>
         </div>
         
-        <!-- 计算历史区域 -->
+        <!-- 计算历史和汇总信息区域 -->
         <div class="form-group mt-3">
-          <button class="btn btn-outline-info" type="button" data-bs-toggle="collapse" data-bs-target="#historyCollapse"
-            aria-expanded="false" aria-controls="historyCollapse">
-            <i class="bi bi-clock-history"></i> 计算历史 <span class="badge bg-info" id="historyCount">0</span>
-          </button>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#historyCollapse"
+              aria-expanded="false" aria-controls="historyCollapse">
+              <i class="bi bi-clock-history"></i> 计算历史 <span class="badge bg-secondary" id="historyCount">0</span>
+            </button>
+            <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#summaryCollapse"
+              aria-expanded="false" aria-controls="summaryCollapse">
+              显示汇总信息
+            </button>
+          </div>
           <div class="collapse" id="historyCollapse">
             <div class="card card-body mt-2">
               <div class="d-flex justify-content-between align-items-center mb-2">
@@ -183,16 +189,8 @@
               </div>
             </div>
           </div>
-        </div>  
-
-        <!-- Collapse 组件 箱规汇总信息 -->
-        <div class="form-group mt-3">
-          <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#summaryCollapse"
-            aria-expanded="false" aria-controls="summaryCollapse">
-            显示汇总信息
-          </button>
           <div class="collapse" id="summaryCollapse">
-            <div class="card card-body">
+            <div class="card card-body mt-2">
               <p>箱规: <span id="summary-size">[length]*[width]*[height]cm</span> </p>
               <p>计费重: <span id="summary-chargeweight">0</span> kg</p>
               <p>总结：<span id="summary-desc">0ctns 0kg 0cbm</span></p>
@@ -470,7 +468,7 @@
                 
                 <!-- 报价历史记录按钮 -->
                 <div class="form-group mt-3">
-                  <button type="button" class="btn btn-outline-info" data-bs-toggle="modal" data-bs-target="#quoteHistoryModal">
+                  <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quoteHistoryModal">
                     <i class="bi bi-clock-history"></i> 报价历史记录
                   </button>
                 </div>

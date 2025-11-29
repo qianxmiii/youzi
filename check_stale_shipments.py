@@ -247,6 +247,38 @@ def generate_html_report(results, output_file="stales.html"):
          tr.problem-item {{
              border-left: 3px solid #ffc107;
          }}
+         
+         /* 分页样式 */
+         .pagination-container {{
+             display: flex;
+             justify-content: space-between;
+             align-items: center;
+             margin-top: 20px;
+             padding: 15px;
+             background-color: #f8f9fa;
+             border-radius: 6px;
+         }}
+         .pagination-info {{
+             display: flex;
+             align-items: center;
+             gap: 15px;
+         }}
+         .pagination {{
+             margin: 0;
+         }}
+         .page-size-selector {{
+             display: flex;
+             align-items: center;
+             gap: 8px;
+         }}
+         .page-size-selector label {{
+             margin: 0;
+             white-space: nowrap;
+         }}
+         .page-size-selector select {{
+             width: auto;
+             padding: 5px 10px;
+         }}
     </style>
 </head>
 <body>
@@ -505,6 +537,28 @@ def generate_html_report(results, output_file="stales.html"):
     html += """
         </tbody>
     </table>
+    
+    <!-- 分页控件 -->
+    <div class="pagination-container">
+        <div class="pagination-info">
+            <div class="page-size-selector">
+                <label for="pageSizeSelect">每页显示:</label>
+                <select id="pageSizeSelect" class="form-select form-select-sm" onchange="changePageSize()" style="width: auto;">
+                    <option value="20" selected>20</option>
+                    <option value="50">50</option>
+                    <option value="100">100</option>
+                    <option value="200">200</option>
+                    <option value="500">500</option>
+                </select>
+            </div>
+            <span id="paginationInfo" class="text-muted">显示 0-0 条，共 0 条</span>
+        </div>
+        <nav>
+            <ul class="pagination pagination-sm mb-0" id="pagination">
+                <!-- 分页按钮将通过JavaScript动态生成 -->
+            </ul>
+        </nav>
+    </div>
 </div>
 <script src="js/common/bootstrap.bundle.min.js"></script>
 <script>
@@ -611,22 +665,29 @@ function filterTable(type) {
         var days = parseInt(row.getAttribute("data-days"));
         var isWarehouse = row.getAttribute("data-warehouse") === '1';
         var eta3 = row.getAttribute("data-eta3") === '1';
+        let shouldShow = false;
         if (type === "all") {
-            row.style.display = "";
+            shouldShow = true;
         } else if (type === "7") {
-            row.style.display = (days > 7) ? "" : "none";
+            shouldShow = (days > 7);
         } else if (type === "14") {
-            row.style.display = (days > 14) ? "" : "none";
+            shouldShow = (days > 14);
         } else if (type === "warehouse") {
-            row.style.display = isWarehouse ? "" : "none";
+            shouldShow = isWarehouse;
         } else if (type === "eta3") {
-            row.style.display = eta3 ? "" : "none";
+            shouldShow = eta3;
         }
+        row.setAttribute('data-filtered', shouldShow ? 'true' : 'false');
     });
     // 重置客户和国家筛选
     document.getElementById("customerFilter").value = "";
     document.getElementById("countryFilter").value = "";
     document.getElementById("trackFilterInput").value = "";
+    
+    // 筛选后重置到第一页并更新分页
+    currentPage = 1;
+    displayPage();
+    updatePagination();
 }
 function filterByTrackingNumbers() {
     const input = document.getElementById('trackingSearchInput').value.trim();
@@ -639,12 +700,156 @@ function filterByTrackingNumbers() {
     const rows = document.querySelectorAll('#logisticsTable tbody tr');
     
     rows.forEach(row => {
-        const rowTrackingNumber = row.cells[0].textContent.trim();
+        const rowTrackingNumber = row.cells[1].textContent.trim(); // 运单号在第二列（索引1）
         const shouldShow = trackingNumbers.some(num => 
             rowTrackingNumber.includes(num));
         
-        row.style.display = shouldShow ? '' : 'none';
+        row.setAttribute('data-filtered', shouldShow ? 'true' : 'false');
     });
+    
+    // 筛选后重置到第一页并更新分页
+    currentPage = 1;
+    displayPage();
+    updatePagination();
+}
+
+// 分页相关变量
+let currentPage = 1;
+let pageSize = 20;
+
+// 获取所有应该显示的行（基于筛选条件）
+function getFilteredRows() {
+    const allRows = document.querySelectorAll('#logisticsTable tbody tr');
+    return Array.from(allRows).filter(row => {
+        // 检查行是否有data-filtered属性，如果没有则默认显示
+        const filtered = row.getAttribute('data-filtered');
+        return filtered !== 'false';
+    });
+}
+
+// 更新分页显示
+function updatePagination() {
+    const filteredRows = getFilteredRows();
+    const totalRows = filteredRows.length;
+    const totalPages = Math.ceil(totalRows / pageSize);
+    
+    // 更新分页信息
+    const start = totalRows === 0 ? 0 : (currentPage - 1) * pageSize + 1;
+    const end = Math.min(currentPage * pageSize, totalRows);
+    document.getElementById('paginationInfo').textContent = `显示 ${start}-${end} 条，共 ${totalRows} 条`;
+    
+    // 生成分页按钮
+    const pagination = document.getElementById('pagination');
+    pagination.innerHTML = '';
+    
+    if (totalPages <= 1) {
+        return; // 如果只有一页或没有数据，不显示分页
+    }
+    
+    // 上一页按钮
+    const prevLi = document.createElement('li');
+    prevLi.className = `page-item ${currentPage === 1 ? 'disabled' : ''}`;
+    prevLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage - 1}); return false;">上一页</a>`;
+    pagination.appendChild(prevLi);
+    
+    // 页码按钮
+    const maxButtons = 7; // 最多显示7个页码按钮
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    
+    if (endPage - startPage < maxButtons - 1) {
+        startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+    
+    // 第一页
+    if (startPage > 1) {
+        const firstLi = document.createElement('li');
+        firstLi.className = 'page-item';
+        firstLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(1); return false;">1</a>`;
+        pagination.appendChild(firstLi);
+        
+        if (startPage > 2) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.className = 'page-item disabled';
+            ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+            pagination.appendChild(ellipsisLi);
+        }
+    }
+    
+    // 中间页码
+    for (let i = startPage; i <= endPage; i++) {
+        const li = document.createElement('li');
+        li.className = `page-item ${i === currentPage ? 'active' : ''}`;
+        li.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${i}); return false;">${i}</a>`;
+        pagination.appendChild(li);
+    }
+    
+    // 最后一页
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            const ellipsisLi = document.createElement('li');
+            ellipsisLi.className = 'page-item disabled';
+            ellipsisLi.innerHTML = '<span class="page-link">...</span>';
+            pagination.appendChild(ellipsisLi);
+        }
+        
+        const lastLi = document.createElement('li');
+        lastLi.className = 'page-item';
+        lastLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${totalPages}); return false;">${totalPages}</a>`;
+        pagination.appendChild(lastLi);
+    }
+    
+    // 下一页按钮
+    const nextLi = document.createElement('li');
+    nextLi.className = `page-item ${currentPage === totalPages ? 'disabled' : ''}`;
+    nextLi.innerHTML = `<a class="page-link" href="#" onclick="goToPage(${currentPage + 1}); return false;">下一页</a>`;
+    pagination.appendChild(nextLi);
+}
+
+// 跳转到指定页面
+function goToPage(page) {
+    const filteredRows = getFilteredRows();
+    const totalPages = Math.ceil(filteredRows.length / pageSize);
+    
+    if (page < 1 || page > totalPages) {
+        return;
+    }
+    
+    currentPage = page;
+    displayPage();
+    updatePagination();
+    
+    // 滚动到表格顶部
+    document.getElementById('logisticsTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// 显示当前页的数据
+function displayPage() {
+    const filteredRows = getFilteredRows();
+    const start = (currentPage - 1) * pageSize;
+    const end = start + pageSize;
+    
+    // 先隐藏所有行
+    const allRows = document.querySelectorAll('#logisticsTable tbody tr');
+    allRows.forEach(row => {
+        row.style.display = 'none';
+    });
+    
+    // 显示当前页的行
+    filteredRows.forEach((row, index) => {
+        if (index >= start && index < end) {
+            row.style.display = '';
+        }
+    });
+}
+
+// 改变每页显示数量
+function changePageSize() {
+    const select = document.getElementById('pageSizeSelect');
+    pageSize = parseInt(select.value);
+    currentPage = 1; // 重置到第一页
+    displayPage();
+    updatePagination();
 }
 
 function filterAll() {
@@ -687,10 +892,15 @@ function filterAll() {
              (problemFilter === 'problem' && isProblem))&&
                 (!statusFilter || rowStatus === statusFilter);
 
-        row.style.display = showRow ? '' : 'none';
+        row.setAttribute('data-filtered', showRow ? 'true' : 'false');
 
         document.getElementById('trackingSearchInput').value = '';
     });
+    
+    // 筛选后重置到第一页并更新分页
+    currentPage = 1;
+    displayPage();
+    updatePagination();
 }
 
 document.addEventListener('DOMContentLoaded', function () {
@@ -707,6 +917,16 @@ document.addEventListener('DOMContentLoaded', function () {
             trigger: 'manual'
         });
     });
+    
+    // 初始化：所有行默认应该显示
+    const allRows = document.querySelectorAll('#logisticsTable tbody tr');
+    allRows.forEach(row => {
+        row.setAttribute('data-filtered', 'true');
+    });
+    
+    // 初始化分页
+    displayPage();
+    updatePagination();
 });
 </script>
 </body>

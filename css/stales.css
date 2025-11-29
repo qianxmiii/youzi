@@ -11,6 +11,12 @@
     background-color: yellow;
     font-weight: bold;
 }
+html, body {
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
 body {
     font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     background-color: #f9f9fb;
@@ -24,6 +30,8 @@ h2 {
 }
 
 .container {
+    width: 100%;
+    max-width: 100%;
     background-color: #fff;
     border-radius: 8px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
@@ -162,40 +170,74 @@ td.unupdated-days {
      border-bottom-left-radius: 0;
  }
  
- /* 悬浮复制按钮样式 */
- .floating-copy-btn {
-     position: fixed;
-     bottom: 30px;
-     right: 30px;
-     width: 56px;
-     height: 56px;
-     border-radius: 50%;
-     background-color: #0d6efd;
-     color: white;
-     border: none;
-     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-     cursor: pointer;
-     display: flex;
-     align-items: center;
-     justify-content: center;
-     z-index: 1000;
-     transition: all 0.3s ease;
-     font-size: 24px;
- }
- .floating-copy-btn:hover {
-     background-color: #0b5ed7;
-     box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
-     transform: translateY(-2px);
- }
- .floating-copy-btn:active {
-     transform: translateY(0);
-     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
- }
- .floating-copy-btn:disabled {
-     background-color: #6c757d;
-     cursor: not-allowed;
-     opacity: 0.6;
- }
+/* 悬浮按钮组样式 */
+.floating-buttons {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    z-index: 1000;
+}
+
+/* 悬浮按钮基础样式 */
+.floating-action-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    color: white;
+    border: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    font-size: 24px;
+    position: relative;
+}
+
+.floating-action-btn:hover {
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+.floating-action-btn:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.floating-action-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+}
+
+/* 复制按钮样式 */
+.floating-copy-btn {
+    background-color: #0d6efd;
+}
+
+.floating-copy-btn:hover {
+    background-color: #0b5ed7;
+}
+
+.floating-copy-btn:disabled {
+    background-color: #6c757d;
+}
+
+/* 清除选择按钮样式 */
+.floating-clear-btn {
+    background-color: #6c757d;
+}
+
+.floating-clear-btn:hover {
+    background-color: #5a6268;
+}
+
+.floating-clear-btn:disabled {
+    background-color: #adb5bd;
+}
  .copy-count-badge {
      position: absolute;
      top: -8px;
@@ -216,7 +258,88 @@ td.unupdated-days {
  .copy-count-badge:empty {
      display: none;
  }
- .copy-count-badge.hidden {
-     display: none;
- }
+.copy-count-badge.hidden {
+    display: none;
+}
+
+/* Toast 提示框样式 */
+.custom-toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    animation: slideIn 0.3s ease-out;
+}
+
+.custom-toast-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: white;
+    padding: 16px 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    min-width: 200px;
+}
+
+.custom-toast-icon {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+/* Toast 类型颜色 */
+.custom-toast-icon.success {
+    background-color: #28a745; /* 绿色 */
+}
+
+.custom-toast-icon.error {
+    background-color: #dc3545; /* 红色 */
+}
+
+.custom-toast-icon.warning {
+    background-color: #ffc107; /* 黄色 */
+}
+
+.custom-toast-icon.info {
+    background-color: #0dcaf0; /* 蓝色 */
+}
+
+.custom-toast-message {
+    color: #333;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-100%);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* 淡出动画 */
+.custom-toast.fade-out {
+    animation: slideOut 0.3s ease-in forwards;
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-100%);
+    }
+}
 

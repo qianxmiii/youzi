@@ -1,6 +1,8 @@
-// 显示工具提示的辅助函数
-function showTooltip(message, duration=2000) {
-    const btn = document.getElementById('copyBtn');
+// 显示工具提示的辅助函数（保留用于兼容）
+function showTooltip(message, duration=2000, elementId='copyBtn') {
+    const btn = document.getElementById(elementId);
+    if (!btn) return;
+    
     let tooltip = bootstrap.Tooltip.getInstance(btn);
     
     if (!tooltip) {
@@ -58,11 +60,31 @@ function toggleSelectAll(source) {
     
     if (!hasVisible) {
         source.checked = false;
-        showTooltip('没有可选的运单');
+        showToast('没有可选的运单', 'warning');
     }
     
     // 更新复制按钮计数
     updateCopyButtonCount();
+}
+
+// 清除所有选择
+function clearAllSelections() {
+    // 取消所有复选框的选中状态
+    document.querySelectorAll('.tracking-checkbox:checked').forEach(checkbox => {
+        checkbox.checked = false;
+    });
+    
+    // 取消全选复选框
+    const selectAllCheckbox = document.getElementById('selectAll');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.checked = false;
+    }
+    
+    // 更新复制按钮计数
+    updateCopyButtonCount();
+    
+    // 显示提示
+    showToast('已清除所有选择', 'success');
 }
 
 function copySelectedTrackingNumbers() {
@@ -76,7 +98,7 @@ function copySelectedTrackingNumbers() {
     });
     
     if (selected.length === 0) {
-        showTooltip('请至少选择一个运单号');
+        showToast('请至少选择一个运单号', 'warning');
         return;
     }
     
@@ -97,16 +119,12 @@ function copySelectedTrackingNumbers() {
         var copyBtn = document.getElementById('copyBtn');
         var tooltip = bootstrap.Tooltip.getInstance(copyBtn);
 
-        if (!tooltip) {
-            tooltip = new bootstrap.Tooltip(copyBtn, {
-                title: successful ? '复制成功!' : '复制失败',
-                trigger: 'manual'
-            });
+        // 使用 showToast 显示结果
+        if (successful) {
+            showToast('复制成功！', 'success');
         } else {
-            tooltip.setContent({'.tooltip-inner': successful ? '复制成功!' : '复制失败'});
+            showToast('复制失败', 'error');
         }
-        
-        tooltip.show();
 
         if (successful) {
             // 获取图标元素
@@ -116,11 +134,10 @@ function copySelectedTrackingNumbers() {
             copyIcon.classList.remove('bi-clipboard');
             copyIcon.classList.add('bi-check-all');
 
-            // 2 秒后恢复图标为 bi-send
+            // 2 秒后恢复图标
             setTimeout(() => {
                 copyIcon.classList.remove('bi-check-all');
                 copyIcon.classList.add('bi-clipboard');
-                tooltip.hide();
             }, 2000);
             
             // 更新计数
@@ -129,7 +146,7 @@ function copySelectedTrackingNumbers() {
 
     } catch (err) {
         console.error('复制失败: ', err);
-        alert('复制失败，请手动复制');
+        showToast('复制失败，请手动复制', 'error');
     } finally {
         document.body.removeChild(textarea);
     }
@@ -509,6 +526,7 @@ document.addEventListener('DOMContentLoaded', function () {
         target.addEventListener('show.bs.collapse', () => btn.textContent = '收起');
         target.addEventListener('hide.bs.collapse', () => btn.textContent = '展开更多');
     });
+    // 初始化所有悬浮按钮的tooltip
     var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
     tooltipTriggerList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl, {

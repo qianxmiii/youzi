@@ -253,11 +253,18 @@ def generate_html_report(results, output_file="stales.html"):
         <label>轨迹查询</label>
         <input type="text" id="trackFilterInput" oninput="debouncedFilterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
     </div>
-    <!-- 悬浮复制按钮 -->
-    <button id="copyBtn" class="floating-copy-btn" onclick="copySelectedTrackingNumbers()" data-bs-toggle="tooltip" data-bs-placement="left" title="复制选中运单号">
-        <i id="copy-icon" class="bi bi-clipboard"></i>
-        <span id="copy-count" class="copy-count-badge">0</span>
-    </button>
+    <!-- 悬浮按钮组 -->
+    <div class="floating-buttons">
+        <!-- 清除选择按钮 -->
+        <button id="clearBtn" class="floating-action-btn floating-clear-btn" onclick="clearAllSelections()" data-bs-toggle="tooltip" data-bs-placement="left" title="清除所有选择">
+            <i class="bi bi-x-circle"></i>
+        </button>
+        <!-- 复制按钮 -->
+        <button id="copyBtn" class="floating-action-btn floating-copy-btn" onclick="copySelectedTrackingNumbers()" data-bs-toggle="tooltip" data-bs-placement="left" title="复制选中运单号">
+            <i id="copy-icon" class="bi bi-clipboard"></i>
+            <span id="copy-count" class="copy-count-badge">0</span>
+        </button>
+    </div>
     <br/>
     <table class="table table-bordered table-hover" id="logisticsTable">
         <thead class="table-light">
@@ -421,7 +428,19 @@ def generate_html_report(results, output_file="stales.html"):
         </nav>
     </div>
 </div>
+
+<!-- Toast 提示框 -->
+<div class="position-fixed top-0 start-50 translate-middle-x" style="z-index: 9999; margin-top: 20px;">
+    <div id="copyToast" class="custom-toast" role="alert" aria-live="assertive" aria-atomic="true" style="display: none;">
+        <div class="custom-toast-content">
+            <div class="custom-toast-icon" id="toastIcon"></div>
+            <span id="toastMessage" class="custom-toast-message"></span>
+        </div>
+    </div>
+</div>
+
 <script src="js/common/bootstrap.bundle.min.js"></script>
+<script src="js/common.js"></script>
 <script src="js/stales/stales.js"></script>
 </body>
 </html>"""

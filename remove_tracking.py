@@ -34,14 +34,14 @@ def remove_tracking_numbers(tracking_numbers):
     
     # Process tracking_numbers.json
     try:
-        with open('tracking_numbers.json', 'r', encoding='utf-8') as f:
+        with open('data/tracking_numbers.json', 'r', encoding='utf-8') as f:
             tracking_data = json.load(f)
         
         original_count = len(tracking_data)
         tracking_data = [item for item in tracking_data if item['tracking_number'] not in tracking_numbers]
         removed_count = original_count - len(tracking_data)
         
-        with open('tracking_numbers.json', 'w', encoding='utf-8') as f:
+        with open('data/tracking_numbers.json', 'w', encoding='utf-8') as f:
             json.dump(tracking_data, f, ensure_ascii=False, indent=4)
         
         print(f"Removed {removed_count} entries from tracking_numbers.json")

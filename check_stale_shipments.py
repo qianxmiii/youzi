@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 import re
 
 
-def load_config(filename='config.json'):
+def load_config(filename='config/config.json'):
     with open(filename, 'r', encoding='utf-8') as f:
         config = json.load(f)
         # 确保channel_filters有默认值
@@ -17,7 +17,7 @@ def load_config(filename='config.json'):
         return config
 
 
-def load_tracking_numbers(filename='tracking_numbers.json'):
+def load_tracking_numbers(filename='data/tracking_numbers.json'):
     with open(filename, 'r', encoding='utf-8') as f:
         # 这里假设每条有 tracking_number 和 customer 字段
         return json.load(f)

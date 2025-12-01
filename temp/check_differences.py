@@ -8,8 +8,8 @@ def load_json_file(filename):
 def find_differences():
     try:
         # Load the files
-        assignments = load_json_file('assignments.json')
-        tracking_numbers_data = load_json_file('tracking_numbers.json')
+        assignments = load_json_file('data/assignments.json')
+        tracking_numbers_data = load_json_file('data/tracking_numbers.json')
         
         # Get sets of tracking numbers
         assigned_tns = set(assignments.keys())

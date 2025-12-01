@@ -6,7 +6,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import os
 
 
-def load_config(config_file='config.json'):
+def load_config(config_file='config/config.json'):
     try:
         with open(config_file, 'r', encoding='utf-8') as f:
             config = json.load(f)
@@ -32,7 +32,7 @@ def load_config(config_file='config.json'):
 
 
 
-def load_tracking_numbers(json_file='tracking_numbers.json'):
+def load_tracking_numbers(json_file='data/tracking_numbers.json'):
     try:
         with open(json_file, 'r', encoding='utf-8') as f:
             data = json.load(f)
@@ -592,7 +592,7 @@ def deduplicate_tracking_list(tracking_list):
 
 if __name__ == "__main__":
     try:
-        config = load_config("config.json")
+        config = load_config("config/config.json")
         tracking_list = load_tracking_numbers("tracking_numbers.json")
         tracking_list = deduplicate_tracking_list(tracking_list)
         assignments = load_assignments("data/assignments.json")

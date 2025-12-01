@@ -166,6 +166,10 @@ function filterTable(type) {
         document.getElementById("problemFilter").value = "normal";
         document.getElementById("statusFilter").value = "";
         document.getElementById("trackingSearchInput").value = "";
+        const inspectionLocationFilter = document.getElementById("inspectionLocationFilter");
+        if (inspectionLocationFilter) {
+            inspectionLocationFilter.value = "";
+        }
     }
     
     // 调用 filterAll 来应用所有筛选条件（包括当前选中的类型）
@@ -471,6 +475,7 @@ function filterAll() {
     const statusFilter = document.getElementById('statusFilter').value;
     const channelFilterValue = document.getElementById('channelFilter').value;
     const trackingSearchInput = document.getElementById('trackingSearchInput').value.trim();
+    const inspectionLocationFilter = document.getElementById('inspectionLocationFilter')?.value || '';
 
     const rows = document.querySelectorAll('#logisticsTable tbody tr');
     rows.forEach(row => {
@@ -482,6 +487,7 @@ function filterAll() {
         const rowStatus = row.getAttribute('data-status');
         const carrier = row.getAttribute('data-carrier').toLowerCase();
         const rowTrackingNumber = row.cells[1].textContent.trim(); // 运单号在第二列（索引1）
+        const inspectionLocation = row.getAttribute('data-inspection-location') || '';
         
         // 检查"超过7天"等筛选条件
         var days = parseInt(row.getAttribute("data-days"));
@@ -497,6 +503,11 @@ function filterAll() {
             typeFilterPass = isWarehouse;
         } else if (currentFilterType === "eta3") {
             typeFilterPass = eta3;
+        } else if (currentFilterType === "inspection") {
+            typeFilterPass = (rowStatus === '查验');
+        } else if (currentFilterType === "inspection14") {
+            const inspectionDays = parseInt(row.getAttribute('data-inspection-days')) || -1;
+            typeFilterPass = (rowStatus === '查验' && inspectionDays >= 14);
         } else if (currentFilterType === "all") {
             typeFilterPass = true;
         }
@@ -522,7 +533,8 @@ function filterAll() {
             (problemFilter === 'all' || 
              (problemFilter === 'normal' && !isProblem) || 
              (problemFilter === 'problem' && isProblem)) &&
-            (!statusFilter || rowStatus === statusFilter);
+            (!statusFilter || rowStatus === statusFilter) &&
+            (!inspectionLocationFilter || inspectionLocation === inspectionLocationFilter);
 
         row.setAttribute('data-filtered', showRow ? 'true' : 'false');
     });

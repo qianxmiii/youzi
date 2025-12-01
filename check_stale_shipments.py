@@ -131,6 +131,47 @@ def generate_html_report(results, output_file="stales.html"):
     countries = sorted({item.get('deliveryCountry', {}).get('name', '') for item in results if item.get('deliveryCountry', {}).get('name', '')})
     channels = sorted({item.get('channel', '') for item in results if item.get('channel', '')})
     
+    # 读取查验信息并计算统计信息（需要在HTML生成之前完成）
+    try:
+        with open("data/inspection.json", "r", encoding="utf-8") as f:
+            inspection_items = json.load(f)
+    except FileNotFoundError:
+        inspection_items = {}
+    
+    # 计算查验统计信息
+    inspection_stats = {
+        'total': 0,
+        'domestic': 0,
+        'overseas': 0,
+        'over_14_days': 0,
+        'total_days': 0,
+        'avg_days': 0
+    }
+    
+    for tracking_number, info in inspection_items.items():
+        inspection_stats['total'] += 1
+        location = info.get('location', '')
+        if location == '国内':
+            inspection_stats['domestic'] += 1
+        elif location == '国外':
+            inspection_stats['overseas'] += 1
+        
+        start_time = info.get('start_time', '')
+        if start_time:
+            try:
+                start_date = datetime.strptime(start_time, "%Y-%m-%d")
+                now = datetime.now()
+                days = (now - start_date).days
+                if days >= 0:
+                    inspection_stats['total_days'] += days
+                    if days >= 14:
+                        inspection_stats['over_14_days'] += 1
+            except ValueError:
+                pass
+    
+    if inspection_stats['total'] > 0:
+        inspection_stats['avg_days'] = round(inspection_stats['total_days'] / inspection_stats['total'], 1)
+    
     html = f"""<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -152,6 +193,23 @@ def generate_html_report(results, output_file="stales.html"):
         </p>
     </div>
     
+    <!-- 查验统计信息面板 -->
+    {f'<div class="alert alert-info mb-3" id="inspectionStatsPanel">' + 
+     f'<div class="row text-center">' +
+     f'<div class="col-md-2"><strong><i class="bi bi-shield-exclamation"></i> 查验总数</strong><br>' +
+     f'<span class="badge bg-danger fs-6">{inspection_stats["total"]}</span></div>' +
+     f'<div class="col-md-2"><strong><i class="bi bi-c-circle"></i> 国内查验</strong><br>' +
+     f'<span class="badge bg-warning text-dark fs-6">{inspection_stats["domestic"]}</span></div>' +
+     f'<div class="col-md-2"><strong><i class="bi bi-globe"></i> 国外查验</strong><br>' +
+     f'<span class="badge bg-info fs-6">{inspection_stats["overseas"]}</span></div>' +
+     f'<div class="col-md-2"><strong><i class="bi bi-exclamation-triangle"></i> 超过14天</strong><br>' +
+     f'<span class="badge bg-danger fs-6">{inspection_stats["over_14_days"]}</span></div>' +
+     f'<div class="col-md-2"><strong><i class="bi bi-calendar-range"></i> 平均天数</strong><br>' +
+     f'<span class="badge bg-secondary fs-6">{inspection_stats["avg_days"]}天</span></div>' +
+     f'<div class="col-md-2"><button class="btn btn-sm btn-outline-primary" onclick="filterTable(\'inspection\')">' +
+     f'<i class="bi bi-filter"></i> 仅显示查验</button></div>' +
+     f'</div></div>' if inspection_stats['total'] > 0 else ''}
+    
     <div class="filter-buttons mb-3">
         <button class="btn btn-outline-secondary btn-sm" onclick="filterTable('all')">
             <i class="bi bi-list-ul"></i> 全部
@@ -168,6 +226,8 @@ def generate_html_report(results, output_file="stales.html"):
         <button class="btn btn-outline-success btn-sm" onclick="filterTable('eta3')">
             <i class="bi bi-ship"></i> 3天内到港
         </button>
+        {f'<button class="btn btn-outline-danger btn-sm" onclick="filterTable(\'inspection14\')">' +
+         f'<i class="bi bi-shield-exclamation"></i> 查验超过14天</button>' if inspection_stats['over_14_days'] > 0 else ''}
     </div>
     
     <div class="d-flex mb-3 gap-3">
@@ -256,6 +316,17 @@ def generate_html_report(results, output_file="stales.html"):
             <label><i class="bi bi-flag"></i> 状态筛选</label>
         </div>
     </div>
+    <!-- 查验地点筛选 -->
+    <div class="col-md-2">
+        <div class="form-floating">
+            <select class="form-select form-select" id="inspectionLocationFilter" onchange="filterAll() ">
+                <option value="">所有查验地点</option>
+                <option value="国内">国内</option>
+                <option value="国外">国外</option>
+            </select>
+            <label><i class="bi bi-geo-alt"></i> 查验地点</label>
+        </div>
+    </div>
     </div>
     <!-- 查询区域 -->
     <div class="search-section d-flex align-items-end gap-3 mb-3">
@@ -332,13 +403,6 @@ def generate_html_report(results, output_file="stales.html"):
     
     with open("data/problem_items.json", "r", encoding="utf-8") as f:
         problem_items = json.load(f)
-    
-    # 读取查验信息
-    try:
-        with open("data/inspection.json", "r", encoding="utf-8") as f:
-            inspection_items = json.load(f)
-    except FileNotFoundError:
-        inspection_items = {}
 
     for item in results:
         tracking_number = item.get("tracking_number") or item.get("odd") or ""

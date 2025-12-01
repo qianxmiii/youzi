@@ -153,66 +153,28 @@ function copySelectedTrackingNumbers() {
 }
 
 function filterTable(type) {
-    var rows = document.querySelectorAll("#logisticsTable tbody tr");
-    rows.forEach(row => {
-        var days = parseInt(row.getAttribute("data-days"));
-        var isWarehouse = row.getAttribute("data-warehouse") === '1';
-        var eta3 = row.getAttribute("data-eta3") === '1';
-        let shouldShow = false;
-        if (type === "all") {
-            shouldShow = true;
-        } else if (type === "7") {
-            shouldShow = (days > 7);
-        } else if (type === "14") {
-            shouldShow = (days > 14);
-        } else if (type === "warehouse") {
-            shouldShow = isWarehouse;
-        } else if (type === "eta3") {
-            shouldShow = eta3;
-        }
-        row.setAttribute('data-filtered', shouldShow ? 'true' : 'false');
-    });
-    // 重置客户和国家筛选
-    document.getElementById("customerFilter").value = "";
-    document.getElementById("countryFilter").value = "";
-    document.getElementById("trackFilterInput").value = "";
+    // 保存当前筛选类型
+    currentFilterType = type;
     
-    // 清除筛选缓存
-    clearFilterCache();
+    // 如果选择"全部"，重置其他筛选条件
+    if (type === "all") {
+        document.getElementById("customerFilter").value = "";
+        document.getElementById("countryFilter").value = "";
+        document.getElementById("carrierFilter").value = "";
+        document.getElementById("channelFilter").value = "";
+        document.getElementById("trackFilterInput").value = "";
+        document.getElementById("problemFilter").value = "normal";
+        document.getElementById("statusFilter").value = "";
+        document.getElementById("trackingSearchInput").value = "";
+    }
     
-    // 筛选后重置到第一页并更新分页和结果数
-    currentPage = 1;
-    displayPage();
-    updatePagination();
-    updateResultCount();
+    // 调用 filterAll 来应用所有筛选条件（包括当前选中的类型）
+    filterAll();
 }
 
 function filterByTrackingNumbers() {
-    const input = document.getElementById('trackingSearchInput').value.trim();
-    if (!input) {
-        filterAll();
-        return;
-    }
-    
-    const trackingNumbers = input.split(/\s+/).map(num => num.trim());
-    const rows = document.querySelectorAll('#logisticsTable tbody tr');
-    
-    rows.forEach(row => {
-        const rowTrackingNumber = row.cells[1].textContent.trim(); // 运单号在第二列（索引1）
-        const shouldShow = trackingNumbers.some(num => 
-            rowTrackingNumber.includes(num));
-        
-        row.setAttribute('data-filtered', shouldShow ? 'true' : 'false');
-    });
-    
-    // 清除筛选缓存
-    clearFilterCache();
-    
-    // 筛选后重置到第一页并更新分页和结果数
-    currentPage = 1;
-    displayPage();
-    updatePagination();
-    updateResultCount();
+    // 直接调用 filterAll，让所有筛选条件一起生效
+    filterAll();
 }
 
 // 分页相关变量
@@ -220,6 +182,7 @@ let currentPage = 1;
 let pageSize = parseInt(localStorage.getItem('staleShipmentsPageSize')) || 10; // 从localStorage读取或使用默认值10
 let filteredRowsCache = null; // 缓存筛选结果，提升性能
 let lastResultCount = 0; // 记录上一次的结果数量
+let currentFilterType = 'all'; // 当前选中的筛选类型：all, 7, 14, warehouse, eta3
 
 // 获取所有应该显示的行（基于筛选条件）
 function getFilteredRows(useCache = true) {
@@ -507,6 +470,7 @@ function filterAll() {
     const problemFilter = document.getElementById('problemFilter').value;
     const statusFilter = document.getElementById('statusFilter').value;
     const channelFilterValue = document.getElementById('channelFilter').value;
+    const trackingSearchInput = document.getElementById('trackingSearchInput').value.trim();
 
     const rows = document.querySelectorAll('#logisticsTable tbody tr');
     rows.forEach(row => {
@@ -517,9 +481,37 @@ function filterAll() {
         const isProblem = row.getAttribute('data-problem') === '1';
         const rowStatus = row.getAttribute('data-status');
         const carrier = row.getAttribute('data-carrier').toLowerCase();
+        const rowTrackingNumber = row.cells[1].textContent.trim(); // 运单号在第二列（索引1）
+        
+        // 检查"超过7天"等筛选条件
+        var days = parseInt(row.getAttribute("data-days"));
+        var isWarehouse = row.getAttribute("data-warehouse") === '1';
+        var eta3 = row.getAttribute("data-eta3") === '1';
+        let typeFilterPass = true;
+        
+        if (currentFilterType === "7") {
+            typeFilterPass = (days > 7);
+        } else if (currentFilterType === "14") {
+            typeFilterPass = (days > 14);
+        } else if (currentFilterType === "warehouse") {
+            typeFilterPass = isWarehouse;
+        } else if (currentFilterType === "eta3") {
+            typeFilterPass = eta3;
+        } else if (currentFilterType === "all") {
+            typeFilterPass = true;
+        }
+        
+        // 检查运单号筛选
+        let trackingFilterPass = true;
+        if (trackingSearchInput) {
+            const trackingNumbers = trackingSearchInput.split(/\s+/).map(num => num.trim());
+            trackingFilterPass = trackingNumbers.some(num => rowTrackingNumber.includes(num));
+        }
 
-        // 综合所有筛选条件
+        // 综合所有筛选条件（包括类型筛选和运单号筛选）
         const showRow = 
+            typeFilterPass &&
+            trackingFilterPass &&
             (customerFilter === '' || customer.includes(customerFilter)) &&
             (countryFilter === '' || country.includes(countryFilter)) &&
             (channelFilterValue === '' || 
@@ -529,12 +521,10 @@ function filterAll() {
             (trackFilter === '' || trackText.includes(trackFilter)) &&
             (problemFilter === 'all' || 
              (problemFilter === 'normal' && !isProblem) || 
-             (problemFilter === 'problem' && isProblem))&&
-                (!statusFilter || rowStatus === statusFilter);
+             (problemFilter === 'problem' && isProblem)) &&
+            (!statusFilter || rowStatus === statusFilter);
 
         row.setAttribute('data-filtered', showRow ? 'true' : 'false');
-
-        document.getElementById('trackingSearchInput').value = '';
     });
     
     // 清除筛选缓存

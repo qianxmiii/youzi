@@ -251,6 +251,7 @@ def generate_html_report(results, output_file="stales.html"):
                 <option value="">所有状态</option>
                 <option value="转运中">转运中</option>
                 <option value="已签收">已签收</option>
+                <option value="查验">查验</option>
             </select>
             <label><i class="bi bi-flag"></i> 状态筛选</label>
         </div>
@@ -331,6 +332,13 @@ def generate_html_report(results, output_file="stales.html"):
     
     with open("data/problem_items.json", "r", encoding="utf-8") as f:
         problem_items = json.load(f)
+    
+    # 读取查验信息
+    try:
+        with open("data/inspection.json", "r", encoding="utf-8") as f:
+            inspection_items = json.load(f)
+    except FileNotFoundError:
+        inspection_items = {}
 
     for item in results:
         tracking_number = item.get("tracking_number") or item.get("odd") or ""
@@ -342,6 +350,27 @@ def generate_html_report(results, output_file="stales.html"):
         customer = item.get("customer", "")
         status_code = item.get("status", 0)
         status = status_map.get(status_code, str(status_code))
+        
+        # 检查是否为查验状态
+        inspection_info = inspection_items.get(tracking_number)
+        if inspection_info:
+            status = "查验"
+            inspection_location = inspection_info.get("location", "")
+            inspection_start_time = inspection_info.get("start_time", "")
+            # 计算查验天数
+            inspection_days = -1
+            if inspection_start_time:
+                try:
+                    start_date = datetime.strptime(inspection_start_time, "%Y-%m-%d")
+                    now = datetime.now()
+                    inspection_days = (now - start_date).days
+                except ValueError:
+                    inspection_days = -1
+        else:
+            inspection_location = ""
+            inspection_start_time = ""
+            inspection_days = -1
+        
         row_class = ""
         if isinstance(days, int):
             if days > 14:
@@ -417,6 +446,51 @@ def generate_html_report(results, output_file="stales.html"):
         # 根据状态添加图标和样式
         if status == '已签收':
             status_html = f'<span class="badge bg-success"><i class="bi bi-check-circle"></i> {status}</span>'
+        elif status == '查验':
+            # 计算查验天数显示
+            if inspection_days >= 0:
+                days_text = f"（{inspection_days}天）"
+            else:
+                days_text = ""
+            # tooltip显示详细信息
+            tooltip_text = f"查验地点：{inspection_location or '未知'}"
+            if inspection_start_time:
+                tooltip_text += f"<br>开始时间：{inspection_start_time}"
+            if inspection_days >= 0:
+                tooltip_text += f"<br>查验天数：{inspection_days}天"
+            
+            # 根据查验地点选择图标
+            if inspection_location == "国内":
+                inspection_icon = "bi-c-circle"  # 建筑图标表示国内
+            elif inspection_location == "国外":
+                inspection_icon = "bi-globe"  # 地球图标表示国外
+            else:
+                inspection_icon = "bi-shield-exclamation"  # 默认图标
+            
+            # 根据查验地点和天数设置颜色
+            # 国内：少于14天浅红色，大于等于14天深红色
+            # 国外：少于14天浅红色，大于等于14天深红色
+            if inspection_days >= 14:
+                # 大于等于14天：深红色
+                if inspection_location == "国内":
+                    badge_color = "background-color: #c82333;"  # 深红色
+                elif inspection_location == "国外":
+                    badge_color = "background-color: #bd2130;"  # 稍深的红色
+                else:
+                    badge_color = "background-color: #c82333;"  # 默认深红色
+            elif inspection_days >= 0:
+                # 少于14天：浅红色
+                if inspection_location == "国内":
+                    badge_color = "background-color: #ff6b6b;"  # 浅红色
+                elif inspection_location == "国外":
+                    badge_color = "background-color: #ff8787;"  # 稍浅的红色
+                else:
+                    badge_color = "background-color: #ff6b6b;"  # 默认浅红色
+            else:
+                # 无法计算天数：使用默认深红色
+                badge_color = "background-color: #dc3545;"
+            
+            status_html = f'<span class="badge" style="{badge_color} color: white;" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-html="true" title="{tooltip_text}"><i class="bi {inspection_icon}"></i> 查验{days_text}</span>'
         else:
             status_html = f'<span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat"></i> {status}</span>'
         
@@ -431,6 +505,9 @@ def generate_html_report(results, output_file="stales.html"):
                 data-track="{track_text}"
                 data-problem="{'1' if tracking_number in problem_items else '0'}"
                 data-status="{status}"
+                data-inspection-location="{inspection_location}"
+                data-inspection-start-time="{inspection_start_time}"
+                data-inspection-days="{inspection_days}"
                 >
                 <td><input type="checkbox" class="tracking-checkbox form-check-input" value="{tracking_number}"></td>
                 <td><strong>{item.get('odd')}</strong></td>

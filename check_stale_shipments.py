@@ -117,6 +117,97 @@ def annotate_shipments(results):
     return results
 
 
+def calculate_heatmap_data(results, inspection_items):
+    """计算热力图数据：按客户/国家/渠道统计"""
+    heatmap_data = {
+        'by_customer': {},
+        'by_country': {},
+        'by_channel': {},
+        'customer_country': {}  # 客户-国家交叉统计
+    }
+    
+    # 统计查验运单
+    inspection_tracking_numbers = set(inspection_items.keys())
+    
+    for item in results:
+        customer = item.get('customer', '未知客户')
+        country = item.get('deliveryCountry', {}).get('name', '未知国家')
+        channel = item.get('channel', '未知渠道')
+        tracking_number = item.get("tracking_number") or item.get("odd") or ""
+        
+        is_inspection = tracking_number in inspection_tracking_numbers
+        days_stale = item.get('days_stale', 0)
+        
+        # 按客户统计
+        if customer not in heatmap_data['by_customer']:
+            heatmap_data['by_customer'][customer] = {
+                'total': 0,
+                'inspection': 0,
+                'stale_7': 0,  # 超过7天未更新
+                'stale_14': 0  # 超过14天未更新
+            }
+        heatmap_data['by_customer'][customer]['total'] += 1
+        if is_inspection:
+            heatmap_data['by_customer'][customer]['inspection'] += 1
+        if days_stale > 7:
+            heatmap_data['by_customer'][customer]['stale_7'] += 1
+        if days_stale > 14:
+            heatmap_data['by_customer'][customer]['stale_14'] += 1
+        
+        # 按国家统计
+        if country not in heatmap_data['by_country']:
+            heatmap_data['by_country'][country] = {
+                'total': 0,
+                'inspection': 0,
+                'stale_7': 0,
+                'stale_14': 0
+            }
+        heatmap_data['by_country'][country]['total'] += 1
+        if is_inspection:
+            heatmap_data['by_country'][country]['inspection'] += 1
+        if days_stale > 7:
+            heatmap_data['by_country'][country]['stale_7'] += 1
+        if days_stale > 14:
+            heatmap_data['by_country'][country]['stale_14'] += 1
+        
+        # 按渠道统计
+        if channel not in heatmap_data['by_channel']:
+            heatmap_data['by_channel'][channel] = {
+                'total': 0,
+                'inspection': 0,
+                'stale_7': 0,
+                'stale_14': 0
+            }
+        heatmap_data['by_channel'][channel]['total'] += 1
+        if is_inspection:
+            heatmap_data['by_channel'][channel]['inspection'] += 1
+        if days_stale > 7:
+            heatmap_data['by_channel'][channel]['stale_7'] += 1
+        if days_stale > 14:
+            heatmap_data['by_channel'][channel]['stale_14'] += 1
+        
+        # 客户-国家交叉统计
+        key = f"{customer}|{country}"
+        if key not in heatmap_data['customer_country']:
+            heatmap_data['customer_country'][key] = {
+                'customer': customer,
+                'country': country,
+                'total': 0,
+                'inspection': 0,
+                'stale_7': 0,
+                'stale_14': 0
+            }
+        heatmap_data['customer_country'][key]['total'] += 1
+        if is_inspection:
+            heatmap_data['customer_country'][key]['inspection'] += 1
+        if days_stale > 7:
+            heatmap_data['customer_country'][key]['stale_7'] += 1
+        if days_stale > 14:
+            heatmap_data['customer_country'][key]['stale_14'] += 1
+    
+    return heatmap_data
+
+
 def generate_html_report(results, output_file="stales.html"):
     now_str = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
     # 获取唯一的承运商列表
@@ -172,6 +263,15 @@ def generate_html_report(results, output_file="stales.html"):
     if inspection_stats['total'] > 0:
         inspection_stats['avg_days'] = round(inspection_stats['total_days'] / inspection_stats['total'], 1)
     
+    # 计算热力图数据
+    try:
+        heatmap_data = calculate_heatmap_data(results, inspection_items)
+        # 将热力图数据转换为 JSON 字符串（在 HTML 生成之前，转义特殊字符）
+        heatmap_data_json = json.dumps(heatmap_data, ensure_ascii=False).replace('</script>', '<\\/script>')
+    except Exception as e:
+        print(f"计算热力图数据时出错: {e}")
+        heatmap_data_json = '{}'  # 使用空对象作为默认值
+    
     html = f"""<!DOCTYPE html>
 <html lang="zh">
 <head>
@@ -181,6 +281,8 @@ def generate_html_report(results, output_file="stales.html"):
     <link href="css/common/bootstrap-icons.min.css" rel="stylesheet" />
     <link href="css/stales.css" rel="stylesheet" />
     <link rel="icon" href="img/stale_favicon.png" type="image/png">
+    <!-- Chart.js 图表库 -->
+    <script src="js/common/chart.umd.min.js"></script>
 </head>
 <body>
 <div class="container mt-4">
@@ -209,6 +311,60 @@ def generate_html_report(results, output_file="stales.html"):
      f'<div class="col-md-2"><button class="btn btn-sm btn-outline-primary" onclick="filterTable(\'inspection\')">' +
      f'<i class="bi bi-filter"></i> 仅显示查验</button></div>' +
      f'</div></div>' if inspection_stats['total'] > 0 else ''}
+    
+    <!-- 热力图区域 -->
+    <div class="card mb-4">
+        <div class="card-header">
+            <h5 class="mb-0">
+                <i class="bi bi-diagram-3"></i> 数据热力图
+                <button class="btn btn-sm btn-outline-secondary float-end" type="button" data-bs-toggle="collapse" data-bs-target="#heatmapCollapse">
+                    <i class="bi bi-chevron-down"></i> 展开/收起
+                </button>
+            </h5>
+        </div>
+        <div class="collapse" id="heatmapCollapse">
+            <div class="card-body">
+                <!-- 热力图类型选择 -->
+                <div class="mb-3">
+                    <div class="btn-group" role="group">
+                        <input type="radio" class="btn-check" name="heatmapType" id="heatmapTotal" value="total" checked>
+                        <label class="btn btn-outline-primary" for="heatmapTotal">总运单数</label>
+                        
+                        <input type="radio" class="btn-check" name="heatmapType" id="heatmapInspection" value="inspection">
+                        <label class="btn btn-outline-primary" for="heatmapInspection">查验运单</label>
+                        
+                        <input type="radio" class="btn-check" name="heatmapType" id="heatmapStale7" value="stale_7">
+                        <label class="btn btn-outline-primary" for="heatmapStale7">超过7天未更新</label>
+                        
+                        <input type="radio" class="btn-check" name="heatmapType" id="heatmapStale14" value="stale_14">
+                        <label class="btn btn-outline-primary" for="heatmapStale14">超过14天未更新</label>
+                    </div>
+                </div>
+                
+                <!-- 热力图维度选择 -->
+                <div class="mb-3">
+                    <div class="btn-group" role="group">
+                        <input type="radio" class="btn-check" name="heatmapDimension" id="heatmapByCustomer" value="customer" checked>
+                        <label class="btn btn-outline-secondary" for="heatmapByCustomer">按客户</label>
+                        
+                        <input type="radio" class="btn-check" name="heatmapDimension" id="heatmapByCountry" value="country">
+                        <label class="btn btn-outline-secondary" for="heatmapByCountry">按国家</label>
+                        
+                        <input type="radio" class="btn-check" name="heatmapDimension" id="heatmapByChannel" value="channel">
+                        <label class="btn btn-outline-secondary" for="heatmapByChannel">按渠道</label>
+                        
+                        <input type="radio" class="btn-check" name="heatmapDimension" id="heatmapCustomerCountry" value="customer_country">
+                        <label class="btn btn-outline-secondary" for="heatmapCustomerCountry">客户×国家</label>
+                    </div>
+                </div>
+                
+                <!-- 热力图容器 -->
+                <div id="heatmapContainer" style="min-height: 400px; position: relative;">
+                    <canvas id="heatmapChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
     
     <div class="filter-buttons mb-3">
         <button class="btn btn-outline-secondary btn-sm" onclick="filterTable('all')">
@@ -627,10 +783,19 @@ def generate_html_report(results, output_file="stales.html"):
         </div>
     </div>
 </div>
+"""
+    
+    # 使用 f-string 添加热力图数据和脚本（必须在普通字符串结束后）
+    html += f"""
+<!-- 热力图数据 -->
+<script>
+    window.heatmapData = {heatmap_data_json};
+</script>
 
 <script src="js/common/bootstrap.bundle.min.js"></script>
 <script src="js/common.js"></script>
 <script src="js/stales/stales.js"></script>
+<script src="js/stales/heatmap.js"></script>
 </body>
 </html>"""
 

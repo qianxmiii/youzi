@@ -4118,6 +4118,7 @@ td input.form-control {
     color: #333;
     font-size: 14px;
     font-weight: 500;
+    white-space: nowrap;
 }
 
 @keyframes slideIn {

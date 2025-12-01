@@ -180,10 +180,11 @@ function filterTable(type) {
     // 清除筛选缓存
     clearFilterCache();
     
-    // 筛选后重置到第一页并更新分页
+    // 筛选后重置到第一页并更新分页和结果数
     currentPage = 1;
     displayPage();
     updatePagination();
+    updateResultCount();
 }
 
 function filterByTrackingNumbers() {
@@ -207,16 +208,18 @@ function filterByTrackingNumbers() {
     // 清除筛选缓存
     clearFilterCache();
     
-    // 筛选后重置到第一页并更新分页
+    // 筛选后重置到第一页并更新分页和结果数
     currentPage = 1;
     displayPage();
     updatePagination();
+    updateResultCount();
 }
 
 // 分页相关变量
 let currentPage = 1;
 let pageSize = parseInt(localStorage.getItem('staleShipmentsPageSize')) || 10; // 从localStorage读取或使用默认值10
 let filteredRowsCache = null; // 缓存筛选结果，提升性能
+let lastResultCount = 0; // 记录上一次的结果数量
 
 // 获取所有应该显示的行（基于筛选条件）
 function getFilteredRows(useCache = true) {
@@ -242,11 +245,61 @@ function clearFilterCache() {
     filteredRowsCache = null;
 }
 
+// 检查是否有筛选条件
+function hasFilterConditions() {
+    const customerFilter = document.getElementById('customerFilter')?.value || '';
+    const countryFilter = document.getElementById('countryFilter')?.value || '';
+    const channelFilter = document.getElementById('channelFilter')?.value || '';
+    const carrierFilter = document.getElementById('carrierFilter')?.value || '';
+    const trackFilter = document.getElementById('trackFilterInput')?.value || '';
+    const problemFilter = document.getElementById('problemFilter')?.value || 'all';
+    const statusFilter = document.getElementById('statusFilter')?.value || '';
+    const trackingSearch = document.getElementById('trackingSearchInput')?.value || '';
+    
+    // 检查是否有任何筛选条件（问题件筛选默认是"非问题件"，不算筛选条件）
+    return customerFilter !== '' || 
+           countryFilter !== '' || 
+           channelFilter !== '' || 
+           carrierFilter !== '' || 
+           trackFilter !== '' || 
+           problemFilter !== 'all' || 
+           statusFilter !== '' || 
+           trackingSearch !== '';
+}
+
+// 更新结果数量显示
+function updateResultCount(showToastNotification = true) {
+    const filteredRows = getFilteredRows();
+    const totalRows = filteredRows.length;
+    const resultCountElement = document.getElementById('resultCount');
+    if (resultCountElement) {
+        resultCountElement.textContent = totalRows;
+    }
+    
+    // 如果结果数量发生变化且需要显示提示，且有筛选条件，则显示 toast
+    if (showToastNotification && 
+        typeof window.showToast === 'function' && 
+        lastResultCount !== totalRows && 
+        lastResultCount > 0 &&
+        hasFilterConditions()) {
+        const message = totalRows > 0 
+            ? `找到 ${totalRows} 条符合条件的运单` 
+            : '未找到符合条件的运单';
+        const type = totalRows > 0 ? 'success' : 'info';
+        window.showToast(message, type);
+    }
+    
+    lastResultCount = totalRows;
+}
+
 // 更新分页显示
 function updatePagination() {
     const filteredRows = getFilteredRows();
     const totalRows = filteredRows.length;
     const totalPages = Math.ceil(totalRows / pageSize);
+    
+    // 更新结果数量
+    updateResultCount();
     
     // 更新分页信息（更详细的信息）
     const start = totalRows === 0 ? 0 : (currentPage - 1) * pageSize + 1;
@@ -399,6 +452,15 @@ function displayPage() {
             row.style.display = '';
         }
     });
+    
+    // 初始化新显示行的tooltip
+    const visibleBadges = document.querySelectorAll('#logisticsTable tbody tr[style=""] td .badge[data-bs-toggle="tooltip"]');
+    visibleBadges.forEach(badge => {
+        // 如果还没有初始化tooltip，则初始化
+        if (!bootstrap.Tooltip.getInstance(badge)) {
+            new bootstrap.Tooltip(badge);
+        }
+    });
 }
 
 // 改变每页显示数量
@@ -478,10 +540,11 @@ function filterAll() {
     // 清除筛选缓存
     clearFilterCache();
     
-    // 筛选后重置到第一页并更新分页
+    // 筛选后重置到第一页并更新分页和结果数
     currentPage = 1;
     displayPage();
     updatePagination();
+    updateResultCount();
 }
 
 // 创建防抖的筛选函数
@@ -526,12 +589,18 @@ document.addEventListener('DOMContentLoaded', function () {
         target.addEventListener('show.bs.collapse', () => btn.textContent = '收起');
         target.addEventListener('hide.bs.collapse', () => btn.textContent = '展开更多');
     });
-    // 初始化所有悬浮按钮的tooltip
-    var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
-    tooltipTriggerList.map(function (tooltipTriggerEl) {
+    // 初始化所有悬浮按钮的tooltip（手动触发）
+    var manualTooltipList = [].slice.call(document.querySelectorAll('.floating-action-btn[data-bs-toggle="tooltip"]'));
+    manualTooltipList.map(function (tooltipTriggerEl) {
         return new bootstrap.Tooltip(tooltipTriggerEl, {
             trigger: 'manual'
         });
+    });
+    
+    // 初始化未更新天数的tooltip（悬停触发）
+    var daysTooltipList = [].slice.call(document.querySelectorAll('td .badge[data-bs-toggle="tooltip"]'));
+    daysTooltipList.map(function (tooltipTriggerEl) {
+        return new bootstrap.Tooltip(tooltipTriggerEl);
     });
     
     // 初始化：所有行默认应该显示
@@ -557,9 +626,13 @@ document.addEventListener('DOMContentLoaded', function () {
         }
     });
     
+    // 应用默认筛选（非问题件）
+    filterAll();
+    
     // 初始化分页
     displayPage();
     updatePagination();
+    updateResultCount();
     
     // 初始化复制按钮计数
     updateCopyButtonCount();

@@ -29,6 +29,40 @@ h2 {
     color: #2c3e50;
 }
 
+/* 页面标题样式 */
+.page-header {
+    border-bottom: 2px solid #e9ecef;
+    padding-bottom: 15px;
+    margin-bottom: 20px;
+}
+
+.page-title {
+    color: #2c3e50;
+    font-weight: 600;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-title i {
+    font-size: 1.3em;
+    color: #0d6efd;
+}
+
+.page-subtitle {
+    color: #6c757d;
+    margin: 0;
+    font-size: 0.9em;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.page-subtitle i {
+    font-size: 0.9em;
+}
+
 .container {
     width: 100%;
     max-width: 100%;
@@ -38,32 +72,180 @@ h2 {
     padding: 25px;
 }
 
+.filter-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 15px;
+    background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.filter-buttons button {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.2s ease;
+}
+
+.filter-buttons button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.filter-buttons button i {
+    font-size: 1em;
+}
+
 .filter-buttons button,
 .filter-customer select,
 .filter-track input {
-    margin: 5px 8px 15px 0;
+    margin: 0;
+}
+
+/* 查询区域 */
+.search-section {
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 15px;
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.tracking-search {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.tracking-search label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    color: #495057;
+    white-space: nowrap;
+    margin: 0;
+}
+
+.tracking-search label i {
+    color: #0d6efd;
+}
+
+.tracking-search .input-group-text {
+    background-color: #e9ecef;
+    border-right: none;
+}
+
+.tracking-search .input-group-text i {
+    color: #6c757d;
+}
+
+.filter-track {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+}
+
+.filter-track label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+    color: #495057;
+    white-space: nowrap;
+    margin: 0;
+}
+
+.filter-track label i {
+    color: #0d6efd;
+}
+
+.filter-track .input-group-text {
+    background-color: #e9ecef;
+    border-right: none;
+}
+
+.filter-track .input-group-text i {
+    color: #6c757d;
 }
 
 .filter-track input {
     padding: 5px 10px;
     border: 1px solid #ccc;
     border-radius: 5px;
-    width: 250px;
+}
+
+/* 结果数量提示 */
+.result-count-info {
+    display: flex;
+    align-items: center;
+}
+
+#resultCountBadge {
+    font-size: 14px;
+    padding: 8px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#resultCountBadge i {
+    font-size: 1em;
 }
 
 table.table {
-    border-radius: 6px;
+    border-radius: 8px;
     overflow: hidden;
+    border: 1px solid #dee2e6;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 table th {
     background-color: #f0f3f5;
+    color: #2c3e50;
     text-align: center;
+    font-weight: 600;
+    padding: 12px 8px;
+    border: none;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    border-bottom: 2px solid #dee2e6;
+}
+
+table th i {
+    margin-right: 5px;
+    font-size: 0.9em;
 }
 
 table td {
     vertical-align: middle;
     font-size: 14px;
+    padding: 10px 8px;
+}
+
+/* 轨迹列宽度设置 */
+table th:nth-child(9),
+table td:nth-child(9) {
+    width: 500px;
+    min-width: 400px;
+    max-width: 600px;
+}
+table tbody tr {
+    transition: all 0.2s ease;
+}
+
+table tbody tr:hover {
+    background-color: #f8f9fa;
+    transform: scale(1.01);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .very-stale {
@@ -76,14 +258,23 @@ table td {
 
 .badge {
     font-size: 12px;
-    padding: 4px 8px;
+    padding: 5px 10px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-weight: 500;
+}
+
+.badge i {
+    font-size: 0.9em;
 }
 
 .highlight {
-    background-color: #ffff80;
+    background: linear-gradient(120deg, #ffff80 0%, #ffd700 100%);
     font-weight: bold;
-    padding: 0 2px;
+    padding: 2px 4px;
     border-radius: 3px;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1);
 }
 td.unupdated-days {
    width: 100px;
@@ -154,6 +345,15 @@ td.unupdated-days {
  #paginationInfo {
      white-space: nowrap;
      flex-shrink: 0;
+     display: flex;
+     align-items: center;
+     gap: 6px;
+     font-weight: 500;
+     color: #495057;
+ }
+
+ #paginationInfo i {
+     color: #0d6efd;
  }
  .input-group {
      display: inline-flex;
@@ -314,6 +514,7 @@ td.unupdated-days {
     color: #333;
     font-size: 14px;
     font-weight: 500;
+    white-space: nowrap;
 }
 
 @keyframes slideIn {

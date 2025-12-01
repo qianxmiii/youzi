@@ -143,15 +143,31 @@ def generate_html_report(results, output_file="stales.html"):
 </head>
 <body>
 <div class="container mt-4">
-    <h3>运单轨迹报告</h3>
-    <p>生成时间: {now_str}</p>
+    <div class="page-header mb-4">
+        <h3 class="page-title">
+            <i class="bi bi-clipboard-data"></i> 运单轨迹报告
+        </h3>
+        <p class="page-subtitle">
+            <i class="bi bi-clock"></i> 生成时间: {now_str}
+        </p>
+    </div>
     
-    <div class="filter-buttons mb-2">
-        <button class="btn btn-outline-secondary btn-sm" onclick="filterTable('all')">✅全部</button>
-        <button class="btn btn-outline-warning btn-sm" onclick="filterTable('7')">超过7天未更新</button>
-        <button class="btn btn-outline-danger btn-sm" onclick="filterTable('14')">🚨超过14天未更新</button>
-        <button class="btn btn-outline-info btn-sm" onclick="filterTable('warehouse')">📦未更新</button>
-        <button class="btn btn-outline-success btn-sm" onclick="filterTable('eta3')">🛳️3天内到港</button>
+    <div class="filter-buttons mb-3">
+        <button class="btn btn-outline-secondary btn-sm" onclick="filterTable('all')">
+            <i class="bi bi-list-ul"></i> 全部
+        </button>
+        <button class="btn btn-outline-warning btn-sm" onclick="filterTable('7')">
+            <i class="bi bi-exclamation-triangle"></i> 超过7天未更新
+        </button>
+        <button class="btn btn-outline-danger btn-sm" onclick="filterTable('14')">
+            <i class="bi bi-exclamation-circle"></i> 超过14天未更新
+        </button>
+        <button class="btn btn-outline-info btn-sm" onclick="filterTable('warehouse')">
+            <i class="bi bi-box-seam"></i> 未更新
+        </button>
+        <button class="btn btn-outline-success btn-sm" onclick="filterTable('eta3')">
+            <i class="bi bi-ship"></i> 3天内到港
+        </button>
     </div>
     
     <div class="d-flex mb-3 gap-3">
@@ -165,7 +181,7 @@ def generate_html_report(results, output_file="stales.html"):
         html += f'<option value="{c}">{c}</option>'
     html += """
         </select>
-            <label>客户筛选</label>
+            <label><i class="bi bi-person"></i> 客户筛选</label>
         </div>
     </div>
     <!-- 承运商筛选 -->
@@ -177,7 +193,7 @@ def generate_html_report(results, output_file="stales.html"):
         html += f'<option value="{carrier}">{carrier}</option>'
     html += """
             </select>
-            <label>承运商</label>
+            <label><i class="bi bi-truck"></i> 承运商</label>
         </div>
     </div>
     <!-- 国家筛选 -->
@@ -189,7 +205,7 @@ def generate_html_report(results, output_file="stales.html"):
         html += f'<option value="{co}">{co}</option>'
     html += """
         </select>
-            <label>国家筛选</label>
+            <label><i class="bi bi-globe"></i> 国家筛选</label>
         </div>
     </div>
     <!-- 渠道筛选 -->
@@ -212,7 +228,7 @@ def generate_html_report(results, output_file="stales.html"):
     
     html += """
             </select>
-            <label>渠道</label>
+            <label><i class="bi bi-diagram-3"></i> 渠道</label>
         </div>
     </div>
     </div>
@@ -222,10 +238,10 @@ def generate_html_report(results, output_file="stales.html"):
         <div class="form-floating">
             <select class="form-select form-select" id="problemFilter" onchange="filterAll() ">
                 <option value="all">所有运单</option>
-                <option value="normal">非问题件</option>
+                <option value="normal" selected>非问题件</option>
                 <option value="problem">问题件</option>
             </select>
-            <label>问题件筛选</label>
+            <label><i class="bi bi-exclamation-octagon"></i> 问题件筛选</label>
         </div>
     </div>
     <!-- 状态筛选 -->
@@ -236,22 +252,46 @@ def generate_html_report(results, output_file="stales.html"):
                 <option value="转运中">转运中</option>
                 <option value="已签收">已签收</option>
             </select>
-            <label>状态筛选</label>
+            <label><i class="bi bi-flag"></i> 状态筛选</label>
         </div>
     </div>
     </div>
-    <!-- 运单号查询 -->
-    <div class="tracking-search d-flex align-items-center gap-2 mb-5">
-        <label for="trackingSearchInput" class="form-label mb-0">运单号查询</label>
-        <input type="text" id="trackingSearchInput" 
-               placeholder="输入运单号，多个用空格分隔" 
-               class="form-control form-control-sm w-auto"
-               style="min-width: 250px;">
-        <button class="btn btn-outline-primary" onclick="filterByTrackingNumbers()">查询</button>
-    </div>
-    <div class="filter-track flex-grow-1">
-        <label>轨迹查询</label>
-        <input type="text" id="trackFilterInput" oninput="debouncedFilterAll()" class="form-control form-control-sm" style="width: 300px; display: inline-block;">
+    <!-- 查询区域 -->
+    <div class="search-section d-flex align-items-end gap-3 mb-3">
+        <!-- 运单号查询 -->
+        <div class="tracking-search d-flex align-items-center gap-2">
+            <label for="trackingSearchInput" class="form-label mb-0">
+                <i class="bi bi-search"></i> 运单号查询
+            </label>
+            <div class="input-group" style="width: auto;">
+                <span class="input-group-text"><i class="bi bi-upc-scan"></i></span>
+                <input type="text" id="trackingSearchInput" 
+                       placeholder="输入运单号，多个用空格分隔" 
+                       class="form-control form-control-sm"
+                       style="min-width: 250px;">
+                <button class="btn btn-outline-primary" onclick="filterByTrackingNumbers()">
+                    <i class="bi bi-search"></i> 查询
+                </button>
+            </div>
+        </div>
+        <!-- 轨迹查询 -->
+        <div class="filter-track d-flex align-items-center gap-2">
+            <label class="form-label mb-0">
+                <i class="bi bi-list-check"></i> 轨迹查询
+            </label>
+            <div class="input-group" style="width: 300px;">
+                <span class="input-group-text"><i class="bi bi-funnel"></i></span>
+                <input type="text" id="trackFilterInput" oninput="debouncedFilterAll()" 
+                       class="form-control form-control-sm" 
+                       placeholder="搜索轨迹信息...">
+            </div>
+        </div>
+        <!-- 结果数量提示 -->
+        <div class="result-count-info ms-auto">
+            <span class="badge bg-info text-white" id="resultCountBadge">
+                <i class="bi bi-list-ul"></i> 共 <span id="resultCount">0</span> 条结果
+            </span>
+        </div>
     </div>
     <!-- 悬浮按钮组 -->
     <div class="floating-buttons">
@@ -269,17 +309,16 @@ def generate_html_report(results, output_file="stales.html"):
     <table class="table table-bordered table-hover" id="logisticsTable">
         <thead class="table-light">
             <tr>
-                <th><input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleSelectAll(this)" title="只选中当前筛选条件下可见的运单"></th>
-                <th>运单号</th>
-                <th>客户名</th>
-                <th>渠道</th>
-                <th>承运商</th>
-                <th>最后更新时间</th>
-                <th>未更新天数</th>
-                <th>状态</th>
-                <th>目的国</th>
-                <th>轨迹</th>
-                <th>备注</th>
+                <th style="width: 50px"><input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleSelectAll(this)" title="只选中当前筛选条件下可见的运单"></th>
+                <th style="width: 120px"><i class="bi bi-upc"></i> 运单号</th>
+                <th style="width: 100px"><i class="bi bi-person"></i> 客户名</th>
+                <th style="width: 100px"><i class="bi bi-diagram-3"></i> 渠道</th>
+                <th style="width: 100px"><i class="bi bi-truck"></i> 承运商</th>
+                <th style="width: 100px"><i class="bi bi-calendar-x"></i> 未更新天数</th>
+                <th style="width: 100px"><i class="bi bi-flag"></i> 状态</th>
+                <th style="width: 100px"><i class="bi bi-globe"></i> 目的国</th>
+                <th style="width: 500px; min-width: 400px"><i class="bi bi-list-check"></i> 轨迹</th>
+                <th style="width: 100px"><i class="bi bi-info-circle"></i> 备注</th>
             </tr>
         </thead>
         <tbody>
@@ -353,7 +392,7 @@ def generate_html_report(results, output_file="stales.html"):
         problem_reason = problem_items.get(tracking_number)
 
         if problem_reason:
-            problem_badge = f'<span class="badge rounded-pill text-bg-info ms-2" title="{problem_reason}">问题件</span>'
+            problem_badge = f'<span class="badge rounded-pill text-bg-info ms-2" title="{problem_reason}"><i class="bi bi-exclamation-octagon"></i> 问题件</span>'
         else:
             problem_badge = ''
         # 根据未更新天数设置badge颜色
@@ -375,6 +414,12 @@ def generate_html_report(results, output_file="stales.html"):
         else:
             badge_class = "bg-dark"  # 深色，严重超时
             days_display = str(days)
+        # 根据状态添加图标和样式
+        if status == '已签收':
+            status_html = f'<span class="badge bg-success"><i class="bi bi-check-circle"></i> {status}</span>'
+        else:
+            status_html = f'<span class="badge bg-warning text-dark"><i class="bi bi-arrow-repeat"></i> {status}</span>'
+        
         html += f"""
             <tr class="{row_class}{problem_class}" data-days="{days if isinstance(days, int) else 0 }" 
                 data-warehouse="{is_warehouse}" 
@@ -388,14 +433,13 @@ def generate_html_report(results, output_file="stales.html"):
                 data-status="{status}"
                 >
                 <td><input type="checkbox" class="tracking-checkbox form-check-input" value="{tracking_number}"></td>
-                <td>{item.get('odd')}</td>
+                <td><strong>{item.get('odd')}</strong></td>
                 <td>{customer}</td>
-                <td>{item.get('channel', '')}</td>
-                <td>{item.get('carrier', '')}</td>
-                <td>{item.get('last_update', '')}</td>
-                <td><span class="badge {badge_class}">{days_display}</span></td>
-                <td>{status}</td>
-                <td>{delivery_country}</td>
+                <td><span class="badge bg-secondary">{item.get('channel', '')}</span></td>
+                <td><span class="badge bg-light text-dark">{item.get('carrier', '')}</span></td>
+                <td><span class="badge {badge_class}" data-bs-toggle="tooltip" data-bs-placement="top" title="{item.get('last_update', '')}">{days_display}</span></td>
+                <td>{status_html}</td>
+                <td><i class="bi bi-geo-alt"></i> {delivery_country}</td>
                 <td>{track_cell}</td>
                 <td>{problem_badge}</td>
             </tr>
@@ -409,17 +453,21 @@ def generate_html_report(results, output_file="stales.html"):
     <div class="pagination-container">
         <div class="pagination-info">
             <div class="page-size-selector">
-                <label for="pageSizeSelect">每页显示:</label>
+                <label for="pageSizeSelect">
+                    <i class="bi bi-list-columns"></i> 每页显示:
+                </label>
                 <select id="pageSizeSelect" class="form-select form-select-sm" onchange="changePageSize()" style="width: 100px;">
                     <option value="10" selected>10</option>
-                    <option value="30">50</option>
+                    <option value="30">30</option>
                     <option value="50">50</option>
                     <option value="100">100</option>
                     <option value="200">200</option>
                     <option value="500">500</option>
                 </select>
             </div>
-            <span id="paginationInfo" class="text-muted">显示 0-0 条，共 0 条</span>
+            <span id="paginationInfo" class="text-muted">
+                <i class="bi bi-info-circle"></i> 显示 0-0 条，共 0 条
+            </span>
         </div>
         <nav>
             <ul class="pagination pagination-sm mb-0" id="pagination">

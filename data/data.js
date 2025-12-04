@@ -342,47 +342,25 @@ const transitTimeData = {
             "default": "30-35"
         },
         "Air express": {
-            "default": "8-12"
+            "default": "10-15"
         },
+        // Fast sea express、Fast Maston express、Super sea express 使用相同的时效配置
         "Fast sea express": {
             "0-3": "20-25",
             "4-7": "18-22",
-            "8-9": "15-20"
-        },
-        "Fast Maston express": {
-            "0-3": "20-25",
-            "4-7": "18-22",
             "8-9": "16-20"
         },
-        "Super sea express": {
-            "0-3": "20-25",
-            "4-7": "18-22",
-            "8-9": "16-20"
-        },
+        // Normal sea express、Normal Maston express 使用相同的时效配置
         "Normal sea express": {
             "0-3": "21-26",
             "4-7": "19-23",
             "8-9": "17-22"
         },
-        "Normal Maston express": {
-            "0-3": "21-26",
-            "4-7": "19-23",
-            "8-9": "17-21"
-        },
+        // Fast sea truck、Super sea truck、Fast Maston truck 使用相同的时效配置
         "Fast sea truck": {
-            "0-3": "25-28",
-            "4-7": "20-24",
-            "8-9": "18-22"
-        },
-        "Super sea truck": {
-            "0-3": "25-28",
-            "4-7": "20-24",
-            "8-9": "18-22"
-        },
-        "Fast Maston truck": {
-            "0-3": "25-28",
-            "4-7": "20-24",
-            "8-9": "18-22" 
+            "0-3": "25-30",
+            "4-7": "21-26",
+            "8-9": "18-24"
         },
         "Express": {
             "default": "5-8"
@@ -393,7 +371,7 @@ const transitTimeData = {
             "default": "35-45"
         },
         "Sea express": {
-            "default": "32-38"
+            "default": "35-45"
         },
         "Fast Maston truck": {
             "default": "22-28"
@@ -405,13 +383,13 @@ const transitTimeData = {
             "default": "22-28"
         },
         "Fast Maston express": {
-            "default": "20-28"
+            "default": "22-28"
         },
         "Fast sea express": {
-            "default": "20-28"
+            "default": "22-28"
         },
         "Super sea express": {
-            "default": "20-28"
+            "default": "22-28"
         },
         "Air express": {
             "default": "10-15"
@@ -422,10 +400,10 @@ const transitTimeData = {
     },
     "欧洲": {
         "Sea truck": {
-            "default": "50-55"
+            "default": "45-55"
         },
         "Sea express": {
-            "default": "45-50"
+            "default": "45-55"
         },
         "Train truck": {
             "default": "28-38"
@@ -434,13 +412,13 @@ const transitTimeData = {
             "default": "28-38"
         },
         "Road truck": {
-            "default": "22-28"
+            "default": "25-28"
         },
         "Road express": {
-            "default": "22-28"
+            "default": "25-28"
         },
         "Air express": {
-            "default": "8-12"
+            "default": "10-15"
         },
         "Express": {
             "default": "5-8"
@@ -451,22 +429,22 @@ const transitTimeData = {
             "default": "45-55"
         },
         "Sea express": {
-            "default": "40-50"
+            "default": "45-55"
         },
         "Train truck": {
-            "default": "30-40"
+            "default": "30-38"
         },
         "Train express": {
             "default": "30-38"
         },
         "Road truck": {
-            "default": "24-28"
+            "default": "25-28"
         },
         "Road express": {
-            "default": "23-27"
+            "default": "25-28"
         },
         "Air express": {
-            "default": "8-12"
+            "default": "10-15"
         },
         "Express": {
             "default": "5-8"
@@ -481,6 +459,13 @@ const transitTimeData = {
         }
     }
 };
+
+// 合并重复的时效配置
+transitTimeData["美国"]["Fast Maston express"] = transitTimeData["美国"]["Fast sea express"];
+transitTimeData["美国"]["Super sea express"] = transitTimeData["美国"]["Fast sea express"];
+transitTimeData["美国"]["Super sea truck"] = transitTimeData["美国"]["Fast sea truck"];
+transitTimeData["美国"]["Fast Maston truck"] = transitTimeData["美国"]["Fast sea truck"];
+transitTimeData["美国"]["Normal Maston express"] = transitTimeData["美国"]["Normal sea express"];
 
 const boxRules = {
     "美国": {

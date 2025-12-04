@@ -520,18 +520,18 @@
                     <div class="form-text">格式：地址 箱数 | 地址 箱数 | ...</div>
                   </div>
 
-                  <!-- 利润输入 -->
-                  <div class="mb-3">
-                    <label for="batch-profit" class="form-label">利润 (RMB)</label>
-                    <input type="number" id="batch-profit" class="form-control" placeholder="例如: 0.5" value="0.5" />
-                    <div class="form-text">输入利润</div>
-                  </div>
-
-                  <!-- 提货费输入 -->
-                  <div class="mb-3">
-                    <label for="batch-pickup-fee" class="form-label">提货费 (RMB)</label>
-                    <input type="number" id="batch-pickup-fee" class="form-control" placeholder="例如: 100" value="0" />
-                    <div class="form-text">输入每箱或每单提货费用，用于计算总费用</div>
+                  <!-- 利润和提货费输入（同一行） -->
+                  <div class="row mb-3">
+                    <div class="col-md-6">
+                      <label for="batch-profit" class="form-label">利润 (RMB)</label>
+                      <input type="number" id="batch-profit" class="form-control" placeholder="例如: 0.5" value="0.5" />
+                      <div class="form-text">输入利润</div>
+                    </div>
+                    <div class="col-md-6">
+                      <label for="batch-pickup-fee" class="form-label">提货费 (RMB)</label>
+                      <input type="number" id="batch-pickup-fee" class="form-control" placeholder="例如: 100" value="0" />
+                      <div class="form-text">输入每箱或每单提货费用，用于计算总费用</div>
+                    </div>
                   </div>
 
                   <!-- 渠道选择 -->

@@ -18,7 +18,7 @@ window.onload = function () {
 
     // 获取下一个星期五的日期
     valid_date = getNextFriday();
-    // valid_date = "12/12";
+    valid_date = "12/13";
 
     init(); // 初始化
     eventListener();

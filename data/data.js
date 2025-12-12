@@ -227,7 +227,7 @@ window.data = {
                 { chinese: "不带电带磁", english: "Without battery, without magnet."},
                 { chinese: "带电带磁", english: "With battery or magnet."},
                 { chinese: "木制品需提供商检报告，原木制品还需提供熏蒸报告", english: "For Wooden products, pls provide the commodity inspection report. For raw wooden products, fumigation report is also needed." },
-                { chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3", english: "For battery goods, please provide MSDS and transport report. For lithium batteries, UN38.3 is also needed." },
+                { chinese: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3", english: "For battery goods, please provide MSDS and transport report. For lithium batteries, Also need UN38.3" },
                 { chinese: "儿童产品请提供CPC", english: "For children's products, please provide CPC." }
 
             ]

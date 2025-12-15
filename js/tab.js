@@ -930,6 +930,32 @@ function onProductChange() {
     }
 }
 
+// 切换按方包税
+function toggleByVolumeTaxIncluded() {
+    const checkbox = document.getElementById('t_by-volume-tax-included');
+    const inputField = document.getElementById('t_by-volume-tax-included-value');
+    const goodsValueField = document.getElementById('t_goods-value');
+    
+    if (checkbox.checked) {
+        // 显示输入框
+        inputField.style.display = 'block';
+        // 货值设为0
+        goodsValueField.value = '0';
+        // 禁用货值输入框
+        goodsValueField.disabled = true;
+    } else {
+        // 隐藏输入框
+        inputField.style.display = 'none';
+        // 恢复货值输入框
+        goodsValueField.disabled = false;
+        // 如果货值是0，恢复为默认值167
+        if (goodsValueField.value === '0' || goodsValueField.value === '') {
+            goodsValueField.value = '167';
+        }
+    }
+    // 重新计算
+    calculateCostDDU();
+}
 
 // 计算自税成本
 function calculateCostDDU() {
@@ -964,7 +990,17 @@ function calculateCostDDU() {
     }
 
     // 计算头程费用
-    const forwardingCost = pricePerCbm.mul(chargeVolume);
+    // 检查是否选中按方包税
+    const byVolumeTaxIncluded = document.getElementById('t_by-volume-tax-included').checked;
+    let actualPricePerCbm = pricePerCbm;
+    
+    if (byVolumeTaxIncluded) {
+        // 实际按方包税 = 按方表价 + 输入框中的值
+        const additionalValue = new Decimal(parseFloat(document.getElementById('t_by-volume-tax-included-value').value) || 0);
+        actualPricePerCbm = pricePerCbm.plus(additionalValue);
+    }
+    
+    const forwardingCost = actualPricePerCbm.mul(chargeVolume);
     document.getElementById('t_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
 
     // 计算税金 关税加征20%

@@ -702,6 +702,10 @@
               <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#deliveryTimeModal">
                 <i class="bi bi-truck"></i> 派送时间查询
               </button>
+              <!-- 8. 仓库查询 -->
+              <button type="button" class="btn btn-info" data-bs-toggle="modal" data-bs-target="#warehouseModal" onclick="initWarehouseModal()">
+                <i class="bi bi-building"></i> 仓库查询
+              </button>
             </div>
 
             <!-- 模态框-常用术语-->
@@ -1666,6 +1670,8 @@
   <script src="js/logistics.js"></script>
   <script src="js/logistics_memo.js"></script>
   <script src="js/bookmarks.js"></script>
+  <script src="data/warehouse_data.js"></script>
+  <script src="js/warehouse.js"></script>
   
   <!-- 页面加载完成后初始化 -->
   <script>
@@ -1810,6 +1816,97 @@
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 仓库查询模态框 -->
+  <div class="modal fade" id="warehouseModal" tabindex="-1" aria-labelledby="warehouseModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title" id="warehouseModalLabel">
+            <i class="bi bi-building"></i> 仓库查询
+          </h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+        </div>
+        <div class="modal-body">
+          <!-- 搜索和筛选区域 -->
+          <!-- 筛选下拉菜单 -->
+          <div class="row mb-3">
+            <div class="col-md-3">
+              <select class="form-select" id="warehouseFilterType" onchange="filterWarehouses()">
+                <option value="">全部地址类型</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="warehouseFilterCountry" onchange="filterWarehouses()">
+                <option value="">全部国家代码</option>
+              </select>
+            </div>
+            <div class="col-md-3">
+              <select class="form-select" id="warehouseFilterState" onchange="filterWarehouses()">
+                <option value="">全部州省</option>
+              </select>
+            </div>
+            <div class="col-md-3 text-end">
+              <button type="button" class="btn btn-outline-primary" onclick="copySelectedWarehouses()">
+                <i class="bi bi-clipboard"></i> 复制选中
+              </button>
+              <button type="button" class="btn btn-outline-secondary ms-2" id="selectAllWarehousesBtn" onclick="toggleSelectAllWarehouses()">
+                <i class="bi bi-check-all"></i> <span id="selectAllBtnText">全选</span>
+              </button>
+              <button type="button" class="btn btn-outline-success ms-2" onclick="exportWarehouseExcel()">
+                <i class="bi bi-file-earmark-excel"></i> 导出Excel
+              </button>
+            </div>
+          </div>
+          <!-- 搜索框 -->
+          <div class="row mb-3">
+            <div class="col-md-12">
+              <div class="input-group">
+                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                <input type="text" class="form-control" id="warehouseSearchInput" placeholder="搜索仓库地址、代码..." oninput="filterWarehouses()">
+              </div>
+            </div>
+          </div>
+          
+          <!-- 统计信息 -->
+          <div class="mb-3">
+            <span class="badge bg-info" id="warehouseCount">共 0 条记录</span>
+            <span class="badge bg-success ms-2" id="warehouseSelectedCount">已选中 0 条</span>
+          </div>
+          
+          <!-- 仓库列表表格 -->
+          <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+            <table class="table table-hover table-striped mb-0" id="warehouseTable">
+              <thead class="table-light sticky-top">
+                <tr>
+                  <th style="width: 50px">
+                    <input type="checkbox" id="warehouseSelectAll" onchange="toggleAllWarehouses(this)">
+                  </th>
+                  <th style="width: 100px">仓库代码</th>
+                  <th style="width: 200px">地址</th>
+                  <th style="width: 150px">城市</th>
+                  <th style="width: 100px">州省</th>
+                  <th style="width: 100px">邮编</th>
+                  <th style="width: 100px">国家</th>
+                  <th style="width: 100px">操作</th>
+                </tr>
+              </thead>
+              <tbody id="warehouseTableBody">
+                <tr>
+                  <td colspan="8" class="text-center text-muted py-4">
+                    <i class="bi bi-info-circle"></i> 正在加载数据...
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
         </div>
       </div>
     </div>

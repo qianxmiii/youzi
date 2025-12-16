@@ -41,7 +41,6 @@ const shippingChannels = {
       "Normal sea express",  // 加班快递派
       "Train express",       // 铁路快递派
       "Road express",        // 卡航快递派
-      "UPS/Fedex/DHL",       // UPS/Fedex/DHL
       "Express"              // 快递
     ]
   };
@@ -291,7 +290,7 @@ window.data = {
     // 派送方式按国家分类
     deliveryMethodsByCountry: {
         "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Normal sea express", "Air truck","Fast sea truck","Normal sea truck","Fast Maston express", "Super sea express","Super sea truck",
-             "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","Express", "UPS/Fedex/DHL"
+             "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","Express"
         ],
         "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express","Super sea truck",
             "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck", "Express"
@@ -316,7 +315,6 @@ window.data = {
         'Normal sea truck': '加班卡派', 
         'Air express': '空派',
         'Air truck': '空卡',
-        'UPS/Fedex/DHL': 'UPS/Fedex/DHL',
         'Train express': '铁路快递派',
         'Train truck': '铁路卡派',
         'Road express': '卡航快递派',

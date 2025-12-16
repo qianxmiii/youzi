@@ -1857,9 +1857,6 @@
               <button type="button" class="btn btn-outline-secondary ms-2" id="selectAllWarehousesBtn" onclick="toggleSelectAllWarehouses()">
                 <i class="bi bi-check-all"></i> <span id="selectAllBtnText">全选</span>
               </button>
-              <button type="button" class="btn btn-outline-success ms-2" onclick="exportWarehouseExcel()">
-                <i class="bi bi-file-earmark-excel"></i> 导出Excel
-              </button>
             </div>
           </div>
           <!-- 搜索框 -->
@@ -1906,6 +1903,9 @@
           </div>
         </div>
         <div class="modal-footer">
+          <button type="button" class="btn btn-outline-success" onclick="exportWarehouseExcel()">
+            <i class="bi bi-file-earmark-excel"></i> 导出Excel
+          </button>
           <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
         </div>
       </div>

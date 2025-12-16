@@ -2582,18 +2582,6 @@ window.warehouseData = {
       "电话": "0000000000"
     },
     {
-      "仓库代码": "PPO4-46307",
-      "地址类型": "FBA",
-      "收件人公司名": "Amazon PPO4",
-      "收件人": "Amazon PPO4",
-      "国家代码": "US",
-      "邮编": 46307,
-      "州省": "IN",
-      "城市": "Crown Point",
-      "地址": "9850 Mississippi Street",
-      "电话": "0000000000"
-    },
-    {
       "仓库代码": "IUSR",
       "地址类型": "FBA",
       "收件人公司名": "Amazon IUSR",
@@ -2906,7 +2894,7 @@ window.warehouseData = {
       "电话": "0000000000"
     },
     {
-      "仓库代码": "PPO4-46410",
+      "仓库代码": "PPO4",
       "地址类型": "FBA",
       "收件人公司名": "Amazon PPO4",
       "收件人": "Amazon PPO4",

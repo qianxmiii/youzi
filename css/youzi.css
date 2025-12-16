@@ -491,6 +491,17 @@ td input.form-control {
   font-size: 0.875rem;
 }
 
+/* 箱规表格操作列样式 */
+.button-cell {
+  width: 150px;
+  min-width: 150px;
+  white-space: nowrap;
+}
+
+.button-cell .btn {
+  margin-right: 2px;
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
   #addressModal .modal-dialog {

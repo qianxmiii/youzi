@@ -737,6 +737,7 @@ function parseDimensions() {
                 <td>
                     <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
                     <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
+                    <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
                 </td>
             `;
         }

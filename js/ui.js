@@ -58,6 +58,7 @@ function addRow() {
         <td>
             <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
             <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
+            <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
         </td>
     `;
     table.appendChild(newRow);
@@ -84,6 +85,61 @@ function deleteRow(event) {
     }
 
     calculate(); // 重新计算总计
+}
+
+// 复制当前行数据并新增一行
+function copyRow(event) {
+    let row = event.target.closest('tr'); // 获取当前行
+    
+    // 获取行中的数据
+    const length = row.querySelector('.length')?.value || '';
+    const width = row.querySelector('.width')?.value || '';
+    const height = row.querySelector('.height')?.value || '';
+    const weight = row.querySelector('.weight')?.value || '';
+    const quantity = row.querySelector('.quantity')?.value || '';
+    
+    // 如果没有数据，提示用户
+    if (!length && !width && !height && !weight && !quantity) {
+        showToast('当前行没有数据可复制', 'warning');
+        return;
+    }
+    
+    // 创建新行
+    let table = document.getElementById('box-table');
+    let newRow = document.createElement('tr');
+    newRow.classList.add('input-row');
+    
+    // 获取当前行数，用于生成编号
+    let rowCount = table.getElementsByClassName('input-row').length + 1;
+    
+    // 创建新行的HTML，并填充当前行的数据
+    newRow.innerHTML = `
+        <td class="index-cell">${rowCount}</td>
+        <td><input type="number" class="form-control length" oninput="calculate()" value="${length}"></td>
+        <td><input type="number" class="form-control width" oninput="calculate()" value="${width}"></td>
+        <td><input type="number" class="form-control height" oninput="calculate()" value="${height}"></td>
+        <td><input type="number" class="form-control weight" oninput="calculate()" value="${weight}"></td>
+        <td><input type="number" class="form-control quantity" oninput="calculate()" value="${quantity}"></td>
+        <td class="result-cell">0.00 cbm</td>
+        <td class="result-cell">0 kg</td>
+        <td class="result-cell">0 kg</td>
+        <td class="result-cell">0 kg</td>
+        <td class="result-cell">0 cm</td>
+        <td>
+            <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
+            <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
+            <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
+        </td>
+    `;
+    
+    // 将新行添加到表格中
+    table.appendChild(newRow);
+    
+    // 重新计算
+    calculate();
+    
+    // 提示用户
+    showToast('已复制当前行并新增一行', 'success');
 }
 
 // 更新邮编

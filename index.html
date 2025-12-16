@@ -128,7 +128,7 @@
               <th class="narrow-column">实重</th>
               <th class="narrow-column">材积重</th>
               <th class="narrow-column">周长</th>
-              <th class="narrow-column">操作</th>
+              <th class="narrow-column" style="width: 150px;">操作</th>
             </tr>
           </thead>
           <tbody id="box-table">
@@ -147,6 +147,7 @@
               <td class="button-cell">
                 <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
                 <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
+                <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
               </td>
             </tr>
           </tbody>

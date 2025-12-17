@@ -475,3 +475,88 @@ function checkSpecificAddress() {
     const addressInput = document.getElementById("address").value.trim().toUpperCase();
     showSpecificAddressTransitTime(addressInput);
 }
+
+// ==================== 特别说明标签功能 ====================
+
+/**
+ * 初始化特别说明标签（从 data_logistics.js 中读取配置）
+ */
+function initSpecialNoteTags() {
+    const container = document.getElementById('special-note-tags-container');
+    if (!container || typeof specialNotes === 'undefined') return;
+    
+    // 清空容器
+    container.innerHTML = '';
+    
+    // 根据配置生成按钮
+    specialNotes.forEach(item => {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'btn btn-sm btn-outline-secondary note-tag';
+        btn.setAttribute('data-note-id', item.id);
+        btn.setAttribute('data-note-cn', item.note.cn);
+        btn.setAttribute('data-note-en', item.note.en);
+        btn.onclick = function() { toggleNoteTag(this); };
+        btn.innerHTML = `${item.icon} ${item.label}`; // 显示中文标签
+        container.appendChild(btn);
+    });
+    
+    // 添加清除按钮
+    const clearBtn = document.createElement('button');
+    clearBtn.type = 'button';
+    clearBtn.className = 'btn btn-sm btn-outline-danger clear-note-btn';
+    clearBtn.onclick = function() { clearAllNoteTags(); updateQuote(); };
+    clearBtn.innerHTML = '✕ 清除';
+    clearBtn.title = '清除所有选择';
+    container.appendChild(clearBtn);
+}
+
+/**
+ * 切换特别说明标签的选中状态
+ * @param {HTMLElement} btn - 被点击的按钮元素
+ */
+function toggleNoteTag(btn) {
+    btn.classList.toggle('btn-outline-secondary');
+    btn.classList.toggle('btn-primary');
+    btn.classList.toggle('active');
+    
+    // 更新报价文本
+    updateQuote();
+}
+
+/**
+ * 获取所有选中的特别说明
+ * @param {string} lang - 语言选项 'cn' 或 'en'，默认 'en'
+ * @returns {string[]} 选中的说明数组
+ */
+function getSelectedNotes(lang = 'en') {
+    const selectedNotes = [];
+    const noteTags = document.querySelectorAll('.note-tag.active');
+    
+    noteTags.forEach(tag => {
+        const note = lang === 'cn' 
+            ? tag.getAttribute('data-note-cn') 
+            : tag.getAttribute('data-note-en');
+        if (note) {
+            selectedNotes.push(note);
+        }
+    });
+    
+    return selectedNotes;
+}
+
+/**
+ * 清除所有特别说明的选中状态
+ */
+function clearAllNoteTags() {
+    const noteTags = document.querySelectorAll('.note-tag');
+    noteTags.forEach(tag => {
+        tag.classList.remove('btn-primary', 'active');
+        tag.classList.add('btn-outline-secondary');
+    });
+}
+
+// 页面加载时初始化特别说明标签
+document.addEventListener('DOMContentLoaded', function() {
+    initSpecialNoteTags();
+});

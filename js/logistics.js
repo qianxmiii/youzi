@@ -697,6 +697,18 @@ function updateQuote() {
         placement: 'top'
     });
 
+    // 获取选中的特别说明并追加到报价文本
+    // 根据报价格式选择语言：RMB格式用中文，其他用英文
+    const noteLang = data.quoteType.includes("RMB") ? 'cn' : 'en';
+    const selectedNotes = getSelectedNotes(noteLang);
+    if (selectedNotes.length > 0) {
+        const noteTitle = noteLang === 'cn' ? '说明:' : 'Notes:';
+        notes += `\n\n${noteTitle}\n`;
+        selectedNotes.forEach(note => {
+            notes += `• ${note}\n`;
+        });
+    }
+
     // 将备注内容填入 textarea
     document.getElementById("notes").value = notes;
 

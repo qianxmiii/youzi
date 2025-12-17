@@ -220,7 +220,6 @@
     </button>
     
     <!-- 报价计算模块 -->
-        <!-- 报价计算模块 -->
         <div class="module">
           <div id="quote-calculation" class="my-4">
             <!-- <h3 class="text-center">报价计算</h3> -->
@@ -311,6 +310,7 @@
                         <th class="hidden">总报价 (USD)</th>
                         <th class="hidden">总报价 (RMB)</th>
                         <th>单价</th>
+                        <th>综合单价</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -357,6 +357,9 @@
                         <td class="hidden"><input type="number" id="total_price_rmb" class="form-control result" value="0" readonly /></td>
                         <!-- 单价 -->
                         <td><input type="number" id="unit_price" class="form-control result" value="0" readonly /></td>
+                        <!-- 综合单价 -->
+                        <td><input type="number" id="total_unit_price" class="form-control result" value="0" readonly 
+                          data-bs-toggle="tooltip" data-bs-placement="top" title="包含提货费、偏远费等所有费用后的单价" /></td>
                       </tr>
                     </tbody>
                   </table>

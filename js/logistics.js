@@ -639,6 +639,64 @@ function updateQuote() {
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\n`;
     }
 
+    // 计算综合单价（包含所有费用）
+    // 综合单价 = (总报价RMB + 提货费RMB + 附加费RMB) / 计费重
+    // 注意：addFee 在 RMB 格式下是 RMB，在 USD 格式下是 USD，需要转换
+    // 使用固定转换比例：3.5 USD = 25 RMB（比例 25/3.5 ≈ 7.14）
+    const FIXED_USD_TO_RMB_RATE = new Decimal(25).dividedBy(3.5);
+    let addFeeRMB = new Decimal(0);
+    if (data.quoteType.includes("RMB")) {
+        // RMB格式：addFee 已经是 RMB
+        addFeeRMB = addFee;
+    } else {
+        // USD格式：addFee 是 USD，使用固定比例转换成 RMB
+        addFeeRMB = addFee.mul(FIXED_USD_TO_RMB_RATE);
+    }
+    
+    let totalAllFeesRMB = totalPriceRMB.add(new Decimal(pickupFeeRMB)).add(addFeeRMB);
+    let totalUnitPrice = new Decimal(0);
+    if (data.quoteType.includes("CBM")) {
+        // 按方计费时，使用计费方
+        totalUnitPrice = chargeCBM.greaterThan(0) ? totalAllFeesRMB.dividedBy(chargeCBM) : new Decimal(0);
+    } else {
+        // 按重量计费时，使用计费重
+        totalUnitPrice = chargeWeight.greaterThan(0) ? totalAllFeesRMB.dividedBy(chargeWeight) : new Decimal(0);
+    }
+    
+    // 更新综合单价显示
+    const totalUnitPriceElement = document.getElementById("total_unit_price");
+    totalUnitPriceElement.value = totalUnitPrice.toFixed(2);
+    
+    // 根据综合单价与基础单价的差异设置颜色提示
+    if (totalUnitPrice.greaterThan(unitPriceRMB)) {
+        // 如果综合单价高于基础单价（有附加费），显示橙色
+        totalUnitPriceElement.style.color = '#ff6600';
+    } else {
+        totalUnitPriceElement.style.color = ''; // 恢复默认颜色
+    }
+    
+    // 更新 tooltip 显示费用明细
+    let feeDetails = `基础报价: ${totalPriceRMB.toFixed(2)} RMB`;
+    if (new Decimal(pickupFeeRMB).greaterThan(0)) {
+        feeDetails += `\n提货费: ${pickupFeeRMB} RMB`;
+    }
+    if (addFeeRMB.greaterThan(0)) {
+        feeDetails += `\n附加费: ${addFeeRMB.toFixed(2)} RMB`;
+    }
+    feeDetails += `\n总费用: ${totalAllFeesRMB.toFixed(2)} RMB`;
+    totalUnitPriceElement.setAttribute('title', feeDetails);
+    totalUnitPriceElement.setAttribute('data-bs-title', feeDetails);
+    
+    // 刷新 tooltip
+    const existingTooltip = bootstrap.Tooltip.getInstance(totalUnitPriceElement);
+    if (existingTooltip) {
+        existingTooltip.dispose();
+    }
+    new bootstrap.Tooltip(totalUnitPriceElement, {
+        html: true,
+        placement: 'top'
+    });
+
     // 将备注内容填入 textarea
     document.getElementById("notes").value = notes;
 

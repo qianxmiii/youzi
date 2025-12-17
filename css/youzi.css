@@ -502,6 +502,41 @@ td input.form-control {
   margin-right: 2px;
 }
 
+/* 特别说明标签样式 */
+.special-note-tags {
+  margin-top: 8px;
+}
+
+.special-note-tags .note-tag {
+  transition: all 0.2s ease;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.75rem;
+  border-radius: 20px;
+}
+
+.special-note-tags .note-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.special-note-tags .note-tag.active {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(13, 110, 253, 0.3);
+}
+
+.special-note-tags .clear-note-btn {
+  font-size: 0.8rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 20px;
+  opacity: 0.7;
+  transition: all 0.2s ease;
+}
+
+.special-note-tags .clear-note-btn:hover {
+  opacity: 1;
+  transform: translateY(-1px);
+}
+
 /* 响应式调整 */
 @media (max-width: 768px) {
   #addressModal .modal-dialog {

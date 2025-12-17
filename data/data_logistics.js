@@ -292,6 +292,7 @@ const termsByCategory = {
             ],
             tags: ["流程","欧洲"],
         },
+        { chinese: "中欧铁路换装流程", english: "铁路换轨和倒装，原因：铁路不同轨距", definition: "卸货：在国境站，使用龙门式起重机等设备将入境中欧班列上的集装箱从宽轨列车上卸下。换装：将卸下的集装箱换装到准轨列车上，并进行必要的固定和检查。编组：完成换装的准轨列车在调车场进行编组，形成新的列车编组。出发：编组完成的准轨列车转入到发场，进行最后的列检、商检等作业，然后继续出发。", tags: ["基础", "物流","欧洲"]},
         { chinese: "货运代理", english: "freight forwarder", definition: "受托处理货物运输的代理人，负责安排运输及相关服务", tags: ["基础", "物流"]},
         { chinese: "报价", english: "quotation", definition: "卖方根据买方需求提供的价格信息", tags: ["基础", "物流"]},
         { chinese: "发货人", english: "SHPR/Shipper", definition: "货物的实际出口方或安排货物出口的一方", tags: ["基础", "物流"]},
@@ -498,6 +499,64 @@ const termsByCategory = {
         { chinese: "惠灵顿", english: "Wellington", definition: "新西兰", tags: ["港口", "澳新线"]}
     ]
 };
+
+// 特别说明配置（中英文版本）
+const specialNotes = [
+    {
+        id: "wood",
+        icon: "🪵",
+        label: "木制品",
+        note: { 
+            cn: "木制品请提供商检证书。", 
+            en: "For Wooden products, please provide the commodity inspection report." 
+        }
+    },
+    {
+        id: "battery",
+        icon: "🔋",
+        label: "带电",
+        note: { 
+            cn: "带电请提供MSDS，运输鉴定报告，锂电池还需要提供UN38.3。", 
+            en: "For battery goods, please provide MSDS and transport report. For lithium batteries, Also need UN38.3." 
+        }
+    },
+    {
+        id: "battery and magnet",
+        icon: "🔋",
+        label: "带电带磁",
+        note: { 
+            cn: "请确认产品不带电带磁。", 
+            en: "Please confirm that the product is not magnetic or electrical." 
+        }
+    },
+    {
+        id: "child",
+        icon: "🎠",
+        label: "儿童产品",
+        note: { 
+            cn: "儿童产品请提供CPC。", 
+            en: "For children's products, please provide CPC." 
+        }
+    },
+    {
+        id: "brand",
+        icon: "🏷️",
+        label: "带牌",
+        note: { 
+            cn: "请确认产品无牌不侵权。", 
+            en: "Please confirm that the product is not infringing." 
+        }
+    },
+    {
+        id: "FDA",
+        icon: "🍎",
+        label: "FDA",
+        note: { 
+            cn: "请提供FDA认证。", 
+            en: "Please provide FDA certification." 
+        }
+    }
+];
 
 // 将数据暴露到全局
 window.logisticsData = {

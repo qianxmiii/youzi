@@ -653,7 +653,7 @@ const quoteTipsConfig = {
     country: {
         "美国": [
             {
-                quoteTip: "反倾销",
+                quoteTip: "儿童产品",
                 quoteTipDetail: ""
             }
         ],
@@ -685,6 +685,16 @@ const quoteTipsConfig = {
             {
                 quoteTip: "木制品",
                 quoteTipDetail: ""
+            }
+        ],
+        "澳大利亚": [
+            {
+                quoteTip: "木制品",
+                quoteTipDetail: "澳大利亚对植物类、木制品产品查货率极高 ，为保障时效稳定 ，所有木制品，藤制品，竹制品等制品 需提供熏蒸证明。"
+            },
+            {
+                quoteTip: "中澳证CO",
+                quoteTipDetail: "普货RMB150/份，根据中澳贸易条款.中澳产地证可豁免部分澳洲 DUTY，特殊敏感产品单询 （请注意：中澳证只能减免DUTY，政府税以及GST 还是需要支付）"
             }
         ]
     }

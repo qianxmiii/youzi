@@ -32,6 +32,148 @@ function updateDeliveryMethods() {
     if (typeof toggleVolumeRatioVisibility === 'function') {
         toggleVolumeRatioVisibility();
     }
+    
+    // 更新特别提示
+    updateQuoteTips();
+}
+
+/**
+ * 根据选择的运输方式和国家更新特别提示（Badge样式）
+ */
+function updateQuoteTips() {
+    // 获取选择的运输方式
+    const deliveryMethodSelect = document.getElementById("delivery-method-select");
+    const selectedDeliveryMethod = deliveryMethodSelect ? deliveryMethodSelect.value : "";
+    
+    // 获取选择的国家
+    const countrySelect = document.getElementById("country-select");
+    const selectedCountry = countrySelect ? countrySelect.value : "";
+    
+    // 获取统一容器
+    const tipsContainer = document.getElementById("quote-tips-container");
+    
+    if (!tipsContainer) return;
+    
+    // 清空容器
+    tipsContainer.innerHTML = "";
+    
+    // 从独立配置中获取提示信息
+    let deliveryTipsArray = [];
+    let countryTipsArray = [];
+    
+    if (typeof window.logisticsData !== 'undefined' && window.logisticsData.quoteTipsConfig) {
+        const config = window.logisticsData.quoteTipsConfig;
+        
+        // 获取运输方式提示
+        if (config.deliveryMethod && config.deliveryMethod[selectedDeliveryMethod]) {
+            deliveryTipsArray = config.deliveryMethod[selectedDeliveryMethod];
+        }
+        
+        // 获取国家提示
+        if (config.country && config.country[selectedCountry]) {
+            countryTipsArray = config.country[selectedCountry];
+        }
+    }
+    
+    // 统一颜色：运输方式用蓝色，国家用绿色
+    const deliveryColor = '#005be2';
+    const countryColor = '#00c16e'; 
+    const originColor = '#2164f4'; 
+    
+    // 先渲染运输方式提示（蓝色）
+    deliveryTipsArray.forEach((tip, index) => {
+        createTipBadge(tip, tipsContainer, 'delivery', deliveryColor, index);
+    });
+    
+    // 再渲染国家提示（绿色）
+    countryTipsArray.forEach((tip, index) => {
+        createTipBadge(tip, tipsContainer, 'country', countryColor, deliveryTipsArray.length + index);
+    });
+    
+    // 显示或隐藏容器
+    if (deliveryTipsArray.length > 0 || countryTipsArray.length > 0) {
+        tipsContainer.style.display = "flex";
+        
+        // 初始化Bootstrap tooltips
+        setTimeout(() => {
+            // 销毁旧的tooltip实例
+            const existingTooltips = tipsContainer.querySelectorAll('[data-bs-toggle="tooltip"]');
+            existingTooltips.forEach(el => {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                    const tooltipInstance = bootstrap.Tooltip.getInstance(el);
+                    if (tooltipInstance) {
+                        tooltipInstance.dispose();
+                    }
+                }
+            });
+            
+            // 初始化新的tooltip
+            const tooltipTriggerList = tipsContainer.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipTriggerList.forEach(tooltipTriggerEl => {
+                if (typeof bootstrap !== 'undefined' && bootstrap.Tooltip) {
+                    new bootstrap.Tooltip(tooltipTriggerEl, {
+                        placement: 'top',
+                        html: true,
+                        trigger: 'hover focus'
+                    });
+                }
+            });
+        }, 100);
+    } else {
+        tipsContainer.style.display = "none";
+    }
+}
+
+/**
+ * 创建提示Badge
+ * @param {Object} tip - 提示对象
+ * @param {HTMLElement} container - 容器元素
+ * @param {string} type - 类型（'delivery' 或 'country'）
+ * @param {string} textColor - 文字颜色
+ * @param {number} index - 索引
+ */
+function createTipBadge(tip, container, type, textColor, index) {
+    const badge = document.createElement('span');
+    badge.className = `badge quote-tip-badge quote-tip-${type}`;
+    
+    // 使用简洁样式：白底，统一颜色文字
+    badge.style.cssText = `
+        cursor: help; 
+        font-size: 0.9rem; 
+        font-weight: 600;
+        padding: 0.35rem 0.7rem; 
+        margin: 0.25rem 0.35rem 0.25rem 0; 
+        transition: all 0.15s ease;
+        border-radius: 0.2rem;
+        background-color: #ffffff;
+        color: ${textColor};
+        border: 1px solid #dee2e6;
+        box-shadow: none;
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+        line-height: 1.4;
+    `;
+    badge.setAttribute('data-bs-toggle', 'tooltip');
+    badge.setAttribute('data-bs-placement', 'top');
+    badge.setAttribute('data-bs-html', 'true');
+    badge.setAttribute('title', tip.quoteTipDetail || '');
+    badge.textContent = `#${tip.quoteTip}`;
+    
+    // 添加悬停效果
+    badge.addEventListener('mouseenter', function() {
+        this.style.backgroundColor = '#f8f9fa';
+        this.style.borderColor = textColor;
+    });
+    badge.addEventListener('mouseleave', function() {
+        this.style.backgroundColor = '#ffffff';
+        this.style.borderColor = '#dee2e6';
+    });
+    
+    // 添加唯一ID用于初始化tooltip
+    badge.id = `quote-tip-${type}-${index}`;
+    
+    container.appendChild(badge);
 }
 
 // 添加新的一行
@@ -559,4 +701,10 @@ function clearAllNoteTags() {
 // 页面加载时初始化特别说明标签
 document.addEventListener('DOMContentLoaded', function() {
     initSpecialNoteTags();
+    // 初始化特别提示（延迟执行，确保数据已加载）
+    setTimeout(() => {
+        if (typeof updateQuoteTips === 'function') {
+            updateQuoteTips();
+        }
+    }, 500);
 });

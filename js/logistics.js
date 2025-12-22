@@ -739,20 +739,27 @@ function parseDimensions() {
 
     // 处理每一行数据
     rows.forEach((row, index) => {
+        // 预处理：去掉.00和cm，简化识别
+        // 去掉 .00（但保留其他小数，如 .5）
+        row = row.replace(/\.00(?=\D|$)/g, '');
+        // 去掉 cm（不区分大小写，保留空格）
+        row = row.replace(/\s*cm\s*/gi, ' ');
 
         // 使用正则表达式解析长、宽、高、重量和箱数
-        const dimensionRegex = /(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*[*xX×]\s*(\d+(\.\d+)?)\s*(cm|mm|MM|inch|in|英寸)?/i;
+        // 尺寸支持 x 或 * 或 × 分隔符
+        const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|inch|in|英寸)?/i;
         const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
-        const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
+        // 箱数正则：支持带.00的格式（虽然已经预处理去掉，但保留兼容性）
+        const quantityRegex = /(\d+(?:\.\d+)?)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
 
         // 提取长、宽、高
         const dimensionMatch = row.match(dimensionRegex);
         let length = 0, width = 0, height = 0;
         if (dimensionMatch) {
             length = parseFloat(dimensionMatch[1]);
-            width = parseFloat(dimensionMatch[3]);
-            height = parseFloat(dimensionMatch[5]);
-            const unit = (dimensionMatch[7] || '').toLowerCase();
+            width = parseFloat(dimensionMatch[2]);
+            height = parseFloat(dimensionMatch[3]);
+            const unit = (dimensionMatch[4] || '').toLowerCase();
             // 如果是英寸单位，转换为厘米
             if (unit === 'inch' || unit === 'in' || unit === '英寸') {
                 length *= 2.54;
@@ -779,9 +786,9 @@ function parseDimensions() {
             }
         }
 
-        // 提取箱数
+        // 提取箱数（支持带.00的格式，虽然已经预处理去掉）
         const quantityMatch = row.match(quantityRegex);
-        const quantity = quantityMatch ? parseInt(quantityMatch[1]) : 0;
+        const quantity = quantityMatch ? Math.floor(parseFloat(quantityMatch[1])) : 0;
 
         // 增加行号计数器
         rowNumber++;
@@ -2057,15 +2064,21 @@ let batchQuoteData = {
  * 解析箱规信息
  */
 function parseBatchBoxSpec() {
-    const input = document.getElementById('batch-box-spec').value.trim();
+    let input = document.getElementById('batch-box-spec').value.trim();
     if (!input) {
         batchQuoteData.boxSpec = null;
         return;
     }
     
+    // 预处理：去掉.00和cm，简化识别
+    // 去掉 .00（但保留其他小数，如 .5）
+    input = input.replace(/\.00(?=\D|$)/g, '');
+    // 去掉 cm（不区分大小写，保留空格）
+    input = input.replace(/\s*cm\s*/gi, ' ');
+    
     // 使用更灵活的正则表达式解析箱规信息
     // 支持多种格式：45*45*50 10KG 50CTNS 或 45x45x50 10kg 50箱 等
-    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|inch|in|英寸)?/i;
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|inch|in|英寸)?/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     

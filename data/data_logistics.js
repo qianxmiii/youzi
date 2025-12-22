@@ -555,6 +555,24 @@ const specialNotes = [
             cn: "请提供FDA认证。", 
             en: "Please provide FDA certification." 
         }
+    },
+    {
+        id: "medical",
+        icon: "🏥",
+        label: "医用",
+        note: { 
+            cn: "请确认产品非医用，不涉及医疗用途。", 
+            en: "Please confirm that the product is non-medical and does not involve medical use." 
+        }
+    },
+    {
+        id: "military",
+        icon: "🎖️",
+        label: "军用",
+        note: { 
+            cn: "请确认产品非军用，不涉及军事用途。", 
+            en: "Please confirm that the product is non-military and does not involve military use." 
+        }
     }
 ];
 

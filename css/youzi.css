@@ -283,6 +283,21 @@ td input.form-control {
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
 }
 
+/* 计算历史和汇总信息按钮选中状态 */
+button[data-bs-toggle="collapse"][data-bs-target="#historyCollapse"].active,
+button[data-bs-toggle="collapse"][data-bs-target="#summaryCollapse"].active {
+  background-color: #6c757d;
+  border-color: #6c757d;
+  color: #ffffff;
+}
+
+button[data-bs-toggle="collapse"][data-bs-target="#historyCollapse"]:not(.active):hover,
+button[data-bs-toggle="collapse"][data-bs-target="#summaryCollapse"]:not(.active):hover {
+  background-color: transparent;
+  border-color: #6c757d;
+  color: #6c757d;
+}
+
 /* ----------- */
 /* 报价计算模块 */
 /* ----------- */

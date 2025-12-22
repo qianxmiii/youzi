@@ -1211,7 +1211,35 @@ function resetDeliveryQuery() {
 }
 
 // 页面加载完成后初始化历史记录显示
+// 初始化计算历史和汇总信息按钮的选中状态
+function initCollapseButtonStates() {
+    const historyCollapse = document.getElementById('historyCollapse');
+    const summaryCollapse = document.getElementById('summaryCollapse');
+    const historyButton = document.querySelector('button[data-bs-target="#historyCollapse"]');
+    const summaryButton = document.querySelector('button[data-bs-target="#summaryCollapse"]');
+    
+    if (historyCollapse && historyButton) {
+        historyCollapse.addEventListener('show.bs.collapse', function() {
+            historyButton.classList.add('active');
+        });
+        historyCollapse.addEventListener('hide.bs.collapse', function() {
+            historyButton.classList.remove('active');
+        });
+    }
+    
+    if (summaryCollapse && summaryButton) {
+        summaryCollapse.addEventListener('show.bs.collapse', function() {
+            summaryButton.classList.add('active');
+        });
+        summaryCollapse.addEventListener('hide.bs.collapse', function() {
+            summaryButton.classList.remove('active');
+        });
+    }
+}
+
 document.addEventListener('DOMContentLoaded', function() {
+    // 初始化collapse按钮状态
+    initCollapseButtonStates();
     // 初始化Bootstrap tooltips
     initBootstrapTooltips();
     

@@ -558,9 +558,142 @@ const specialNotes = [
     }
 ];
 
+// 报价提示事项配置（独立数据结构）
+const quoteTipsConfig = {
+    // 运输方式提示配置
+    deliveryMethod: {
+        "Sea truck": [
+        ],
+        "Sea express": [
+            {
+                quoteTip: "MOQ 12KG"
+            },
+            {
+                quoteTip: "超长超重"
+            },
+            {
+                quoteTip: "偏远"
+            },
+            {
+                quoteTip: "私人地址"
+            }
+        ],
+        "Air express": [
+            {
+                quoteTip: "带电带磁"
+            },
+            {
+                quoteTip: "MOQ 10KG"
+            },
+            {
+                quoteTip: "超长超重"
+            },
+            {
+                quoteTip: "偏远"
+            },
+            {
+                quoteTip: "私人地址"
+            }
+        ],
+        "Air truck": [
+            {
+                quoteTip: "带电带磁"
+            }
+        ],
+        "Express": [
+            {
+                quoteTip: "带电带磁"
+            },
+            {
+                quoteTip: "旺季附加费"
+            },
+            {
+                quoteTip: "偏远"
+            },
+            {
+                quoteTip: "私人地址"
+            }
+        ],
+        "Train express": [
+            {
+                quoteTip: "MOQ 12KG"
+            },
+            {
+                quoteTip: "超长超重"
+            },
+            {
+                quoteTip: "偏远"
+            },
+            {
+                quoteTip: "私人地址"
+            }
+        ],
+        "Train truck": [
+            
+        ],
+        "Road express": [
+            {
+                quoteTip: "MOQ 12KG"
+            },
+            {
+                quoteTip: "超长超重"
+            },
+            {
+                quoteTip: "偏远"
+            },
+            {
+                quoteTip: "私人地址"
+            }
+        ],
+        "Road truck": [
+
+        ]
+    },
+    // 国家提示配置
+    country: {
+        "美国": [
+            {
+                quoteTip: "反倾销",
+                quoteTipDetail: ""
+            }
+        ],
+        "英国": [
+            {
+                quoteTip: "纺织品",
+                quoteTipDetail: ""
+            },
+            {
+                quoteTip: "木制品",
+                quoteTipDetail: ""
+            }
+        ],
+        "欧洲": [
+            {
+                quoteTip: "纺织品",
+                quoteTipDetail: ""
+            },
+            {
+                quoteTip: "木制品",
+                quoteTipDetail: ""
+            }
+        ],
+        "加拿大": [
+            {
+                quoteTip: "纺织品",
+                quoteTipDetail: ""
+            },
+            {
+                quoteTip: "木制品",
+                quoteTipDetail: ""
+            }
+        ]
+    }
+};
+
 // 将数据暴露到全局
 window.logisticsData = {
     generalInfo: logisticsGeneralInfo,
     countryInfo: countryLogisticsInfo,
-    termsByCategory: termsByCategory
+    termsByCategory: termsByCategory,
+    quoteTipsConfig: quoteTipsConfig
 };

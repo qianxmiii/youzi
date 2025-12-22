@@ -263,7 +263,7 @@
                       <tr>
                         <!-- 派送方式 -->
                         <td>
-                          <select id="delivery-method-select" class="form-control" oninput="updateQuote()" onchange="handleDeliveryMethodChange(); showTab('expressQueryTab'); checkCostInput()"></select>
+                          <select id="delivery-method-select" class="form-control" oninput="updateQuote(); updateQuoteTips();" onchange="handleDeliveryMethodChange(); showTab('expressQueryTab'); checkCostInput(); updateQuoteTips();"></select>
                         </td>
                         <!-- 国家 -->
                         <td>
@@ -463,6 +463,13 @@
                     <option value="161">161</option>
                     <option value="163">163</option>
                   </select>
+                </div>
+                <!-- 特别提示 -->
+                <div class="form-group mt-3">
+                  <label class="subtitle">特别提示 <small class="text-muted">(鼠标悬停查看详情)</small></label>
+                  <div id="quote-tips-container" class="d-flex flex-wrap align-items-start" style="display: none;">
+                    <!-- Badge由JS动态生成 -->
+                  </div>
                 </div>
                 <!-- 特别说明标签 -->
                 <div class="form-group mt-3">

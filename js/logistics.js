@@ -300,6 +300,9 @@ function importData() {
 
     updateQuote();
 
+    // 显示成功提示
+    showToast('数据导入成功', 'success');
+
     // 获取图标元素
     const importIcon = document.getElementById('import-icon');
 

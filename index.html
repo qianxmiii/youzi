@@ -167,13 +167,16 @@
         
         <!-- 计算历史和汇总信息区域 -->
         <div class="form-group mt-3">
-          <div class="d-flex gap-2">
+          <div class="d-flex gap-2 align-items-center">
+            <button id="import-data-btn" class="btn btn-outline-dark" type="button" onclick="importData()" style="height: 38px;">
+              <i id="import-icon" class="bi bi-send"></i> 导入数据
+            </button>
             <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#historyCollapse"
-              aria-expanded="false" aria-controls="historyCollapse">
+              aria-expanded="false" aria-controls="historyCollapse" style="height: 38px;">
               <i class="bi bi-clock-history"></i> 计算历史 <span class="badge bg-secondary" id="historyCount">0</span>
             </button>
             <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#summaryCollapse"
-              aria-expanded="false" aria-controls="summaryCollapse">
+              aria-expanded="false" aria-controls="summaryCollapse" style="height: 38px;">
               显示汇总信息
             </button>
           </div>
@@ -213,11 +216,7 @@
         </div>
       </div>
     </div>
-
-    <!-- 导入数据按钮 -->
-    <button id="import-data-btn" class="btn btn-outline-dark" onclick="importData()">
-      <i id="import-icon" class="bi bi-send"></i> 导入数据
-    </button>
+  </br>
     
     <!-- 报价计算模块 -->
         <div class="module">
@@ -645,7 +644,7 @@
             </div>
           </div>
         </div>
-
+    </br>
     <!-- Tab功能模块 -->
     <div class="module">
       <div class="container mt-4">

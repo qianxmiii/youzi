@@ -3,7 +3,7 @@
  */
 
 // 新增常量 exchange_rate
-const exchange_rate = 7.0; //美元汇率
+const exchange_rate = 6.8; //美元汇率
 const cost_exchange_rate = 7.1; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';

@@ -747,7 +747,7 @@ function parseDimensions() {
 
         // 使用正则表达式解析长、宽、高、重量和箱数
         // 尺寸支持 x 或 * 或 × 分隔符
-        const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|inch|in|英寸)?/i;
+        const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|m|M|米|inch|in|英寸)?/i;
         const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
         // 箱数正则：支持带.00的格式（虽然已经预处理去掉，但保留兼容性）
         const quantityRegex = /(\d+(?:\.\d+)?)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
@@ -771,6 +771,12 @@ function parseDimensions() {
                 length /= 10;
                 width /= 10;
                 height /= 10;
+            }
+            // 如果是米单位，转换为厘米
+            else if (unit === 'm' || unit === '米') {
+                length *= 100;
+                width *= 100;
+                height *= 100;
             }
         }
 
@@ -875,7 +881,7 @@ function parsePackageInfo() {
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     // 尺寸识别正则表达式，支持各种分隔符和单位
-    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|inch|in|英寸)?/i;
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
     // 前缀支持带To
     // 识别 1.通用亚马逊仓库 == 开头3个字母 + 1个数字 2. AWD仓库 == IUS 开头 + 一个字母（例如：IUSA）
     const addressRegex = /(?:To \s+)?((?:[A-Z]{3}\d)|IUS[A-Z])\b/i;
@@ -921,6 +927,12 @@ function parsePackageInfo() {
             length /= 10;
             width /= 10;
             height /= 10;
+        }
+        // 如果是米单位，转换为厘米
+        else if (unit === 'm' || unit === '米') {
+            length *= 100;
+            width *= 100;
+            height *= 100;
         }
         
         // 如果识别到尺寸但没有识别到体积，自动计算体积
@@ -2078,7 +2090,7 @@ function parseBatchBoxSpec() {
     
     // 使用更灵活的正则表达式解析箱规信息
     // 支持多种格式：45*45*50 10KG 50CTNS 或 45x45x50 10kg 50箱 等
-    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|inch|in|英寸)?/i;
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|m|M|米|inch|in|英寸)?/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     
@@ -2102,6 +2114,12 @@ function parseBatchBoxSpec() {
             length /= 10;
             width /= 10;
             height /= 10;
+        }
+        // 如果是米单位，转换为厘米
+        else if (unit === 'm' || unit === '米') {
+            length *= 100;
+            width *= 100;
+            height *= 100;
         }
     }
     

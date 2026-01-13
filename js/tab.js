@@ -825,7 +825,7 @@ function parseCalTabCargoInfo() {
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     // 尺寸识别正则表达式，支持各种分隔符和单位
-    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|inch|in|英寸)?/i;
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
     const addressRegex = /(?:To \s+)?([A-Z]{3}\d{1})\b/i;  // 识别开头3个字母 + 1个数字 前缀支持带To
     
 
@@ -870,6 +870,12 @@ function parseCalTabCargoInfo() {
             length /= 10;
             width /= 10;
             height /= 10;
+        }
+        // 如果是米单位，转换为厘米
+        else if (unit === 'm' || unit === '米') {
+            length *= 100;
+            width *= 100;
+            height *= 100;
         }
         
         // 如果识别到尺寸但没有识别到体积，自动计算体积

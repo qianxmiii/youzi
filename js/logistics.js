@@ -241,7 +241,21 @@ function calculate() {
      // 更新汇总信息
      document.getElementById('summary-size').innerText = sizeinfo;
      document.getElementById('summary-chargeweight').innerText = totalDimensionWeight;
-     document.getElementById('summary-desc').innerText = `\n${totalQuantity}ctns ${totalWeight}kg ${totalVolume}cbm `;
+     
+     // 计算单箱实重，判断是否使用托（pallets）单位
+     let singleWeight = 0;
+     let quantityUnit = 'ctns';
+     if (totalQuantity.greaterThan(0)) {
+         singleWeight = totalWeight.dividedBy(totalQuantity).toNumber();
+         if (singleWeight > 50) {
+             quantityUnit = 'pallets';
+         } else {
+             if (totalQuantity.equals(1)) {
+                 quantityUnit = 'ctn';
+             }
+         }
+     }
+     document.getElementById('summary-desc').innerText = `\n${totalQuantity}${quantityUnit} ${totalWeight}kg ${totalVolume}cbm `;
 
     // 获取DOM元素
     const warningsTextarea = document.getElementById('box-warnings');
@@ -533,8 +547,22 @@ function updateQuote() {
     unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : new Decimal(0);
     document.getElementById("unit_price").value = unitPriceRMB.toFixed(2);
 
+    // 计算单箱实重，判断是否使用托（pallets）单位
+    let singleWeight = 0;
+    if (data.totalQuantity.greaterThan(0)) {
+        singleWeight = data.totalWeight.dividedBy(data.totalQuantity).toNumber();
+    }
+    
     let unit = 'ctns ';
-    if (data.totalQuantity <= 1) unit = 'ctn ';
+    let unitCN = '箱'; // 中文单位
+    if (singleWeight > 50) {
+        // 单箱实重大于50KG，使用托（pallets）单位
+        unit = 'pallets ';
+        unitCN = '托';
+    } else {
+        // 单箱实重小于等于50KG，使用箱（ctn/ctns）单位
+        if (data.totalQuantity <= 1) unit = 'ctn ';
+    }
 
     addFee = new Decimal(0); //每次初始化
     // 根据选择的备注格式动态生成备注内容
@@ -569,7 +597,7 @@ function updateQuote() {
 
     } else if (data.quoteType === "通用-RMB") {
         // 构建备注内容
-        notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        notes = `${data.address} ${data.totalQuantity.toFixed(0)}${unitCN} ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
@@ -582,7 +610,7 @@ function updateQuote() {
 
     } else if (data.quoteType === "通用-RMB-CBM") {
         // 构建备注内容
-        notes = `${data.address} ${data.totalQuantity.toFixed(0)}箱 ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
+        notes = `${data.address} ${data.totalQuantity.toFixed(0)}${unitCN} ${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/cbm * ${chargeCBM}cbm = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;

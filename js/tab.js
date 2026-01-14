@@ -888,9 +888,19 @@ function parseCalTabCargoInfo() {
     document.getElementById('t_weight').value = Math.ceil(weight);
     document.getElementById('t_volume').value = new Decimal(volume).toDecimalPlaces(2, Decimal.ROUND_UP);
 
-    document.getElementById('tp_quantity').value = quantity;
-    document.getElementById('tp_weight').value = Math.ceil(weight);
-    document.getElementById('tp_volume').value = new Decimal(volume).toDecimalPlaces(2, Decimal.ROUND_UP);
+    // 更新所有包税成本计算行的数据
+    const tbody = document.getElementById('DDPTableBody');
+    if (tbody) {
+        const rows = tbody.querySelectorAll('tr');
+        rows.forEach((row, index) => {
+            const quantityEl = document.getElementById('tp_quantity_' + index);
+            const weightEl = document.getElementById('tp_weight_' + index);
+            const volumeEl = document.getElementById('tp_volume_' + index);
+            if (quantityEl) quantityEl.value = quantity;
+            if (weightEl) weightEl.value = Math.ceil(weight);
+            if (volumeEl) volumeEl.value = new Decimal(volume).toDecimalPlaces(2, Decimal.ROUND_UP);
+        });
+    }
     
     // 触发计算
     calculateCostDDU();
@@ -1030,61 +1040,276 @@ function calculateCostDDU() {
     document.getElementById('t_unit-price-kg').textContent = unitPriceKg.toFixed(2);
 }
 
-// 计算包税成本
+// 计算包税成本（计算所有行，兼容旧代码）
 function calculateCostDDP() {
-    // 获取输入值
-    const quantity = parseFloat(document.getElementById('tp_quantity').value) || 0;
-    const weight = new Decimal(parseFloat(document.getElementById('tp_weight').value) || 0);
-    const volume = new Decimal(parseFloat(document.getElementById('tp_volume').value) || 0);
-    const pricePerKg = new Decimal(parseFloat(document.getElementById('tp_price-per-kg').value) || 0);
-    const deliveryFeeUSD = new Decimal(parseFloat(document.getElementById('tp_delivery-fee-usd').value) || 0);
-    const deliveryFeeRMB = new Decimal(parseFloat(document.getElementById('tp_delivery-fee-rmb').value) || 0);
+    const tbody = document.getElementById('DDPTableBody');
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+    rows.forEach((row, index) => {
+        calculateCostDDPRow(index);
+    });
+}
 
-    // 计算计费重
-    let chargeWeight = Decimal.max(weight,volume.mul(1000000).dividedBy(6000)).toDecimalPlaces(0, Decimal.ROUND_UP);
-    document.getElementById('tp_charge-weight').textContent = chargeWeight;
+// 计算包税成本（支持多行）
+function calculateCostDDPRow(rowIndex) {
+    try {
+        // 获取输入值
+        const quantityEl = document.getElementById('tp_quantity_' + rowIndex);
+        const weightEl = document.getElementById('tp_weight_' + rowIndex);
+        const volumeEl = document.getElementById('tp_volume_' + rowIndex);
+        const pricePerKgEl = document.getElementById('tp_price-per-kg_' + rowIndex);
+        const deliveryFeeUSDEl = document.getElementById('tp_delivery-fee-usd_' + rowIndex);
+        const deliveryFeeRMBEl = document.getElementById('tp_delivery-fee-rmb_' + rowIndex);
+        
+        if (!weightEl || !volumeEl || !pricePerKgEl || !deliveryFeeUSDEl || !deliveryFeeRMBEl) {
+            console.error('包税成本计算：找不到必要的元素，rowIndex=' + rowIndex);
+            return;
+        }
+        
+        const quantity = parseFloat(quantityEl ? quantityEl.value : 0) || 0;
+        const weight = new Decimal(parseFloat(weightEl.value) || 0);
+        const volume = new Decimal(parseFloat(volumeEl.value) || 0);
+        const pricePerKg = new Decimal(parseFloat(pricePerKgEl.value) || 0);
+        const deliveryFeeUSD = new Decimal(parseFloat(deliveryFeeUSDEl.value) || 0);
+        const deliveryFeeRMB = new Decimal(parseFloat(deliveryFeeRMBEl.value) || 0);
 
-    // 计算计费方
-    const weightRatio = document.getElementById('weight-ratio-select').value;
-    let chargeVolume;
-    if (weightRatio === 'actual') {
-        // 实际方：只使用体积
-        chargeVolume = volume;
-    } else {
-        // 使用选择的重量比计算
-        const ratio = parseFloat(weightRatio);
-        chargeVolume = Decimal.max(volume, weight.dividedBy(ratio).toDecimalPlaces(2, Decimal.ROUND_UP));
+        // 计算计费重
+        let chargeWeight = Decimal.max(weight,volume.mul(1000000).dividedBy(6000)).toDecimalPlaces(0, Decimal.ROUND_UP);
+        const chargeWeightEl = document.getElementById('tp_charge-weight_' + rowIndex);
+        if (chargeWeightEl) chargeWeightEl.textContent = chargeWeight;
+
+        // 计算计费方
+        const weightRatioEl = document.getElementById('weight-ratio-select');
+        const weightRatio = weightRatioEl ? weightRatioEl.value : '363';
+        let chargeVolume;
+        if (weightRatio === 'actual') {
+            // 实际方：只使用体积
+            chargeVolume = volume;
+        } else {
+            // 使用选择的重量比计算
+            const ratio = parseFloat(weightRatio);
+            chargeVolume = Decimal.max(volume, weight.dividedBy(ratio).toDecimalPlaces(2, Decimal.ROUND_UP));
+        }
+        const chargeCbmEl = document.getElementById('tp_charge-cbm_' + rowIndex);
+        if (chargeCbmEl) chargeCbmEl.textContent = chargeVolume.toDecimalPlaces(2, Decimal.ROUND_UP);
+
+        // 计算泡比 泡比 = 实重 / 体积
+        let volumeRatio = new Decimal(0);
+        if (!weight.equals(0) && !volume.equals(0)) {
+            volumeRatio = weight.dividedBy(volume);
+        }
+        const volumeRatioEl = document.getElementById('tp_volume-ratio_' + rowIndex);
+        if (volumeRatioEl) volumeRatioEl.textContent = volumeRatio.toFixed(0);
+
+        // 计算头程费用
+        const forwardingCost = pricePerKg.mul(chargeWeight);
+        const forwardingCostEl = document.getElementById('tp_freight-forwarding-cost_' + rowIndex);
+        if (forwardingCostEl) forwardingCostEl.textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
+
+        // 计算派送费 (RMB)
+        const deliveryFeeTran = deliveryFeeUSD.mul(exchange_rate);
+        const totalDeliveryFee = new Decimal(deliveryFeeRMB.add(deliveryFeeTran).toFixed(2));
+        const deliveryFeeFinalEl = document.getElementById('tp_delivery-fee-final_' + rowIndex);
+        if (deliveryFeeFinalEl) deliveryFeeFinalEl.textContent = totalDeliveryFee;
+
+        // 计算总成本
+        const totalCost = forwardingCost.plus(totalDeliveryFee);
+        const totalCostEl = document.getElementById('tp_total-cost_' + rowIndex);
+        if (totalCostEl) totalCostEl.textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
+        
+        // 计算单价 (RMB/cbm)
+        const unitPriceCbm = chargeVolume.greaterThan(0) ? totalCost.dividedBy(chargeVolume) : new Decimal(0);
+        const unitPriceCbmEl = document.getElementById('tp_unit-price-cbm_' + rowIndex);
+        if (unitPriceCbmEl) unitPriceCbmEl.textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
+
+        // 计算单价 (RMD/kg)
+        const unitPriceKg = chargeWeight.greaterThan(0) ? totalCost.dividedBy(chargeWeight) : new Decimal(0);
+        const unitPriceKgEl = document.getElementById('tp_unit-price-kg_' + rowIndex);
+        if (unitPriceKgEl) unitPriceKgEl.textContent = unitPriceKg.toFixed(2);
+    } catch (error) {
+        console.error('包税成本计算错误，rowIndex=' + rowIndex, error);
     }
-    document.getElementById('tp_charge-cbm').textContent = chargeVolume.toDecimalPlaces(2, Decimal.ROUND_UP);
+}
 
-
-    // 计算泡比 泡比 = 实重 / 体积
-    let volumeRatio = new Decimal(0);
-    if (weight != 0 && volume != 0) {
-        volumeRatio = weight.dividedBy(volume);
-        document.getElementById('tp_volume-ratio').textContent = volumeRatio.toFixed(0);
-    }
-
-    // 计算头程费用
-    const forwardingCost = pricePerKg.mul(chargeWeight);
-    document.getElementById('tp_freight-forwarding-cost').textContent = forwardingCost.toDecimalPlaces(2, Decimal.ROUND_UP);
-
-    // 计算派送费 (RMB)
-    const deliveryFeeTran = deliveryFeeUSD.mul(exchange_rate);
-    const totalDeliveryFee = new Decimal(deliveryFeeRMB.add(deliveryFeeTran).toFixed(2));
-    document.getElementById('tp_delivery-fee-final').textContent = totalDeliveryFee;
-
-    // 计算总成本
-    const totalCost = forwardingCost.plus(totalDeliveryFee);
-    document.getElementById('tp_total-cost').textContent = totalCost.toDecimalPlaces(0, Decimal.ROUND_UP);
+// 新增包税成本计算行
+function addDDPRow() {
+    const tbody = document.getElementById('DDPTableBody');
+    const rows = tbody.querySelectorAll('tr');
+    const newRowIndex = rows.length;
     
-    // 计算单价 (RMB/cbm)
-    const unitPriceCbm = chargeVolume.greaterThan(0) ? totalCost.dividedBy(chargeVolume) : new Decimal(0);
-    document.getElementById('tp_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
+    // 获取最后一行的数据作为模板
+    const lastRow = rows[rows.length - 1];
+    const lastRowIndex = parseInt(lastRow.getAttribute('data-row-index'));
+    
+    // 创建新行
+    const newRow = lastRow.cloneNode(true);
+    newRow.setAttribute('data-row-index', newRowIndex);
+    
+    // 更新所有ID和事件处理
+    const inputs = newRow.querySelectorAll('input');
+    inputs.forEach(input => {
+        const oldId = input.id;
+        if (oldId) {
+            const newId = oldId.replace('_' + lastRowIndex, '_' + newRowIndex);
+            input.id = newId;
+            input.value = ''; // 清空输入值
+            input.oninput = function() { calculateCostDDPRow(newRowIndex); };
+        }
+    });
+    
+    const spans = newRow.querySelectorAll('span');
+    spans.forEach(span => {
+        const oldId = span.id;
+        if (oldId) {
+            const newId = oldId.replace('_' + lastRowIndex, '_' + newRowIndex);
+            span.id = newId;
+            span.textContent = '0.00';
+            // 确保单价列保持加粗样式
+            if (newId.includes('tp_unit-price-cbm_') || newId.includes('tp_unit-price-kg_')) {
+                span.classList.add('fw-bold');
+            }
+        }
+    });
+    
+    // 更新操作按钮
+    const buttons = newRow.querySelectorAll('button');
+    buttons.forEach(button => {
+        const onclick = button.getAttribute('onclick');
+        if (onclick) {
+            if (onclick.includes('copyDDPRow')) {
+                button.setAttribute('onclick', 'copyDDPRow(' + newRowIndex + ')');
+            } else if (onclick.includes('deleteDDPRow')) {
+                button.setAttribute('onclick', 'deleteDDPRow(' + newRowIndex + ')');
+                button.disabled = false; // 新行可以删除
+            }
+        }
+    });
+    
+    tbody.appendChild(newRow);
+}
 
-    // 计算单价 (RMD/kg)
-    const unitPriceKg = chargeWeight.greaterThan(0) ? totalCost.dividedBy(chargeWeight) : new Decimal(0);
-    document.getElementById('tp_unit-price-kg').textContent = unitPriceKg.toFixed(2);
+// 复制包税成本计算行
+function copyDDPRow(rowIndex) {
+    const tbody = document.getElementById('DDPTableBody');
+    const rows = tbody.querySelectorAll('tr');
+    const sourceRow = rows[rowIndex];
+    const newRowIndex = rows.length;
+    
+    // 创建新行
+    const newRow = sourceRow.cloneNode(true);
+    newRow.setAttribute('data-row-index', newRowIndex);
+    
+    // 更新所有ID和事件处理，并复制值
+    const inputs = newRow.querySelectorAll('input');
+    inputs.forEach(input => {
+        const oldId = input.id;
+        if (oldId) {
+            const newId = oldId.replace('_' + rowIndex, '_' + newRowIndex);
+            input.id = newId;
+            // 复制输入值
+            const sourceInput = document.getElementById(oldId);
+            if (sourceInput) {
+                input.value = sourceInput.value;
+            }
+            input.oninput = function() { calculateCostDDPRow(newRowIndex); };
+        }
+    });
+    
+    const spans = newRow.querySelectorAll('span');
+    spans.forEach(span => {
+        const oldId = span.id;
+        if (oldId) {
+            const newId = oldId.replace('_' + rowIndex, '_' + newRowIndex);
+            span.id = newId;
+            // 复制显示值
+            const sourceSpan = document.getElementById(oldId);
+            if (sourceSpan) {
+                span.textContent = sourceSpan.textContent;
+            }
+            // 确保单价列保持加粗样式
+            if (newId.includes('tp_unit-price-cbm_') || newId.includes('tp_unit-price-kg_')) {
+                span.classList.add('fw-bold');
+            }
+        }
+    });
+    
+    // 更新操作按钮
+    const buttons = newRow.querySelectorAll('button');
+    buttons.forEach(button => {
+        const onclick = button.getAttribute('onclick');
+        if (onclick) {
+            if (onclick.includes('copyDDPRow')) {
+                button.setAttribute('onclick', 'copyDDPRow(' + newRowIndex + ')');
+            } else if (onclick.includes('deleteDDPRow')) {
+                button.setAttribute('onclick', 'deleteDDPRow(' + newRowIndex + ')');
+                button.disabled = false; // 复制的行可以删除
+            }
+        }
+    });
+    
+    tbody.appendChild(newRow);
+    
+    // 重新计算新行的值
+    calculateCostDDPRow(newRowIndex);
+}
+
+// 删除包税成本计算行
+function deleteDDPRow(rowIndex) {
+    const tbody = document.getElementById('DDPTableBody');
+    const rows = tbody.querySelectorAll('tr');
+    
+    // 至少保留一行
+    if (rows.length <= 1) {
+        return;
+    }
+    
+    const rowToDelete = rows[rowIndex];
+    if (rowToDelete) {
+        rowToDelete.remove();
+        
+        // 重新索引所有行
+        const remainingRows = tbody.querySelectorAll('tr');
+        remainingRows.forEach((row, index) => {
+            row.setAttribute('data-row-index', index);
+            
+            // 更新所有ID
+            const inputs = row.querySelectorAll('input');
+            inputs.forEach(input => {
+                const oldId = input.id;
+                if (oldId) {
+                    const baseId = oldId.substring(0, oldId.lastIndexOf('_'));
+                    const newId = baseId + '_' + index;
+                    input.id = newId;
+                    input.oninput = function() { calculateCostDDPRow(index); };
+                }
+            });
+            
+            const spans = row.querySelectorAll('span');
+            spans.forEach(span => {
+                const oldId = span.id;
+                if (oldId) {
+                    const baseId = oldId.substring(0, oldId.lastIndexOf('_'));
+                    const newId = baseId + '_' + index;
+                    span.id = newId;
+                }
+            });
+            
+            // 更新操作按钮
+            const buttons = row.querySelectorAll('button');
+            buttons.forEach(button => {
+                const onclick = button.getAttribute('onclick');
+                if (onclick) {
+                    if (onclick.includes('copyDDPRow')) {
+                        button.setAttribute('onclick', 'copyDDPRow(' + index + ')');
+                    } else if (onclick.includes('deleteDDPRow')) {
+                        button.setAttribute('onclick', 'deleteDDPRow(' + index + ')');
+                        // 如果只剩一行，禁用删除按钮
+                        button.disabled = remainingRows.length === 1;
+                    }
+                }
+            });
+        });
+    }
 }
 
 

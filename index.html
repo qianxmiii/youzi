@@ -1088,26 +1088,40 @@
                     <th width="6%" class="text-center text-dark">头程费(RMB)</th>
                     <th width="6%" class="text-center text-dark">派送费(RMB)</th>
                     <th width="6%" class="text-center fw-bold text-dark">总成本 (RMB)</th>
-                    <th width="5%" class="text-center text-dark">单价(cbm)</th>
-                    <th width="5%" class="text-center text-dark">单价(kg)</th>
+                    <th width="5%" class="text-center fw-bold text-dark">单价(cbm)</th>
+                    <th width="5%" class="text-center fw-bold text-dark">单价(kg)</th>
+                    <th width="8%" class="text-center text-dark">操作</th>
                   </tr>
                 </thead>
-                <tbody>
-                  <tr>
-                    <td style="display: none;"><input type="number" class="form-control" id="tp_quantity" oninput="calculateCostDDP()" /></td>
-                    <td><input type="number" class="form-control" id="tp_weight" oninput="calculateCostDDP()" /></td>
-                    <td><input type="number" class="form-control" id="tp_volume" oninput="calculateCostDDP()" /></td>
-                    <td><span id="tp_charge-weight">0.00</span></td>
-                    <td><span id="tp_charge-cbm">0.00</span></td>
-                    <td><span id="tp_volume-ratio">0</span></td>
-                    <td><input type="number" class="form-control" id="tp_price-per-kg" oninput="calculateCostDDP()" /></td>
-                    <td><input type="number" class="form-control" id="tp_delivery-fee-usd" oninput="calculateCostDDP()" /></td>
-                    <td><input type="number" class="form-control" id="tp_delivery-fee-rmb" oninput="calculateCostDDP()" /></td>
-                    <td><span id="tp_freight-forwarding-cost">0.00</span></td>
-                    <td><span id="tp_delivery-fee-final">0.00</span></td>
-                    <td><span id="tp_total-cost">0.00</span></td>
-                    <td><span id="tp_unit-price-cbm">0.00</span></td>
-                    <td><span id="tp_unit-price-kg">0.00</span></td>
+                <tbody id="DDPTableBody">
+                  <tr data-row-index="0">
+                    <td style="display: none;"><input type="number" class="form-control" id="tp_quantity_0" oninput="calculateCostDDPRow(0)" /></td>
+                    <td><input type="number" class="form-control" id="tp_weight_0" oninput="calculateCostDDPRow(0)" /></td>
+                    <td><input type="number" class="form-control" id="tp_volume_0" oninput="calculateCostDDPRow(0)" /></td>
+                    <td><span id="tp_charge-weight_0">0.00</span></td>
+                    <td><span id="tp_charge-cbm_0">0.00</span></td>
+                    <td><span id="tp_volume-ratio_0">0</span></td>
+                    <td><input type="number" class="form-control" id="tp_price-per-kg_0" oninput="calculateCostDDPRow(0)" /></td>
+                    <td><input type="number" class="form-control" id="tp_delivery-fee-usd_0" oninput="calculateCostDDPRow(0)" /></td>
+                    <td><input type="number" class="form-control" id="tp_delivery-fee-rmb_0" oninput="calculateCostDDPRow(0)" /></td>
+                    <td><span id="tp_freight-forwarding-cost_0">0.00</span></td>
+                    <td><span id="tp_delivery-fee-final_0">0.00</span></td>
+                    <td><span id="tp_total-cost_0">0.00</span></td>
+                    <td><span id="tp_unit-price-cbm_0" class="fw-bold">0.00</span></td>
+                    <td><span id="tp_unit-price-kg_0" class="fw-bold">0.00</span></td>
+                    <td>
+                      <div class="btn-group btn-group-sm" role="group">
+                        <button type="button" class="btn btn-success btn-sm" onclick="addDDPRow()" title="新增行">
+                          <i class="bi bi-plus-lg"></i>
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" onclick="copyDDPRow(0)" title="复制行">
+                          <i class="bi bi-files"></i>
+                        </button>
+                        <button type="button" class="btn btn-danger btn-sm" onclick="deleteDDPRow(0)" title="删除行" disabled>
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 </tbody>
                     </table>

@@ -683,6 +683,10 @@ const quoteTipsConfig = {
             {
                 quoteTip: "木制品",
                 quoteTipDetail: ""
+            },
+            {
+                quoteTip: "自税递延清关费",
+                quoteTipDetail: ""
             }
         ],
         "欧洲": [
@@ -693,6 +697,14 @@ const quoteTipsConfig = {
             {
                 quoteTip: "木制品",
                 quoteTipDetail: ""
+            },
+            {
+                quoteTip: "自税递延清关费",
+                quoteTipDetail: ""
+            },
+            {
+                quoteTip: "二次清关",
+                quoteTipDetail: "罗马尼亚，希腊、葡萄牙，保加利亚部分欧盟国家有二次清关风险"
             }
         ],
         "加拿大": [

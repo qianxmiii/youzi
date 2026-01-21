@@ -93,7 +93,6 @@ function renderTerms(filteredTerms = allTerms) {
             // 检查是否为流程类型术语
             if (term.type === 'process' && term.steps) {
                 // 流程步骤卡片 - 可折叠设计
-                console.log('渲染流程卡片:', term.chinese);
                 card.className = 'col-md-4 mb-3';
                 card.innerHTML = `
                     <div class="card h-100 process-card-compact" data-process-id="${term.chinese}">

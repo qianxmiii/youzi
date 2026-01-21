@@ -376,9 +376,7 @@ function renderCategoryButtons() {
 
 
 // 初始化术语模态框
-function initTermModal() {
-    console.log('Initializing term modal...');
-    
+function initTermModal() {    
     // 初始化常用术语
     renderCategoryButtons();
     filterTerms('全部');

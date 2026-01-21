@@ -239,7 +239,7 @@
               </li>
               <li class="nav-item" role="presentation">
                 <button class="nav-link" id="batch-quote-tab" data-bs-toggle="tab" data-bs-target="#batch-quote" type="button" role="tab" aria-controls="batch-quote" aria-selected="false">
-                  <i class="bi bi-collection"></i> 智能批量报价
+                  <i class="bi bi-collection"></i> 批量报价
                 </button>
               </li>
             </ul>
@@ -507,11 +507,11 @@
                 </div>
               </div>
               
-              <!-- 智能批量报价Tab -->
+              <!-- 批量报价Tab -->
               <div class="tab-pane fade" id="batch-quote" role="tabpanel" aria-labelledby="batch-quote-tab">
                 <div class="mt-3">
                   <div class="d-flex justify-content-between align-items-center mb-2">
-                    <label class="subtitle mb-0">智能批量报价</label>
+                    <label class="subtitle mb-0">批量报价</label>
                     <div class="btn-group">
                       <button type="button" class="btn btn-sm btn-outline-warning" onclick="addCommonAddressCombination()">
                         <i class="bi bi-lightning"></i> 快速添加
@@ -553,14 +553,19 @@
                     <div class="form-text">格式：地址 箱数 | 地址 箱数 | ...</div>
                   </div>
 
-                  <!-- 利润和提货费输入（同一行） -->
+                  <!-- 品名、利润和提货费输入（同一行） -->
                   <div class="row mb-3">
-                    <div class="col-md-6">
+                    <div class="col-md-4">
+                      <label for="batch-product-name" class="form-label">品名</label>
+                      <input type="text" id="batch-product-name" class="form-control" placeholder="例如: 产品名称" value="" />
+                      <div class="form-text">输入产品名称（可选）</div>
+                    </div>
+                    <div class="col-md-4">
                       <label for="batch-profit" class="form-label">利润 (RMB)</label>
                       <input type="number" id="batch-profit" class="form-control" placeholder="例如: 0.5" value="0.5" />
                       <div class="form-text">输入利润</div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                       <label for="batch-pickup-fee" class="form-label">提货费 (RMB)</label>
                       <input type="number" id="batch-pickup-fee" class="form-control" placeholder="例如: 100" value="0" />
                       <div class="form-text">输入每箱或每单提货费用，用于计算总费用</div>

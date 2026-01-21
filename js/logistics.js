@@ -754,18 +754,16 @@ function parseDimensions() {
     // const rows = input.split(/\||== LCL Load Item/).map(row => row.trim());
     const rows = input.split(/\||== LCL Load Item|== Air Load Item/).map(row => row.trim()).filter(row => row); // 过滤掉空字符串
 
-    // 获取表格的 tbody 元素
-    const tableBody = document.getElementById("box-table");
+    // 用于存储解析后的箱规数据
+    const parsedBoxes = [];
+    // 用于存储和合并相同箱规的 Map（只合并有箱数的）
+    // 键：长-宽-高-重量（用于识别相同箱规）
+    // 值：{ length, width, height, weight, quantity }
+    const boxSpecMap = new Map();
+    // 存储没有箱数的箱规（不合并）
+    const boxesWithoutQuantity = [];
 
-    // 清除表格中除第一行外的所有行
-    while (tableBody.rows.length > 1) {
-        tableBody.deleteRow(1);
-    }
-
-    // 行号计数器，用于正确编号
-    let rowNumber = 0;
-
-    // 处理每一行数据
+    // 第一步：解析所有输入行
     rows.forEach((row, index) => {
         // 预处理：去掉.00和cm，简化识别
         // 去掉 .00（但保留其他小数，如 .5）
@@ -824,20 +822,83 @@ function parseDimensions() {
         const quantityMatch = row.match(quantityRegex);
         const quantity = quantityMatch ? Math.floor(parseFloat(quantityMatch[1])) : 0;
 
-        // 增加行号计数器
-        rowNumber++;
+        // 标准化尺寸（向上取整到整数）
+        const normalizedLength = Math.ceil(length);
+        const normalizedWidth = Math.ceil(width);
+        const normalizedHeight = Math.ceil(height);
+        // 标准化重量（保留2位小数）
+        const normalizedWeight = parseFloat(weight.toFixed(2));
 
-        // 获取当前行（如果需要，添加新行）
+        // 如果解析到了有效的箱规数据（长宽高重量都大于0）
+        if (normalizedLength > 0 && normalizedWidth > 0 && normalizedHeight > 0 && normalizedWeight > 0) {
+            if (quantity > 0) {
+                // 有箱数：用于合并相同箱规
+                const key = `${normalizedLength}-${normalizedWidth}-${normalizedHeight}-${normalizedWeight}`;
+                
+                // 如果已存在相同箱规，累加数量；否则创建新记录
+                if (boxSpecMap.has(key)) {
+                    boxSpecMap.get(key).quantity += quantity;
+                } else {
+                    boxSpecMap.set(key, {
+                        length: normalizedLength,
+                        width: normalizedWidth,
+                        height: normalizedHeight,
+                        weight: normalizedWeight,
+                        quantity: quantity
+                    });
+                }
+            } else {
+                // 没有箱数：单独存储，不合并
+                boxesWithoutQuantity.push({
+                    length: normalizedLength,
+                    width: normalizedWidth,
+                    height: normalizedHeight,
+                    weight: normalizedWeight,
+                    quantity: 0
+                });
+            }
+        }
+    });
+
+    // 第二步：将合并后的箱规数据填充到表格
+    const tableBody = document.getElementById("box-table");
+
+    // 清除表格中除第一行外的所有行
+    while (tableBody.rows.length > 1) {
+        tableBody.deleteRow(1);
+    }
+
+    // 获取合并后的有箱数的箱规数组
+    const mergedBoxSpecs = Array.from(boxSpecMap.values());
+    // 合并所有箱规：先是有箱数的（已合并），然后是没有箱数的（不合并）
+    const allBoxSpecs = [...mergedBoxSpecs, ...boxesWithoutQuantity];
+
+    // 如果没有任何有效数据，清空第一行并返回
+    if (allBoxSpecs.length === 0) {
+        const firstRow = tableBody.rows[0];
+        firstRow.querySelector('.length').value = '';
+        firstRow.querySelector('.width').value = '';
+        firstRow.querySelector('.height').value = '';
+        firstRow.querySelector('.weight').value = '';
+        firstRow.querySelector('.quantity').value = '';
+        firstRow.querySelector('.index-cell').textContent = '1';
+        calculate();
+        return;
+    }
+
+    // 填充表格数据
+    allBoxSpecs.forEach((boxSpec, index) => {
         let currentRow;
-        if (rowNumber === 1) {
-            currentRow = tableBody.rows[0]; // 第一行直接使用
-            // 更新第一行的编号
-            currentRow.querySelector('.index-cell').textContent = rowNumber;
+        if (index === 0) {
+            // 第一行直接使用现有行
+            currentRow = tableBody.rows[0];
+            currentRow.querySelector('.index-cell').textContent = index + 1;
         } else {
-            currentRow = tableBody.insertRow(); // 添加新行
+            // 添加新行
+            currentRow = tableBody.insertRow();
             currentRow.classList.add('input-row');
             currentRow.innerHTML = `
-                <td class="index-cell">${rowNumber}</td>
+                <td class="index-cell">${index + 1}</td>
                 <td><input type="number" class="form-control length" oninput="calculate()"></td>
                 <td><input type="number" class="form-control width" oninput="calculate()"></td>
                 <td><input type="number" class="form-control height" oninput="calculate()"></td>
@@ -856,16 +917,16 @@ function parseDimensions() {
             `;
         }
 
-        // 将解析后的数据填充到当前行
-        currentRow.querySelector('.length').value = Math.ceil(length.toFixed(1));
-        currentRow.querySelector('.width').value = Math.ceil(width.toFixed(1));
-        currentRow.querySelector('.height').value = Math.ceil(height.toFixed(1));
-        currentRow.querySelector('.weight').value = weight.toFixed(2);
-        currentRow.querySelector('.quantity').value = quantity;
-
-        // 触发计算
-        calculate();
+        // 填充数据
+        currentRow.querySelector('.length').value = boxSpec.length;
+        currentRow.querySelector('.width').value = boxSpec.width;
+        currentRow.querySelector('.height').value = boxSpec.height;
+        currentRow.querySelector('.weight').value = boxSpec.weight.toFixed(2);
+        currentRow.querySelector('.quantity').value = boxSpec.quantity;
     });
+
+    // 触发计算
+    calculate();
 }
 
 // 调整所有箱规的尺寸（运输后尺寸增加）
@@ -1602,6 +1663,28 @@ function clearBoxTable() {
         toggle: false
     });
     warningsCollapse.hide();
+}
+
+/**
+ * 补全所有箱数为1
+ */
+function fillQuantityToOne() {
+    // 获取表格的 tbody 元素
+    const tableBody = document.getElementById("box-table");
+    
+    // 获取所有输入行
+    const rows = tableBody.querySelectorAll('.input-row');
+    
+    // 遍历每一行，将箱数设置为1
+    rows.forEach(row => {
+        const quantityInput = row.querySelector('.quantity');
+        if (quantityInput) {
+            quantityInput.value = '1';
+        }
+    });
+    
+    // 触发计算
+    calculate();
 }
 
 /**

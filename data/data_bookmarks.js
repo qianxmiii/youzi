@@ -55,6 +55,24 @@ const bookmarksData = [
     icon: "📭",
     tags: ["快递", "国内", "查询"]
   },
+  {
+    id: 32,
+    name: "德邦快递",
+    url: "https://www.deppon.com/mail/price",
+    description: "德邦快递价格时效查询",
+    category: "快递公司",
+    icon: "🚚",
+    tags: ["快递", "中国"]
+  },
+  {
+    id: 33,
+    name: "安能物流",
+    url: "https://www.ane56.com/self-Freight.html",
+    description: "安能物流",
+    category: "快递公司",
+    icon: "🚛",
+    tags: ["快递", "中国"]
+  },
 
   // 物流工具
   {
@@ -93,6 +111,15 @@ const bookmarksData = [
     icon: "📱",
     tags: ["查询", "跟踪", "物流"]
   },
+  {
+    id: 35,
+    name: "Sagawa-佐川急便",
+    url: "https://k2k.sagawa-exp.co.jp/p/sagawa/web/okurijoinput.jsp",
+    description: "佐川急便",
+    category: "快递公司",
+    icon: "📦",
+    tags: ["日本", "快递"]
+  },
 
   // 海关查询
   {
@@ -130,6 +157,33 @@ const bookmarksData = [
     category: "海关查询",
     icon: "🔢",
     tags: ["海关编码", "查询", "工具"]
+  },
+  {
+    id: 30,
+    name: "中国国际贸易单一窗口",
+    url: "https://www.singlewindow.cn/#/publicInquiryDetail?id=pi5",
+    description: "中国国际贸易单一窗口公共查询",
+    category: "海关查询",
+    icon: "🏛️",
+    tags: ["海关", "报关", "中国"]
+  },
+  {
+    id: 31,
+    name: "海关备案查询",
+    url: "http://202.127.48.145:8888/zscq/search/jsp/vBrandSearchIndex.jsp",
+    description: "知识产权海关保护备案查询",
+    category: "海关查询",
+    icon: "📋",
+    tags: ["海关", "备案", "品牌"]
+  },
+  {
+    id: 34,
+    name: "美国FDA查询",
+    url: "https://www.accessdata.fda.gov/scripts/cdrh/cfdocs/cfrl/rl.cfm",
+    description: "美国FDA查询",
+    category: "海关查询",
+    icon: "🏥",
+    tags: ["FDA", "美国"]
   },
 
   // 汇率查询

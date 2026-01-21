@@ -2094,7 +2094,6 @@ function deleteQuoteHistory(quoteId) {
         showToast('报价记录已删除');
         
     } catch (error) {
-        console.error('删除报价记录失败:', error);
         showToast('删除报价记录失败', 'error');
     }
 }

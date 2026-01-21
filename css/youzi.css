@@ -826,9 +826,18 @@ button[data-bs-toggle="collapse"][data-bs-target="#summaryCollapse"]:not(.active
   border: 2px solid #f44336 !important; /* 红色边框 */
 }
 
+/* 零值警告样式 - 长宽高箱数为0的单元格 */
+.zero-value-warning {
+  background-color: #fff3cd !important; /* 浅黄色背景 */
+  color: #856404 !important; /* 深黄色字体 */
+  font-weight: bold !important; /* 加粗字体 */
+  border: 2px solid #ffc107 !important; /* 黄色边框 */
+}
+
 /* 移除整行高亮 */
 .special-size-warning td,
-.single-weight-warning td {
+.single-weight-warning td,
+.zero-value-warning td {
   background-color: inherit !important;
   color: inherit !important;
   font-weight: inherit !important;

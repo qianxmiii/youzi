@@ -1799,9 +1799,7 @@ function saveQuoteHistory() {
         
         // 保存到localStorage
         localStorage.setItem('quoteHistory', JSON.stringify(history));
-        
-        console.log('报价历史记录已保存:', quoteData.id);
-        
+                
     } catch (error) {
         console.error('保存报价历史记录失败:', error);
     }
@@ -2307,10 +2305,8 @@ function parseBatchBoxSpec() {
             totalQuantity: totalQuantity
         };
         
-        console.log('解析箱规成功:', batchQuoteData.boxSpec);
     } else {
         batchQuoteData.boxSpec = null;
-        console.log('箱规格式不正确，请确保包含：长*宽*高 重量 总箱数');
     }
 }
 
@@ -2859,7 +2855,6 @@ function updateBatchQuoteProfit(index, newProfitRMB) {
     // 重新计算报价（成本 + 利润）
     item.unitPriceRMB = new Decimal(item.unitCostRMB).plus(profitRMB).toNumber();
     item.unitPrice = new Decimal(item.unitPriceRMB).div(new Decimal(exchange_rate)).toFixed(2);
-    console.log("item.unitPrice", item.unitPrice);
     item.totalPrice = new Decimal(item.unitPrice).mul(new Decimal(item.chargeWeight)).toFixed(2);
     
     // 更新页面显示
@@ -3700,10 +3695,7 @@ function exportAddressBook() {
     try {
         // 获取地址数据
         const addressData = getAddressBookData();
-        
-        console.log('地址数据:', addressData);
-        console.log('数据长度:', addressData.length);
-        
+                
         if (!addressData || addressData.length === 0) {
             showToast('没有地址数据可导出。请确保customerAddresses变量中有数据。', 'warning');
             return;

@@ -3182,8 +3182,12 @@ function exportExcel() {
     // 准备数据
     const data = [];
     
+    // 获取品名（用于文件名前缀）
+    const productName = document.getElementById('batch-product-name')?.value?.trim() || '';
+    
     // 添加表头
     data.push([
+        'Channel',      // 渠道
         'AD',           // 地址
         'CTNS',         // 箱数
         'Size',         // 箱规尺寸
@@ -3191,10 +3195,10 @@ function exportExcel() {
         'Volume',       // 总体积
         'Volume weight', // 总材积重
         'Actual weight', // 总实重
-        'Chargeable weight', // 总计费重
-        'unit price',   // 报价(USD)
-        'total cost',   // 总价(USD)
-        'transit time', // 时效
+        'Chargeweight', // 总计费重
+        'Unit price',   // 报价(USD)
+        'Total cost',   // 总价(USD)
+        'Transit time', // 时效
         '泡比',         // 泡比
         'Remark'        // 详细备注信息
     ]);
@@ -3231,6 +3235,7 @@ function exportExcel() {
             
             // 添加数据行
             data.push([
+                item.channel,           // Channel - 渠道
                 item.address,           // AD - 地址
                 item.quantity,          // CTNS - 箱数
                 size,                   // Size - 箱规尺寸
@@ -3271,6 +3276,7 @@ function exportExcel() {
     // 如果有提货费，先添加提货费行
     if (pickupFee.greaterThan(0)) {
         data.push([
+            '',                             // Channel
             '',                             // AD
             '',                             // CTNS
             '',                             // Size
@@ -3279,16 +3285,17 @@ function exportExcel() {
             '',                             // Volume weight
             '',                             // Actual weight
             '',                             // Chargeable weight
-            'Pickup fee',                             // unit price
+            'Pickup fee',                   // unit price
             parseFloat(pickupFee.toFixed(2)), // Pickup fee - 提货费
             '',                             // transit time
             '',                             // 泡比
-            ''                    // Remark
+            ''                              // Remark
         ]);
     }
     
     // 添加总价行
     data.push([
+        '',                             // Channel
         '',                             // AD
         totalQuantity,                  // CTNS - 总箱数
         'boxes',                        // Size
@@ -3324,6 +3331,7 @@ function exportExcel() {
         
         // 设置列宽
         worksheet.columns = [
+            { width: 15 }, // Channel
             { width: 10 }, // AD
             { width: 8 },  // CTNS
             { width: 12 }, // Size
@@ -3339,11 +3347,12 @@ function exportExcel() {
             { width: 50 }  // Remark
         ];
         
-        // 生成文件名：XXctns_quote_月日
+        // 生成文件名：如果有品名，则在前面加上品名作为前缀
         const now = new Date();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
-        const fileName = `${totalQuantity}ctns_quote_${month}${day}.xlsx`;
+        const fileNamePrefix = productName ? `${productName}_` : '';
+        const fileName = `${fileNamePrefix}${totalQuantity}ctns_quote_${month}${day}.xlsx`;
         
         // 生成并下载Excel文件
         workbook.xlsx.writeBuffer().then(function(buffer) {
@@ -3360,7 +3369,7 @@ function exportExcel() {
         // 降级使用XLSX
         const ws = XLSX.utils.aoa_to_sheet(data);
         ws['!cols'] = [
-            { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+            { wch: 15 }, { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
             { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 10 },
             { wch: 12 }, { wch: 8 }, { wch: 50 }
         ];
@@ -3368,7 +3377,8 @@ function exportExcel() {
         const now = new Date();
         const month = String(now.getMonth() + 1).padStart(2, '0');
         const day = String(now.getDate()).padStart(2, '0');
-        const fileName = `${totalQuantity}ctns_quote_${month}${day}.xlsx`;
+        const fileNamePrefix = productName ? `${productName}_` : '';
+        const fileName = `${fileNamePrefix}${totalQuantity}ctns_quote_${month}${day}.xlsx`;
         XLSX.writeFile(wb, fileName);
         showToast('Excel文件已下载');
     }

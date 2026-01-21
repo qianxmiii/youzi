@@ -601,6 +601,7 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
+        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
@@ -615,6 +616,7 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
+        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd`;
@@ -623,6 +625,7 @@ function updateQuote() {
         // 构建备注内容
         notes = `${data.address} ${data.channel}: ${priceUsd} usd per kg `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
+        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
 
     } else if (data.quoteType === "通用-RMB") {
         // 构建备注内容
@@ -630,6 +633,7 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
+        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 0);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB");
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "RMB", data.overSizeFee);
@@ -643,6 +647,7 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/cbm * ${chargeCBM}cbm = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
+        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 0); 
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
         notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
@@ -654,6 +659,7 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
+        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
         if (data.isDDU) notes += getDDUFee(data.country, 1);
@@ -668,6 +674,7 @@ function updateQuote() {
         notes += data.isDDU ? 'DDU ' : 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
+        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
@@ -677,6 +684,7 @@ function updateQuote() {
         if (data.isDDU) notes += 'DDU ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
+        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
@@ -690,6 +698,7 @@ function updateQuote() {
         if (data.isDDU) notes += 'DDU ';
         notes += `${data.channel}: ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
+        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
@@ -1215,6 +1224,8 @@ function getInputData() {
         pickupFeeCheck: document.getElementById("pickup-fee-checkbox").checked,
         pickUpFeeRaw: parseFloat(document.getElementById("pickup-fee").value) || 0,
         moqInput: new Decimal(document.getElementById('moq-input').value || 21),
+        isMOQBox: document.getElementById('moq-box-checkbox').checked,
+        moqBoxInput: parseFloat(document.getElementById('moq-box-input').value || 12),
     };
 }
 

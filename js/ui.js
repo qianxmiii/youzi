@@ -507,6 +507,19 @@ function toggleMOQInput() {
     updateQuote();
 }
 
+function toggleMOQBoxInput() {
+    const moqBoxCheckbox = document.getElementById("moq-box-checkbox");
+    const moqBoxInputContainer = document.getElementById("moq-box-input-container");
+
+    // 根据复选框状态显示或隐藏输入框
+    if (moqBoxCheckbox.checked) {
+        moqBoxInputContainer.style.display = "block"; // 显示输入框
+    } else {
+        moqBoxInputContainer.style.display = "none"; // 隐藏输入框
+    }
+    updateQuote();
+}
+
 // 提货费输入控制
 function togglePickupFeeInput() {
     const pickupFeeCheckbox = document.getElementById("pickup-fee-checkbox");

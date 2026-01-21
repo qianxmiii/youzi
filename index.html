@@ -411,6 +411,15 @@
                   <div id="moq-input-container" style="display: none;">
                     <input type="number" id="moq-input" class="form-control" placeholder="kg" value="21" oninput="updateQuote()">
                   </div>
+                  <!-- MOQ Box -->
+                  <div class="form-check mr-3">
+                    <input type="checkbox" id="moq-box-checkbox" class="form-check-input" onchange="toggleMOQBoxInput()" />
+                    <label for="moq-box-checkbox" class="form-check-label">MOQ Box</label>
+                  </div>
+                  <!-- MOQ Box 输入框 -->
+                  <div id="moq-box-input-container" style="display: none;">
+                    <input type="number" id="moq-box-input" class="form-control" placeholder="kg" value="12" oninput="updateQuote()" style="width: 80px;">
+                  </div>
                   <!-- 提货费 -->
                   <div class="form-check mr-3">
                     <input type="checkbox" id="pickup-fee-checkbox" class="form-check-input" onchange="togglePickupFeeInput()" />

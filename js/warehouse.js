@@ -514,38 +514,79 @@ function exportWarehouseExcel() {
             wsData.push(row);
         });
         
-        // 创建工作表
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        
-        // 设置列宽（根据字段数量动态设置）
-        const colWidths = headers.map(() => ({ wch: 15 }));
-        // 特殊字段设置更宽的列
-        const wideColumns = ['地址', '收件人公司名', '详细地址'];
-        headers.forEach((header, index) => {
-            if (wideColumns.includes(header)) {
-                colWidths[index] = { wch: 30 };
-            } else if (header === '仓库代码' || header === '邮编') {
-                colWidths[index] = { wch: 12 };
-            }
-        });
-        ws['!cols'] = colWidths;
-        
-        // 添加工作表到工作簿
-        XLSX.utils.book_append_sheet(wb, ws, '仓库数据');
-        
-        // 生成文件名
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const hour = String(now.getHours()).padStart(2, '0');
-        const minute = String(now.getMinutes()).padStart(2, '0');
-        const fileName = `仓库数据_${year}${month}${day}_${hour}${minute}.xlsx`;
-        
-        // 生成并下载Excel文件
-        XLSX.writeFile(wb, fileName);
-        
-        showToast(`已导出 ${filteredWarehouses.length} 条仓库数据到Excel`, 'success');
+        // 使用ExcelJS生成带字体的Excel文件
+        if (typeof ExcelJS !== 'undefined') {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('仓库数据');
+            
+            // 设置默认字体为微软雅黑
+            worksheet.defaultFont = { name: '微软雅黑', size: 11 };
+            
+            // 添加数据
+            wsData.forEach((row) => {
+                const excelRow = worksheet.addRow(row);
+                excelRow.eachCell((cell) => {
+                    cell.font = { name: '微软雅黑', size: 11 };
+                });
+            });
+            
+            // 设置列宽（根据字段数量动态设置）
+            const colWidths = headers.map(() => 15);
+            // 特殊字段设置更宽的列
+            const wideColumns = ['地址', '收件人公司名', '详细地址'];
+            headers.forEach((header, index) => {
+                if (wideColumns.includes(header)) {
+                    colWidths[index] = 30;
+                } else if (header === '仓库代码' || header === '邮编') {
+                    colWidths[index] = 12;
+                }
+            });
+            worksheet.columns = colWidths.map(width => ({ width }));
+            
+            // 生成文件名
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hour = String(now.getHours()).padStart(2, '0');
+            const minute = String(now.getMinutes()).padStart(2, '0');
+            const fileName = `仓库数据_${year}${month}${day}_${hour}${minute}.xlsx`;
+            
+            // 生成并下载Excel文件
+            workbook.xlsx.writeBuffer().then(function(buffer) {
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = fileName;
+                link.click();
+                URL.revokeObjectURL(link.href);
+            });
+            
+            showToast(`已导出 ${filteredWarehouses.length} 条仓库数据到Excel`, 'success');
+        } else {
+            // 降级使用XLSX
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            const colWidths = headers.map(() => ({ wch: 15 }));
+            const wideColumns = ['地址', '收件人公司名', '详细地址'];
+            headers.forEach((header, index) => {
+                if (wideColumns.includes(header)) {
+                    colWidths[index] = { wch: 30 };
+                } else if (header === '仓库代码' || header === '邮编') {
+                    colWidths[index] = { wch: 12 };
+                }
+            });
+            ws['!cols'] = colWidths;
+            XLSX.utils.book_append_sheet(wb, ws, '仓库数据');
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hour = String(now.getHours()).padStart(2, '0');
+            const minute = String(now.getMinutes()).padStart(2, '0');
+            const fileName = `仓库数据_${year}${month}${day}_${hour}${minute}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showToast(`已导出 ${filteredWarehouses.length} 条仓库数据到Excel`, 'success');
+        }
         
     } catch (error) {
         console.error('导出Excel失败:', error);

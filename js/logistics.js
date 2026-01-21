@@ -3304,39 +3304,74 @@ function exportExcel() {
         ''                              // Remark
     ]);
     
-    // 创建工作表
-    const ws = XLSX.utils.aoa_to_sheet(data);
-    
-    // 设置列宽
-    ws['!cols'] = [
-        { wch: 10 }, // AD
-        { wch: 8 },  // CTNS
-        { wch: 12 }, // Size
-        { wch: 10 }, // Weight
-        { wch: 10 }, // Volume
-        { wch: 12 }, // Volume weight
-        { wch: 12 }, // Actual weight
-        { wch: 15 }, // Chargeable weight
-        { wch: 10 }, // unit price
-        { wch: 10 }, // total cost
-        { wch: 12 }, // transit time
-        { wch: 8 },  // 泡比
-        { wch: 50 }  // Remark
-    ];
-    
-    // 添加工作表到工作簿
-    XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
-    
-    // 生成文件名：XXctns_quote_月日
-    const now = new Date();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const fileName = `${totalQuantity}ctns_quote_${month}${day}.xlsx`;
-    
-    // 生成并下载Excel文件
-    XLSX.writeFile(wb, fileName);
-    
-    showToast('Excel文件已下载');
+    // 使用ExcelJS生成带字体的Excel文件
+    if (typeof ExcelJS !== 'undefined') {
+        // 使用ExcelJS创建带字体的Excel
+        const workbook = new ExcelJS.Workbook();
+        const worksheet = workbook.addWorksheet('Sheet1');
+        
+        // 设置默认字体为微软雅黑
+        worksheet.defaultFont = { name: '微软雅黑', size: 11 };
+        
+        // 添加数据
+        data.forEach((row, rowIndex) => {
+            const excelRow = worksheet.addRow(row);
+            // 设置整行字体为微软雅黑
+            excelRow.eachCell((cell) => {
+                cell.font = { name: '微软雅黑', size: 11 };
+            });
+        });
+        
+        // 设置列宽
+        worksheet.columns = [
+            { width: 10 }, // AD
+            { width: 8 },  // CTNS
+            { width: 12 }, // Size
+            { width: 10 }, // Weight
+            { width: 10 }, // Volume
+            { width: 12 }, // Volume weight
+            { width: 12 }, // Actual weight
+            { width: 15 }, // Chargeable weight
+            { width: 10 }, // unit price
+            { width: 10 }, // total cost
+            { width: 12 }, // transit time
+            { width: 8 },  // 泡比
+            { width: 50 }  // Remark
+        ];
+        
+        // 生成文件名：XXctns_quote_月日
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const fileName = `${totalQuantity}ctns_quote_${month}${day}.xlsx`;
+        
+        // 生成并下载Excel文件
+        workbook.xlsx.writeBuffer().then(function(buffer) {
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+            URL.revokeObjectURL(link.href);
+        });
+        
+        showToast('Excel文件已下载');
+    } else {
+        // 降级使用XLSX
+        const ws = XLSX.utils.aoa_to_sheet(data);
+        ws['!cols'] = [
+            { wch: 10 }, { wch: 8 }, { wch: 12 }, { wch: 10 }, { wch: 10 },
+            { wch: 12 }, { wch: 12 }, { wch: 15 }, { wch: 10 }, { wch: 10 },
+            { wch: 12 }, { wch: 8 }, { wch: 50 }
+        ];
+        XLSX.utils.book_append_sheet(wb, ws, 'Sheet1');
+        const now = new Date();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const fileName = `${totalQuantity}ctns_quote_${month}${day}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        showToast('Excel文件已下载');
+    }
 }
 
 /**
@@ -3685,37 +3720,66 @@ function exportAddressBook() {
             ]);
         });
         
-        // 创建工作表
-        const ws = XLSX.utils.aoa_to_sheet(wsData);
-        
-        // 设置列宽
-        ws['!cols'] = [
-            { wch: 10 }, // 客户
-            { wch: 8 },  // 邮编
-            { wch: 30 }, // 详细地址
-            { wch: 20 }, // 公司名
-            { wch: 15 }, // 联系人
-            { wch: 15 }, // 电话
-            { wch: 8 },  // 类型
-            { wch: 8 }   // 区域
-        ];
-        
-        // 添加工作表到工作簿
-        XLSX.utils.book_append_sheet(wb, ws, '客户地址簿');
-        
-        // 生成文件名
-        const now = new Date();
-        const timestamp = now.getFullYear() + 
-                         String(now.getMonth() + 1).padStart(2, '0') + 
-                         String(now.getDate()).padStart(2, '0') + '_' +
-                         String(now.getHours()).padStart(2, '0') + 
-                         String(now.getMinutes()).padStart(2, '0');
-        const fileName = `客户地址簿_${timestamp}.xlsx`;
-        
-        // 导出文件
-        XLSX.writeFile(wb, fileName);
-        
-        showToast('地址簿导出成功', 'success');
+        // 使用ExcelJS生成带字体的Excel文件
+        if (typeof ExcelJS !== 'undefined') {
+            const workbook = new ExcelJS.Workbook();
+            const worksheet = workbook.addWorksheet('客户地址簿');
+            
+            // 设置默认字体为微软雅黑
+            worksheet.defaultFont = { name: '微软雅黑', size: 11 };
+            
+            // 添加数据
+            wsData.forEach((row) => {
+                const excelRow = worksheet.addRow(row);
+                excelRow.eachCell((cell) => {
+                    cell.font = { name: '微软雅黑', size: 11 };
+                });
+            });
+            
+            // 设置列宽
+            worksheet.columns = [
+                { width: 10 }, { width: 8 }, { width: 30 }, { width: 20 },
+                { width: 15 }, { width: 15 }, { width: 8 }, { width: 8 }
+            ];
+            
+            // 生成文件名
+            const now = new Date();
+            const timestamp = now.getFullYear() + 
+                             String(now.getMonth() + 1).padStart(2, '0') + 
+                             String(now.getDate()).padStart(2, '0') + '_' +
+                             String(now.getHours()).padStart(2, '0') + 
+                             String(now.getMinutes()).padStart(2, '0');
+            const fileName = `客户地址簿_${timestamp}.xlsx`;
+            
+            // 导出文件
+            workbook.xlsx.writeBuffer().then(function(buffer) {
+                const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+                const link = document.createElement('a');
+                link.href = URL.createObjectURL(blob);
+                link.download = fileName;
+                link.click();
+                URL.revokeObjectURL(link.href);
+            });
+            
+            showToast('地址簿导出成功', 'success');
+        } else {
+            // 降级使用XLSX
+            const ws = XLSX.utils.aoa_to_sheet(wsData);
+            ws['!cols'] = [
+                { wch: 10 }, { wch: 8 }, { wch: 30 }, { wch: 20 },
+                { wch: 15 }, { wch: 15 }, { wch: 8 }, { wch: 8 }
+            ];
+            XLSX.utils.book_append_sheet(wb, ws, '客户地址簿');
+            const now = new Date();
+            const timestamp = now.getFullYear() + 
+                             String(now.getMonth() + 1).padStart(2, '0') + 
+                             String(now.getDate()).padStart(2, '0') + '_' +
+                             String(now.getHours()).padStart(2, '0') + 
+                             String(now.getMinutes()).padStart(2, '0');
+            const fileName = `客户地址簿_${timestamp}.xlsx`;
+            XLSX.writeFile(wb, fileName);
+            showToast('地址簿导出成功', 'success');
+        }
         
     } catch (error) {
         console.error('导出地址簿失败:', error);

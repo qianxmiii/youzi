@@ -152,27 +152,56 @@ function calculate() {
         let widthCell = row.querySelector('.width');
         let heightCell = row.querySelector('.height');
         let weightCell = row.querySelector('.weight');
+        let quantityCell = row.querySelector('.quantity');
 
         // 移除之前的整行样式
         row.classList.remove('special-size-warning');
 
-        // 只给超过62cm的单元格添加样式
-        if (length.greaterThanOrEqualTo(62)) {
-            lengthCell.classList.add('special-size-warning');
-        } else {
+        // 检查长宽高是否为0，并添加零值警告样式
+        if (length.equals(0)) {
+            lengthCell.classList.add('zero-value-warning');
             lengthCell.classList.remove('special-size-warning');
+        } else {
+            lengthCell.classList.remove('zero-value-warning');
+            // 只给超过62cm的单元格添加超长样式
+            if (length.greaterThanOrEqualTo(62)) {
+                lengthCell.classList.add('special-size-warning');
+            } else {
+                lengthCell.classList.remove('special-size-warning');
+            }
         }
 
-        if (width.greaterThanOrEqualTo(62)) {
-            widthCell.classList.add('special-size-warning');
-        } else {
+        if (width.equals(0)) {
+            widthCell.classList.add('zero-value-warning');
             widthCell.classList.remove('special-size-warning');
+        } else {
+            widthCell.classList.remove('zero-value-warning');
+            // 只给超过62cm的单元格添加超长样式
+            if (width.greaterThanOrEqualTo(62)) {
+                widthCell.classList.add('special-size-warning');
+            } else {
+                widthCell.classList.remove('special-size-warning');
+            }
         }
 
-        if (height.greaterThanOrEqualTo(62)) {
-            heightCell.classList.add('special-size-warning');
-        } else {
+        if (height.equals(0)) {
+            heightCell.classList.add('zero-value-warning');
             heightCell.classList.remove('special-size-warning');
+        } else {
+            heightCell.classList.remove('zero-value-warning');
+            // 只给超过62cm的单元格添加超长样式
+            if (height.greaterThanOrEqualTo(62)) {
+                heightCell.classList.add('special-size-warning');
+            } else {
+                heightCell.classList.remove('special-size-warning');
+            }
+        }
+
+        // 检查箱数是否为0
+        if (quantity.equals(0)) {
+            quantityCell.classList.add('zero-value-warning');
+        } else {
+            quantityCell.classList.remove('zero-value-warning');
         }
 
         // 检查单箱实重（大于等于22kg）
@@ -1627,10 +1656,11 @@ function clearBoxTable() {
     
     // 移除所有警告样式
     firstRow.classList.remove('special-size-warning');
-    firstRow.querySelector('.length').classList.remove('special-size-warning');
-    firstRow.querySelector('.width').classList.remove('special-size-warning');
-    firstRow.querySelector('.height').classList.remove('special-size-warning');
+    firstRow.querySelector('.length').classList.remove('special-size-warning', 'zero-value-warning');
+    firstRow.querySelector('.width').classList.remove('special-size-warning', 'zero-value-warning');
+    firstRow.querySelector('.height').classList.remove('special-size-warning', 'zero-value-warning');
     firstRow.querySelector('.weight').classList.remove('single-weight-warning');
+    firstRow.querySelector('.quantity').classList.remove('zero-value-warning');
     
     // 重置总计数据
     document.getElementById('total-volume').innerText = '0.00';

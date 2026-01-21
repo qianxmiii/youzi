@@ -673,6 +673,18 @@ const quoteTipsConfig = {
             {
                 quoteTip: "儿童产品",
                 quoteTipDetail: ""
+            },
+            {
+                quoteTip: "FDA产品",
+                quoteTipDetail: ""
+            },
+            {
+                quoteTip: "反倾销",
+                quoteTipDetail: ""
+            },
+            {
+                quoteTip: "木制品/纺织品/钢铁铝制品",
+                quoteTipDetail: "高关税产品注意附加费"
             }
         ],
         "英国": [

@@ -810,8 +810,8 @@ function parseDimensions() {
         row = row.replace(/\s*cm\s*/gi, ' ');
 
         // 使用正则表达式解析长、宽、高、重量和箱数
-        // 尺寸支持 x 或 * 或 × 分隔符
-        const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|m|M|米|inch|in|英寸)?/i;
+        // 尺寸支持 x 或 * 或 × 分隔符，单位支持 cm（如 90*35*35 cm）
+        const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
         const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
         // 箱数正则：支持带.00的格式（虽然已经预处理去掉，但保留兼容性）
         const quantityRegex = /(\d+(?:\.\d+)?)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
@@ -867,8 +867,8 @@ function parseDimensions() {
         // 标准化重量（保留2位小数）
         const normalizedWeight = parseFloat(weight.toFixed(2));
 
-        // 如果解析到了有效的箱规数据（长宽高重量都大于0）
-        if (normalizedLength > 0 && normalizedWidth > 0 && normalizedHeight > 0 && normalizedWeight > 0) {
+        // 如果解析到了有效的箱规数据（长宽高有效即可，重量可选；无 KG 时重量为 0 也会填入）
+        if (normalizedLength > 0 && normalizedWidth > 0 && normalizedHeight > 0) {
             if (quantity > 0) {
                 // 有箱数：用于合并相同箱规
                 const key = `${normalizedLength}-${normalizedWidth}-${normalizedHeight}-${normalizedWeight}`;
@@ -955,11 +955,11 @@ function parseDimensions() {
             `;
         }
 
-        // 填充数据
+        // 填充数据（无 KG 时重量留空）
         currentRow.querySelector('.length').value = boxSpec.length;
         currentRow.querySelector('.width').value = boxSpec.width;
         currentRow.querySelector('.height').value = boxSpec.height;
-        currentRow.querySelector('.weight').value = boxSpec.weight.toFixed(2);
+        currentRow.querySelector('.weight').value = boxSpec.weight > 0 ? boxSpec.weight.toFixed(2) : '';
         currentRow.querySelector('.quantity').value = boxSpec.quantity;
     });
 
@@ -2238,8 +2238,8 @@ function parseBatchBoxSpec() {
     input = input.replace(/\s*cm\s*/gi, ' ');
     
     // 使用更灵活的正则表达式解析箱规信息
-    // 支持多种格式：45*45*50 10KG 50CTNS 或 45x45x50 10kg 50箱 等
-    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(mm|MM|m|M|米|inch|in|英寸)?/i;
+    // 支持多种格式：45*45*50 10KG 50CTNS、45x45x50 10kg 50箱、90*35*35 cm 等
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     

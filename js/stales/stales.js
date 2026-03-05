@@ -212,6 +212,54 @@ function clearFilterCache() {
     filteredRowsCache = null;
 }
 
+/**
+ * 导出当前筛选结果中的「最新轨迹」到 Excel（运单轨迹报告 stales.html）
+ */
+function exportLatestTrackToExcel() {
+    if (typeof XLSX === 'undefined') {
+        if (typeof showToast === 'function') {
+            showToast('缺少 XLSX 库，无法导出 Excel', 'warning');
+        } else {
+            alert('缺少 XLSX 库，无法导出 Excel');
+        }
+        return;
+    }
+    const rows = getFilteredRows(false);
+    if (!rows || rows.length === 0) {
+        if (typeof showToast === 'function') {
+            showToast('当前筛选条件下没有数据可导出', 'warning');
+        } else {
+            alert('当前筛选条件下没有数据可导出');
+        }
+        return;
+    }
+    const headers = ['运单号', '客户', '渠道', '承运商', '状态', '目的国', '未更新天数', '最新轨迹时间', '最新轨迹描述'];
+    const data = [headers];
+    rows.forEach(tr => {
+        const trackingNumber = (tr.querySelector('.tracking-checkbox')?.value || tr.querySelector('td:nth-child(2)')?.textContent || '').trim();
+        const customer = tr.getAttribute('data-customer') || '';
+        const channel = tr.getAttribute('data-channel') || '';
+        const carrier = tr.getAttribute('data-carrier') || '';
+        const status = tr.getAttribute('data-status') || '';
+        const country = tr.getAttribute('data-country') || '';
+        const daysCell = tr.querySelector('td:nth-child(6)');
+        const daysStale = daysCell ? daysCell.textContent.trim() : '';
+        const latestTime = tr.getAttribute('data-latest-time') || '';
+        const latestDesc = tr.getAttribute('data-latest-desc') || '';
+        data.push([trackingNumber, customer, channel, carrier, status, country, daysStale, latestTime, latestDesc]);
+    });
+    const wb = XLSX.utils.book_new();
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [{ wch: 18 }, { wch: 20 }, { wch: 16 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 60 }];
+    XLSX.utils.book_append_sheet(wb, ws, '最新轨迹');
+    const date = new Date();
+    const fileName = '最新轨迹_' + date.getFullYear() + String(date.getMonth() + 1).padStart(2, '0') + String(date.getDate()).padStart(2, '0') + '_' + String(date.getHours()).padStart(2, '0') + String(date.getMinutes()).padStart(2, '0') + '.xlsx';
+    XLSX.writeFile(wb, fileName);
+    if (typeof showToast === 'function') {
+        showToast('Excel 已下载');
+    }
+}
+
 // 检查是否有筛选条件
 function hasFilterConditions() {
     const customerFilter = document.getElementById('customerFilter')?.value || '';

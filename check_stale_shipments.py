@@ -519,6 +519,9 @@ def generate_html_report(results, output_file="stales.html"):
             <span class="badge bg-info text-white" id="resultCountBadge">
                 <i class="bi bi-list-ul"></i> 共 <span id="resultCount">0</span> 条结果
             </span>
+            <button type="button" class="btn btn-success btn-sm ms-2" id="exportLatestTrackBtn" onclick="exportLatestTrackToExcel()">
+                <i class="bi bi-file-earmark-excel"></i> 导出最新轨迹 Excel
+            </button>
         </div>
     </div>
     <!-- 悬浮按钮组 -->
@@ -635,6 +638,10 @@ def generate_html_report(results, output_file="stales.html"):
             for log in item.get("logisticsInfors", [])
         ]).replace('"', '&quot;')
 
+        first_log = track_logs[0] if track_logs else {}
+        latest_time = (first_log.get("nodeTime") or "").replace('"', '&quot;')
+        latest_desc = (first_log.get("nodeDesc") or "").replace('"', '&quot;')
+
         eta_flag = 1 if item.get("eta_within_3_days") else 0
         is_warehouse = 1 if latest_desc == 'Your goods are in the warehouse' else 0
         tracking_number = item.get("tracking_number") or item.get("odd") or ""
@@ -723,6 +730,8 @@ def generate_html_report(results, output_file="stales.html"):
                 data-channel="{item.get('channel', '')}"
                 data-carrier="{item.get('carrier', '')}"
                 data-track="{track_text}"
+                data-latest-time="{latest_time}"
+                data-latest-desc="{latest_desc}"
                 data-problem="{'1' if tracking_number in problem_items else '0'}"
                 data-status="{status}"
                 data-inspection-location="{inspection_location}"
@@ -793,6 +802,7 @@ def generate_html_report(results, output_file="stales.html"):
 </script>
 
 <script src="js/common/bootstrap.bundle.min.js"></script>
+<script src="js/common/xlsx.full.min.js"></script>
 <script src="js/common.js"></script>
 <script src="js/stales/stales.js"></script>
 <script src="js/stales/heatmap.js"></script>

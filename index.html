@@ -374,10 +374,15 @@
                 
                 <!-- 多选模块 MOQ等 -->
                 <div class="option-items align-items-center">
-                  <!-- 偏远地址 -->
+                  <!-- 偏远 -->
                   <div class="form-check mr-3">
                     <input type="checkbox" id="remote-address" class="form-check-input" oninput="updateQuote()" />
-                    <label for="remote-address" class="form-check-label">偏远地址</label>
+                    <label for="remote-address" class="form-check-label">偏远</label>
+                  </div>
+                  <!-- 住宅 -->
+                  <div class="form-check mr-3">
+                    <input type="checkbox" id="residential-check" class="form-check-input" oninput="updateQuote()" />
+                    <label for="residential-check" class="form-check-label">住宅</label>
                   </div>
                   <!-- 带电 -->
                   <div class="form-check mr-3">
@@ -866,7 +871,7 @@
                       <div class="col-md-3">
                         <select id="remoteFilter" class="form-select">
                           <option value="all">所有区域</option>
-                          <option value="remote">偏远地址</option>
+                          <option value="remote">偏远</option>
                           <option value="non-remote">非偏远</option>
                         </select>
                       </div>

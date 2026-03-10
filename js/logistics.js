@@ -18,7 +18,7 @@ window.onload = function () {
 
     // 获取下一个星期五的日期
     // valid_date = getNextFriday();
-    valid_date = "03/07";
+    valid_date = "03/14";
 
     init(); // 初始化
     eventListener();
@@ -605,6 +605,7 @@ function updateQuote() {
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
@@ -636,6 +637,7 @@ function updateQuote() {
         if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 0);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB");
+        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB","residential");
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "RMB", data.overSizeFee);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "RMB", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
@@ -662,6 +664,7 @@ function updateQuote() {
         if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
@@ -688,6 +691,7 @@ function updateQuote() {
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
@@ -702,6 +706,7 @@ function updateQuote() {
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
+        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
@@ -1212,6 +1217,7 @@ function getInputData() {
         profitRmb: new Decimal(document.getElementById("profit_rmb").value || 0),
         quoteType: document.getElementById("quote-type").value,
         isRemoteAddress: document.getElementById('remote-address').checked,
+        isResidential: document.getElementById('residential-check').checked,
         isMOQ: document.getElementById('MOQ').checked,
         isDDU: document.getElementById('ddu_check').checked,
         isOverSize: document.getElementById('oversize_check').checked,
@@ -1758,6 +1764,7 @@ function saveQuoteHistory() {
             
             // 特殊选项
             isRemote: document.getElementById('remote-address').checked || false,
+            hasResidential: document.getElementById('residential-check').checked || false,
             hasBattery: document.getElementById('battery_check').checked || false,
             isOversize: document.getElementById('oversize_check').checked || false,
             oversizeFee: parseFloat(document.getElementById('oversize-input').value) || 0,
@@ -1875,6 +1882,9 @@ function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
         let statusInfo = [];
         if (record.isRemote) {
             statusInfo.push(`<span class="badge bg-dark text-white" style="font-size: 0.7rem;">偏远</span>`);
+        }
+        if (record.hasResidential) {
+            statusInfo.push(`<span class="badge bg-dark text-white" style="font-size: 0.7rem;">住宅</span>`);
         }
         if (record.hasBattery) {
             statusInfo.push(`<span class="badge bg-success text-white" style="font-size: 0.7rem;">带电</span>`);
@@ -2043,6 +2053,7 @@ function loadQuoteToForm(quoteId) {
         
         // 设置特殊选项
         document.getElementById('remote-address').checked = record.isRemote;
+        document.getElementById('residential-check').checked = record.hasResidential || false;
         document.getElementById('battery_check').checked = record.hasBattery;
         document.getElementById('oversize_check').checked = record.isOversize;
         document.getElementById('oversize-input').value = record.oversizeFee || 0;

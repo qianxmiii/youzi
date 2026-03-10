@@ -21,12 +21,13 @@ function getWeightIndex(weight) {
     return 4; // 101KG+
 }
 
-// 获取偏远费
-function getRemoteAddressfee(totalQuantity, unit) {
+// 获取偏远费/住宅费（费用规则相同，feeLabel 可选：'residential' 显示住宅费，否则显示偏远地址费）
+function getRemoteAddressfee(totalQuantity, unit, feeLabel) {
     let remoteAddressStr = "";
     let remoteAddressFee = new Decimal(0);
+    const isResidential = feeLabel === 'residential';
     if (unit == "RMB") {
-        remoteAddressStr = LINE_BREAK + '偏远地址费: ';
+        remoteAddressStr = LINE_BREAK + (isResidential ? '住宅费: ' : '偏远地址费: ');
         remoteAddressFee = new Decimal(25).mul(totalQuantity);
         if (remoteAddressFee.lessThan(150)) {
             remoteAddressStr += '25RMB/箱，低消150RMB ';
@@ -36,7 +37,7 @@ function getRemoteAddressfee(totalQuantity, unit) {
             addFee = addFee.add(remoteAddressFee);
         }
     } else {
-        remoteAddressStr = LINE_BREAK + 'Remote address fee: ';
+        remoteAddressStr = LINE_BREAK + (isResidential ? 'Residential fee: ' : 'Remote address fee: ');
         remoteAddressFee = new Decimal(3.5).mul(totalQuantity);
         remoteAddressStr += '3.5usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + remoteAddressFee + 'usd ';
             addFee = addFee.add(remoteAddressFee);

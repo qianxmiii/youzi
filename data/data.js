@@ -611,14 +611,12 @@ const carrierWeightRatioDiscounts = {
         discounts: [
             { ratio: 200, discount: 0.5 },
             { ratio: 250, discount: 0.8 },
-            { ratio: 300, discount: 1.5 },
-            { ratio: 350, discount: 1.8 },
-            { ratio: 400, discount: 2.0 },  
-            { ratio: 500, discount: 2.7 },
-            { ratio: 600, discount: 3.0 },
-            { ratio: 700, discount: 3.2 },
+            { ratio: 300, discount: 1.1 },
+            { ratio: 350, discount: 1.3 },
+            { ratio: 400, discount: 1.5 },
+            { ratio: 450, discount: 1.8 },
         ],
-        description: "100KG+货重比减：1:200减0.5，1:250减0.8，1:300减1.5，1:350减1.8，1:400减2.0，1:500减2.7，1:600减3.0，1:700减3.2"
+        description: "100KG+货重比减：1:200减0.5，1:250减0.8，1:300减1.1，1:350减1.3，1:400减1.5，1:450减1.8"
     },
     "壹合": {
         name: "壹合",

@@ -17,8 +17,8 @@ const {deliveryMethodsByCountry, quickReplies} = window.data;
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    // valid_date = getNextFriday();
-    valid_date = "03/14";
+    valid_date = getNextFriday();
+    // valid_date = "03/14";
 
     init(); // 初始化
     eventListener();
@@ -1077,17 +1077,20 @@ function parsePackageInfo() {
     // 识别地址代码（适配新版 addressByCountry 结构）
     const addressMatch = input.match(addressRegex);
     if (addressMatch) {
-        const addressCode = addressMatch[0].toUpperCase();
+        const addressRaw = addressMatch[0];  // 保留原始大小写，如 DFW2n
+        const addressCodeUpper = addressRaw.toUpperCase();
         let found = false;
         
         // 记录当前国家，用于检测是否发生变化
         const currentCountry = document.getElementById('country-select').value;
         
-        // 遍历所有国家查找匹配
+        // 遍历所有国家查找匹配（先尝试原始大小写再尝试全大写，兼容 DFW2n、MCI1n 等带小写后缀的仓库码）
         for (const country in addressByCountry) {
-            if (addressByCountry[country][addressCode]) {
+            const postcode = addressByCountry[country][addressRaw] || addressByCountry[country][addressCodeUpper];
+            if (postcode) {
+                const addressCode = addressByCountry[country][addressRaw] !== undefined ? addressRaw : addressCodeUpper;
                 document.getElementById('address').value = addressCode;
-                document.getElementById('postcode').value = addressByCountry[country][addressCode];
+                document.getElementById('postcode').value = postcode;
                 document.getElementById('country-select').value = country;
                 found = true;
                 
@@ -1103,7 +1106,7 @@ function parsePackageInfo() {
         
         // 未匹配时的处理（可选）
         if (!found) {
-            document.getElementById('address').value = addressCode;
+            document.getElementById('address').value = addressRaw;
             const defaultCountry = "美国";
             document.getElementById('country-select').value = defaultCountry;
             

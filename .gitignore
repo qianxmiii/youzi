@@ -9,3 +9,7 @@ stales.html
 data/private_data.js
 data/remove_tracking.txt
 youzi.code-workspace
+
+# Node server
+server/node_modules/
+server/*.db

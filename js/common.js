@@ -536,8 +536,9 @@ function getZipLabelByGroups(groups, zipcode) {
 }
 
 // 支持承运商下多渠道：优先取子渠道配置，缺失时回退承运商级默认
+// 可选传入 volumeRatio、billingWeight：与承运商货重比减配置联动，在表价基础上扣减（USD/kg）
 function getCarrierPrice(params) {
-    const { carrier, channel, origin, zipcode, weight } = params;
+    const { carrier, channel, origin, zipcode, weight, volumeRatio, billingWeight } = params;
     const carrierCfg = getCarrierCfg(carrier);
     if (!carrierCfg) return null;
 
@@ -555,7 +556,20 @@ function getCarrierPrice(params) {
     if (!regionMap) return null;
     const row = regionMap[zipLabel] || regionMap["_default"] || null;
     if (!row) return null;
-    return row[idx] != null ? row[idx] : null;
+    const base = row[idx];
+    if (base == null) return null;
+
+    let price = new Decimal(base);
+    if (typeof getApplicableDiscount === 'function' && volumeRatio != null && !isNaN(Number(volumeRatio)) && Number(volumeRatio) > 0) {
+        const vr = new Decimal(volumeRatio);
+        const bw = billingWeight != null && !isNaN(Number(billingWeight))
+            ? new Decimal(billingWeight)
+            : new Decimal(weight || 0);
+        const disc = getApplicableDiscount(vr, carrier, bw);
+        price = price.minus(disc);
+    }
+    if (price.lessThan(0)) price = new Decimal(0);
+    return price.toNumber();
 }
 
 function getWeightHeaders(breaks) {

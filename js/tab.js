@@ -1428,7 +1428,19 @@ function calculatePrice(region,channel,zipcode,weight) {
     // 优先承运商配置 先注释掉，后面来调试
     const carrier = (document.getElementById('t4_carrier') || {}).value;
     if (carrier && typeof getCarrierPrice === 'function') {
-        const price = getCarrierPrice({ carrier, channel, origin: region, zipcode, weight });
+        const vrEl = document.getElementById('volumeRatio');
+        const cwEl = document.getElementById('chargeWeight');
+        const volumeRatioParsed = vrEl ? parseFloat(vrEl.value) : NaN;
+        const billingParsed = cwEl ? parseFloat(cwEl.value) : NaN;
+        const price = getCarrierPrice({
+            carrier,
+            channel,
+            origin: region,
+            zipcode,
+            weight,
+            volumeRatio: !isNaN(volumeRatioParsed) && volumeRatioParsed > 0 ? volumeRatioParsed : null,
+            billingWeight: !isNaN(billingParsed) ? billingParsed : null
+        });
         if (price != null) {
             document.getElementById("t4_priceResult").innerHTML = `单价：$${price} / KG`;
             // 高亮承运商表格对应单元格

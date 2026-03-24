@@ -17,8 +17,8 @@ const {deliveryMethodsByCountry, quickReplies} = window.data;
 window.onload = function () {
 
     // 获取下一个星期五的日期
-    // valid_date = getNextFriday();
-    valid_date = "03/19";
+    valid_date = getNextFriday();
+    // valid_date = "03/19";
 
     init(); // 初始化
     eventListener();
@@ -626,6 +626,12 @@ function updateQuote() {
         // 构建备注内容
         notes = `${data.address} ${data.channel}: ${priceUsd} usd per kg `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
+        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
+
+    } else if (data.quoteType === "通用-RMB-单价") {
+        // 简洁单价行（RMB/kg），对应「通用-单价」的美元版
+        notes = `${data.address} ${getCN(data.channel)}: ${priceRmb} RMB/kg `;
+        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天`;
         if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
 
     } else if (data.quoteType === "通用-RMB") {
@@ -3505,19 +3511,17 @@ function showDeliveryMethodHint(deliveryMethod) {
  * @returns {string} - tooltip内容
  */
 function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
-    // 获取当前选择的承运商
-    const currentCarrier = getCurrentCarrier();
-    const carrierConfig = carrierWeightRatioDiscounts[currentCarrier] || carrierWeightRatioDiscounts[defaultCarrier];
-    
+    const carrierConfig = unifiedWeightRatioDiscountConfig;
+
     // 检查是否满足最低计费重要求
     if (billingWeight && carrierConfig.minBillingWeight) {
         if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
-            return `${carrierConfig.name}货重比减：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG`;
+            return `${carrierConfig.name}：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG`;
         }
     }
-    
+
     // 构建tooltip内容 - 只显示当前泡比能满足的折扣
-    let tooltipContent = `${carrierConfig.name}货重比减：\n`;
+    let tooltipContent = `${carrierConfig.name}：\n`;
     
     // 找到当前泡比能满足的所有折扣
     const applicableDiscounts = carrierConfig.discounts.filter(item => 
@@ -3539,18 +3543,6 @@ function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
 }
 
 /**
- * 获取当前选择的承运商
- * @returns {string} - 承运商名称
- */
-function getCurrentCarrier() {
-    const carrierSelect = document.getElementById('carrier-select');
-    if (carrierSelect && carrierSelect.value) {
-        return carrierSelect.value;
-    }
-    return defaultCarrier;
-}
-
-/**
  * 根据泡比获取适用的折扣
  * @param {Decimal} volumeRatio - 泡比值
  * @param {string} carrier - 承运商名称
@@ -3558,9 +3550,9 @@ function getCurrentCarrier() {
  * @returns {number} - 折扣值
  */
 function getApplicableDiscount(volumeRatio, carrier = null, billingWeight = null) {
-    const carrierName = carrier || getCurrentCarrier();
-    const carrierConfig = carrierWeightRatioDiscounts[carrierName] || carrierWeightRatioDiscounts[defaultCarrier];
-    
+    void carrier; // 保留参数兼容旧调用；优惠与承运商无关
+    const carrierConfig = unifiedWeightRatioDiscountConfig;
+
     // 检查是否满足最低计费重要求
     if (billingWeight && carrierConfig.minBillingWeight) {
         if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
@@ -3615,22 +3607,22 @@ function updateCarrierTooltip() {
  */
 function initCarrierSelector() {
     const carrierSelect = document.getElementById('carrier-select');
-    if (carrierSelect) {
-        // 设置默认承运商
-        carrierSelect.value = defaultCarrier;
-        
-        // 动态生成选项（从配置中读取）
-        carrierSelect.innerHTML = '';
-        Object.keys(carrierWeightRatioDiscounts).forEach(carrierName => {
-            const option = document.createElement('option');
-            option.value = carrierName;
-            option.textContent = carrierWeightRatioDiscounts[carrierName].name;
-            carrierSelect.appendChild(option);
-        });
-        
-        // 设置默认选中项
-        carrierSelect.value = defaultCarrier;
-    }
+    if (!carrierSelect || typeof expressPricing === 'undefined' || !expressPricing) return;
+
+    carrierSelect.innerHTML = '';
+    const carriers = Object.keys(expressPricing);
+    carriers.forEach(carrierName => {
+        const option = document.createElement('option');
+        option.value = carrierName;
+        option.textContent = carrierName;
+        carrierSelect.appendChild(option);
+    });
+
+    const preferred =
+        typeof defaultCarrier !== 'undefined' && carriers.includes(defaultCarrier)
+            ? defaultCarrier
+            : carriers[0];
+    carrierSelect.value = preferred;
 }
 
 /**

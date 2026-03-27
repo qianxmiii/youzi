@@ -3513,21 +3513,19 @@ function showDeliveryMethodHint(deliveryMethod) {
 function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
     const carrierConfig = unifiedWeightRatioDiscountConfig;
 
-    // 检查是否满足最低计费重要求
+    // 仅作参考提示；实际报价不自动扣减（见 getCarrierPrice）
     if (billingWeight && carrierConfig.minBillingWeight) {
         if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
-            return `${carrierConfig.name}：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG`;
+            return `${carrierConfig.name}：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG\n\n（仅供参考，报价未自动扣减，请自行核算）`;
         }
     }
 
-    // 构建tooltip内容 - 只显示当前泡比能满足的折扣
     let tooltipContent = `${carrierConfig.name}：\n`;
-    
-    // 找到当前泡比能满足的所有折扣
-    const applicableDiscounts = carrierConfig.discounts.filter(item => 
+
+    const applicableDiscounts = carrierConfig.discounts.filter(item =>
         volumeRatio.greaterThanOrEqualTo(item.ratio)
     );
-    
+
     if (applicableDiscounts.length > 0) {
         applicableDiscounts.forEach(item => {
             tooltipContent += `1:${item.ratio}减${item.discount}\n`;
@@ -3535,10 +3533,10 @@ function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
     } else {
         tooltipContent += `当前泡比${volumeRatio}不满足任何折扣条件`;
     }
-    
-    // 移除最后的换行符
+
     tooltipContent = tooltipContent.trim();
-    
+    tooltipContent += `\n\n（仅供参考，报价未自动扣减，请自行核算）`;
+
     return tooltipContent;
 }
 

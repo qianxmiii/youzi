@@ -536,7 +536,7 @@ function getZipLabelByGroups(groups, zipcode) {
 }
 
 // 支持承运商下多渠道：优先取子渠道配置，缺失时回退承运商级默认
-// 可选传入 volumeRatio、billingWeight：与承运商货重比减配置联动，在表价基础上扣减（USD/kg）
+// 可选传入 volumeRatio、billingWeight：兼容旧调用；表价不再按货重比减自动扣减，仅页面提示会使用配置。
 function getCarrierPrice(params) {
     const { carrier, channel, origin, zipcode, weight, volumeRatio, billingWeight } = params;
     const carrierCfg = getCarrierCfg(carrier);
@@ -560,14 +560,8 @@ function getCarrierPrice(params) {
     if (base == null) return null;
 
     let price = new Decimal(base);
-    if (typeof getApplicableDiscount === 'function' && volumeRatio != null && !isNaN(Number(volumeRatio)) && Number(volumeRatio) > 0) {
-        const vr = new Decimal(volumeRatio);
-        const bw = billingWeight != null && !isNaN(Number(billingWeight))
-            ? new Decimal(billingWeight)
-            : new Decimal(weight || 0);
-        const disc = getApplicableDiscount(vr, carrier, bw);
-        price = price.minus(disc);
-    }
+    // 说明：用户要求“提示/报价费用不自动减比重减”，因此此处不再根据货重比减配置扣减单价。
+    // 如果你需要手动扣减，可在导出的报价或备注中自行计算并减去对应折扣。
     if (price.lessThan(0)) price = new Decimal(0);
     return price.toNumber();
 }

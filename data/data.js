@@ -620,5 +620,5 @@ const unifiedWeightRatioDiscountConfig = {
     description: "100KG+ " + UNIFIED_VOLUME_RATIO_DISCOUNT_DESC
 };
 
-// 主界面承运商下拉默认选中（须在 expressPricing 中存在）
-const defaultCarrier = "鑫鲲鹏";
+// 主界面「运输方式」下拉默认选中（须在 expressPricing 中存在，与 data_price 顶层键一致）
+const defaultCarrier = "渠道";    

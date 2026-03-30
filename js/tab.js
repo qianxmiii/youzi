@@ -1313,18 +1313,26 @@ function deleteDDPRow(rowIndex) {
 
 
 /**
- * Tab 4 - 快递派查价
+ * Tab 4 - 快递派查价（单一价目表 + 子渠道下拉）
  */
-// 动态生成快递派价格表格
-function initCarrierSelect() {
-    const sel = document.getElementById('t4_carrier');
-    if (!sel || !window.data || !expressPricing) return;
-    const carriers = Object.keys(expressPricing);
-    sel.innerHTML = carriers.map(c => `<option value="${c}">${c}</option>`).join('');
-    sel.addEventListener('change', function() {
-        syncChannelWithCarrier();
-        renderPriceTable();
-    });
+function syncT4ChannelOptions() {
+    const channelSel = document.getElementById('t4_channel');
+    if (!channelSel || typeof getExpressPricingRootCfg !== 'function') return;
+    const cfg = getExpressPricingRootCfg();
+    if (!cfg || !cfg.channels) return;
+    const available = Object.keys(cfg.channels);
+    if (available.length === 0) return;
+    const current = channelSel.value;
+    channelSel.innerHTML = available.map(ch => `<option value="${ch}">${ch}</option>`).join('');
+    if (available.includes(current)) channelSel.value = current;
+    else channelSel.value = available[0];
+}
+
+function initT4ChannelSelect() {
+    const channelSel = document.getElementById('t4_channel');
+    if (!channelSel || !window.data || !expressPricing) return;
+    syncT4ChannelOptions();
+    channelSel.addEventListener('change', () => renderPriceTable());
 }
 
 function renderPriceTable() {
@@ -1337,10 +1345,9 @@ function renderPriceTable() {
     southTbody.innerHTML = "";
     eastTbody.innerHTML = "";
 
-    const carrier = (document.getElementById('t4_carrier') || {}).value;
-    const cfg = typeof getCarrierCfg === 'function' ? getCarrierCfg(carrier) : null;
+    const carrier = typeof getExpressPricingRootKey === 'function' ? getExpressPricingRootKey() : '';
+    const cfg = typeof getExpressPricingRootCfg === 'function' ? getExpressPricingRootCfg() : null;
 
-    // 基于承运商配置动态渲染
     const channel = (document.getElementById("t4_channel") || {}).value;
     const effectiveBreaks = typeof getEffectiveBreaks === 'function' ? getEffectiveBreaks(carrier, channel) : (cfg?.weightBreaks || []);
     const headers = typeof getWeightHeaders === 'function' ? getWeightHeaders(effectiveBreaks) : [];
@@ -1377,7 +1384,7 @@ function renderPriceTable() {
     });
 }
 
-// 页面加载后初始化承运商下拉与价格表
+// 页面加载后初始化渠道下拉与价格表
 document.addEventListener('DOMContentLoaded', function () {
     // 初始化搜索功能
     initSearchFunction();
@@ -1388,36 +1395,12 @@ document.addEventListener('DOMContentLoaded', function () {
     } catch (e) { console.warn('initWorldClock error', e); }
     
     try {
-        initCarrierSelect();
-    } catch (e) { console.warn('initCarrierSelect error', e); }
+        initT4ChannelSelect();
+    } catch (e) { console.warn('initT4ChannelSelect error', e); }
     try {
-        syncChannelWithCarrier();
         renderPriceTable();
     } catch (e) { console.warn('renderPriceTable error', e); }
 });
-
-// 当承运商切换时，同步渠道下拉为该承运商可用渠道
-function syncChannelWithCarrier() {
-    const carrier = (document.getElementById('t4_carrier') || {}).value;
-    const channelSel = document.getElementById('t4_channel');
-    if (!carrier || !channelSel || typeof getCarrierCfg !== 'function') return;
-    const cfg = getCarrierCfg(carrier);
-    if (!cfg || !cfg.channels) return;
-
-    const available = Object.keys(cfg.channels);
-    if (available.length === 0) return;
-
-    // 重建渠道下拉，仅展示该承运商支持的渠道
-    const current = channelSel.value;
-    channelSel.innerHTML = available.map(ch => `<option value="${ch}">${ch}</option>`).join('');
-    // 保持当前值如在可选范围，否则选第一个
-    if (available.includes(current)) {
-        channelSel.value = current;
-    }
-    if (!available.includes(channelSel.value)) {
-        channelSel.value = available[0];
-    }
-}
 
 // 计算价格并突出显示对应的单元格
 function calculatePrice(region,channel,zipcode,weight) {
@@ -1425,8 +1408,7 @@ function calculatePrice(region,channel,zipcode,weight) {
         document.getElementById("t4_priceResult").innerHTML = "单价：请输入有效的邮编和重量";
         return;
     }
-    // 优先承运商配置 先注释掉，后面来调试
-    const carrier = (document.getElementById('t4_carrier') || {}).value;
+    const carrier = typeof getExpressPricingRootKey === 'function' ? getExpressPricingRootKey() : '';
     if (carrier && typeof getCarrierPrice === 'function') {
         const vrEl = document.getElementById('volumeRatio');
         const cwEl = document.getElementById('chargeWeight');

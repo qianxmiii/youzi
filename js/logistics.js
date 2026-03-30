@@ -52,9 +52,8 @@ function init() {
  * 监听输入
  */
 function eventListener() {
-    // 监听渠道下拉选项的变化
-    document.getElementById("t4_channel").addEventListener("change", renderPriceTable());
-    
+    // t4_channel 的 change 由 tab.js initT4ChannelSelect 绑定
+
     // 监听备注框 Ctrl+C 复制触发保存报价历史
     const notesEl = document.getElementById('notes');
     if (notesEl) {
@@ -3516,7 +3515,7 @@ function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
     // 仅作参考提示；实际报价不自动扣减（见 getCarrierPrice）
     if (billingWeight && carrierConfig.minBillingWeight) {
         if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
-            return `${carrierConfig.name}：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG\n\n（仅供参考，报价未自动扣减，请自行核算）`;
+            return `${carrierConfig.name}：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG\n\n`;
         }
     }
 
@@ -3535,8 +3534,6 @@ function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
     }
 
     tooltipContent = tooltipContent.trim();
-    tooltipContent += `\n\n（仅供参考，报价未自动扣减，请自行核算）`;
-
     return tooltipContent;
 }
 

@@ -503,9 +503,21 @@ function updateSummaryFromHistory(data) {
     });
 }
 
-// === 承运商定制查价通用函数 ===
+// === 快递派查价（expressPricing 顶层仅一组价目，如「渠道」） ===
 function getCarrierCfg(carrier) {
     return (window.data && expressPricing && expressPricing[carrier]) || null;
+}
+
+/** 当前价目表在 expressPricing 中的顶层键（合并渠道后通常只有一个） */
+function getExpressPricingRootKey() {
+    if (typeof expressPricing === 'undefined' || !expressPricing) return '';
+    const keys = Object.keys(expressPricing);
+    return keys[0] || '';
+}
+
+function getExpressPricingRootCfg() {
+    const k = getExpressPricingRootKey();
+    return k ? expressPricing[k] : null;
 }
 
 function getWeightIndexByBreaks(breaks, weight) {

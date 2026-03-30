@@ -15,7 +15,7 @@ def load_config(config_file='config/config.json'):
             
             for vendor in config['vendors']:
                 name = vendor.get('name')
-                if name == "鑫鲲鹏" or name == "华威尔":
+                if name == "海运" or name == "空运":
                     required_keys = ['name', 'FACTNO', 'SUPNO', 'SUPPASS', 'APPKEY', 'apiUrl']
                 else:
                     required_keys = ['name', 'appToken', 'appKey', 'apiUrl']
@@ -70,7 +70,7 @@ def fetch_tracking_data(tracking_item, vendor, max_retries=3):
         try:
             
             # 特殊逻辑
-            if vendor["name"] == "鑫鲲鹏" or vendor["name"] == "华威尔":
+            if vendor["name"] == "海运" or vendor["name"] == "空运":
                 params = {
                     "FACTNO": vendor["FACTNO"],
                     "SUPNO": vendor["SUPNO"],

@@ -612,12 +612,11 @@ const UNIFIED_VOLUME_RATIO_DISCOUNTS = [
 ];
 const UNIFIED_VOLUME_RATIO_DISCOUNT_DESC = "货重比减：1:200减0.5，1:250减1，1:300减1.5，1:500减2";
 
-/** 全系统统一泡比重优惠（与承运商无关）；计费重 ≥100KG 才享受 */
+/** 全系统统一泡比重优惠（与承运商无关） */
 const unifiedWeightRatioDiscountConfig = {
-    name: "比重减（100KG起）",
-    minBillingWeight: 100,
+    name: "比重减",
     discounts: UNIFIED_VOLUME_RATIO_DISCOUNTS,
-    description: "100KG+ " + UNIFIED_VOLUME_RATIO_DISCOUNT_DESC
+    description: UNIFIED_VOLUME_RATIO_DISCOUNT_DESC
 };
 
 // 主界面「运输方式」下拉默认选中（须在 expressPricing 中存在，与 data_price 顶层键一致）

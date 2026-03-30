@@ -3513,12 +3513,6 @@ function getCarrierDiscountTooltip(volumeRatio, billingWeight = null) {
     const carrierConfig = unifiedWeightRatioDiscountConfig;
 
     // 仅作参考提示；实际报价不自动扣减（见 getCarrierPrice）
-    if (billingWeight && carrierConfig.minBillingWeight) {
-        if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
-            return `${carrierConfig.name}：\n需要${carrierConfig.minBillingWeight}KG及以上才有货重比减\n当前计费重：${billingWeight}KG\n\n`;
-        }
-    }
-
     let tooltipContent = `${carrierConfig.name}：\n`;
 
     const applicableDiscounts = carrierConfig.discounts.filter(item =>
@@ -3548,13 +3542,6 @@ function getApplicableDiscount(volumeRatio, carrier = null, billingWeight = null
     void carrier; // 保留参数兼容旧调用；优惠与承运商无关
     const carrierConfig = unifiedWeightRatioDiscountConfig;
 
-    // 检查是否满足最低计费重要求
-    if (billingWeight && carrierConfig.minBillingWeight) {
-        if (billingWeight.lessThan(carrierConfig.minBillingWeight)) {
-            return 0; // 不满足最低计费重要求，无折扣
-        }
-    }
-    
     // 找到适用的最大折扣
     let applicableDiscount = 0;
     for (const item of carrierConfig.discounts) {

@@ -1335,6 +1335,25 @@ function initT4ChannelSelect() {
     channelSel.addEventListener('change', () => renderPriceTable());
 }
 
+// 初始化成本计算 Tab 的按kg表价可选项（支持手输 + 下拉选择）
+function initDDPKgPriceOptions() {
+    const datalist = document.getElementById('tp-price-per-kg-options');
+    const options = window.ddpKgPriceOptions;
+    if (!datalist || !Array.isArray(options)) return;
+
+    datalist.innerHTML = '';
+    options.forEach(item => {
+        if (!item || item.price == null) return;
+        const option = document.createElement('option');
+        option.value = String(item.price);
+        if (item.label) {
+            option.label = item.label;
+            option.textContent = item.label;
+        }
+        datalist.appendChild(option);
+    });
+}
+
 function renderPriceTable() {
     const southTable = document.getElementById("southChinaPriceTable");
     const eastTable = document.getElementById("eastChinaPriceTable");
@@ -1400,6 +1419,9 @@ document.addEventListener('DOMContentLoaded', function () {
     try {
         renderPriceTable();
     } catch (e) { console.warn('renderPriceTable error', e); }
+    try {
+        initDDPKgPriceOptions();
+    } catch (e) { console.warn('initDDPKgPriceOptions error', e); }
 });
 
 // 计算价格并突出显示对应的单元格

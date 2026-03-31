@@ -113,6 +113,20 @@ const seaTruckPrice = {
     "GYR3": 4.4
 };
 
+// 成本计算 Tab - 包税成本「按kg表价」可选项（可手输，也可下拉选择）
+const ddpKgPriceOptions = [
+    { label: "洛杉矶自提(特惠)", price: 3.48 },
+    { label: "洛杉矶自提(OA)", price: 3.68 },
+    { label: "洛杉矶自提(以星合德)", price: 4.8 },
+    { label: "洛杉矶自提(美森)", price: 8.78 },
+    { label: "纽约自提", price: 4.28 },
+    { label: "奥克兰自提", price: 3.78 },
+    { label: "休斯顿自提", price: 4.28 },
+    { label: "芝加哥自提", price: 4.88 },
+    { label: "萨瓦纳自提", price: 4.38 }
+];
+
 // 将 expressPricing 挂载到 window 对象上
 window.expressPricing = expressPricing;
 window.seaTruckPrice = seaTruckPrice;
+window.ddpKgPriceOptions = ddpKgPriceOptions;

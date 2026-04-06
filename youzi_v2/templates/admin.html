@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>youzi_v2</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">youzi_v2</div>
+      <div class="menu-group-title">后台管理</div>
+      <button class="menu-item active" data-view="dashboard">仪表盘</button>
+      <button class="menu-item" data-view="quote">报价历史</button>
+      <button class="menu-item" data-view="addresses">常用地址</button>
+
+      <div class="menu-group-title">工具栏</div>
+      <button class="menu-item" data-view="product-import">箱单转换</button>
+    </aside>
+
+    <main class="content">
+      <section id="view-dashboard" class="view active">
+        <h2>仪表盘</h2>
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">报价记录数</div>
+            <div class="card-value" id="metric-quote-count">-</div>
+          </div>
+          <div class="card">
+            <div class="card-label">地址簿条数</div>
+            <div class="card-value" id="metric-address-count">-</div>
+          </div>
+          <div class="card">
+            <div class="card-label">服务状态</div>
+            <div class="card-value" id="metric-health">检查中</div>
+          </div>
+        </div>
+        <p class="hint">报价与地址数据存于 SQLite；字段与 index 页 / youzi_v2 API 一致（客户、品名、国家、地址等分列）。</p>
+      </section>
+
+      <section id="view-quote" class="view">
+        <div class="row-head">
+          <h2>报价历史</h2>
+          <div>
+            <button id="btn-refresh">刷新</button>
+            <button id="btn-new" class="primary">新增</button>
+            <button id="btn-clear" class="danger">清空</button>
+          </div>
+        </div>
+
+        <div class="table-wrap table-scroll quote-table-wrap">
+          <table class="quote-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>来源</th>
+                <th>创建时间</th>
+                <th>更新时间</th>
+                <th>报价时间</th>
+                <th>客户</th>
+                <th>品名</th>
+                <th>国家</th>
+                <th>邮编</th>
+                <th>地址</th>
+                <th>发货地</th>
+                <th>渠道</th>
+                <th>箱数</th>
+                <th>实重</th>
+                <th>体积</th>
+                <th>成本¥</th>
+                <th>利润¥</th>
+                <th>报价¥</th>
+                <th>报价$</th>
+                <th>计费重</th>
+                <th>计费方</th>
+                <th>泡比</th>
+                <th>总价$</th>
+                <th>总价¥</th>
+                <th>单价RMB</th>
+                <th>类型</th>
+                <th>备注</th>
+                <th>状态 / 附加费</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="quote-tbody">
+              <tr><td colspan="29" class="empty">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-addresses" class="view">
+        <div class="row-head">
+          <h2>常用地址</h2>
+          <div>
+            <button id="addr-btn-refresh">刷新</button>
+            <button id="addr-btn-new" class="primary">新增</button>
+          </div>
+        </div>
+        <div class="table-wrap table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>客户</th>
+                <th>品名</th>
+                <th>国家</th>
+                <th>地址</th>
+                <th>邮编</th>
+                <th>公司</th>
+                <th>联系人</th>
+                <th>电话</th>
+                <th>商业</th>
+                <th>偏远</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="addr-tbody">
+              <tr><td colspan="11" class="empty">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-product-import" class="view">
+        <h2>箱单转换</h2>
+        <p class="hint">上传客户箱单（.xlsx/.xls），转换为系统产品导入模版。</p>
+
+        <div class="card form-card">
+          <label class="field-label">箱单文件</label>
+          <input id="pi-file" type="file" accept=".xlsx,.xls" />
+
+          <div class="row-actions">
+            <button id="pi-upload" class="primary">上传并转换</button>
+            <a id="pi-download" class="button-link disabled" href="#">下载产品导入模版</a>
+          </div>
+          <div id="pi-msg" class="hint"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="quote-dialog" class="dialog-wide">
+    <form method="dialog" id="quote-form">
+      <h3 id="dialog-title">新增报价</h3>
+      <div class="form-grid">
+        <label>客户<input id="form-customer" placeholder="默认 00" /></label>
+        <label>品名<input id="form-product-name" placeholder="默认 00" /></label>
+        <label>国家<input id="form-country" placeholder="如 美国" /></label>
+        <label>地址/仓库代码<input id="form-address" placeholder="如 DFW2" /></label>
+        <label>渠道<input id="form-channel" required placeholder="运输方式，必填" /></label>
+        <label>金额 (USD)<input id="form-amount" type="number" step="0.01" /></label>
+      </div>
+      <label>备注<textarea id="form-note" rows="3"></textarea></label>
+      <menu>
+        <button value="cancel" type="button" id="quote-cancel">取消</button>
+        <button value="default" class="primary" type="submit" id="form-submit">保存</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <dialog id="address-dialog" class="dialog-wide">
+    <form method="dialog" id="address-form">
+      <h3 id="addr-dialog-title">新增地址</h3>
+      <div class="form-grid">
+        <label>客户<input id="addr-form-customer" placeholder="00" /></label>
+        <label>品名<input id="addr-form-product" placeholder="00" /></label>
+        <label>国家<input id="addr-form-country" /></label>
+        <label>地址/仓库<input id="addr-form-address" /></label>
+        <label>邮编<input id="addr-form-postcode" /></label>
+        <label>公司<input id="addr-form-company" /></label>
+        <label>联系人<input id="addr-form-contact" /></label>
+        <label>电话<input id="addr-form-phone" /></label>
+        <label class="check-row"><input id="addr-form-commercial" type="checkbox" checked /> 商业地址</label>
+        <label class="check-row"><input id="addr-form-remote" type="checkbox" /> 偏远</label>
+      </div>
+      <menu>
+        <button type="button" id="addr-cancel">取消</button>
+        <button type="submit" class="primary" id="addr-submit">保存</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

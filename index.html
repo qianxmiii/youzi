@@ -263,6 +263,8 @@
                         <th>运输方式</th>
                         <th>国家</th>
                         <th>发货地</th>
+                        <th>客户</th>
+                        <th>品名</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -288,6 +290,14 @@
                             <option>华东</option>
                             <option>华南</option>
                           </select>
+                        </td>
+                        <!-- 客户代码（默认 00） -->
+                        <td>
+                          <input type="text" id="quote-customer-code" class="form-control" value="00" maxlength="100" title="客户代码或简称" />
+                        </td>
+                        <!-- 品名（默认 00） -->
+                        <td>
+                          <input type="text" id="quote-product-name" class="form-control" value="00" maxlength="200" title="品名" />
                         </td>
                       </tr>
                     </tbody>
@@ -860,7 +870,7 @@
                     <!-- 搜索筛选区 -->
                     <div class="row g-2 mb-3">
                       <div class="col-md-6">
-                        <input type="text" id="addressSearch" class="form-control" placeholder="搜索客户/地址/邮编...">
+                        <input type="text" id="addressSearch" class="form-control" placeholder="搜索客户/品名/国家/地址/邮编...">
                       </div>
                       <div class="col-md-3">
                         <select id="addressTypeFilter" class="form-select">
@@ -884,14 +894,16 @@
                         <thead class="table-light">
                           <tr>
                             <th width="5%">客户</th>
+                            <th width="6%">品名</th>
+                            <th width="5%">国家</th>
                             <th width="5%">邮编</th>
-                            <th width="40%">详细地址</th>
-                            <th width="15%">公司名</th>
-                            <th width="15%">联系人</th>
-                            <th width="10%">电话</th>
+                            <th width="28%">地址/仓库代码</th>
+                            <th width="12%">公司名</th>
+                            <th width="10%">联系人</th>
+                            <th width="8%">电话</th>
                             <th width="5%">类型</th>
                             <th width="5%">区域</th>
-                            <th width="10%">操作</th>
+                            <th width="11%">操作</th>
                           </tr>
                         </thead>
                         <tbody id="addressTableBody">

@@ -16,4 +16,12 @@ server/*.db
 
 # 产品导入脚本生成的临时文件
 temp/
-tools/youzi_v2/__pycache__/
+
+# youzi_v2：本地 SQLite、上传与生成文件（勿提交 Git）
+youzi_v2/__pycache__/
+youzi_v2/**/__pycache__/
+youzi_v2/data/
+youzi_v2/**/*.db
+youzi_v2/temp/
+# 若迁址后仍留有旧目录，可手动删掉 tools/youzi_v2（数据库未占用时）
+tools/youzi_v2/

@@ -91,10 +91,22 @@
         <div class="margin-vertical">
           <label for="dimension-input" class = "subtitle">箱规识别</label>
           <div class="input-group">
-            <input type="text" id="dimension-input" class="form-control" placeholder="例如: 45*45*50cm 或 90*35*35 cm, 10.15kg, 21ctns" oninput="parseDimensions()" />
+            <input type="text" id="dimension-input" class="form-control" placeholder="例如: 45*45*50cm 或 90*35*35 cm, 10.15kg, 21ctns；也可直接粘贴 Excel 三列（箱数、kg、长x宽x高）" oninput="parseDimensions()" />
             <button class="btn btn-outline-danger" type="button" onclick="clearBoxTable()" title="一键清空所有箱规数据">
               <i class="bi bi-trash"></i> 清空
             </button>
+          </div>
+          <div class="mt-3">
+            <label for="box-excel-paste" class="subtitle d-block mb-1">Excel 粘贴（三列 / 五列）</label>
+            <textarea id="box-excel-paste" class="form-control font-monospace" rows="6"
+              placeholder="在 Excel 中复制后粘贴到此处：&#10;三列：箱数 / 单箱毛重kg / 长x宽x高&#10;五列：箱数 / 单箱毛重kg / 长 / 宽 / 高&#10;支持表头行（首列非数字会自动跳过）"
+              onpaste="setTimeout(function(){ parseExcelBoxPasteFromTextarea(); }, 0)"></textarea>
+            <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
+              <button type="button" class="btn btn-outline-primary btn-sm" onclick="parseExcelBoxPasteFromTextarea()">
+                <i class="bi bi-table"></i> 解析表格并填入
+              </button>
+              <span class="form-text mb-0">支持两种格式：<strong>三列（箱数→重量→长×宽×高）</strong> 或 <strong>五列（箱数→重量→长→宽→高）</strong>；直接从 Excel 复制即可</span>
+            </div>
           </div>
           <div class="mt-2">
             <label class="form-label mb-2" style="font-size: 0.9rem; color: #6c757d;">尺寸调整（运输后尺寸增加）</label>

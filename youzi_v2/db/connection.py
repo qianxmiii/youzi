@@ -1,0 +1,58 @@
+from __future__ import annotations
+
+import sqlite3
+import threading
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    pass
+
+_instance: "Database | None" = None
+_instance_lock = threading.Lock()
+
+
+class Database:
+    """单文件 SQLite，线程内复用连接；启动时挂载各表的 ensure_schema / seed。"""
+
+    def __init__(self, db_path: Path) -> None:
+        self._lock = threading.RLock()
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._path = db_path
+        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        self._conn.row_factory = sqlite3.Row
+        self._bootstrap()
+
+    def _bootstrap(self) -> None:
+        from . import addresses_table
+        from . import app_settings_table
+        from . import quote_history_table
+
+        with self._lock:
+            app_settings_table.ensure_schema(self._conn)
+            quote_history_table.ensure_schema(self._conn)
+            addresses_table.ensure_schema(self._conn)
+            self._conn.commit()
+        app_settings_table.seed_if_empty(self._conn)
+        addresses_table.seed_if_empty(self._conn)
+        self._conn.commit()
+
+    @property
+    def conn(self) -> sqlite3.Connection:
+        return self._conn
+
+    @property
+    def lock(self) -> threading.RLock:
+        return self._lock
+
+    @property
+    def path(self) -> Path:
+        return self._path
+
+
+def get_database(db_path: Path) -> Database:
+    global _instance
+    with _instance_lock:
+        if _instance is None or _instance.path != db_path:
+            _instance = Database(db_path)
+        return _instance

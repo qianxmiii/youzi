@@ -2,6 +2,9 @@
  * tab.js 标签相关功能
  */
 
+/** 客户地址簿：只挂 window，避免与其它脚本的词法声明冲突 */
+window.customerAddresses = window.customerAddresses || [];
+
  /**
   * Tab1 - 常用功能
   */
@@ -1935,6 +1938,30 @@ function clearAllDateCalc() {
   clearDateCalc2();
 }
 
+function youziV2Origin() {
+  return (typeof window !== 'undefined' && window.YOUZI_V2_ORIGIN) || 'http://127.0.0.1:3001';
+}
+
+function fetchAddressesFromYouziV2() {
+  return fetch(youziV2Origin() + '/api/addresses')
+    .then(function (res) {
+      if (!res.ok) {
+        throw new Error('HTTP ' + res.status);
+      }
+      return res.json();
+    })
+    .then(function (rows) {
+      if (Array.isArray(rows)) {
+        window.customerAddresses = rows;
+      }
+      return window.customerAddresses;
+    })
+    .catch(function () {
+      window.customerAddresses = [];
+      return window.customerAddresses;
+    });
+}
+
 /**
  * 初始化地址簿功能
  */
@@ -1942,9 +1969,11 @@ function initAddressBook() {
 
   const modal = new bootstrap.Modal('#addressModal');
   
-  // 打开模态框时加载数据
+  // 打开模态框时从 youzi_v2 拉取 SQLite 地址簿并渲染
   document.getElementById('openAddressBook').addEventListener('click', function() {
-    renderAddressTable();
+    fetchAddressesFromYouziV2().then(function () {
+      renderAddressTable();
+    });
   });
 
   // 绑定筛选事件
@@ -1956,21 +1985,23 @@ function initAddressBook() {
 /**
  * 渲染地址表格
  */
-function renderAddressTable(data = customerAddresses) {
+function renderAddressTable(data = window.customerAddresses) {
   const tbody = document.getElementById('addressTableBody');
   tbody.innerHTML = '';
 
   data.forEach(addr => {
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td width="5%">${addr.customer}</td>
-      <td width="5%">${addr.postalCode}</td>
-      <td width="40%" class="text-truncate" title="${addr.address}">
-        ${addr.address}
+      <td width="5%">${addr.customer != null ? addr.customer : ''}</td>
+      <td width="6%">${addr.productName != null ? addr.productName : ''}</td>
+      <td width="5%">${addr.country != null ? addr.country : ''}</td>
+      <td width="5%">${addr.postalCode != null ? addr.postalCode : ''}</td>
+      <td width="28%" class="text-truncate" title="${addr.address || ''}">
+        ${addr.address || ''}
       </td>
-      <td width="15%">${addr.company || '-'}</td>
+      <td width="12%">${addr.company || '-'}</td>
       <td width="10%">${addr.contact || '-'}</td>
-      <td width="5%">${addr.phone || '-'}</td>
+      <td width="8%">${addr.phone || '-'}</td>
       <td width="5%">
         <span class="badge ${addr.isCommercial ? 'bg-primary' : 'bg-success'}">
           ${addr.isCommercial ? '商业' : '住宅'}
@@ -1981,9 +2012,9 @@ function renderAddressTable(data = customerAddresses) {
           ${addr.isRemote ? '偏远' : '非偏远'}
         </span>
       </td>
-      <td width="10%">
+      <td width="11%">
         <button class="btn btn-sm btn-outline-primary py-0 px-2"
-                onclick="copyAddress(${addr.id})"
+                onclick="copyAddress(${JSON.stringify(addr.id)})"
                 title="复制地址信息">
           <i class="bi bi-clipboard"></i>
         </button>
@@ -2001,12 +2032,18 @@ function filterAddresses() {
   const typeFilter = document.getElementById('addressTypeFilter').value;
   const remoteFilter = document.getElementById('remoteFilter').value;
 
-  const filtered = customerAddresses.filter(addr => {
+  const filtered = window.customerAddresses.filter(addr => {
+    const cust = (addr.customer || '').toLowerCase();
+    const pn = (addr.productName || '').toLowerCase();
+    const ctry = (addr.country || '').toLowerCase();
+    const addrLine = (addr.address || '').toLowerCase();
+    const pc = String(addr.postalCode || '');
     return (
-      // 搜索条件（新增对公司名、联系人、电话的搜索）
-      (addr.customer.toLowerCase().includes(searchTerm) ||
-      addr.postalCode.includes(searchTerm) ||
-      addr.address.toLowerCase().includes(searchTerm) ||
+      (cust.includes(searchTerm) ||
+      pn.includes(searchTerm) ||
+      ctry.includes(searchTerm) ||
+      pc.includes(searchTerm) ||
+      addrLine.includes(searchTerm) ||
       (addr.company && addr.company.toLowerCase().includes(searchTerm)) ||
       (addr.contact && addr.contact.toLowerCase().includes(searchTerm)) ||
       (addr.phone && addr.phone.includes(searchTerm))
@@ -2033,7 +2070,7 @@ function filterAddresses() {
  * 复制地址信息到剪贴板
  */
 function copyAddress(id) {
-  const addr = customerAddresses.find(a => a.id === id);
+  const addr = window.customerAddresses.find(a => a.id === id);
   if (!addr) return;
 
   // 构建要复制的文本内容
@@ -2154,12 +2191,14 @@ function exportAddressBook() {
         
         // 准备数据
         const wsData = [
-            ['客户', '邮编', '详细地址', '公司名', '联系人', '电话', '商业/住宅', '偏远地址']
+            ['客户', '品名', '国家', '邮编', '地址', '公司名', '联系人', '电话', '商业/住宅', '偏远地址']
         ];
         
         addressData.forEach(address => {
             wsData.push([
                 address.customer || '',
+                address.productName || '',
+                address.country || '',
                 address.postcode || '',
                 address.address || '',
                 address.company || '',
@@ -2243,10 +2282,12 @@ function exportAddressBook() {
 function getAddressBookData() {
     try {
         // 只从全局变量customerAddresses获取数据
-        if (typeof customerAddresses !== 'undefined' && customerAddresses && customerAddresses.length > 0) {
+        if (window.customerAddresses && window.customerAddresses.length > 0) {
             // 转换数据格式以匹配导出需求
-            return customerAddresses.map(addr => ({
+            return window.customerAddresses.map(addr => ({
                 customer: addr.customer || '',
+                productName: addr.productName || '',
+                country: addr.country || '',
                 postcode: addr.postalCode || '',
                 address: addr.address || '',
                 company: addr.company || '',

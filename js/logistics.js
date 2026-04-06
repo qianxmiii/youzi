@@ -1720,6 +1720,180 @@ function clearBoxTable() {
     warningsCollapse.hide();
 }
 
+/** index 报价历史写入 youzi_v2（SQLite）；可在页面里设置 window.YOUZI_V2_ORIGIN 覆盖 */
+var YOUZI_V2_QUOTE_ORIGIN =
+    (typeof window !== 'undefined' && window.YOUZI_V2_ORIGIN) || 'http://127.0.0.1:3001';
+
+/** 报价历史时间：YYYY-MM-DD HH:mm:ss（本地时区），与示例 2014-12-05 12:00:01 一致 */
+function formatQuoteHistoryDateTime(date) {
+    var d = date instanceof Date ? date : new Date(date);
+    if (isNaN(d.getTime())) {
+        return '';
+    }
+    function pad(n) {
+        return String(n).padStart(2, '0');
+    }
+    return (
+        d.getFullYear() +
+        '-' +
+        pad(d.getMonth() + 1) +
+        '-' +
+        pad(d.getDate()) +
+        ' ' +
+        pad(d.getHours()) +
+        ':' +
+        pad(d.getMinutes()) +
+        ':' +
+        pad(d.getSeconds())
+    );
+}
+
+/** 将 ISO、毫秒时间戳等可解析值转为上述格式；无法解析则原样返回字符串 */
+function normalizeQuoteHistoryTimestamp(raw) {
+    if (raw == null || raw === '') {
+        return '';
+    }
+    if (raw instanceof Date) {
+        return formatQuoteHistoryDateTime(raw);
+    }
+    var d = new Date(raw);
+    if (!isNaN(d.getTime())) {
+        return formatQuoteHistoryDateTime(d);
+    }
+    return String(raw);
+}
+
+function quoteHistoryApiRowToRecord(apiRow) {
+    if (!apiRow || typeof apiRow !== 'object') {
+        return null;
+    }
+    var ex = apiRow.extra;
+    if (ex && typeof ex === 'object' && ex.address != null) {
+        var r = {};
+        for (var k in ex) {
+            if (Object.prototype.hasOwnProperty.call(ex, k) && k !== '_source') {
+                r[k] = ex[k];
+            }
+        }
+        r.id = apiRow.id;
+        if (!r.timestamp && apiRow.updated_at) {
+            r.timestamp = normalizeQuoteHistoryTimestamp(apiRow.updated_at);
+        } else if (r.timestamp) {
+            r.timestamp = normalizeQuoteHistoryTimestamp(r.timestamp);
+        }
+        if (r.customer == null || r.customer === '') {
+            r.customer = '00';
+        }
+        if (r.productName == null || r.productName === '') {
+            r.productName = '00';
+        }
+        return r;
+    }
+    if (apiRow.address != null || apiRow.deliveryMethod != null) {
+        return {
+            id: apiRow.id,
+            customer: apiRow.customer != null && apiRow.customer !== '' ? apiRow.customer : '00',
+            productName: apiRow.productName != null && apiRow.productName !== '' ? apiRow.productName : '00',
+            timestamp: normalizeQuoteHistoryTimestamp(
+                apiRow.timestamp || apiRow.updated_at || ''
+            ),
+            address: apiRow.address || '',
+            postcode: apiRow.postcode || '',
+            country: apiRow.country || '',
+            deliveryMethod: apiRow.deliveryMethod || '',
+            origin: apiRow.origin || '',
+            quantity: apiRow.quantity || 0,
+            weight: apiRow.weight || 0,
+            volume: apiRow.volume || 0,
+            costRmb: apiRow.costRmb || 0,
+            profitRmb: apiRow.profitRmb || 0,
+            priceRmb: apiRow.priceRmb || 0,
+            priceUsd: apiRow.priceUsd || 0,
+            totalPriceUsd: apiRow.totalPriceUsd || 0,
+            totalPriceRmb: apiRow.totalPriceRmb || 0,
+            unitPriceRmb: apiRow.unitPriceRmb || 0,
+            isRemote: !!apiRow.isRemote,
+            hasResidential: !!apiRow.hasResidential,
+            hasBattery: !!apiRow.hasBattery,
+            isOversize: !!apiRow.isOversize,
+            oversizeFee: apiRow.oversizeFee || 0,
+            oversizeQuantity: apiRow.oversizeQuantity || 0,
+            isOverweight: !!apiRow.isOverweight,
+            overweightFee: apiRow.overweightFee || 0,
+            overweightQuantity: apiRow.overweightQuantity || 0,
+            isMOQ: !!apiRow.isMOQ,
+            moqValue: apiRow.moqValue || 0,
+            hasPickupFee: !!apiRow.hasPickupFee,
+            pickupFeeRmb: apiRow.pickupFeeRmb || 0,
+            pickupFeeUsd: apiRow.pickupFeeUsd || 0,
+            isDDU: !!apiRow.isDDU,
+            isUSD: !!apiRow.isUSD,
+            chargeWeight: apiRow.chargeWeight || 0,
+            chargeCBM: apiRow.chargeCBM || 0,
+            volumeRatio: apiRow.volumeRatio || 0,
+            quoteType: apiRow.quoteType || '通用',
+            notes: apiRow.notes || ''
+        };
+    }
+    return {
+        id: apiRow.id,
+        customer: '00',
+        productName: '00',
+        timestamp: normalizeQuoteHistoryTimestamp(apiRow.updated_at || ''),
+        address: '',
+        postcode: '',
+        country: '',
+        deliveryMethod: apiRow.channel || '',
+        origin: '',
+        quantity: 0,
+        weight: 0,
+        volume: 0,
+        costRmb: 0,
+        profitRmb: 0,
+        priceRmb: 0,
+        priceUsd: 0,
+        totalPriceUsd: apiRow.amount || 0,
+        totalPriceRmb: 0,
+        unitPriceRmb: 0,
+        isRemote: false,
+        hasResidential: false,
+        hasBattery: false,
+        isOversize: false,
+        oversizeFee: 0,
+        oversizeQuantity: 0,
+        isOverweight: false,
+        overweightFee: 0,
+        overweightQuantity: 0,
+        isMOQ: false,
+        moqValue: 0,
+        hasPickupFee: false,
+        pickupFeeRmb: 0,
+        pickupFeeUsd: 0,
+        isDDU: false,
+        isUSD: false,
+        chargeWeight: 0,
+        chargeCBM: 0,
+        volumeRatio: 0,
+        quoteType: '通用',
+        notes: apiRow.note || ''
+    };
+}
+
+function refreshQuoteHistoryCache() {
+    return fetch(YOUZI_V2_QUOTE_ORIGIN + '/api/quote-history')
+        .then(function (res) {
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status);
+            }
+            return res.json();
+        })
+        .then(function (rows) {
+            window.quoteHistoryAll = rows.map(quoteHistoryApiRowToRecord).filter(Boolean);
+            window.quoteHistoryPagedSource = null;
+            return window.quoteHistoryAll;
+        });
+}
+
 /**
  * 补全所有箱数为1
  */
@@ -1743,16 +1917,22 @@ function fillQuantityToOne() {
 }
 
 /**
- * 保存报价历史记录
+ * 保存报价历史记录（写入 youzi_v2 SQLite，不再使用 localStorage）
  */
 function saveQuoteHistory() {
     try {
         // 获取当前报价的所有数据
+        var qcEl = document.getElementById('quote-customer-code');
+        var qpEl = document.getElementById('quote-product-name');
+        var qcVal = (qcEl && qcEl.value.trim()) || '00';
+        var qpVal = (qpEl && qpEl.value.trim()) || '00';
         const quoteData = {
             id: generateQuoteId(),
-            timestamp: new Date().toLocaleString('zh-CN'),
+            timestamp: formatQuoteHistoryDateTime(new Date()),
             
             // 基础信息
+            customer: qcVal,
+            productName: qpVal,
             address: (document.getElementById('address').value || '').toUpperCase(),
             postcode: document.getElementById('postcode').value || '',
             country: document.getElementById('country-select').value || '',
@@ -1800,20 +1980,30 @@ function saveQuoteHistory() {
             quoteType: document.getElementById('quote-type').value || '通用',
             notes: document.getElementById('notes').value || ''
         };
-        
-        // 获取现有历史记录
-        let history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
-        
-        // 添加新记录到开头
-        history.unshift(quoteData);
-        
-        // 限制历史记录数量（最多保存100条）
-        if (history.length > 100) {
-            history = history.slice(0, 100);
-        }
-        
-        // 保存到localStorage
-        localStorage.setItem('quoteHistory', JSON.stringify(history));
+
+        fetch(YOUZI_V2_QUOTE_ORIGIN + '/api/quote-history/index', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(quoteData)
+        })
+            .then(function (res) {
+                if (!res.ok) {
+                    return res.json().then(
+                        function (body) {
+                            throw new Error((body && body.detail) || '保存失败');
+                        },
+                        function () {
+                            throw new Error('保存失败');
+                        }
+                    );
+                }
+            })
+            .catch(function (err) {
+                console.error('保存报价历史记录失败:', err);
+                if (typeof showToast === 'function') {
+                    showToast('保存报价历史失败，请确认 youzi_v2 已启动（端口 3001）', 'error');
+                }
+            });
                 
     } catch (error) {
         console.error('保存报价历史记录失败:', error);
@@ -1838,13 +2028,17 @@ function generateQuoteId() {
  * 加载报价历史记录
  */
 function loadQuoteHistory() {
-    try {
-        const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
-        renderQuoteHistoryTable(history);
-        updateQuoteHistoryInfo(history.length);
-    } catch (error) {
-        console.error('加载报价历史记录失败:', error);
-    }
+    refreshQuoteHistoryCache()
+        .then(function (history) {
+            renderQuoteHistoryTable(history);
+            updateQuoteHistoryInfo(history.length);
+        })
+        .catch(function (error) {
+            console.error('加载报价历史记录失败:', error);
+            if (typeof showToast === 'function') {
+                showToast('加载报价历史失败，请确认 youzi_v2 已启动（端口 3001）', 'error');
+            }
+        });
 }
 
 /**
@@ -1908,7 +2102,7 @@ function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
         const statusInfoHtml = statusInfo.join(' ');
         
         row.innerHTML = `
-            <td>${record.timestamp}</td>
+            <td>${normalizeQuoteHistoryTimestamp(record.timestamp)}</td>
             <td>${record.address}</td>
             <td>${record.country}</td>
             <td>${record.quantity}</td>
@@ -1980,7 +2174,7 @@ function searchQuoteHistory() {
     const countryFilter = document.getElementById('quoteHistoryCountry').value;
     const dateRange = document.getElementById('quoteHistoryDateRange').value;
     
-    let history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+    let history = window.quoteHistoryAll || [];
     
     // 应用筛选
     let filteredHistory = history.filter(record => {
@@ -2003,7 +2197,8 @@ function searchQuoteHistory() {
         
         return matchesSearch && matchesCountry && matchesDate;
     });
-    
+
+    window.quoteHistoryPagedSource = filteredHistory;
     renderQuoteHistoryTable(filteredHistory, 1, 10);
     updateQuoteHistoryInfo(filteredHistory.length);
 }
@@ -2014,7 +2209,7 @@ function searchQuoteHistory() {
 function prevQuoteHistoryPage() {
     const currentPage = window.currentQuoteHistoryPage || 1;
     if (currentPage > 1) {
-        const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+        const history = window.quoteHistoryPagedSource || window.quoteHistoryAll || [];
         renderQuoteHistoryTable(history, currentPage - 1, 10);
     }
 }
@@ -2024,7 +2219,7 @@ function prevQuoteHistoryPage() {
  */
 function nextQuoteHistoryPage() {
     const currentPage = window.currentQuoteHistoryPage || 1;
-    const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+    const history = window.quoteHistoryPagedSource || window.quoteHistoryAll || [];
     const totalPages = Math.ceil(history.length / 10);
     
     if (currentPage < totalPages) {
@@ -2037,7 +2232,7 @@ function nextQuoteHistoryPage() {
  */
 function loadQuoteToForm(quoteId) {
     try {
-        const history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
+        const history = window.quoteHistoryAll || [];
         const record = history.find(item => item.id === quoteId);
         
         if (!record) {
@@ -2051,6 +2246,14 @@ function loadQuoteToForm(quoteId) {
         document.getElementById('country-select').value = record.country;
         document.getElementById('delivery-method-select').value = record.deliveryMethod;
         document.getElementById('origin-select').value = record.origin;
+        var qcForm = document.getElementById('quote-customer-code');
+        var qpForm = document.getElementById('quote-product-name');
+        if (qcForm) {
+            qcForm.value = record.customer != null && String(record.customer) !== '' ? record.customer : '00';
+        }
+        if (qpForm) {
+            qpForm.value = record.productName != null && String(record.productName) !== '' ? record.productName : '00';
+        }
         
         document.getElementById('quantity').value = record.quantity;
         document.getElementById('weight').value = record.weight;
@@ -2112,18 +2315,17 @@ function deleteQuoteHistory(quoteId) {
         return;
     }
     
-    try {
-        let history = JSON.parse(localStorage.getItem('quoteHistory') || '[]');
-        history = history.filter(item => item.id !== quoteId);
-        localStorage.setItem('quoteHistory', JSON.stringify(history));
-        
-        // 重新加载表格
-        loadQuoteHistory();
-        showToast('报价记录已删除');
-        
-    } catch (error) {
-        showToast('删除报价记录失败', 'error');
-    }
+    fetch(YOUZI_V2_QUOTE_ORIGIN + '/api/quote-history/' + encodeURIComponent(quoteId), { method: 'DELETE' })
+        .then(function (res) {
+            if (!res.ok) {
+                throw new Error('删除失败');
+            }
+            loadQuoteHistory();
+            showToast('报价记录已删除');
+        })
+        .catch(function () {
+            showToast('删除报价记录失败', 'error');
+        });
 }
 
 /**
@@ -2134,15 +2336,18 @@ function clearQuoteHistory() {
         return;
     }
     
-    try {
-        localStorage.removeItem('quoteHistory');
-        loadQuoteHistory();
-        showToast('所有报价历史记录已清空');
-        
-    } catch (error) {
-        console.error('清空报价历史记录失败:', error);
-        showToast('清空报价历史记录失败', 'error');
-    }
+    fetch(YOUZI_V2_QUOTE_ORIGIN + '/api/quote-history', { method: 'DELETE' })
+        .then(function (res) {
+            if (!res.ok) {
+                throw new Error('清空失败');
+            }
+            loadQuoteHistory();
+            showToast('所有报价历史记录已清空');
+        })
+        .catch(function (error) {
+            console.error('清空报价历史记录失败:', error);
+            showToast('清空报价历史记录失败', 'error');
+        });
 }
 
 /**

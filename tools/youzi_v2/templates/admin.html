@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>youzi_v2</title>
+  <link rel="stylesheet" href="/static/admin.css" />
+</head>
+<body>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="brand">youzi_v2</div>
+      <div class="menu-group-title">后台管理</div>
+      <button class="menu-item active" data-view="dashboard">仪表盘</button>
+      <button class="menu-item" data-view="quote">报价历史</button>
+
+      <div class="menu-group-title">工具栏</div>
+      <button class="menu-item" data-view="product-import">箱单转换</button>
+    </aside>
+
+    <main class="content">
+      <section id="view-dashboard" class="view active">
+        <h2>仪表盘</h2>
+        <div class="cards">
+          <div class="card">
+            <div class="card-label">报价记录数</div>
+            <div class="card-value" id="metric-quote-count">-</div>
+          </div>
+          <div class="card">
+            <div class="card-label">服务状态</div>
+            <div class="card-value" id="metric-health">检查中</div>
+          </div>
+        </div>
+        <p class="hint">当前为后台框架版：先提供统一菜单、基础数据管理和工具入口，后续再逐块迁移旧功能。</p>
+      </section>
+
+      <section id="view-quote" class="view">
+        <div class="row-head">
+          <h2>报价历史（框架版 CRUD）</h2>
+          <div>
+            <button id="btn-refresh">刷新</button>
+            <button id="btn-new" class="primary">新增</button>
+            <button id="btn-clear" class="danger">清空</button>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>客户</th>
+                <th>渠道</th>
+                <th>金额</th>
+                <th>备注</th>
+                <th>更新时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody id="quote-tbody">
+              <tr><td colspan="6" class="empty">加载中...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="view-product-import" class="view">
+        <h2>箱单转换</h2>
+        <p class="hint">上传客户箱单（.xlsx/.xls），转换为系统产品导入模版。</p>
+
+        <div class="card form-card">
+          <label class="field-label">箱单文件</label>
+          <input id="pi-file" type="file" accept=".xlsx,.xls" />
+
+          <div class="row-actions">
+            <button id="pi-upload" class="primary">上传并转换</button>
+            <a id="pi-download" class="button-link disabled" href="#">下载产品导入模版</a>
+          </div>
+          <div id="pi-msg" class="hint"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="quote-dialog">
+    <form method="dialog" id="quote-form">
+      <h3 id="dialog-title">新增报价</h3>
+      <label>客户<input id="form-customer" required /></label>
+      <label>渠道<input id="form-channel" required /></label>
+      <label>金额<input id="form-amount" type="number" step="0.01" required /></label>
+      <label>备注<textarea id="form-note" rows="3"></textarea></label>
+      <menu>
+        <button value="cancel">取消</button>
+        <button value="default" class="primary" id="form-submit">保存</button>
+      </menu>
+    </form>
+  </dialog>
+
+  <script src="/static/admin.js"></script>
+</body>
+</html>

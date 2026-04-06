@@ -16,3 +16,4 @@ server/*.db
 
 # 产品导入脚本生成的临时文件
 temp/
+tools/youzi_v2/__pycache__/

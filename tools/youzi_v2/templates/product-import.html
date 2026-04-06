@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>箱单转产品导入模版</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      max-width: 760px;
+      margin: 40px auto;
+      padding: 0 16px;
+      background: #f8f9fa;
+    }
+    .card {
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 10px;
+      padding: 20px;
+    }
+    .row { margin: 12px 0; }
+    button, a {
+      padding: 8px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #fff;
+      text-decoration: none;
+      color: #111827;
+      cursor: pointer;
+      margin-right: 8px;
+    }
+    button.primary { background: #2563eb; color: #fff; border-color: #2563eb; }
+    a.disabled { pointer-events: none; opacity: .5; }
+    .ok { color: #0a7d2c; }
+    .err { color: #c21f39; }
+    code { background: #f3f4f6; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <p><a href="/">← 返回后台首页</a></p>
+    <h2>箱单发票 -> 产品导入模版</h2>
+    <p>独立工具页（FastAPI），不和原先前端系统混在一起。</p>
+
+    <div class="row">
+      <input id="file" type="file" accept=".xlsx,.xls" />
+    </div>
+
+    <div class="row">
+      <button id="uploadBtn" class="primary">上传并转换</button>
+      <a id="downloadBtn" class="disabled" href="#">下载产品导入模版</a>
+    </div>
+
+    <div id="msg" class="row"></div>
+
+    <hr />
+    <p>启动命令：<code>uvicorn tools.youzi_v2.app:app --host 127.0.0.1 --port 3001 --reload</code></p>
+  </div>
+
+  <script>
+    const fileEl = document.getElementById("file");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const msgEl = document.getElementById("msg");
+
+    function setMsg(text, ok = true) {
+      msgEl.textContent = text || "";
+      msgEl.className = ok ? "row ok" : "row err";
+    }
+
+    function resetDownload() {
+      downloadBtn.classList.add("disabled");
+      downloadBtn.href = "#";
+    }
+
+    uploadBtn.addEventListener("click", async () => {
+      setMsg("");
+      resetDownload();
+
+      const file = fileEl.files && fileEl.files[0];
+      if (!file) {
+        setMsg("请先选择箱单文件。", false);
+        return;
+      }
+
+      const form = new FormData();
+      form.append("invoice", file);
+
+      uploadBtn.disabled = true;
+      setMsg("上传并转换中...");
+      try {
+        const res = await fetch("/api/product-import", { method: "POST", body: form });
+        const data = await res.json();
+        if (!res.ok) {
+          setMsg(data.detail || "转换失败", false);
+          return;
+        }
+
+        downloadBtn.href = `/api/product-import/download/${encodeURIComponent(data.id)}`;
+        downloadBtn.classList.remove("disabled");
+        setMsg("上传成功，点击下载即可。");
+      } catch (err) {
+        setMsg("请求失败，请确认 FastAPI 服务已启动。", false);
+      } finally {
+        uploadBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,16 +1,75 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
-const {
-  getQuoteHistory,
-  addQuote,
-  deleteQuoteById,
-  clearQuoteHistory,
-  getCalculationHistory,
-  addCalculation,
-  deleteCalculationById,
-  clearCalculationHistory
-} = require('./db');
+let getQuoteHistory;
+let addQuote;
+let deleteQuoteById;
+let clearQuoteHistory;
+let getCalculationHistory;
+let addCalculation;
+let deleteCalculationById;
+let clearCalculationHistory;
+
+try {
+  ({
+    getQuoteHistory,
+    addQuote,
+    deleteQuoteById,
+    clearQuoteHistory,
+    getCalculationHistory,
+    addCalculation,
+    deleteCalculationById,
+    clearCalculationHistory
+  } = require('./db'));
+} catch (err) {
+  console.warn('SQLite 初始化失败，历史记录将使用内存模式:', err.message);
+  const quoteHistory = [];
+  const calculationHistory = [];
+
+  getQuoteHistory = () => quoteHistory;
+  addQuote = (record) => {
+    const item = {
+      ...record,
+      id: record?.id || `quote_${Date.now()}`,
+      timestamp: record?.timestamp || new Date().toISOString()
+    };
+    quoteHistory.unshift(item);
+    if (quoteHistory.length > 100) quoteHistory.length = 100;
+    return item.id;
+  };
+  deleteQuoteById = (id) => {
+    const index = quoteHistory.findIndex((x) => String(x.id) === String(id));
+    if (index >= 0) quoteHistory.splice(index, 1);
+    return { changes: index >= 0 ? 1 : 0 };
+  };
+  clearQuoteHistory = () => {
+    quoteHistory.length = 0;
+    return { changes: 1 };
+  };
+
+  getCalculationHistory = () => calculationHistory;
+  addCalculation = (record) => {
+    const item = {
+      id: record?.id || Date.now(),
+      timestamp: record?.timestamp || new Date().toISOString(),
+      data: record?.data || {},
+      summary: record?.summary || '',
+      details: record?.details || ''
+    };
+    calculationHistory.unshift(item);
+    if (calculationHistory.length > 50) calculationHistory.length = 50;
+    return item.id;
+  };
+  deleteCalculationById = (id) => {
+    const index = calculationHistory.findIndex((x) => String(x.id) === String(id));
+    if (index >= 0) calculationHistory.splice(index, 1);
+    return { changes: index >= 0 ? 1 : 0 };
+  };
+  clearCalculationHistory = () => {
+    calculationHistory.length = 0;
+    return { changes: 1 };
+  };
+}
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -119,11 +178,13 @@ app.delete('/api/calculation-history', (req, res) => {
 app.get('/api/*', (req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
-// 其余 GET 回退到 index（单页应用）
+
+// 其余 GET 回退到 index（单页应用；静态文件已在 express.static 中处理）
 app.get('*', (req, res) => {
   res.sendFile(path.join(ROOT, 'index.html'));
 });
 
 app.listen(PORT, () => {
   console.log(`youzi server: http://localhost:${PORT}`);
+  console.log('产品导入工具页已迁移到 FastAPI: http://127.0.0.1:3001/');
 });

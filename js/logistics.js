@@ -793,10 +793,265 @@ function updateQuote() {
 
 }
 
+/**
+ * 将合并后的箱规数组写入 #box-table 并触发 calculate（与 parseDimensions 第二步共用）
+ */
+function renderAllBoxSpecsIntoTable(allBoxSpecs) {
+    const tableBody = document.getElementById("box-table");
+    if (!tableBody) return;
+
+    while (tableBody.rows.length > 1) {
+        tableBody.deleteRow(1);
+    }
+
+    if (allBoxSpecs.length === 0) {
+        const firstRow = tableBody.rows[0];
+        firstRow.querySelector(".length").value = "";
+        firstRow.querySelector(".width").value = "";
+        firstRow.querySelector(".height").value = "";
+        firstRow.querySelector(".weight").value = "";
+        firstRow.querySelector(".quantity").value = "";
+        firstRow.querySelector(".index-cell").textContent = "1";
+        calculate();
+        return;
+    }
+
+    allBoxSpecs.forEach((boxSpec, index) => {
+        let currentRow;
+        if (index === 0) {
+            currentRow = tableBody.rows[0];
+            currentRow.querySelector(".index-cell").textContent = index + 1;
+        } else {
+            currentRow = tableBody.insertRow();
+            currentRow.classList.add("input-row");
+            currentRow.innerHTML = `
+                <td class="index-cell">${index + 1}</td>
+                <td><input type="number" class="form-control length" oninput="calculate()"></td>
+                <td><input type="number" class="form-control width" oninput="calculate()"></td>
+                <td><input type="number" class="form-control height" oninput="calculate()"></td>
+                <td><input type="number" class="form-control weight" oninput="calculate()"></td>
+                <td><input type="number" class="form-control quantity" oninput="calculate()"></td>
+                <td class="result-cell">0.00 cbm</td>
+                <td class="result-cell">0 kg</td>
+                <td class="result-cell">0 kg</td>
+                <td class="result-cell">0 kg</td>
+                <td class="result-cell">0 cm</td>
+                <td>
+                    <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
+                    <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
+                    <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
+                </td>
+            `;
+        }
+
+        currentRow.querySelector(".length").value = boxSpec.length;
+        currentRow.querySelector(".width").value = boxSpec.width;
+        currentRow.querySelector(".height").value = boxSpec.height;
+        currentRow.querySelector(".weight").value =
+            boxSpec.weight > 0 ? boxSpec.weight.toFixed(2) : "";
+        currentRow.querySelector(".quantity").value = boxSpec.quantity;
+    });
+
+    calculate();
+}
+
+/** 解析外箱尺寸字符串：49 x 43.2 x 55、49*43.2*55（cm，原始数值） */
+function parseLooseDimensionTriple(str) {
+    if (!str || typeof str !== "string") return null;
+    const s = str.trim().replace(/\u00a0/g, " ").replace(/\s+/g, " ");
+    const m = s.match(
+        /(\d+(?:[.,]\d+)?)\s*[*xX×]\s*(\d+(?:[.,]\d+)?)\s*[*xX×]\s*(\d+(?:[.,]\d+)?)/
+    );
+    if (!m) return null;
+    const a = parseFloat(m[1].replace(",", "."));
+    const b = parseFloat(m[2].replace(",", "."));
+    const c = parseFloat(m[3].replace(",", "."));
+    if (![a, b, c].every((n) => n > 0 && Number.isFinite(n))) return null;
+    return { length: a, width: b, height: c };
+}
+
+/** 纯数字五段：箱数 重量 长 宽 高（例如：6.00 18 49 43.2 55） */
+function parseFiveNumberBoxRow(str) {
+    if (!str || typeof str !== "string") return null;
+    const s = str
+        .trim()
+        .replace(/\u00a0/g, " ")
+        .replace(/\s+/g, " ");
+    const m = s.match(
+        /^(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)\s+(\d+(?:[.,]\d+)?)$/
+    );
+    if (!m) return null;
+    const qty = parseFloat(m[1].replace(",", "."));
+    const weight = parseFloat(m[2].replace(",", "."));
+    const length = parseFloat(m[3].replace(",", "."));
+    const width = parseFloat(m[4].replace(",", "."));
+    const height = parseFloat(m[5].replace(",", "."));
+    if (![qty, weight, length, width, height].every((n) => Number.isFinite(n) && n > 0)) {
+        return null;
+    }
+    return {
+        quantity: Math.floor(qty),
+        weight,
+        length,
+        width,
+        height,
+    };
+}
+
+function parseLooseDecimal(raw) {
+    if (raw == null) return NaN;
+    const s = String(raw)
+        .trim()
+        .replace(/\u00a0/g, " ")
+        .replace(/,/g, ".")
+        .replace(/\s+/g, "");
+    if (!s) return NaN;
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : NaN;
+}
+
+/**
+ * Excel 复制出的 TSV：
+ * 1) 三列：箱数 | 单箱毛重kg | 长x宽x高
+ * 2) 五列：箱数 | 单箱毛重kg | 长 | 宽 | 高
+ * 可含表头（首列非数字会跳过）
+ */
+function parseExcelTsvBoxPaste(raw) {
+    const text = (raw || "").trim();
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const out = [];
+
+    for (const line of lines) {
+        // 兼容纯空格 5 段：箱数 重量 长 宽 高
+        if (!line.includes("\t")) {
+            const plainFive = parseFiveNumberBoxRow(line);
+            if (plainFive) {
+                out.push(plainFive);
+            }
+            continue;
+        }
+        const cols = line.split("\t").map((c) => c.trim());
+        if (cols.length < 3) continue;
+
+        const qty = parseLooseDecimal(cols[0]);
+        if (!Number.isFinite(qty) || qty <= 0) continue;
+
+        let wCell = (cols[1] || "").replace(/(kg|kgs)$/i, "");
+        const weightNum = parseLooseDecimal(wCell);
+        const weight = Number.isFinite(weightNum) && weightNum >= 0 ? weightNum : 0;
+
+        let dims = null;
+
+        if (cols.length >= 5) {
+            const l = parseLooseDecimal(cols[2]);
+            const w = parseLooseDecimal(cols[3]);
+            const h = parseLooseDecimal(cols[4]);
+            if ([l, w, h].every((n) => Number.isFinite(n) && n > 0)) {
+                dims = { length: l, width: w, height: h };
+            }
+        }
+
+        if (!dims) {
+            const dimStr = cols[2] || "";
+            dims = parseLooseDimensionTriple(dimStr);
+        }
+        if (!dims) continue;
+
+        out.push({
+            length: dims.length,
+            width: dims.width,
+            height: dims.height,
+            weight,
+            quantity: Math.floor(qty),
+        });
+    }
+    return out.length ? out : null;
+}
+
+/** 与 parseDimensions 内相同的「相同箱规合并箱数」逻辑 */
+function mergeBoxSpecRows(rows) {
+    const boxSpecMap = new Map();
+    const boxesWithoutQuantity = [];
+
+    rows.forEach((row) => {
+        const normalizedLength = Math.ceil(row.length);
+        const normalizedWidth = Math.ceil(row.width);
+        const normalizedHeight = Math.ceil(row.height);
+        const normalizedWeight = parseFloat(Number(row.weight).toFixed(2));
+        const quantity = Math.floor(row.quantity || 0);
+
+        if (normalizedLength <= 0 || normalizedWidth <= 0 || normalizedHeight <= 0) {
+            return;
+        }
+
+        if (quantity > 0) {
+            const key = `${normalizedLength}-${normalizedWidth}-${normalizedHeight}-${normalizedWeight}`;
+            if (boxSpecMap.has(key)) {
+                boxSpecMap.get(key).quantity += quantity;
+            } else {
+                boxSpecMap.set(key, {
+                    length: normalizedLength,
+                    width: normalizedWidth,
+                    height: normalizedHeight,
+                    weight: normalizedWeight,
+                    quantity,
+                });
+            }
+        } else {
+            boxesWithoutQuantity.push({
+                length: normalizedLength,
+                width: normalizedWidth,
+                height: normalizedHeight,
+                weight: normalizedWeight,
+                quantity: 0,
+            });
+        }
+    });
+
+    return [...Array.from(boxSpecMap.values()), ...boxesWithoutQuantity];
+}
+
+/** 从 #box-excel-paste 读取并填入箱规表 */
+function parseExcelBoxPasteFromTextarea() {
+    const el = document.getElementById("box-excel-paste");
+    if (!el) return;
+    const raw = el.value.trim();
+    if (!raw) {
+        if (typeof showToast === "function") showToast("请先粘贴 Excel 内容", "warning");
+        return;
+    }
+    const rows = parseExcelTsvBoxPaste(raw);
+    if (!rows) {
+        if (typeof showToast === "function") {
+            showToast(
+                "未能识别：支持三列（箱数/单箱kg/长x宽x高）或五列（箱数/单箱kg/长/宽/高），首列须为数字",
+                "error"
+            );
+        }
+        return;
+    }
+    renderAllBoxSpecsIntoTable(mergeBoxSpecRows(rows));
+    if (typeof showToast === "function") {
+        showToast(`已解析并填入 ${rows.length} 行箱规`, "success");
+    }
+}
+
 // 识别箱规信息
 function parseDimensions() {
     // 获取输入的文本
     const input = document.getElementById("dimension-input").value.trim();
+
+    // 若在单行框里直接粘贴了 Excel 三列表格（含制表符），走表格解析
+    if (input.includes("\t")) {
+        const tsvRows = parseExcelTsvBoxPaste(input);
+        if (tsvRows) {
+            renderAllBoxSpecsIntoTable(mergeBoxSpecRows(tsvRows));
+            if (typeof showToast === "function") {
+                showToast(`已从粘贴解析 ${tsvRows.length} 行箱规`, "success");
+            }
+            return;
+        }
+    }
     
     // 使用正则表达式分割输入，支持 '|' 或 'LCL Load Item' 或 或 'Air Load Item'作为分隔符
     // const rows = input.split(/\||== LCL Load Item/).map(row => row.trim());
@@ -813,6 +1068,29 @@ function parseDimensions() {
 
     // 第一步：解析所有输入行
     rows.forEach((row, index) => {
+        // 快捷格式：箱数 重量 长 宽 高（空格分隔）
+        const fiveNumRow = parseFiveNumberBoxRow(row);
+        if (fiveNumRow) {
+            const normalizedLength = Math.ceil(fiveNumRow.length);
+            const normalizedWidth = Math.ceil(fiveNumRow.width);
+            const normalizedHeight = Math.ceil(fiveNumRow.height);
+            const normalizedWeight = parseFloat(fiveNumRow.weight.toFixed(2));
+            const quantity = Math.floor(fiveNumRow.quantity || 0);
+            const key = `${normalizedLength}-${normalizedWidth}-${normalizedHeight}-${normalizedWeight}`;
+            if (boxSpecMap.has(key)) {
+                boxSpecMap.get(key).quantity += quantity;
+            } else {
+                boxSpecMap.set(key, {
+                    length: normalizedLength,
+                    width: normalizedWidth,
+                    height: normalizedHeight,
+                    weight: normalizedWeight,
+                    quantity: quantity,
+                });
+            }
+            return;
+        }
+
         // 预处理：去掉.00和cm，简化识别
         // 去掉 .00（但保留其他小数，如 .5）
         row = row.replace(/\.00(?=\D|$)/g, '');
@@ -908,73 +1186,9 @@ function parseDimensions() {
         }
     });
 
-    // 第二步：将合并后的箱规数据填充到表格
-    const tableBody = document.getElementById("box-table");
-
-    // 清除表格中除第一行外的所有行
-    while (tableBody.rows.length > 1) {
-        tableBody.deleteRow(1);
-    }
-
-    // 获取合并后的有箱数的箱规数组
     const mergedBoxSpecs = Array.from(boxSpecMap.values());
-    // 合并所有箱规：先是有箱数的（已合并），然后是没有箱数的（不合并）
     const allBoxSpecs = [...mergedBoxSpecs, ...boxesWithoutQuantity];
-
-    // 如果没有任何有效数据，清空第一行并返回
-    if (allBoxSpecs.length === 0) {
-        const firstRow = tableBody.rows[0];
-        firstRow.querySelector('.length').value = '';
-        firstRow.querySelector('.width').value = '';
-        firstRow.querySelector('.height').value = '';
-        firstRow.querySelector('.weight').value = '';
-        firstRow.querySelector('.quantity').value = '';
-        firstRow.querySelector('.index-cell').textContent = '1';
-        calculate();
-        return;
-    }
-
-    // 填充表格数据
-    allBoxSpecs.forEach((boxSpec, index) => {
-        let currentRow;
-        if (index === 0) {
-            // 第一行直接使用现有行
-            currentRow = tableBody.rows[0];
-            currentRow.querySelector('.index-cell').textContent = index + 1;
-        } else {
-            // 添加新行
-            currentRow = tableBody.insertRow();
-            currentRow.classList.add('input-row');
-            currentRow.innerHTML = `
-                <td class="index-cell">${index + 1}</td>
-                <td><input type="number" class="form-control length" oninput="calculate()"></td>
-                <td><input type="number" class="form-control width" oninput="calculate()"></td>
-                <td><input type="number" class="form-control height" oninput="calculate()"></td>
-                <td><input type="number" class="form-control weight" oninput="calculate()"></td>
-                <td><input type="number" class="form-control quantity" oninput="calculate()"></td>
-                <td class="result-cell">0.00 cbm</td>
-                <td class="result-cell">0 kg</td>
-                <td class="result-cell">0 kg</td>
-                <td class="result-cell">0 kg</td>
-                <td class="result-cell">0 cm</td>
-                <td>
-                    <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
-                    <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
-                </td>
-            `;
-        }
-
-        // 填充数据（无 KG 时重量留空）
-        currentRow.querySelector('.length').value = boxSpec.length;
-        currentRow.querySelector('.width').value = boxSpec.width;
-        currentRow.querySelector('.height').value = boxSpec.height;
-        currentRow.querySelector('.weight').value = boxSpec.weight > 0 ? boxSpec.weight.toFixed(2) : '';
-        currentRow.querySelector('.quantity').value = boxSpec.quantity;
-    });
-
-    // 触发计算
-    calculate();
+    renderAllBoxSpecsIntoTable(allBoxSpecs);
 }
 
 // 调整所有箱规的尺寸（运输后尺寸增加）
@@ -1655,6 +1869,8 @@ function updatePickupFee(warehouse, pickupLocation, selectedVehicle) {
 function clearBoxTable() {
     // 清空箱规识别输入框
     document.getElementById('dimension-input').value = '';
+    const excelPaste = document.getElementById('box-excel-paste');
+    if (excelPaste) excelPaste.value = '';
     
     // 获取表格的 tbody 元素
     const tableBody = document.getElementById("box-table");

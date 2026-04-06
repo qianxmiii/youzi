@@ -13,3 +13,6 @@ youzi.code-workspace
 # Node server
 server/node_modules/
 server/*.db
+
+# 产品导入脚本生成的临时文件
+temp/

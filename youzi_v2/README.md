@@ -16,7 +16,7 @@ pip install -r youzi_v2/requirements.txt
 uvicorn youzi_v2.app:app --host 127.0.0.1 --port 3001 --reload
 ```
 
-## 3. 打开页面
+## 3. 访问后台页面
 
 ```text
 http://127.0.0.1:3001/

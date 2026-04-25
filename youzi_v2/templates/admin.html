@@ -37,6 +37,19 @@
           </div>
         </div>
         <p class="hint">报价与地址数据存于 SQLite；字段与 index 页 / youzi_v2 API 一致（客户、品名、国家、地址等分列）。</p>
+
+        <div class="card form-card charge-diff-card">
+          <div class="field-label">计费重差率</div>
+          <p class="hint charge-diff-hint">输入客户计费重与实际计费重，差率按「(实际 − 客户) ÷ 客户」计算并显示为百分比；绝对值超过 3% 时标红。</p>
+          <div class="form-grid charge-diff-grid">
+            <label>客户计费重<input id="charge-w-customer" type="number" step="0.001" min="0" placeholder="如 21.5" /></label>
+            <label>实际计费重<input id="charge-w-actual" type="number" step="0.001" min="0" placeholder="如 22.1" /></label>
+          </div>
+          <div class="charge-diff-result">
+            <span class="charge-diff-result-label">差率</span>
+            <span id="charge-w-rate" class="charge-diff-rate" aria-live="polite">—</span>
+          </div>
+        </div>
       </section>
 
       <section id="view-quote" class="view">

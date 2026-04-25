@@ -124,3 +124,32 @@ menu { display: flex; justify-content: flex-end; gap: 8px; margin: 4px 0 0; padd
 .b-warn { background: #f59e0b; color: #111827; }
 .b-danger { background: #dc2626; color: #fff; }
 .b-muted { background: #9ca3af; color: #fff; }
+
+.charge-diff-card { margin-top: 20px; max-width: 560px; }
+.charge-diff-hint { margin-top: 6px; }
+.charge-diff-grid label { display: flex; flex-direction: column; font-size: 14px; color: #374151; font-weight: 500; }
+.charge-diff-grid input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  padding: 8px;
+  margin-top: 6px;
+  font-size: 14px;
+}
+.charge-diff-result {
+  margin-top: 14px;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.charge-diff-result-label { font-size: 14px; color: #6b7280; }
+.charge-diff-rate {
+  font-size: 22px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #111827;
+}
+.charge-diff-rate.charge-diff-over {
+  color: #b91c1c;
+}

@@ -282,11 +282,6 @@ def generate_html_report(results, output_file):
     <input type="text" id="searchInput" class="form-control" placeholder="搜索运单号或客户名" onkeyup="filterTable()" />
     <select id="vendorFilter" class="form-select" onchange="filterTable()">
       <option value="">全部物流商</option>
-      <option value="森磊">森磊</option>
-      <option value="腾信">腾信</option>
-      <option value="鹏远">鹏远</option>
-      <option value="鑫鲲鹏">鑫鲲鹏</option>
-      <option value="华威尔">华威尔</option>
     </select>
     <select id="customerFilter" class="form-select" onchange="filterTable()">
       <option value="">全部客户</option>

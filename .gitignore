@@ -23,5 +23,3 @@ youzi_v2/**/__pycache__/
 youzi_v2/data/
 youzi_v2/**/*.db
 youzi_v2/temp/
-# 若迁址后仍留有旧目录，可手动删掉 tools/youzi_v2（数据库未占用时）
-tools/youzi_v2/

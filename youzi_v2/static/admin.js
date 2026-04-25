@@ -417,6 +417,37 @@ addrBtnNew.addEventListener("click", openCreateAddrDialog);
 addrBtnRefresh.addEventListener("click", loadAddresses);
 addrForm.addEventListener("submit", saveAddrDialog);
 
+const chargeWCustomer = document.getElementById("charge-w-customer");
+const chargeWActual = document.getElementById("charge-w-actual");
+const chargeWRate = document.getElementById("charge-w-rate");
+
+function updateChargeWeightDiff() {
+  if (!chargeWRate) return;
+  const cRaw = chargeWCustomer && chargeWCustomer.value != null ? chargeWCustomer.value.trim() : "";
+  const aRaw = chargeWActual && chargeWActual.value != null ? chargeWActual.value.trim() : "";
+  if (!cRaw || !aRaw) {
+    chargeWRate.textContent = "—";
+    chargeWRate.classList.remove("charge-diff-over");
+    return;
+  }
+  const c = Number(cRaw);
+  const a = Number(aRaw);
+  if (!(c > 0) || Number.isNaN(c) || Number.isNaN(a)) {
+    chargeWRate.textContent = "—";
+    chargeWRate.classList.remove("charge-diff-over");
+    return;
+  }
+  const signedPct = ((a - c) / c) * 100;
+  const sign = signedPct > 0 ? "+" : "";
+  chargeWRate.textContent = `${sign}${signedPct.toFixed(2)}%`;
+  chargeWRate.classList.toggle("charge-diff-over", Math.abs(signedPct) > 3);
+}
+
+if (chargeWCustomer && chargeWActual) {
+  chargeWCustomer.addEventListener("input", updateChargeWeightDiff);
+  chargeWActual.addEventListener("input", updateChargeWeightDiff);
+}
+
 switchView("dashboard");
 checkHealth();
 loadQuotes();

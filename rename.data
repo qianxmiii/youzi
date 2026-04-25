@@ -1,0 +1,38 @@
+{
+  "default": {
+    "prefix": "",
+    "suffix": ""
+  },
+  "rules": [
+    {"match": "DPSECO260425070", "suffix": "_EU空运_HAJ1_39件 "},
+{"match": "DPSECO260425075", "suffix": "_CA空运_YHM1_70件 "},
+{"match": "DPSECO260425076", "suffix": "_CA空运_YYC4_126件"},
+{"match": "DPSECO260425077", "suffix": "_CA空运_YYZ7_365件"},
+{"match": "DPSECO260425082", "suffix": "_US空运_AVP1_289件"},
+{"match": "DPSECO260425083", "suffix": "_US空运_FTW1_106件"},
+{"match": "DPSECO260425084", "suffix": "_US空运_FWA4_289件"},
+{"match": "DPSECO260425085", "suffix": "_US空运_GYR2_114件"},
+{"match": "DPSECO260425086", "suffix": "_US空运_RDU2_262件"},
+{"match": "DPSECO260425087", "suffix": "_US空运_RDU2_107件"},
+{"match": "DPSECO260425089", "suffix": "_US空运_SCK4_94件 "},
+{"match": "DPSECO260425067", "suffix": "_UK空运_LBA4_445件"},
+{"match": "DPSECO260425097", "suffix": "_US快船_AVP1_677件"},
+{"match": "DPSECO260425099", "suffix": "_US快船_FWA4_609件"},
+{"match": "DPSECO260425100", "suffix": "_US快船_GYR2_486件"},
+{"match": "DPSECO260425101", "suffix": "_US快船_RDU2_577件"},
+{"match": "DPSECO260425103", "suffix": "_US快船_SCK4_458件"},
+{"match": "DPSECO260425115", "suffix": "_US普船_ABE8_108件"},
+{"match": "DPSECO260425121", "suffix": "_US普船_FTW1_74件 "},
+{"match": "DPSECO260425122", "suffix": "_US普船_FWA4_101件"},
+{"match": "DPSECO260425123", "suffix": "_US普船_LGB8_68件 "},
+{"match": "DPSECO260425124", "suffix": "_US普船_RDU2_91件 "},
+{"match": "DPSECO260425069", "suffix": "_EU海运_WRO5_53件 "},
+{"match": "DPSECO260425062", "suffix": "_UK海运_BHX4_921件"},
+{"match": "DPSECO260425063", "suffix": "_UK海运_LBA4_199件"},
+{"match": "DPSECO260425096", "suffix": "_US快船_ABE8_364件"},
+{"match": "DPSECO260425098", "suffix": "_US快船_FTW1_224件"},
+{"match": "DPSECO260425171", "suffix": "_US快船_FWA4_334件"},
+{"match": "DPSECO260425172", "suffix": "_US快船_RDU2_302件"},
+    {"match": "DPSECO260425102", "suffix": "_US快船_SBD1_243件"}
+  ]
+}

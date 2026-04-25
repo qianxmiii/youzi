@@ -2,3 +2,8 @@ fastapi
 uvicorn
 python-multipart
 jinja2
+# 箱单转换 tools/product_import/generate_product_import.py
+openpyxl
+xlrd==1.2.0
+xlwt
+xlutils

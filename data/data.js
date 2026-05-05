@@ -16,7 +16,8 @@ const basicChannels = [
     "Normal sea express",  // 加班快递派
     "Train express",       // 铁路快递派
     "Road express",        // 卡航快递派
-    "Express"              // 快递
+    "Express",             // 快递
+    "ZIM sea express"      // 合德以星快递派
 ];
 
 const shippingChannels = {
@@ -39,6 +40,7 @@ const shippingChannels = {
       "Super sea express",   // 超级快递派
       "Normal Maston express", // 加班美森快递派
       "Normal sea express",  // 加班快递派
+      "ZIM sea express",     // 合德以星快递派
       "Train express",       // 铁路快递派
       "Road express",        // 卡航快递派
       "Express"              // 快递
@@ -338,10 +340,10 @@ window.data = {
     // 派送方式按国家分类
     deliveryMethodsByCountry: {
         "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Normal sea express", "Air truck","Fast sea truck","Normal sea truck","Fast Maston express", "Super sea express","Super sea truck",
-             "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","Express"
+             "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","ZIM sea express","Express"
         ],
         "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express","Super sea truck",
-            "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck", "Express"
+            "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck", "ZIM sea express", "Express"
         ],
         "欧洲": ["Sea truck", "Sea express", "Air truck", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
         "英国": ["Sea truck", "Sea express", "Air truck", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
@@ -359,6 +361,7 @@ window.data = {
         'Fast sea truck': '快船卡派', 
         'Normal sea express': '加班快递派', 
         'Normal Maston express': '加班快递派', 
+        'ZIM sea express': '合德以星快递派',
         'Normal Maston truck': '加班卡派', 
         'Normal sea truck': '加班卡派', 
         'Air express': '空派',
@@ -401,6 +404,12 @@ const transitTimeData = {
             "0-3": "21-26",
             "4-7": "19-23",
             "8-9": "17-22"
+        },
+        // Zim sea express 
+        "ZIM sea express": {
+            "0-3": "22-28",
+            "4-7": "20-25",
+            "8-9": "18-24"
         },
         // Fast sea truck、Super sea truck、Fast Maston truck 使用相同的时效配置
         "Fast sea truck": {

@@ -1469,6 +1469,8 @@ function showCost(origin,country,channel,postcode,weight,withBattery){
             channel = "美森加班";
         } else if (channel == 'Sea express') {
             channel = "普船";
+        } else if (channel == 'ZIM sea express') {
+            channel = "合德以星";
         } else if (channel == 'Air express') {
             if (withBattery) {
                 channel = "空派带电";
@@ -2800,7 +2802,7 @@ function getSelectedChannels() {
 function checkShippingRegionVisibility() {
     const selectedChannels = getSelectedChannels();
     const hasExpressChannel = selectedChannels.some(channel => 
-        channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express'
+        channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express' || channel === 'ZIM sea express'
     );
     
     const regionContainer = document.getElementById('batch-shipping-region-container');
@@ -2843,7 +2845,7 @@ function getChannelBadgeClass(channel) {
  * 获取邮编颜色编码
  */
 function getPostcodeColorClass(postcode, channel) {
-    if (channel !== 'Sea express' && channel !== 'Fast sea express' && channel !== 'Air express') {
+    if (channel !== 'Sea express' && channel !== 'Fast sea express' && channel !== 'Air express' && channel !== 'ZIM sea express') {
         return '';
     }
     
@@ -2890,7 +2892,7 @@ function isRemotePostcode(postcode) {
  * 获取地址显示内容（偏远地区添加图标）
  */
 function getAddressDisplayContent(address, postcode, channel) {
-    if (channel !== 'Sea express' && channel !== 'Fast sea express' && channel !== 'Air express') {
+    if (channel !== 'Sea express' && channel !== 'Fast sea express' && channel !== 'Air express' && channel !== 'ZIM sea express') {
         return `<span class="fw-bold">${address}</span>`;
     }
     
@@ -2942,7 +2944,7 @@ function generateBatchQuote() {
     
     // 检查是否需要发货区域
     const hasExpressChannel = selectedChannels.some(channel => 
-        channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express'
+        channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express' || channel === 'ZIM sea express'
     );
     
     if (hasExpressChannel) {
@@ -2979,7 +2981,7 @@ function generateBatchQuote() {
             let unitCostRMB;
             
             // 对于Sea/Air express类渠道，使用showCost函数计算
-            if (channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express') {
+            if (channel === 'Sea express' || channel === 'Fast sea express' || channel === 'Air express' || channel === 'ZIM sea express') {
                 const shippingRegion = document.getElementById('batch-shipping-region').value;
                 const withBattery = false; // 默认不带电池
                 unitCostRMB = showCost(shippingRegion, matchedCountry, channel, postcode, totalWeight, withBattery) || 0;

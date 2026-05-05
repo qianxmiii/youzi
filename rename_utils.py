@@ -250,8 +250,8 @@ if __name__ == "__main__":
     #   ]
     # }
     changed = batch_rename_tracking_files(
-        folder_path=r"C:\Users\admin\Desktop\422 Marks",
-        rename_data_path=r"C:\Files\git\youzi\rename.data",
+        folder_path=r"C:\Users\qianx\Desktop\new",
+        rename_data_path=r"C:\Users\qianx\Desktop\youzi\rename.data",
         dry_run=False,
     )
     for item in changed:

@@ -203,11 +203,18 @@ function calculate() {
             quantityCell.classList.remove('zero-value-warning');
         }
 
-        // 检查单箱实重（大于等于22kg）
-        if (weight.greaterThanOrEqualTo(22)) {
+        // 检查单箱实重：有输入时才高亮（>=22kg 红色；<12kg 蓝色）
+        const weightInputStr = (weightCell.value || '').trim();
+        if (weightInputStr === '') {
+            weightCell.classList.remove('single-weight-warning', 'single-weight-low');
+        } else if (weight.greaterThanOrEqualTo(22)) {
             weightCell.classList.add('single-weight-warning');
-        } else {
+            weightCell.classList.remove('single-weight-low');
+        } else if (weight.lessThan(12)) {
             weightCell.classList.remove('single-weight-warning');
+            weightCell.classList.add('single-weight-low');
+        } else {
+            weightCell.classList.remove('single-weight-warning', 'single-weight-low');
         }
 
         // 累加总计
@@ -1902,7 +1909,7 @@ function clearBoxTable() {
     firstRow.querySelector('.length').classList.remove('special-size-warning', 'zero-value-warning');
     firstRow.querySelector('.width').classList.remove('special-size-warning', 'zero-value-warning');
     firstRow.querySelector('.height').classList.remove('special-size-warning', 'zero-value-warning');
-    firstRow.querySelector('.weight').classList.remove('single-weight-warning');
+    firstRow.querySelector('.weight').classList.remove('single-weight-warning', 'single-weight-low');
     firstRow.querySelector('.quantity').classList.remove('zero-value-warning');
     
     // 重置总计数据

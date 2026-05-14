@@ -2,6 +2,20 @@
  * common.js 通用功能
  */
 
+// 全局禁止鼠标滚轮改变 <input type="number"> 的值（避免滚页时误触）
+(function initDisableNumberInputWheel() {
+    document.addEventListener(
+        'wheel',
+        function (e) {
+            const t = e.target;
+            if (t && t.matches && t.matches('input[type="number"]')) {
+                e.preventDefault();
+            }
+        },
+        { capture: true, passive: false }
+    );
+})();
+
 // 初始化Bootstrap tooltips
 function initBootstrapTooltips() {
     const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');

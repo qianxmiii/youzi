@@ -39,13 +39,10 @@ app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="stat
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://127.0.0.1:3000",
-        "http://localhost:3000",
-        "http://127.0.0.1:3001",
-        "http://localhost:3001",
-    ],
-    allow_credentials=True,
+    # file:// 打开 index.html 时 Origin 为字面量 "null"；仅用 allow_origins=["null"]
+    # 在部分环境下预检仍拿不到 ACAO，故用正则一并覆盖本机 http 来源。
+    allow_origin_regex=r"^null$|^http://(127\.0\.0\.1|localhost)(:\d+)?$",
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

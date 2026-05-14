@@ -457,34 +457,43 @@ function showTab(tabId) {
     }
 }
 
-// 监听运输方式变化，当切换回非快递派时返回到单地址报价页面
+// 监听运输方式变化，当切换回非快递派时返回到单地址报价页面，并将下方 Tab 切回「快速查询」
 function handleDeliveryMethodChange() {
     const channel = document.getElementById('delivery-method-select').value;
     
     if (!channel.includes("express")) {
-        // 如果不是快递派，返回到单地址报价页面
-        // 只隐藏第二个模块的 Tab 内容，不影响第一个模块
+        // 第一个模块：返回到单地址报价（#single-quote 在 #quoteTabsContent 内，不在 #myTabContent）
+        const singleQuoteTab = document.getElementById('single-quote');
+        if (singleQuoteTab) {
+            document.querySelectorAll("#quoteTabsContent .tab-pane").forEach((pane) => {
+                pane.classList.remove("show", "active");
+            });
+            document.querySelectorAll("#quoteTabs .nav-link").forEach((btn) => {
+                btn.classList.remove("active");
+            });
+            singleQuoteTab.classList.add("show", "active");
+        }
+        const singleQuoteTabButton = document.querySelector('[data-bs-target="#single-quote"]');
+        if (singleQuoteTabButton) {
+            singleQuoteTabButton.classList.add("active");
+        }
+
+        // 第二个模块（#myTab）：清空后切到「快速查询」commonTab（之前误把 active 加在 single-quote 上，下方 Tab 区会空白）
         const secondModuleTabPanes = document.querySelectorAll("#myTabContent .tab-pane");
         secondModuleTabPanes.forEach(tabPane => {
             tabPane.classList.remove("show", "active");
         });
-
-        // 只移除第二个模块的 Tab 导航按钮的激活状态
         const secondModuleTabButtons = document.querySelectorAll("#myTab .nav-link");
         secondModuleTabButtons.forEach(tabButton => {
             tabButton.classList.remove("active");
         });
-
-        // 显示单地址报价页面
-        const singleQuoteTab = document.getElementById('single-quote');
-        if (singleQuoteTab) {
-            singleQuoteTab.classList.add("show", "active");
+        const commonTabPane = document.getElementById("commonTab");
+        if (commonTabPane) {
+            commonTabPane.classList.add("show", "active");
         }
-
-        // 激活单地址报价Tab导航按钮
-        const singleQuoteTabButton = document.querySelector('[data-bs-target="#single-quote"]');
-        if (singleQuoteTabButton) {
-            singleQuoteTabButton.classList.add("active");
+        const commonTabButton = document.querySelector('[data-bs-target="#commonTab"]');
+        if (commonTabButton) {
+            commonTabButton.classList.add("active");
         }
     }
 }

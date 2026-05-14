@@ -71,6 +71,51 @@ function eventListener() {
 }
 
 
+/** 箱规尺寸单元格：有输入才判断；空则清除样式；0 零值警告；≥62 超长警告 */
+function applyDimensionCellWarnings(cell, valueDecimal) {
+    if ((cell.value || '').trim() === '') {
+        cell.classList.remove('zero-value-warning', 'special-size-warning');
+        return;
+    }
+    if (valueDecimal.equals(0)) {
+        cell.classList.add('zero-value-warning');
+        cell.classList.remove('special-size-warning');
+        return;
+    }
+    cell.classList.remove('zero-value-warning');
+    if (valueDecimal.greaterThanOrEqualTo(62)) {
+        cell.classList.add('special-size-warning');
+    } else {
+        cell.classList.remove('special-size-warning');
+    }
+}
+
+/** 箱数单元格：有输入才判断零值警告 */
+function applyQuantityCellWarnings(cell, valueDecimal) {
+    if ((cell.value || '').trim() === '') {
+        cell.classList.remove('zero-value-warning');
+        return;
+    }
+    cell.classList.toggle('zero-value-warning', valueDecimal.equals(0));
+}
+
+/** 单箱实重：有输入才判断（≥22kg 红；<12kg 蓝） */
+function applySingleWeightCellWarnings(cell, valueDecimal) {
+    if ((cell.value || '').trim() === '') {
+        cell.classList.remove('single-weight-warning', 'single-weight-low');
+        return;
+    }
+    if (valueDecimal.greaterThanOrEqualTo(22)) {
+        cell.classList.add('single-weight-warning');
+        cell.classList.remove('single-weight-low');
+    } else if (valueDecimal.lessThan(12)) {
+        cell.classList.remove('single-weight-warning');
+        cell.classList.add('single-weight-low');
+    } else {
+        cell.classList.remove('single-weight-warning', 'single-weight-low');
+    }
+}
+
 // 计算箱规
 function calculate() {
     let rows = document.querySelectorAll('.input-row');
@@ -146,76 +191,20 @@ function calculate() {
         let perimeterCell = row.querySelector('.result-cell:nth-child(11)');
         perimeterCell.classList.toggle('highlight-red', perimeter.greaterThanOrEqualTo(260));
 
-        // 检查特殊尺寸（长宽高大于等于62cm）
+        // 移除之前的整行样式
+        row.classList.remove('special-size-warning');
+
         let lengthCell = row.querySelector('.length');
         let widthCell = row.querySelector('.width');
         let heightCell = row.querySelector('.height');
         let weightCell = row.querySelector('.weight');
         let quantityCell = row.querySelector('.quantity');
 
-        // 移除之前的整行样式
-        row.classList.remove('special-size-warning');
-
-        // 检查长宽高是否为0，并添加零值警告样式
-        if (length.equals(0)) {
-            lengthCell.classList.add('zero-value-warning');
-            lengthCell.classList.remove('special-size-warning');
-        } else {
-            lengthCell.classList.remove('zero-value-warning');
-            // 只给超过62cm的单元格添加超长样式
-            if (length.greaterThanOrEqualTo(62)) {
-                lengthCell.classList.add('special-size-warning');
-            } else {
-                lengthCell.classList.remove('special-size-warning');
-            }
-        }
-
-        if (width.equals(0)) {
-            widthCell.classList.add('zero-value-warning');
-            widthCell.classList.remove('special-size-warning');
-        } else {
-            widthCell.classList.remove('zero-value-warning');
-            // 只给超过62cm的单元格添加超长样式
-            if (width.greaterThanOrEqualTo(62)) {
-                widthCell.classList.add('special-size-warning');
-            } else {
-                widthCell.classList.remove('special-size-warning');
-            }
-        }
-
-        if (height.equals(0)) {
-            heightCell.classList.add('zero-value-warning');
-            heightCell.classList.remove('special-size-warning');
-        } else {
-            heightCell.classList.remove('zero-value-warning');
-            // 只给超过62cm的单元格添加超长样式
-            if (height.greaterThanOrEqualTo(62)) {
-                heightCell.classList.add('special-size-warning');
-            } else {
-                heightCell.classList.remove('special-size-warning');
-            }
-        }
-
-        // 检查箱数是否为0
-        if (quantity.equals(0)) {
-            quantityCell.classList.add('zero-value-warning');
-        } else {
-            quantityCell.classList.remove('zero-value-warning');
-        }
-
-        // 检查单箱实重：有输入时才高亮（>=22kg 红色；<12kg 蓝色）
-        const weightInputStr = (weightCell.value || '').trim();
-        if (weightInputStr === '') {
-            weightCell.classList.remove('single-weight-warning', 'single-weight-low');
-        } else if (weight.greaterThanOrEqualTo(22)) {
-            weightCell.classList.add('single-weight-warning');
-            weightCell.classList.remove('single-weight-low');
-        } else if (weight.lessThan(12)) {
-            weightCell.classList.remove('single-weight-warning');
-            weightCell.classList.add('single-weight-low');
-        } else {
-            weightCell.classList.remove('single-weight-warning', 'single-weight-low');
-        }
+        applyDimensionCellWarnings(lengthCell, length);
+        applyDimensionCellWarnings(widthCell, width);
+        applyDimensionCellWarnings(heightCell, height);
+        applyQuantityCellWarnings(quantityCell, quantity);
+        applySingleWeightCellWarnings(weightCell, weight);
 
         // 累加总计
         totalQuantity = totalQuantity.add(quantity);
@@ -851,9 +840,12 @@ function renderAllBoxSpecsIntoTable(allBoxSpecs) {
             `;
         }
 
-        currentRow.querySelector(".length").value = boxSpec.length;
-        currentRow.querySelector(".width").value = boxSpec.width;
-        currentRow.querySelector(".height").value = boxSpec.height;
+        currentRow.querySelector(".length").value =
+            boxSpec.length === "" ? "" : boxSpec.length;
+        currentRow.querySelector(".width").value =
+            boxSpec.width === "" ? "" : boxSpec.width;
+        currentRow.querySelector(".height").value =
+            boxSpec.height === "" ? "" : boxSpec.height;
         currentRow.querySelector(".weight").value =
             boxSpec.weight > 0 ? boxSpec.weight.toFixed(2) : "";
         currentRow.querySelector(".quantity").value = boxSpec.quantity;
@@ -867,7 +859,7 @@ function parseLooseDimensionTriple(str) {
     if (!str || typeof str !== "string") return null;
     const s = str.trim().replace(/\u00a0/g, " ").replace(/\s+/g, " ");
     const m = s.match(
-        /(\d+(?:[.,]\d+)?)\s*[*xX×]\s*(\d+(?:[.,]\d+)?)\s*[*xX×]\s*(\d+(?:[.,]\d+)?)/
+        /(\d+(?:[.,]\d+)?)\s*[*xX×хХ]\s*(\d+(?:[.,]\d+)?)\s*[*xX×хХ]\s*(\d+(?:[.,]\d+)?)/
     );
     if (!m) return null;
     const a = parseFloat(m[1].replace(",", "."));
@@ -1106,7 +1098,7 @@ function parseDimensions() {
 
         // 使用正则表达式解析长、宽、高、重量和箱数
         // 尺寸支持 x 或 * 或 × 分隔符，单位支持 cm（如 90*35*35 cm）
-        const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
+        const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×хХ]\s*(\d+(?:\.\d+)?)\s*[*xX×хХ]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
         const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
         // 箱数正则：支持带.00的格式（虽然已经预处理去掉，但保留兼容性）
         const quantityRegex = /(\d+(?:\.\d+)?)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
@@ -1162,8 +1154,11 @@ function parseDimensions() {
         // 标准化重量（保留2位小数）
         const normalizedWeight = parseFloat(weight.toFixed(2));
 
-        // 如果解析到了有效的箱规数据（长宽高有效即可，重量可选；无 KG 时重量为 0 也会填入）
-        if (normalizedLength > 0 && normalizedWidth > 0 && normalizedHeight > 0) {
+        const hasFullDims =
+            normalizedLength > 0 && normalizedWidth > 0 && normalizedHeight > 0;
+
+        // 完整尺寸：可先填尺寸、后补重量；无 KG 时重量为 0 也会写入
+        if (hasFullDims) {
             if (quantity > 0) {
                 // 有箱数：用于合并相同箱规
                 const key = `${normalizedLength}-${normalizedWidth}-${normalizedHeight}-${normalizedWeight}`;
@@ -1186,6 +1181,30 @@ function parseDimensions() {
                     length: normalizedLength,
                     width: normalizedWidth,
                     height: normalizedHeight,
+                    weight: normalizedWeight,
+                    quantity: 0
+                });
+            }
+        } else if (normalizedWeight > 0) {
+            // 仅有重量（尺寸未写或未识别全）：先填入重量，尺寸可后补
+            if (quantity > 0) {
+                const key = `__weight-only__${normalizedWeight}`;
+                if (boxSpecMap.has(key)) {
+                    boxSpecMap.get(key).quantity += quantity;
+                } else {
+                    boxSpecMap.set(key, {
+                        length: "",
+                        width: "",
+                        height: "",
+                        weight: normalizedWeight,
+                        quantity: quantity
+                    });
+                }
+            } else {
+                boxesWithoutQuantity.push({
+                    length: "",
+                    width: "",
+                    height: "",
                     weight: normalizedWeight,
                     quantity: 0
                 });
@@ -1239,7 +1258,7 @@ function parsePackageInfo() {
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     // 尺寸识别正则表达式，支持各种分隔符和单位
-    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×хХ]\s*(\d+(?:\.\d+)?)\s*[*xX×хХ]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
     // 前缀支持带To
     // 识别 1.通用亚马逊仓库 == 开头3个字母 + 1个数字 2. AWD仓库 == IUS 开头 + 一个字母（例如：IUSA）
     const addressRegex = /(?:To \s+)?((?:[A-Z]{3}\d)|IUS[A-Z])\b/i;
@@ -2688,7 +2707,7 @@ function parseBatchBoxSpec() {
     
     // 使用更灵活的正则表达式解析箱规信息
     // 支持多种格式：45*45*50 10KG 50CTNS、45x45x50 10kg 50箱、90*35*35 cm 等
-    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*[*xX×]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
+    const dimensionRegex = /(\d+(?:\.\d+)?)\s*[*xX×хХ]\s*(\d+(?:\.\d+)?)\s*[*xX×хХ]\s*(\d+(?:\.\d+)?)\s*(cm|mm|MM|m|M|米|inch|in|英寸)?/i;
     const weightRegex = /([\d.]+)\s*(kg|kgs|lb|lbs|磅)/i;
     const quantityRegex = /(\d+)\s*(X|\s*)\s*(BOX|BOXES|Boxs|CARTON|CARTONS|ctn|ctns|件|箱|pal|pallets|托)/i;
     

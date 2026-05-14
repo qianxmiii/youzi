@@ -573,6 +573,24 @@ const specialNotes = [
             cn: "请确认产品非军用，不涉及军事用途。", 
             en: "Please confirm that the product is non-military and does not involve military use." 
         }
+    },
+    {
+        id: "UL/RU/ET certification",
+        icon: "🔌",
+        label: "UL/RU/ETL认证",
+        note: { 
+            cn: "插电使用的，请核实产品、包装或插头是否带有UL / RU / ETL标识，如有，请提供品牌授权书。", 
+            en: "For plug-in products, please verify whether the product, packaging, or plug has any UL / RU / ETL marks. If yes, please provide the brand authorization letter." 
+        }
+    },
+    {
+        id: "bluetooth",
+        icon: "📶",
+        label: "蓝牙",
+        note: { 
+            cn: "如产品带蓝牙标识，需要提供FCC认证；如产品不带蓝牙标识但带蓝牙功能，需要提供BQB认证。", 
+            en: "If the product has a Bluetooth logo, FCC certification is required. If the product has Bluetooth function but no Bluetooth logo, BQB certification is required." 
+        }
     }
 ];
 

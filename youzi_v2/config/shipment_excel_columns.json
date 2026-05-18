@@ -1,0 +1,25 @@
+{
+  "sheet_preference": ["运单信息", "Sheet1", "sheet1"],
+  "columns": {
+    "运单号": "shipment_no",
+    "客户订单号": "customer_no",
+    "用户名": "customer",
+    "件数": "ctns",
+    "国家": "country_code",
+    "派送仓库": "address_code",
+    "派送地址": "delivery_address",
+    "渠道": "channel_code",
+    "承运商": "carrier_code",
+    "交货仓库": "origin_warehouse_code"
+  },
+  "country_aliases": {
+    "美国": "US",
+    "加拿大": "CA",
+    "英国": "GB",
+    "德国": "DE",
+    "法国": "FR",
+    "欧洲": "EU",
+    "澳大利亚": "AU",
+    "日本": "JP"
+  }
+}

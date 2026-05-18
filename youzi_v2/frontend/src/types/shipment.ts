@@ -1,0 +1,121 @@
+export interface Shipment {
+  id: string
+  shipmentNo: string
+  customer: string | null
+  customerNo: string | null
+  channelCode: string | null
+  countryCode: string | null
+  addressType: 'AMZ' | 'WFS' | '3PL' | string | null
+  addressCode: string | null
+  deliveryAddress: string | null
+  ctns: number | null
+  zipcode: string | null
+  productName: string | null
+  originWarehouseCode: string | null
+  supplierName: string | null
+  carrierCode: string | null
+  customerShipmentId: string | null
+  amazonRefId: string | null
+  vesselName: string | null
+  voyageNo: string | null
+  vesselVoyage: string | null
+  etd: string | null
+  eta: string | null
+  atd: string | null
+  ata: string | null
+  originPortCode: string | null
+  destinationPortCode: string | null
+  deliveredTime: string | null
+  statusCode: string | null
+  latestTrackingTime: string | null
+  latestTrackingDesc: string | null
+  trackingLogCount: number
+  createdTime: string
+  updatedTime: string
+}
+
+export type ShipmentPayload = Partial<
+  Omit<Shipment, 'id' | 'createdTime' | 'updatedTime'>
+> & {
+  shipmentNo: string
+}
+
+export interface ShipmentListResponse {
+  items: Shipment[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface ShipmentImportResult {
+  ok: boolean
+  totalRows: number
+  created: number
+  updated: number
+  failed: number
+  errors: { row?: number; message: string; shipmentNo?: string }[]
+}
+
+export function emptyShipmentForm(): ShipmentPayload {
+  return {
+    shipmentNo: '',
+    customer: null,
+    customerNo: null,
+    channelCode: null,
+    countryCode: null,
+    addressType: null,
+    addressCode: null,
+    deliveryAddress: null,
+    ctns: null,
+    zipcode: null,
+    productName: null,
+    originWarehouseCode: null,
+    supplierName: null,
+    carrierCode: null,
+    customerShipmentId: null,
+    amazonRefId: null,
+    vesselName: null,
+    voyageNo: null,
+    vesselVoyage: null,
+    etd: null,
+    eta: null,
+    atd: null,
+    ata: null,
+    originPortCode: null,
+    destinationPortCode: null,
+    deliveredTime: null,
+    statusCode: 'UNKNOWN',
+  }
+}
+
+export function shipmentToForm(row: Shipment): ShipmentPayload {
+  return {
+    shipmentNo: row.shipmentNo,
+    customer: row.customer,
+    customerNo: row.customerNo,
+    channelCode: row.channelCode,
+    countryCode: row.countryCode,
+    addressType: row.addressType,
+    addressCode: row.addressCode,
+    deliveryAddress: row.deliveryAddress,
+    ctns: row.ctns,
+    zipcode: row.zipcode,
+    productName: row.productName,
+    originWarehouseCode: row.originWarehouseCode,
+    supplierName: row.supplierName,
+    carrierCode: row.carrierCode,
+    customerShipmentId: row.customerShipmentId,
+    amazonRefId: row.amazonRefId,
+    vesselName: row.vesselName,
+    voyageNo: row.voyageNo,
+    vesselVoyage: row.vesselVoyage,
+    etd: row.etd,
+    eta: row.eta,
+    atd: row.atd,
+    ata: row.ata,
+    originPortCode: row.originPortCode,
+    destinationPortCode: row.destinationPortCode,
+    deliveredTime: row.deliveredTime,
+    statusCode: row.statusCode,
+  }
+}

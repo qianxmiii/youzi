@@ -1,5 +1,6 @@
 import os
 import shutil
+import sqlite3
 import subprocess
 import uuid
 from pathlib import Path
@@ -17,6 +18,12 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 from .db.addresses_table import AddressesRepository
 from .db.connection import get_database
 from .db.quote_history_table import QuoteHistoryRepository
+from .db.shipments_repository import ShipmentsRepository
+from .db.tracking_logs_repository import TrackingLogsRepository
+from .schemas.shipments import ShipmentRecordIn, ShipmentUpdateIn
+from .schemas.tracking import TrackingSyncRequest, TrackingSyncResult
+from .services.shipment_excel import import_excel_file
+from .services.tracking_sync import sync_all_tracking
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
@@ -41,7 +48,14 @@ app.add_middleware(
     CORSMiddleware,
     # file:// 打开 index.html 时 Origin 为字面量 "null"；仅用 allow_origins=["null"]
     # 在部分环境下预检仍拿不到 ACAO，故用正则一并覆盖本机 http 来源。
-    allow_origin_regex=r"^null$|^http://(127\.0\.0\.1|localhost)(:\d+)?$",
+    # null=file://；127/localhost=本机；192.168/10=局域网；172.16–31=常见内网
+    allow_origin_regex=(
+        r"^null$"
+        r"|^http://(127\.0\.0\.1|localhost)(:\d+)?$"
+        r"|^http://192\.168\.\d{1,3}\.\d{1,3}(:\d+)?$"
+        r"|^http://10\.\d{1,3}\.\d{1,3}\.\d{1,3}(:\d+)?$"
+        r"|^http://172\.(1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}(:\d+)?$"
+    ),
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -105,6 +119,9 @@ class AddressRecordIn(BaseModel):
 _database = get_database(DATA_DIR / "youzi_v2.db")
 quote_history_repo = QuoteHistoryRepository(_database)
 addresses_repo = AddressesRepository(_database)
+shipments_repo = ShipmentsRepository(_database)
+tracking_logs_repo = TrackingLogsRepository(_database)
+LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
 
 
 def resolve_template_xls() -> Path:
@@ -131,6 +148,139 @@ def product_import_page():
 @app.get("/api/health")
 def health():
     return {"ok": True, "service": "youzi_v2"}
+
+
+@app.get("/api/v1/health")
+def health_v1():
+    return {"ok": True, "service": "youzi_v2", "version": "0.2.0"}
+
+
+# ---------- 运单 shipments ----------
+
+
+@app.get("/api/v1/shipments")
+def list_shipments(
+    search: str | None = None,
+    status_code: str | None = None,
+    country_code: str | None = None,
+    channel_code: str | None = None,
+    min_stale_days: int | None = None,
+    no_tracking: bool | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    return shipments_repo.list_rows(
+        search=search,
+        status_code=status_code,
+        country_code=country_code,
+        channel_code=channel_code,
+        min_stale_days=min_stale_days,
+        no_tracking=no_tracking,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/api/v1/shipments/{item_id}/tracking-logs")
+def list_shipment_tracking_logs(item_id: str, limit: int = 20, offset: int = 0):
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    return tracking_logs_repo.list_by_shipment_no(
+        row["shipmentNo"],
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/api/v1/shipments/{item_id}")
+def get_shipment(item_id: str):
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    return row
+
+
+@app.post("/api/v1/shipments")
+def create_shipment(payload: ShipmentRecordIn):
+    try:
+        return shipments_repo.insert_row(payload.model_dump(by_alias=False))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="运单号已存在") from exc
+
+
+@app.put("/api/v1/shipments/{item_id}")
+def update_shipment(item_id: str, payload: ShipmentUpdateIn):
+    try:
+        return shipments_repo.update_row(item_id, payload.to_payload())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="运单不存在") from exc
+
+
+@app.delete("/api/v1/shipments/{item_id}")
+def delete_shipment(item_id: str):
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    tracking_logs_repo.delete_by_shipment_no(row["shipmentNo"])
+    shipments_repo.delete_row(item_id)
+    return {"deleted": True}
+
+
+@app.post("/api/v1/shipments/sync-tracking", response_model=TrackingSyncResult)
+def sync_shipments_tracking(body: TrackingSyncRequest | None = Body(None)):
+    """
+    从 config/config.json 的 base_url 拉取运单轨迹（与 check_stale_shipments 相同），
+    写入 tracking_logs。body.shipmentNos 非空时仅同步指定运单号。
+    """
+    shipment_nos: list[str] | None = None
+    if body and body.shipment_nos:
+        shipment_nos = [n.strip() for n in body.shipment_nos if n and n.strip()]
+        if not shipment_nos:
+            raise HTTPException(status_code=400, detail="运单号列表不能为空")
+    try:
+        result = sync_all_tracking(
+            shipments_repo,
+            tracking_logs_repo,
+            LOGISTICS_CONFIG_PATH,
+            shipment_nos=shipment_nos,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在仓库根目录 config/config.json 配置 base_url。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return result
+
+
+@app.post("/api/v1/shipments/import")
+async def import_shipments_excel(file: UploadFile = File(...)):
+    """
+    上传运单 Excel（表头与「运单数据」导出模板一致）。
+    按运单号 upsert：已存在则更新，否则新增。
+    """
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 或 .xls 文件")
+
+    task_id = str(uuid.uuid4())
+    extension = Path(filename).suffix if Path(filename).suffix else ".xlsx"
+    upload_path = UPLOAD_DIR / f"shipment_{task_id}{extension}"
+
+    with upload_path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    try:
+        return import_excel_file(shipments_repo, upload_path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if upload_path.exists():
+            upload_path.unlink(missing_ok=True)
 
 
 @app.get("/api/addresses")

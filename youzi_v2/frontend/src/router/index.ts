@@ -1,0 +1,75 @@
+import { createRouter, createWebHistory } from 'vue-router'
+import AppLayout from '@/layouts/AppLayout.vue'
+
+const router = createRouter({
+  history: createWebHistory(import.meta.env.BASE_URL),
+  routes: [
+    {
+      path: '/',
+      component: AppLayout,
+      children: [
+        {
+          path: '',
+          name: 'home',
+          component: () => import('@/views/HomeView.vue'),
+          meta: { title: '工作台' },
+        },
+        {
+          path: 'box',
+          name: 'box',
+          component: () => import('@/views/PlaceholderView.vue'),
+          meta: { title: '箱规计算', migration: 'index.html 箱规模块' },
+        },
+        {
+          path: 'quote',
+          name: 'quote',
+          component: () => import('@/views/PlaceholderView.vue'),
+          meta: { title: '单地址报价', migration: 'logistics.js updateQuote' },
+        },
+        {
+          path: 'quote/batch',
+          name: 'quote-batch',
+          component: () => import('@/views/PlaceholderView.vue'),
+          meta: { title: '批量报价', migration: 'generateBatchQuote' },
+        },
+        {
+          path: 'cost',
+          name: 'cost',
+          component: () => import('@/views/PlaceholderView.vue'),
+          meta: { title: '成本计算', migration: 'tab.js calculateCost*' },
+        },
+        {
+          path: 'library',
+          name: 'library',
+          component: () => import('@/views/PlaceholderView.vue'),
+          meta: { title: '资料库', migration: '术语 / 网址 / 备忘录' },
+        },
+        {
+          path: 'addresses',
+          name: 'addresses',
+          component: () => import('@/views/PlaceholderView.vue'),
+          meta: { title: '地址簿', migration: '/api/addresses' },
+        },
+        {
+          path: 'shipments',
+          name: 'shipments',
+          component: () => import('@/views/shipments/ShipmentsView.vue'),
+          meta: { title: '运单管理' },
+        },
+        {
+          path: 'admin',
+          name: 'admin',
+          component: () => import('@/views/PlaceholderView.vue'),
+          meta: { title: '管理', migration: 'legacy admin.html' },
+        },
+      ],
+    },
+  ],
+})
+
+router.afterEach((to) => {
+  const title = (to.meta.title as string) || 'Youzi'
+  document.title = `${title} · Youzi`
+})
+
+export default router

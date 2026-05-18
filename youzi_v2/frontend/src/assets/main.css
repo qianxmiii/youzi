@@ -1,0 +1,59 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --color-surface: #09090b;
+  --color-panel: #0c0c0f;
+  --color-elevated: #18181b;
+  --color-border: #27272a;
+  --color-border-subtle: #1f1f23;
+  --color-muted: #71717a;
+  --color-fg: #fafafa;
+  --color-accent: #8b5cf6;
+  --color-accent-hover: #a78bfa;
+}
+
+@layer base {
+  html {
+    @apply h-full;
+  }
+
+  body {
+    @apply m-0 min-h-full bg-[var(--color-surface)] font-sans text-[15px] leading-relaxed text-[var(--color-fg)] antialiased;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  ::selection {
+    @apply bg-violet-500/30 text-white;
+  }
+
+  * {
+    @apply border-[var(--color-border-subtle)];
+  }
+}
+
+@layer utilities {
+  .glass-header {
+    @apply border-b border-[var(--color-border)] bg-[var(--color-panel)]/80 backdrop-blur-xl;
+  }
+
+  .panel {
+    @apply rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)]/60 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset];
+  }
+
+  .text-gradient {
+    @apply bg-gradient-to-b from-white to-zinc-400 bg-clip-text text-transparent;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-zinc-400 transition-colors duration-150;
+  }
+
+  .nav-item:hover {
+    @apply bg-white/[0.06] text-zinc-200;
+  }
+
+  .nav-item-active {
+    @apply bg-white/[0.08] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)];
+  }
+}

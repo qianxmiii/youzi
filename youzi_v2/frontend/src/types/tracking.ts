@@ -1,0 +1,26 @@
+export interface TrackingLog {
+  id: string
+  shipmentNo: string
+  trackingTime: string
+  trackingDesc: string
+  createdTime: string
+}
+
+export interface TrackingLogListResponse {
+  items: TrackingLog[]
+  total: number
+  limit: number
+  offset: number
+}
+
+export interface TrackingSyncResult {
+  total: number
+  updated: number
+  skipped: number
+  empty: number
+  notFound: number
+  logCount: number
+  errors: string[]
+  batchSize: number
+  batches: number
+}

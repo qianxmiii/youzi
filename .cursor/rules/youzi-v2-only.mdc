@@ -1,0 +1,28 @@
+---
+description: 新功能仅开发在 youzi_v2；仓库其余目录逐步废弃
+alwaysApply: true
+---
+
+# Youzi 迁移约定
+
+## 唯一活跃代码库：`youzi_v2/`
+
+- **所有新功能、重构、Bug 修复** 只写在 `youzi_v2/` 下（`frontend/`、`backend/`、`app.py`、`db/`、`docs/` 等）。
+- 仓库根目录及其他路径（如根 `index.html`、`js/`、`server/`、`css/`、`data/` 等）视为 **Legacy，正在淘汰**；用户会逐步删除，**不要在那里新增业务功能**。
+- 从 Legacy 迁功能时：把逻辑迁到 `youzi_v2/frontend/src/`（UI + `domain/`）和 `youzi_v2` 后端 API，而不是在旧文件上继续堆代码。
+
+## 开发入口
+
+- 前端：`youzi_v2/frontend`（Vue + Tailwind）
+- 后端：`youzi_v2/app.py` 及后续 `youzi_v2/backend/`
+- 文档：`youzi_v2/README.md`、`youzi_v2/docs/`
+
+## 例外（短期）
+
+- 仅当迁移尚未完成、必须读旧实现作参考时，可 **只读** Legacy 文件；实现仍落在 `youzi_v2`。
+- 共享数据脚本若仍依赖根目录 `tools/`，可在 `youzi_v2` 中通过相对路径调用，但新脚本应优先放在 `youzi_v2/` 内。
+
+## 产品方向（已确认）
+
+- 箱规 + 单票/批量报价等强联动功能 → 同一 **报价工作台**（`/workspace`），用 Pinia 共享货件状态。
+- 运单监控、成本、系统设置 → `youzi_v2` 内独立路由，不塞回 Legacy。

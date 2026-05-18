@@ -23,4 +23,24 @@ export interface TrackingSyncResult {
   errors: string[]
   batchSize: number
   batches: number
+  jobId?: string
+  unassigned?: number
+}
+
+export interface TrackingSyncDailyStats {
+  source: string
+  updatedShipments: number
+  newLogCount: number
+  jobCount: number
+  lastFinished: string | null
+}
+
+export interface CarrierTrackingLog {
+  id: string
+  shipmentNo: string
+  vendorName: string
+  carrierCode: string
+  trackingTime: string
+  trackingDesc: string
+  createdTime: string
 }

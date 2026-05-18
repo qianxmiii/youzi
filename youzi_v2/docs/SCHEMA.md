@@ -42,6 +42,24 @@
 
 ---
 
+## 通用字典表 `dict_items`
+
+按 `dict_type` 分组；同一类型下 `code` 唯一。
+
+| 列名 | 说明 |
+|------|------|
+| `dict_type` | 字典类型（与 `code` 组成主键） |
+| `code` | 编码 |
+| `value` | 值 |
+| `desc` | 说明 |
+
+**主键**：`(dict_type, code)`  
+**索引**：`dict_type`
+
+仓储：`youzi_v2/db/dict_repository.py`
+
+---
+
 ## 运单主表 `shipments`
 
 | 列名 | 说明 | 码表 |

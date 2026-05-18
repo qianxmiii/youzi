@@ -29,6 +29,8 @@ CREATE TABLE {TABLE_NAME} (
     origin_warehouse_code TEXT,
     supplier_name TEXT,
     carrier_code TEXT,
+    carrier_id TEXT,
+    tracking_number TEXT,
     customer_shipment_id TEXT,
     amazon_ref_id TEXT,
     vessel_name TEXT,
@@ -101,38 +103,60 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             f"ALTER TABLE {TABLE_NAME} ADD COLUMN tracking_log_count INTEGER NOT NULL DEFAULT 0"
         )
+    if "latest_carrier_time" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN latest_carrier_time TEXT")
+    if "latest_carrier_desc" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN latest_carrier_desc TEXT")
+    if "carrier_log_count" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN carrier_log_count INTEGER NOT NULL DEFAULT 0"
+        )
+    if "carrier_id" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN carrier_id TEXT")
+    if "tracking_number" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN tracking_number TEXT")
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_latest_tracking_time "
         f"ON {TABLE_NAME}(latest_tracking_time)"
+    )
+    conn.execute(
+        f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_latest_carrier_time "
+        f"ON {TABLE_NAME}(latest_carrier_time)"
     )
     _backfill_tracking_summary(conn)
 
 
 def _backfill_tracking_summary(conn: sqlite3.Connection) -> None:
-    """从 tracking_logs 回填运单最新轨迹摘要（仅补空摘要的行）。"""
+    """从 internal_tracking_logs 回填内部轨迹摘要（仅补空摘要的行）。"""
+    has_internal = conn.execute(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='internal_tracking_logs'"
+    ).fetchone()
+    if not has_internal:
+        return
     conn.execute(
         f"""
         UPDATE {TABLE_NAME}
         SET latest_tracking_time = (
             SELECT t.tracking_time
-            FROM tracking_logs t
+            FROM internal_tracking_logs t
             WHERE t.shipment_no = {TABLE_NAME}.shipment_no
             ORDER BY datetime(t.tracking_time) DESC, datetime(t.created_time) DESC
             LIMIT 1
         ),
         latest_tracking_desc = (
             SELECT t.tracking_desc
-            FROM tracking_logs t
+            FROM internal_tracking_logs t
             WHERE t.shipment_no = {TABLE_NAME}.shipment_no
             ORDER BY datetime(t.tracking_time) DESC, datetime(t.created_time) DESC
             LIMIT 1
         ),
         tracking_log_count = (
-            SELECT COUNT(*) FROM tracking_logs t
+            SELECT COUNT(*) FROM internal_tracking_logs t
             WHERE t.shipment_no = {TABLE_NAME}.shipment_no
         )
         WHERE EXISTS (
-            SELECT 1 FROM tracking_logs t WHERE t.shipment_no = {TABLE_NAME}.shipment_no
+            SELECT 1 FROM internal_tracking_logs t
+            WHERE t.shipment_no = {TABLE_NAME}.shipment_no
         )
         AND (
             latest_tracking_time IS NULL OR latest_tracking_time = ''

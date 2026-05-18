@@ -41,5 +41,29 @@ class TrackingSyncResult(BaseModel):
     errors: list[str] = Field(default_factory=list, description="批次请求错误摘要")
     batch_size: int = Field(default=10, alias="batchSize", description="每批查询运单数")
     batches: int = Field(default=0, description="查询批次数")
+    job_id: str | None = Field(default=None, alias="jobId")
+    unassigned: int = Field(default=0, description="承运商同步：未匹配 vendor 的单数")
 
     model_config = {"populate_by_name": True}
+
+
+class TrackingSyncDailyStats(BaseModel):
+    source: str
+    updated_shipments: int = Field(alias="updatedShipments")
+    new_log_count: int = Field(alias="newLogCount")
+    job_count: int = Field(alias="jobCount")
+    last_finished: str | None = Field(default=None, alias="lastFinished")
+
+    model_config = {"populate_by_name": True}
+
+
+class CarrierTrackingLogRecord(BaseModel):
+    model_config = {"populate_by_name": True}
+
+    id: str
+    shipment_no: str = Field(alias="shipmentNo")
+    vendor_name: str = Field(alias="vendorName")
+    carrier_code: str = Field(alias="carrierCode")
+    tracking_time: str = Field(alias="trackingTime")
+    tracking_desc: str = Field(alias="trackingDesc")
+    created_time: str = Field(alias="createdTime")

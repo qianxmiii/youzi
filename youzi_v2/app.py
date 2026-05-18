@@ -6,22 +6,32 @@ import uuid
 from pathlib import Path
 from typing import Any
 
-from fastapi import Body, FastAPI, File, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
-from fastapi.responses import FileResponse, HTMLResponse
-from fastapi.responses import RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from .db.addresses_table import AddressesRepository
+from .db.code_tables_repository import CodeTablesRepository
 from .db.connection import get_database
+from .db.dict_repository import DictRepository
 from .db.quote_history_table import QuoteHistoryRepository
 from .db.shipments_repository import ShipmentsRepository
+from .db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from .db.tracking_logs_repository import TrackingLogsRepository
+from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
+from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipments import ShipmentRecordIn, ShipmentUpdateIn
-from .schemas.tracking import TrackingSyncRequest, TrackingSyncResult
+from .schemas.tracking import (
+    TrackingSyncDailyStats,
+    TrackingSyncRequest,
+    TrackingSyncResult,
+)
+from .services.carrier_tracking_sync import sync_carrier_tracking
+from .services.code_table_excel import build_template_bytes, import_excel_file as import_code_table_excel
 from .services.shipment_excel import import_excel_file
 from .services.tracking_sync import sync_all_tracking
 
@@ -120,7 +130,13 @@ _database = get_database(DATA_DIR / "youzi_v2.db")
 quote_history_repo = QuoteHistoryRepository(_database)
 addresses_repo = AddressesRepository(_database)
 shipments_repo = ShipmentsRepository(_database)
-tracking_logs_repo = TrackingLogsRepository(_database)
+internal_tracking_repo = TrackingLogsRepository(_database)
+carrier_tracking_repo = CarrierTrackingLogsRepository(_database)
+tracking_jobs_repo = TrackingSyncJobsRepository(_database)
+code_tables_repo = CodeTablesRepository(_database)
+dict_repo = DictRepository(_database)
+# 兼容旧名
+tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
 
 
@@ -155,23 +171,148 @@ def health_v1():
     return {"ok": True, "service": "youzi_v2", "version": "0.2.0"}
 
 
+@app.get("/api/v1/dict/{dict_type}")
+def list_dict_entries(dict_type: str):
+    """按 dict_type 返回字典项（如 country_code → 国家中文名）。"""
+    return {"dictType": dict_type.strip(), "items": dict_repo.list_by_type(dict_type)}
+
+
+# ---------- 后台码表 admin ----------
+
+
+@app.get("/api/v1/admin/code-tables")
+def list_code_table_types():
+    from .db.code_tables_repository import list_table_meta as _list_table_meta
+
+    return {"tables": _list_table_meta()}
+
+
+@app.get("/api/v1/admin/code-tables/{table_name}")
+def list_code_table_rows(
+    table_name: str,
+    search: str | None = None,
+    limit: int = 200,
+    offset: int = 0,
+):
+    try:
+        return code_tables_repo.list_rows(
+            table_name, search=search, limit=limit, offset=offset
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/admin/code-tables/{table_name}/template")
+def download_code_table_template(table_name: str):
+    try:
+        data = build_template_bytes(table_name)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return StreamingResponse(
+        iter([data]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{table_name}_template.xlsx"'
+        },
+    )
+
+
+@app.get("/api/v1/admin/code-tables/{table_name}/{code}")
+def get_code_table_row(table_name: str, code: str):
+    try:
+        row = code_tables_repo.get_row(table_name, code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return row
+
+
+@app.post("/api/v1/admin/code-tables/{table_name}")
+def create_code_table_row(table_name: str, payload: CodeTableRecordIn):
+    try:
+        return code_tables_repo.insert_row(table_name, payload.to_payload())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="编码已存在") from exc
+
+
+@app.put("/api/v1/admin/code-tables/{table_name}/{code}")
+def update_code_table_row(table_name: str, code: str, payload: CodeTableUpdateIn):
+    try:
+        return code_tables_repo.update_row(table_name, code, payload.to_payload())
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="记录不存在") from exc
+
+
+@app.delete("/api/v1/admin/code-tables/{table_name}/{code}")
+def delete_code_table_row(table_name: str, code: str):
+    try:
+        deleted = code_tables_repo.delete_row(table_name, code)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not deleted:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    return {"deleted": True}
+
+
+@app.post("/api/v1/admin/code-tables/{table_name}/import")
+async def import_code_table_excel(table_name: str, file: UploadFile = File(...)):
+    filename = (file.filename or "").lower()
+    if not filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 或 .xls 文件")
+    task_id = str(uuid.uuid4())
+    extension = Path(filename).suffix if Path(filename).suffix else ".xlsx"
+    upload_path = UPLOAD_DIR / f"code_table_{task_id}{extension}"
+    with upload_path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    try:
+        return import_code_table_excel(code_tables_repo, table_name, upload_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if upload_path.exists():
+            upload_path.unlink(missing_ok=True)
+
+
 # ---------- 运单 shipments ----------
+
+
+@app.get("/api/v1/shipments/filter-options")
+def list_shipment_filter_options():
+    return shipments_repo.list_filter_options()
 
 
 @app.get("/api/v1/shipments")
 def list_shipments(
     search: str | None = None,
-    status_code: str | None = None,
-    country_code: str | None = None,
-    channel_code: str | None = None,
-    min_stale_days: int | None = None,
-    no_tracking: bool | None = None,
+    shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
+    status_code: str | None = Query(None, alias="statusCode"),
+    customer: str | None = None,
+    carrier_code: str | None = Query(None, alias="carrierCode"),
+    country_code: str | None = Query(None, alias="countryCode"),
+    channel_code: str | None = Query(None, alias="channelCode"),
+    min_stale_days: int | None = Query(None, alias="minStaleDays"),
+    no_tracking: bool | None = Query(None, alias="noTracking"),
     limit: int = 100,
     offset: int = 0,
 ):
+    if shipment_nos:
+        cleaned = [n.strip() for n in shipment_nos if n and n.strip()]
+        if len(cleaned) > 200:
+            raise HTTPException(status_code=400, detail="单次最多查询 200 个单号")
+        shipment_nos = cleaned
     return shipments_repo.list_rows(
         search=search,
+        shipment_nos=shipment_nos,
         status_code=status_code,
+        customer=customer,
+        carrier_code=carrier_code,
         country_code=country_code,
         channel_code=channel_code,
         min_stale_days=min_stale_days,
@@ -182,15 +323,36 @@ def list_shipments(
 
 
 @app.get("/api/v1/shipments/{item_id}/tracking-logs")
-def list_shipment_tracking_logs(item_id: str, limit: int = 20, offset: int = 0):
+def list_shipment_internal_tracking_logs(item_id: str, limit: int = 20, offset: int = 0):
+    """内部路由轨迹（internal_tracking_logs）。"""
     row = shipments_repo.get_by_id(item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="运单不存在")
-    return tracking_logs_repo.list_by_shipment_no(
+    return internal_tracking_repo.list_by_shipment_no(
         row["shipmentNo"],
         limit=limit,
         offset=offset,
     )
+
+
+@app.get("/api/v1/shipments/{item_id}/carrier-tracking-logs")
+def list_shipment_carrier_tracking_logs(item_id: str, limit: int = 20, offset: int = 0):
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    return carrier_tracking_repo.list_by_shipment_no(
+        row["shipmentNo"],
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/api/v1/shipments/tracking-sync/daily-stats")
+def get_tracking_sync_daily_stats(source: str = Query("carrier")):
+    src = source.strip().lower()
+    if src not in ("internal", "carrier"):
+        raise HTTPException(status_code=400, detail="source 须为 internal 或 carrier")
+    return TrackingSyncDailyStats(**tracking_jobs_repo.today_stats(src))
 
 
 @app.get("/api/v1/shipments/{item_id}")
@@ -224,16 +386,17 @@ def delete_shipment(item_id: str):
     row = shipments_repo.get_by_id(item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="运单不存在")
-    tracking_logs_repo.delete_by_shipment_no(row["shipmentNo"])
+    internal_tracking_repo.delete_by_shipment_no(row["shipmentNo"])
+    carrier_tracking_repo.delete_by_shipment_no(row["shipmentNo"])
     shipments_repo.delete_row(item_id)
     return {"deleted": True}
 
 
 @app.post("/api/v1/shipments/sync-tracking", response_model=TrackingSyncResult)
-def sync_shipments_tracking(body: TrackingSyncRequest | None = Body(None)):
+def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(None)):
     """
-    从 config/config.json 的 base_url 拉取运单轨迹（与 check_stale_shipments 相同），
-    写入 tracking_logs。body.shipmentNos 非空时仅同步指定运单号。
+    从 config/config.json 的 base_url 拉取内部路由轨迹，
+    写入 internal_tracking_logs。body.shipmentNos 非空时仅同步指定运单号。
     """
     shipment_nos: list[str] | None = None
     if body and body.shipment_nos:
@@ -241,9 +404,9 @@ def sync_shipments_tracking(body: TrackingSyncRequest | None = Body(None)):
         if not shipment_nos:
             raise HTTPException(status_code=400, detail="运单号列表不能为空")
     try:
-        result = sync_all_tracking(
+        return sync_all_tracking(
             shipments_repo,
-            tracking_logs_repo,
+            internal_tracking_repo,
             LOGISTICS_CONFIG_PATH,
             shipment_nos=shipment_nos,
         )
@@ -254,7 +417,32 @@ def sync_shipments_tracking(body: TrackingSyncRequest | None = Body(None)):
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
-    return result
+
+
+@app.post("/api/v1/shipments/sync-carrier-tracking", response_model=TrackingSyncResult)
+def sync_shipments_carrier_tracking(body: TrackingSyncRequest | None = Body(None)):
+    """
+    全库在途运单，按 config.vendors 匹配承运商，按 vendor 串行、每批 10 单查询，
+    写入 carrier_tracking_logs。
+    """
+    shipment_nos: list[str] | None = None
+    if body and body.shipment_nos:
+        shipment_nos = [n.strip() for n in body.shipment_nos if n and n.strip()]
+        if not shipment_nos:
+            raise HTTPException(status_code=400, detail="运单号列表不能为空")
+    try:
+        return sync_carrier_tracking(
+            shipments_repo,
+            carrier_tracking_repo,
+            tracking_jobs_repo,
+            LOGISTICS_CONFIG_PATH,
+            trigger="manual",
+            shipment_nos=shipment_nos,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/shipments/import")

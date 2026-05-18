@@ -14,6 +14,8 @@ export interface Shipment {
   originWarehouseCode: string | null
   supplierName: string | null
   carrierCode: string | null
+  carrierId: string | null
+  trackingNumber: string | null
   customerShipmentId: string | null
   amazonRefId: string | null
   vesselName: string | null
@@ -30,6 +32,9 @@ export interface Shipment {
   latestTrackingTime: string | null
   latestTrackingDesc: string | null
   trackingLogCount: number
+  latestCarrierTime: string | null
+  latestCarrierDesc: string | null
+  carrierLogCount: number
   createdTime: string
   updatedTime: string
 }

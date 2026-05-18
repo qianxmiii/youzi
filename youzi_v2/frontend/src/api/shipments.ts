@@ -5,11 +5,46 @@ import type {
   ShipmentListResponse,
   ShipmentPayload,
 } from '@/types/shipment'
-import type { TrackingLogListResponse, TrackingSyncResult } from '@/types/tracking'
+import type {
+  TrackingLogListResponse,
+  TrackingSyncDailyStats,
+  TrackingSyncResult,
+} from '@/types/tracking'
+
+export interface ShipmentFilterOptions {
+  customers: string[]
+  carrierCodes: string[]
+  countryCodes: string[]
+  channelCodes: string[]
+  statusCodes: string[]
+}
+
+/** 仅发送有值的查询参数，避免 ofetch 序列化异常 */
+export function buildShipmentListQuery(params: ListShipmentsParams): Record<string, string | string[]> {
+  const q: Record<string, string | string[]> = {}
+  if (params.search?.trim()) q.search = params.search.trim()
+  if (params.shipmentNos?.length) q.shipmentNos = params.shipmentNos
+  if (params.statusCode?.trim()) q.statusCode = params.statusCode.trim()
+  if (params.customer?.trim()) q.customer = params.customer.trim()
+  if (params.carrierCode?.trim()) q.carrierCode = params.carrierCode.trim()
+  if (params.countryCode?.trim()) q.countryCode = params.countryCode.trim()
+  if (params.channelCode?.trim()) q.channelCode = params.channelCode.trim()
+  if (params.minStaleDays != null && params.minStaleDays > 0) {
+    q.minStaleDays = String(params.minStaleDays)
+  }
+  if (params.noTracking) q.noTracking = 'true'
+  if (params.limit != null) q.limit = String(params.limit)
+  if (params.offset != null) q.offset = String(params.offset)
+  return q
+}
 
 export interface ListShipmentsParams {
   search?: string
+  /** 批量精确查询运单号 / 客户订单号（与 search 二选一） */
+  shipmentNos?: string[]
   statusCode?: string
+  customer?: string
+  carrierCode?: string
   countryCode?: string
   channelCode?: string
   minStaleDays?: number
@@ -19,7 +54,11 @@ export interface ListShipmentsParams {
 }
 
 export async function listShipments(params: ListShipmentsParams): Promise<ShipmentListResponse> {
-  return api<ShipmentListResponse>('/api/v1/shipments', { query: params })
+  return api<ShipmentListResponse>('/api/v1/shipments', { query: buildShipmentListQuery(params) })
+}
+
+export async function getShipmentFilterOptions(): Promise<ShipmentFilterOptions> {
+  return api<ShipmentFilterOptions>('/api/v1/shipments/filter-options')
 }
 
 export async function getShipmentTrackingLogs(
@@ -28,6 +67,23 @@ export async function getShipmentTrackingLogs(
 ): Promise<TrackingLogListResponse> {
   return api<TrackingLogListResponse>(`/api/v1/shipments/${shipmentId}/tracking-logs`, {
     query: params,
+  })
+}
+
+export async function getShipmentCarrierTrackingLogs(
+  shipmentId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<TrackingLogListResponse> {
+  return api<TrackingLogListResponse>(`/api/v1/shipments/${shipmentId}/carrier-tracking-logs`, {
+    query: params,
+  })
+}
+
+export async function getTrackingSyncDailyStats(
+  source: 'internal' | 'carrier',
+): Promise<TrackingSyncDailyStats> {
+  return api<TrackingSyncDailyStats>('/api/v1/shipments/tracking-sync/daily-stats', {
+    query: { source },
   })
 }
 
@@ -60,10 +116,20 @@ export async function importShipmentsExcel(file: File): Promise<ShipmentImportRe
   })
 }
 
-/** 从物流 API 拉取运单轨迹并写入数据库（可能较久） */
+/** 同步内部路由轨迹 */
 export async function syncTracking(shipmentNos?: string[]): Promise<TrackingSyncResult> {
   const body = shipmentNos?.length ? { shipmentNos } : undefined
   return api<TrackingSyncResult>('/api/v1/shipments/sync-tracking', {
+    method: 'POST',
+    body,
+    timeout: 600_000,
+  })
+}
+
+/** 同步承运商轨迹（全库在途或指定单号） */
+export async function syncCarrierTracking(shipmentNos?: string[]): Promise<TrackingSyncResult> {
+  const body = shipmentNos?.length ? { shipmentNos } : undefined
+  return api<TrackingSyncResult>('/api/v1/shipments/sync-carrier-tracking', {
     method: 'POST',
     body,
     timeout: 600_000,

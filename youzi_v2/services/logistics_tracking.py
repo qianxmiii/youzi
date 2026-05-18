@@ -12,6 +12,8 @@ from typing import Any, Callable
 
 import requests
 
+from ..internal_tracking import is_internal_no_tracking_desc
+
 BATCH_SIZE = 10
 DEFAULT_TIMEOUT = 30
 
@@ -113,19 +115,22 @@ def query_logistics_api(
 
 
 def latest_from_logs(logs: list[tuple[str, str]]) -> tuple[str, str]:
-    """API 返回的 logisticsInfors 通常最新一条在首位。"""
-    if not logs:
-        return "", ""
-    return logs[0][0], logs[0][1]
+    """API 返回的 logisticsInfors 通常最新一条在首位；跳过仓库占位节点。"""
+    for t, d in logs:
+        if not is_internal_no_tracking_desc(d):
+            return t, d
+    return "", ""
 
 
 def logs_from_api_item(item: dict[str, Any]) -> list[tuple[str, str]]:
     """将 API 单条结果的 logisticsInfors 转为 (tracking_time, tracking_desc)。"""
+    from ..db.datetime_util import normalize_tracking_time
+
     out: list[tuple[str, str]] = []
     for log in item.get("logisticsInfors") or []:
-        node_time = (log.get("nodeTime") or "").strip()
+        node_time = normalize_tracking_time(log.get("nodeTime") or "")
         node_desc = (log.get("nodeDesc") or "").strip()
-        if node_time:
+        if node_time and not is_internal_no_tracking_desc(node_desc):
             out.append((node_time, node_desc))
     return out
 

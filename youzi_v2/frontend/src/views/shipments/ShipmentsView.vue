@@ -17,27 +17,53 @@ import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.
 import {
   createShipment,
   deleteShipment,
+  getShipmentFilterOptions,
   getShipmentTrackingLogs,
+  getTrackingSyncDailyStats,
   importShipmentsExcel,
   listShipments,
+  syncCarrierTracking,
   syncTracking,
   updateShipment,
 } from '@/api/shipments'
 import ShipmentFormModal from '@/components/shipments/ShipmentFormModal.vue'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
-import type { TrackingSyncResult } from '@/types/tracking'
+import type { ShipmentFilterOptions } from '@/api/shipments'
+import type { TrackingSyncDailyStats, TrackingSyncResult } from '@/types/tracking'
+import { useDictLabels } from '@/composables/useDictLabels'
+import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
+import {
+  hasEffectiveInternalTracking,
+  isInternalNoTrackingDesc,
+} from '@/utils/internalTracking'
 
 const message = useMessage()
+const { loadDictTypes, dictLabel } = useDictLabels()
+const countryLabel = (raw: string | null | undefined) => dictLabel('country_code', raw)
 const loading = ref(false)
 const importing = ref(false)
 const syncingTracking = ref(false)
+const syncingCarrier = ref(false)
+const carrierDaily = ref<TrackingSyncDailyStats | null>(null)
 const copyingTracking = ref(false)
 const items = ref<Shipment[]>([])
 const total = ref(0)
-const search = ref('')
+const searchShipmentNo = ref('')
+const searchKeyword = ref('')
 const filterStatus = ref<string | null>(null)
+const filterCustomer = ref<string | null>(null)
+const filterCarrier = ref<string | null>(null)
+const filterCountry = ref<string | null>(null)
+const filterChannel = ref<string | null>(null)
 const filterStaleDays = ref<number | null>(null)
 const filterNoTracking = ref(false)
+const filterOptions = ref<ShipmentFilterOptions>({
+  customers: [],
+  carrierCodes: [],
+  countryCodes: [],
+  channelCodes: [],
+  statusCodes: [],
+})
 const page = ref(1)
 const pageSize = ref(20)
 const expandedRowKeys = ref<string[]>([])
@@ -51,6 +77,18 @@ const checkedRowKeys = ref<string[]>([])
 
 const selectedCount = computed(() => checkedRowKeys.value.length)
 
+const shipmentNoTokens = computed(() => parseBatchSearchTokens(searchShipmentNo.value))
+const batchShipmentSearchActive = computed(() => shipmentNoTokens.value.length > 1)
+
+/** 按当前页最长运单号估算列宽，避免截断 */
+const shipmentNoColWidth = computed(() => {
+  let maxLen = 10
+  for (const row of items.value) {
+    maxLen = Math.max(maxLen, (row.shipmentNo || '').length)
+  }
+  return Math.min(400, Math.max(200, Math.ceil(maxLen * 8.5) + 28))
+})
+
 const selectedShipmentNos = computed(() =>
   items.value.filter((row) => checkedRowKeys.value.includes(row.id)).map((row) => row.shipmentNo),
 )
@@ -63,15 +101,43 @@ function rowKey(row: Shipment) {
   return row.id
 }
 
-function formatTrackingMessage(res: TrackingSyncResult) {
-  const errHint = res.errors.length ? `；接口错误 ${res.errors.length} 条` : ''
-  return (
-    `轨迹已更新：${res.updated}/${res.total} 单（${res.batches} 批×${res.batchSize}），新增 ${res.logCount} 条` +
+function formatTrackingMessage(res: TrackingSyncResult, label = '轨迹') {
+  const unassigned =
+    res.unassigned && res.unassigned > 0 ? `，未匹配 vendor ${res.unassigned} 单` : ''
+  let text =
+    `${label}已更新：${res.updated}/${res.total} 单（${res.batches} 批×${res.batchSize}），新增 ${res.logCount} 条` +
     (res.skipped ? `，跳过 ${res.skipped} 单` : '') +
-    (res.notFound ? `，未返回 ${res.notFound} 单` : '') +
+    (res.notFound ? `，未返回/失败 ${res.notFound} 单` : '') +
     (res.empty ? `，无轨迹 ${res.empty} 单` : '') +
-    errHint
-  )
+    unassigned
+  if (res.errors.length) {
+    const preview = res.errors.slice(0, 3).join('；')
+    const more = res.errors.length > 3 ? `…等 ${res.errors.length} 条` : ''
+    text += `；错误：${preview}${more}`
+  }
+  return text
+}
+
+function notifyTrackingSyncResult(res: TrackingSyncResult, label: string) {
+  const content = formatTrackingMessage(res, label)
+  if (res.errors.length && res.updated === 0) {
+    message.error(content, { duration: 12_000 })
+  } else if (res.errors.length) {
+    message.warning(content, { duration: 12_000 })
+  } else {
+    message.success(content, { duration: 8000 })
+  }
+  if (res.errors.length) {
+    console.warn(`sync ${label} errors:`, res.errors)
+  }
+}
+
+async function loadCarrierDailyStats() {
+  try {
+    carrierDaily.value = await getTrackingSyncDailyStats('carrier')
+  } catch {
+    carrierDaily.value = null
+  }
 }
 
 function daysSince(time: string | null | undefined): number | null {
@@ -81,19 +147,41 @@ function daysSince(time: string | null | undefined): number | null {
   return Math.floor((Date.now() - t.getTime()) / 86_400_000)
 }
 
-const statusOptions = [
-  { label: '全部状态', value: '' },
-  { label: '转运中', value: 'IN_TRANSIT' },
-  { label: '已签收', value: 'DELIVERED' },
-  { label: '查验', value: 'INSPECTION' },
-  { label: '未知', value: 'UNKNOWN' },
-]
+const statusLabel: Record<string, string> = {
+  IN_TRANSIT: '转运中',
+  DELIVERED: '已签收',
+  INSPECTION: '查验',
+  UNKNOWN: '未知',
+}
+
+const statusOptions = computed(() =>
+  filterOptions.value.statusCodes.map((code) => ({
+    label: statusLabel[code] || code,
+    value: code,
+  })),
+)
 
 const staleOptions = [
   { label: '≥7 天未更新', value: 7 },
   { label: '≥14 天未更新', value: 14 },
   { label: '≥30 天未更新', value: 30 },
 ]
+
+const customerOptions = computed(() =>
+  filterOptions.value.customers.map((v) => ({ label: v, value: v })),
+)
+const carrierOptions = computed(() =>
+  filterOptions.value.carrierCodes.map((v) => ({ label: v, value: v })),
+)
+const countryOptions = computed(() =>
+  filterOptions.value.countryCodes.map((code) => ({
+    label: countryLabel(code) === code ? code : `${countryLabel(code)} (${code})`,
+    value: code,
+  })),
+)
+const channelOptions = computed(() =>
+  filterOptions.value.channelCodes.map((v) => ({ label: v, value: v })),
+)
 
 /** 运单表常显滚动条（Naive 默认隐藏原生条，用 Scrollbar 轨道） */
 const tableScrollbarProps = {
@@ -112,62 +200,102 @@ function clearSelection() {
   checkedRowKeys.value = []
 }
 
-const statusLabel: Record<string, string> = {
-  IN_TRANSIT: '转运中',
-  DELIVERED: '已签收',
-  INSPECTION: '查验',
-  UNKNOWN: '未知',
-}
+function buildListParams(): Parameters<typeof listShipments>[0] {
+  const tokens = shipmentNoTokens.value
+  const keyword = searchKeyword.value.trim()
+  const multiShipment = batchShipmentSearchActive.value
+  const limit = multiShipment
+    ? Math.min(500, Math.max(pageSize.value, tokens.length))
+    : pageSize.value
+  const offset = multiShipment ? 0 : (page.value - 1) * pageSize.value
+  const staleRaw = filterStaleDays.value
+  const staleDays =
+    staleRaw == null || staleRaw === ''
+      ? undefined
+      : typeof staleRaw === 'number'
+        ? staleRaw
+        : Number(staleRaw)
 
-const addressTypeColor: Record<string, 'info' | 'warning' | 'success' | 'default'> = {
-  AMZ: 'warning',
-  WFS: 'info',
-  '3PL': 'success',
-}
-
-async function loadList() {
-  loading.value = true
-  try {
-    const res = await listShipments({
-      search: search.value.trim() || undefined,
-      statusCode: filterStatus.value || undefined,
-      minStaleDays: filterNoTracking.value ? undefined : filterStaleDays.value ?? undefined,
-      noTracking: filterNoTracking.value || undefined,
-      limit: pageSize.value,
-      offset: (page.value - 1) * pageSize.value,
-    })
-    items.value = res.items
-    total.value = res.total
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : '加载失败')
-  } finally {
-    loading.value = false
+  return {
+    ...(tokens.length ? { shipmentNos: tokens } : {}),
+    ...(keyword ? { search: keyword } : {}),
+    statusCode: filterStatus.value || undefined,
+    customer: filterCustomer.value || undefined,
+    carrierCode: filterCarrier.value || undefined,
+    countryCode: filterCountry.value || undefined,
+    channelCode: filterChannel.value || undefined,
+    minStaleDays:
+      filterNoTracking.value || staleDays == null || Number.isNaN(staleDays) || staleDays <= 0
+        ? undefined
+        : staleDays,
+    noTracking: filterNoTracking.value || undefined,
+    limit,
+    offset,
   }
 }
 
+let listRequestSeq = 0
+
+async function loadList() {
+  const seq = ++listRequestSeq
+  loading.value = true
+  try {
+    const res = await listShipments(buildListParams())
+    if (seq !== listRequestSeq) return
+    items.value = res.items
+    total.value = res.total
+  } catch (e) {
+    if (seq !== listRequestSeq) return
+    message.error(e instanceof Error ? e.message : '加载失败')
+  } finally {
+    if (seq === listRequestSeq) loading.value = false
+  }
+}
+
+/** 下拉/勾选筛选变更：回到第 1 页并立即刷新 */
+function onFiltersChanged() {
+  page.value = 1
+  checkedRowKeys.value = []
+  expandedRowKeys.value = []
+  void loadList()
+}
+
+function onNoTrackingChanged(checked: boolean) {
+  if (checked) filterStaleDays.value = null
+  onFiltersChanged()
+}
+
 let searchTimer: ReturnType<typeof setTimeout> | null = null
-watch(search, () => {
+watch([searchShipmentNo, searchKeyword], () => {
   page.value = 1
   if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(loadList, 300)
+  searchTimer = setTimeout(() => {
+    checkedRowKeys.value = []
+    expandedRowKeys.value = []
+    void loadList()
+  }, 300)
 })
 
 watch([page, pageSize], () => {
   checkedRowKeys.value = []
   expandedRowKeys.value = []
-  loadList()
+  void loadList()
 })
 
-watch([filterStatus, filterStaleDays, filterNoTracking], () => {
-  page.value = 1
-  loadList()
-})
+async function loadFilterOptions() {
+  try {
+    filterOptions.value = await getShipmentFilterOptions()
+  } catch {
+    /* 筛选项加载失败不阻塞列表 */
+  }
+}
 
-watch(filterNoTracking, (v) => {
-  if (v) filterStaleDays.value = null
+onMounted(async () => {
+  await loadDictTypes('country_code')
+  await loadFilterOptions()
+  await loadCarrierDailyStats()
+  await loadList()
 })
-
-onMounted(loadList)
 
 function openCreate() {
   modalMode.value = 'create'
@@ -216,34 +344,59 @@ async function handleSyncTracking(shipmentNos?: string[]) {
   syncingTracking.value = true
   try {
     const res = await syncTracking(shipmentNos)
-    message.success(formatTrackingMessage(res), { duration: 6000 })
-    if (res.errors.length) {
-      console.warn('sync-tracking errors', res.errors)
-    }
+    notifyTrackingSyncResult(res, '内部轨迹')
     await loadList()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '更新轨迹失败')
+    message.error(e instanceof Error ? e.message : '更新内部轨迹失败')
   } finally {
     syncingTracking.value = false
   }
 }
 
+async function handleSyncCarrierTracking(shipmentNos?: string[]) {
+  syncingCarrier.value = true
+  try {
+    const res = await syncCarrierTracking(shipmentNos)
+    notifyTrackingSyncResult(res, '承运商轨迹')
+    await loadCarrierDailyStats()
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '更新承运商轨迹失败')
+  } finally {
+    syncingCarrier.value = false
+  }
+}
+
 function resetFilters() {
   filterStatus.value = null
+  filterCustomer.value = null
+  filterCarrier.value = null
+  filterCountry.value = null
+  filterChannel.value = null
   filterStaleDays.value = null
   filterNoTracking.value = false
-  search.value = ''
+  searchShipmentNo.value = ''
+  searchKeyword.value = ''
   page.value = 1
   loadList()
 }
 
-async function handleSyncSelected() {
+async function handleSyncSelectedInternal() {
   const nos = selectedShipmentNos.value
   if (!nos.length) {
     message.warning('请先勾选运单')
     return
   }
   await handleSyncTracking(nos)
+}
+
+async function handleSyncSelectedCarrier() {
+  const nos = selectedShipmentNos.value
+  if (!nos.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  await handleSyncCarrierTracking(nos)
 }
 
 async function copySelectedShipmentNos() {
@@ -286,14 +439,14 @@ function formatTrackingCopyBlock(
 }
 
 async function resolveLatestTracking(row: Shipment): Promise<{ desc: string; time: string }> {
-  if (row.latestTrackingDesc?.trim() || row.latestTrackingTime?.trim()) {
+  if (hasEffectiveInternalTracking(row)) {
     return {
       desc: row.latestTrackingDesc?.trim() || '—',
       time: row.latestTrackingTime?.trim() || '—',
     }
   }
-  const res = await getShipmentTrackingLogs(row.id, { limit: 1, offset: 0 })
-  const log = res.items[0]
+  const res = await getShipmentTrackingLogs(row.id, { limit: 20, offset: 0 })
+  const log = res.items.find((item) => !isInternalNoTrackingDesc(item.trackingDesc))
   if (!log) {
     return { desc: '—', time: '—' }
   }
@@ -358,45 +511,51 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   {
     title: '运单号',
     key: 'shipmentNo',
-    width: 140,
+    width: shipmentNoColWidth.value,
+    minWidth: 200,
     fixed: 'left',
-    ellipsis: { tooltip: true },
-    render: (row) => h('span', { class: 'font-medium text-zinc-100' }, row.shipmentNo),
+    render: (row) =>
+      h('span', { class: 'shipment-no-cell font-medium text-zinc-100' }, row.shipmentNo),
   },
   { title: '客户', key: 'customer', width: 100, ellipsis: { tooltip: true } },
-  { title: '客户订单号', key: 'customerNo', width: 130, ellipsis: { tooltip: true } },
   { title: '件数', key: 'ctns', width: 64, align: 'center' },
-  { title: '国家', key: 'countryCode', width: 72 },
   {
-    title: '类型',
-    key: 'addressType',
-    width: 72,
-    render: (row) =>
-      row.addressType
-        ? h(
-            NTag,
-            { size: 'small', bordered: false, type: addressTypeColor[row.addressType] || 'default' },
-            () => row.addressType,
-          )
-        : '—',
+    title: '国家',
+    key: 'countryCode',
+    width: 96,
+    ellipsis: { tooltip: true },
+    render: (row) => countryLabel(row.countryCode),
   },
   { title: '渠道', key: 'channelCode', width: 160, ellipsis: { tooltip: true } },
   { title: '承运商', key: 'carrierCode', width: 90, ellipsis: { tooltip: true } },
   { title: '派送地址', key: 'deliveryAddress', width: 180, ellipsis: { tooltip: true } },
-  { title: '交货仓库', key: 'originWarehouseCode', width: 90, ellipsis: { tooltip: true } },
   {
-    title: '最新轨迹时间',
+    title: '内部轨迹时间',
     key: 'latestTrackingTime',
     width: 152,
     ellipsis: { tooltip: true },
-    render: (row) => row.latestTrackingTime || '—',
+    render: (row) => (hasEffectiveInternalTracking(row) ? row.latestTrackingTime : null) || '—',
   },
   {
-    title: '最新轨迹',
+    title: '内部最新轨迹',
     key: 'latestTrackingDesc',
-    width: 200,
+    width: 180,
     ellipsis: { tooltip: true },
-    render: (row) => row.latestTrackingDesc || '—',
+    render: (row) => (hasEffectiveInternalTracking(row) ? row.latestTrackingDesc : null) || '—',
+  },
+  {
+    title: '承运商轨迹时间',
+    key: 'latestCarrierTime',
+    width: 152,
+    ellipsis: { tooltip: true },
+    render: (row) => row.latestCarrierTime || '—',
+  },
+  {
+    title: '承运商最新轨迹',
+    key: 'latestCarrierDesc',
+    width: 180,
+    ellipsis: { tooltip: true },
+    render: (row) => row.latestCarrierDesc || '—',
   },
   {
     title: '未更新',
@@ -404,7 +563,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     width: 72,
     align: 'center',
     render: (row) => {
-      const d = daysSince(row.latestTrackingTime)
+      const d = hasEffectiveInternalTracking(row) ? daysSince(row.latestTrackingTime) : null
       if (d === null) {
         return h('span', { class: 'text-zinc-600' }, '—')
       }
@@ -418,17 +577,6 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         () => `${d}天`,
       )
     },
-  },
-  {
-    title: '状态',
-    key: 'statusCode',
-    width: 88,
-    render: (row) =>
-      h(
-        NTag,
-        { size: 'small', bordered: false, type: row.statusCode === 'DELIVERED' ? 'success' : 'default' },
-        () => statusLabel[row.statusCode || ''] || row.statusCode || '—',
-      ),
   },
   { title: '更新时间', key: 'updatedTime', width: 160 },
   {
@@ -464,18 +612,19 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     <div class="shrink-0 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="text-lg font-semibold text-white">运单管理</h2>
-        <p class="text-xs text-zinc-500">共 {{ total }} 条 · 支持 Excel 按运单号 upsert</p>
+        <p class="text-xs text-zinc-500">
+          共 {{ total }} 条 · 支持 Excel 按运单号 upsert
+          <span v-if="batchShipmentSearchActive" class="text-violet-400">
+            · 批量运单号 {{ shipmentNoTokens.length }} 个
+          </span>
+        </p>
       </div>
-      <NSpace>
-        <NInput
-          v-model:value="search"
-          placeholder="搜索运单号、客户、地址…"
-          clearable
-          size="small"
-          class="w-56"
-        />
+      <NSpace align="center">
         <NButton size="small" :loading="syncingTracking" @click="handleSyncTracking()">
-          更新所有轨迹
+          更新内部轨迹
+        </NButton>
+        <NButton size="small" :loading="syncingCarrier" @click="handleSyncCarrierTracking()">
+          更新承运商轨迹
         </NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">
           导入 Excel
@@ -492,26 +641,108 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       @change="onFileSelected"
     />
 
-    <div class="shrink-0 flex flex-wrap items-center gap-2">
-      <NSelect
-        v-model:value="filterStatus"
-        :options="statusOptions"
-        placeholder="状态"
-        clearable
-        size="small"
-        class="w-28"
-      />
-      <NSelect
-        v-model:value="filterStaleDays"
-        :options="staleOptions"
-        :disabled="filterNoTracking"
-        placeholder="停滞"
-        clearable
-        size="small"
-        class="w-36"
-      />
-      <NCheckbox v-model:checked="filterNoTracking" size="small">无轨迹</NCheckbox>
-      <NButton size="small" quaternary @click="resetFilters">重置筛选</NButton>
+    <div
+      v-if="carrierDaily"
+      class="shrink-0 rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs text-zinc-300"
+    >
+      承运商轨迹 · 今日已更新
+      <strong class="text-white">{{ carrierDaily.updatedShipments }}</strong>
+      单，新增
+      <strong class="text-white">{{ carrierDaily.newLogCount }}</strong>
+      条节点
+      <span v-if="carrierDaily.lastFinished" class="text-zinc-500">
+        · 上次同步 {{ carrierDaily.lastFinished }}
+      </span>
+    </div>
+
+    <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
+      <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <NInput
+          v-model:value="searchShipmentNo"
+          type="textarea"
+          placeholder="运单号（逗号/换行）"
+          :autosize="{ minRows: 1, maxRows: 3 }"
+          clearable
+          size="small"
+          class="shipments-filter-shipment-no"
+        />
+        <NInput
+          v-model:value="searchKeyword"
+          placeholder="订单号/地址/轨迹"
+          clearable
+          size="small"
+          class="shipments-filter-keyword"
+        />
+        <span class="shipments-filter-divider" aria-hidden="true" />
+        <NSelect
+          v-model:value="filterCustomer"
+          :options="customerOptions"
+          placeholder="客户"
+          clearable
+          filterable
+          size="small"
+          class="shipments-filter-select"
+          @update:value="onFiltersChanged"
+        />
+        <NSelect
+          v-model:value="filterCarrier"
+          :options="carrierOptions"
+          placeholder="承运商"
+          clearable
+          filterable
+          size="small"
+          class="shipments-filter-select"
+          @update:value="onFiltersChanged"
+        />
+        <NSelect
+          v-model:value="filterCountry"
+          :options="countryOptions"
+          placeholder="国家"
+          clearable
+          filterable
+          size="small"
+          class="shipments-filter-select shipments-filter-select--wide"
+          @update:value="onFiltersChanged"
+        />
+        <NSelect
+          v-model:value="filterChannel"
+          :options="channelOptions"
+          placeholder="渠道"
+          clearable
+          filterable
+          size="small"
+          class="shipments-filter-select shipments-filter-select--wide"
+          @update:value="onFiltersChanged"
+        />
+        <NSelect
+          v-model:value="filterStatus"
+          :options="statusOptions"
+          placeholder="状态"
+          clearable
+          size="small"
+          class="shipments-filter-select"
+          @update:value="onFiltersChanged"
+        />
+        <NSelect
+          v-model:value="filterStaleDays"
+          :options="staleOptions"
+          :disabled="filterNoTracking"
+          placeholder="停滞"
+          clearable
+          size="small"
+          class="shipments-filter-select"
+          @update:value="onFiltersChanged"
+        />
+        <NCheckbox
+          v-model:checked="filterNoTracking"
+          size="small"
+          class="shrink-0 whitespace-nowrap"
+          @update:checked="onNoTrackingChanged"
+        >
+          无轨迹
+        </NCheckbox>
+        <NButton size="small" quaternary class="shrink-0" @click="resetFilters">重置</NButton>
+      </div>
     </div>
 
     <div class="panel shipments-table-panel min-h-0 flex-1 overflow-hidden p-0">
@@ -522,7 +753,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         :columns="columns"
         :data="items"
         :loading="loading"
-        :scroll-x="1880"
+        :scroll-x="1900 + shipmentNoColWidth"
         :scrollbar-props="tableScrollbarProps"
         size="small"
         flex-height
@@ -544,8 +775,11 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         <NButton size="small" :loading="copyingTracking" @click="copySelectedLatestTracking">
           查询并复制最新轨迹
         </NButton>
-        <NButton size="small" type="primary" :loading="syncingTracking" @click="handleSyncSelected">
-          更新选中轨迹
+        <NButton size="small" :loading="syncingTracking" @click="handleSyncSelectedInternal">
+          更新选中内部轨迹
+        </NButton>
+        <NButton size="small" type="primary" :loading="syncingCarrier" @click="handleSyncSelectedCarrier">
+          更新选中承运商轨迹
         </NButton>
       </NSpace>
     </div>
@@ -572,6 +806,52 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
 </template>
 
 <style scoped>
+.shipments-filters-bar {
+  border-radius: 0.5rem;
+}
+
+.shipments-filters-bar .shipments-filter-shipment-no {
+  width: min(200px, 20vw);
+  min-width: 132px;
+  max-width: 220px;
+  flex: 1 1 132px;
+}
+
+.shipments-filters-bar .shipments-filter-shipment-no :deep(.n-input__textarea-el) {
+  min-height: 28px;
+  line-height: 1.4;
+}
+
+.shipments-filters-bar .shipments-filter-keyword {
+  width: min(152px, 16vw);
+  min-width: 120px;
+  flex: 0 1 152px;
+}
+
+.shipments-filters-bar .shipments-filter-select {
+  width: 7.25rem;
+  min-width: 6.5rem;
+}
+
+.shipments-filters-bar .shipments-filter-select--wide {
+  width: 8.75rem;
+  min-width: 7.5rem;
+}
+
+.shipments-filter-divider {
+  width: 1px;
+  height: 1.25rem;
+  flex-shrink: 0;
+  background: var(--color-border);
+}
+
+.shipments-data-table :deep(.shipment-no-cell) {
+  display: inline-block;
+  white-space: nowrap;
+  word-break: keep-all;
+  font-variant-numeric: tabular-nums;
+}
+
 /* 运单表底部/右侧常显滚动条（Naive 默认 hover 才显示） */
 .shipments-table-panel {
   display: flex;

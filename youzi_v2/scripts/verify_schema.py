@@ -18,3 +18,6 @@ print("status codes:", list(c.execute(
 ).fetchall()))
 cols = [r[1] for r in c.execute("PRAGMA table_info(shipments)").fetchall()]
 print("shipments columns:", cols)
+if "sys_dict" in tables:
+    dict_cols = [r[1] for r in c.execute("PRAGMA table_info(sys_dict)").fetchall()]
+    print("sys_dict columns:", dict_cols)

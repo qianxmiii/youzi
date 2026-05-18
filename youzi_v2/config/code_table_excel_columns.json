@@ -1,0 +1,24 @@
+{
+  "sheet_preference": ["码表", "Sheet1", "数据"],
+  "columns": {
+    "编码": "code",
+    "code": "code",
+    "CODE": "code",
+    "中文名": "name_zh",
+    "name_zh": "name_zh",
+    "nameZh": "name_zh",
+    "英文名": "name_en",
+    "name_en": "name_en",
+    "nameEn": "name_en",
+    "排序": "sort_order",
+    "sort_order": "sort_order",
+    "sortOrder": "sort_order",
+    "启用": "is_active",
+    "is_active": "is_active",
+    "isActive": "is_active",
+    "港口类型": "port_type",
+    "port_type": "port_type",
+    "portType": "port_type"
+  },
+  "is_active_true": ["1", "true", "yes", "y", "是", "启用", "TRUE", "Yes"]
+}

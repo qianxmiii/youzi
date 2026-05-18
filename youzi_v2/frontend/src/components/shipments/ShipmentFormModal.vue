@@ -11,8 +11,11 @@ import {
   useMessage,
 } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
+import { useDictLabels } from '@/composables/useDictLabels'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
+
+const { loadDictTypes, dictOptions } = useDictLabels()
 
 const props = defineProps<{
   show: boolean
@@ -31,11 +34,7 @@ const submitting = ref(false)
 
 const title = computed(() => (props.mode === 'create' ? '新增运单' : '编辑运单'))
 
-const addressTypeOptions = [
-  { label: 'AMZ', value: 'AMZ' },
-  { label: 'WFS', value: 'WFS' },
-  { label: '3PL', value: '3PL' },
-]
+const addressTypeOptions = dictOptions('address_type')
 
 const statusOptions = [
   { label: '转运中', value: 'IN_TRANSIT' },
@@ -43,6 +42,13 @@ const statusOptions = [
   { label: '查验', value: 'INSPECTION' },
   { label: '未知', value: 'UNKNOWN' },
 ]
+
+watch(
+  () => props.show,
+  (visible) => {
+    if (visible) void loadDictTypes('address_type')
+  },
+)
 
 watch(
   () => [props.show, props.mode, props.initial] as const,

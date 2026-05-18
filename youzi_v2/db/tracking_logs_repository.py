@@ -8,7 +8,7 @@ from typing import Any
 
 from .connection import Database
 from .datetime_util import now_str
-from .tracking_logs_table import TABLE_NAME
+from .internal_tracking_logs_table import TABLE_NAME
 
 
 def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:

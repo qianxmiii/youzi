@@ -59,8 +59,8 @@ const router = createRouter({
         {
           path: 'admin',
           name: 'admin',
-          component: () => import('@/views/PlaceholderView.vue'),
-          meta: { title: '管理', migration: 'legacy admin.html' },
+          component: () => import('@/views/admin/AdminCodeTablesView.vue'),
+          meta: { title: '后台管理' },
         },
       ],
     },

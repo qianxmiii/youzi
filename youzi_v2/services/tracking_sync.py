@@ -1,4 +1,4 @@
-"""从物流 API 拉取运单轨迹并增量写入 tracking_logs，更新运单摘要。"""
+"""从物流 API 拉取运单轨迹并增量写入 internal_tracking_logs，更新运单内部摘要。"""
 
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ from typing import Any, Callable
 
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_logs_repository import TrackingLogsRepository
+from ..internal_tracking import is_internal_no_tracking_desc
 from .logistics_tracking import (
     BATCH_SIZE,
     _default_log,
@@ -72,6 +73,8 @@ def sync_all_tracking(
         logs = logs_from_api_item(item)
         if not logs:
             empty += 1
+            if is_internal_no_tracking_desc(row.get("latest_tracking_desc")):
+                shipments_repo.update_internal_tracking_summary(sn, "", "", log_count=0)
             continue
 
         latest_time, latest_desc = latest_from_logs(logs)
@@ -84,7 +87,7 @@ def sync_all_tracking(
         inserted = tracking_repo.merge_logs_for_shipment(sn, logs)
         log_count += inserted
         count = tracking_repo.count_by_shipment_no(sn)
-        shipments_repo.update_tracking_summary(
+        shipments_repo.update_internal_tracking_summary(
             sn, latest_time, latest_desc, log_count=count
         )
         updated += 1

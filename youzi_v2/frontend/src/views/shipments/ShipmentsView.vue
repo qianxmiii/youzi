@@ -50,6 +50,8 @@ const items = ref<Shipment[]>([])
 const total = ref(0)
 const searchShipmentNo = ref('')
 const searchKeyword = ref('')
+/** 承运商轨迹同步：指定运单号（逗号/换行）；留空则全库在途 */
+const carrierTrackingInput = ref('')
 const filterStatus = ref<string | null>(null)
 const filterCustomer = ref<string | null>(null)
 const filterCarrier = ref<string | null>(null)
@@ -79,6 +81,7 @@ const selectedCount = computed(() => checkedRowKeys.value.length)
 
 const shipmentNoTokens = computed(() => parseBatchSearchTokens(searchShipmentNo.value))
 const batchShipmentSearchActive = computed(() => shipmentNoTokens.value.length > 1)
+const carrierTrackingTokens = computed(() => parseBatchSearchTokens(carrierTrackingInput.value))
 
 /** 按当前页最长运单号估算列宽，避免截断 */
 const shipmentNoColWidth = computed(() => {
@@ -367,6 +370,22 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
   }
 }
 
+async function handleSyncCarrierTrackingFromInput() {
+  const tokens = carrierTrackingTokens.value
+  if (tokens.length) {
+    await handleSyncCarrierTracking(tokens)
+    return
+  }
+  await handleSyncCarrierTracking()
+}
+
+function onCarrierTrackingInputKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+    e.preventDefault()
+    void handleSyncCarrierTrackingFromInput()
+  }
+}
+
 function resetFilters() {
   filterStatus.value = null
   filterCustomer.value = null
@@ -623,8 +642,25 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         <NButton size="small" :loading="syncingTracking" @click="handleSyncTracking()">
           更新内部轨迹
         </NButton>
-        <NButton size="small" :loading="syncingCarrier" @click="handleSyncCarrierTracking()">
+        <NInput
+          v-model:value="carrierTrackingInput"
+          type="textarea"
+          placeholder="承运商轨迹运单号（逗号/换行，留空=全库在途）"
+          :autosize="{ minRows: 1, maxRows: 2 }"
+          clearable
+          size="small"
+          class="carrier-tracking-query-input"
+          @keydown="onCarrierTrackingInputKeydown"
+        />
+        <NButton
+          size="small"
+          :loading="syncingCarrier"
+          @click="handleSyncCarrierTrackingFromInput"
+        >
           更新承运商轨迹
+          <span v-if="carrierTrackingTokens.length" class="opacity-80">
+            ({{ carrierTrackingTokens.length }})
+          </span>
         </NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">
           导入 Excel
@@ -806,6 +842,16 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
 </template>
 
 <style scoped>
+.carrier-tracking-query-input {
+  width: min(280px, 32vw);
+  min-width: 200px;
+}
+
+.carrier-tracking-query-input :deep(.n-input__textarea-el) {
+  min-height: 28px;
+  line-height: 1.4;
+}
+
 .shipments-filters-bar {
   border-radius: 0.5rem;
 }

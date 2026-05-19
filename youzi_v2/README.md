@@ -25,6 +25,16 @@ uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001 --reload
 
 **终端 2 — 新前端**
 
+Windows PowerShell（若 `npm` 报「禁止运行脚本」，请用 `npm.cmd`）：
+
+```powershell
+cd c:\Files\git\youzi\youzi_v2\frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+macOS / Linux / Git Bash：
+
 ```bash
 cd youzi_v2/frontend
 npm install

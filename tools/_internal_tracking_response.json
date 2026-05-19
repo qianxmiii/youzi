@@ -1,0 +1,76 @@
+{
+  "url": "https://www.worlddps.com/prod-api/client/logistics/noToken/getLogistics",
+  "request": {
+    "odds": [
+      "DPSECO260423180",
+      "DPSECO260410125"
+    ]
+  },
+  "httpStatus": 200,
+  "response": {
+    "code": 200,
+    "msg": "操作成功",
+    "data": [
+      {
+        "odd": "DPSECO260410125",
+        "status": "2",
+        "receiveCountry": {
+          "name": "中国",
+          "enAbbreviation": "CN"
+        },
+        "deliveryCountry": {
+          "name": "美国",
+          "enAbbreviation": "US"
+        },
+        "logisticsInfors": [
+          {
+            "nodeTime": "2026-05-04 21:05:19",
+            "nodeDesc": "RUBY TOWER /004E,ETD:2026/05/12,ETA:2026/05/28"
+          },
+          {
+            "nodeTime": "2026-04-25 15:47:03",
+            "nodeDesc": "Your goods are in the warehouse"
+          },
+          {
+            "nodeTime": "2026-04-10 18:39:35",
+            "nodeDesc": "Your order is handled by May merchandiser on your behalf"
+          },
+          {
+            "nodeTime": "2026-04-10 18:36:40",
+            "nodeDesc": "You have placed your order, and the sales representative is lily"
+          }
+        ]
+      },
+      {
+        "odd": "DPSECO260423180",
+        "status": "2",
+        "receiveCountry": {
+          "name": "中国",
+          "enAbbreviation": "CN"
+        },
+        "deliveryCountry": {
+          "name": "美国",
+          "enAbbreviation": "US"
+        },
+        "logisticsInfors": [
+          {
+            "nodeTime": "2026-05-04 21:05:19",
+            "nodeDesc": "RUBY TOWER /004E,ETD:2026/05/12,ETA:2026/05/28"
+          },
+          {
+            "nodeTime": "2026-04-24 19:20:31",
+            "nodeDesc": "Your goods are in the warehouse"
+          },
+          {
+            "nodeTime": "2026-04-23 18:00:01",
+            "nodeDesc": "Your order is handled by May merchandiser on your behalf"
+          },
+          {
+            "nodeTime": "2026-04-23 17:55:21",
+            "nodeDesc": "You have placed your order, and the sales representative is lily"
+          }
+        ]
+      }
+    ]
+  }
+}

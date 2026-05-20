@@ -25,6 +25,7 @@ export interface TrackingSyncResult {
   batches: number
   jobId?: string
   unassigned?: number
+  logs?: string[]
 }
 
 export interface TrackingSyncDailyStats {

@@ -469,8 +469,17 @@ def _fetch_txfba_track_by_bill_no(
             headers=_txfba_request_headers(vendor),
             timeout=timeout,
         )
-        resp.raise_for_status()
-        payload = resp.json()
+        try:
+            payload = resp.json()
+        except Exception:
+            payload = None
+        if resp.status_code >= 400:
+            snippet = (resp.text or "")[:200].replace("\n", " ")
+            return _carrier_fail(
+                f"HTTP {resp.status_code} {snippet or resp.reason}"
+            )
+        if payload is None:
+            return _carrier_fail("腾信响应非 JSON")
     except Exception as exc:
         return _carrier_fail(str(exc))
 
@@ -478,7 +487,7 @@ def _fetch_txfba_track_by_bill_no(
         return _carrier_fail("腾信 API 响应格式异常")
     if payload.get("code") != 200:
         msg = (payload.get("message") or "").strip() or "腾信查询失败"
-        return _carrier_fail(msg)
+        return _carrier_fail(f"code={payload.get('code')} {msg}")
 
     data = payload.get("data")
     if not isinstance(data, list) or not data:

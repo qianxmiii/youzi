@@ -8,17 +8,27 @@ from typing import Any, Callable
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_logs_repository import TrackingLogsRepository
 from ..internal_tracking import is_internal_no_tracking_desc
+from .sync_log import make_sync_logger
 from .logistics_tracking import (
     BATCH_SIZE,
-    _default_log,
     latest_from_logs,
     load_logistics_config,
     logs_from_api_item,
     query_logistics_api,
     shipment_no_from_api_item,
+    status_code_from_api_item,
+    status_label_from_api_item,
 )
 
 LogFn = Callable[[str], None]
+
+
+def _delivered_time_for_status(
+    status_code: str | None, latest_time: str
+) -> str | None:
+    if status_code == "DELIVERED" and (latest_time or "").strip():
+        return latest_time.strip()
+    return None
 
 
 def sync_all_tracking(
@@ -30,7 +40,7 @@ def sync_all_tracking(
     batch_size: int = BATCH_SIZE,
     log: LogFn | None = None,
 ) -> dict[str, Any]:
-    out_log = log or _default_log
+    log_lines, out_log = make_sync_logger(log)
     config = load_logistics_config(config_path)
     base_url = config["base_url"]
     batch_size = BATCH_SIZE
@@ -42,7 +52,7 @@ def sync_all_tracking(
         out_log(f"[轨迹同步] 指定 {requested} 单，库内匹配 {total} 单")
     if total == 0:
         out_log("[轨迹同步] 无待同步运单，跳过")
-        return _empty_result(batch_size)
+        return _empty_result(batch_size, log_lines)
 
     out_log(f"[轨迹同步] 开始，base_url={base_url}")
 
@@ -70,17 +80,33 @@ def sync_all_tracking(
         if item is None:
             not_found += 1
             continue
+
+        api_status = status_code_from_api_item(item)
+        stored_status = (row.get("status_code") or "").strip()
+        status_label = status_label_from_api_item(item)
+
         logs = logs_from_api_item(item)
         if not logs:
             empty += 1
-            if is_internal_no_tracking_desc(row.get("latest_tracking_desc")):
+            if api_status and api_status != stored_status:
+                shipments_repo.update_internal_tracking_summary(
+                    sn,
+                    row.get("latest_tracking_time") or "",
+                    row.get("latest_tracking_desc") or "",
+                    status_code=api_status,
+                )
+                out_log(f"[轨迹同步] {sn} 报文 {status_label} -> {api_status}（无有效轨迹节点）")
+                updated += 1
+            elif is_internal_no_tracking_desc(row.get("latest_tracking_desc")):
                 shipments_repo.update_internal_tracking_summary(sn, "", "", log_count=0)
             continue
 
         latest_time, latest_desc = latest_from_logs(logs)
         stored_time = row.get("latest_tracking_time") or ""
         stored_desc = row.get("latest_tracking_desc") or ""
-        if latest_time == stored_time and latest_desc == stored_desc:
+        summary_same = latest_time == stored_time and latest_desc == stored_desc
+        status_same = not api_status or api_status == stored_status
+        if summary_same and status_same:
             skipped += 1
             continue
 
@@ -88,10 +114,20 @@ def sync_all_tracking(
         log_count += inserted
         count = tracking_repo.count_by_shipment_no(sn)
         shipments_repo.update_internal_tracking_summary(
-            sn, latest_time, latest_desc, log_count=count
+            sn,
+            latest_time,
+            latest_desc,
+            log_count=count,
+            status_code=api_status,
+            delivered_time=_delivered_time_for_status(api_status, latest_time),
         )
         updated += 1
-        if updated % 50 == 0 or idx == total:
+        if api_status:
+            out_log(
+                f"[轨迹同步] {sn} 报文 {status_label} -> {api_status}，"
+                f"轨迹 {len(logs)} 条，最新 {latest_time}"
+            )
+        elif updated % 50 == 0 or idx == total:
             out_log(
                 f"[轨迹同步] 进度 {idx}/{total}，"
                 f"已更新 {updated} 单，跳过 {skipped} 单，新增轨迹 {log_count} 条"
@@ -102,7 +138,7 @@ def sync_all_tracking(
 
     out_log(
         f"[轨迹同步] 完成：共 {total} 单，{total_batches} 批；"
-        f"更新 {updated} 单，跳过 {skipped} 单（摘要未变），"
+        f"更新 {updated} 单，跳过 {skipped} 单（摘要与状态均未变），"
         f"新增轨迹 {log_count} 条；无轨迹 {empty} 单，API 未返回 {not_found} 单"
     )
     if unique_errors:
@@ -118,10 +154,11 @@ def sync_all_tracking(
         "errors": unique_errors,
         "batchSize": batch_size,
         "batches": total_batches,
+        "logs": log_lines[-200:],
     }
 
 
-def _empty_result(batch_size: int) -> dict[str, Any]:
+def _empty_result(batch_size: int, log_lines: list[str] | None = None) -> dict[str, Any]:
     return {
         "total": 0,
         "updated": 0,
@@ -132,4 +169,5 @@ def _empty_result(batch_size: int) -> dict[str, Any]:
         "errors": [],
         "batchSize": batch_size,
         "batches": 0,
+        "logs": (log_lines or [])[-200:],
     }

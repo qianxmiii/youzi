@@ -19,8 +19,15 @@ class Database:
         self._lock = threading.RLock()
         db_path.parent.mkdir(parents=True, exist_ok=True)
         self._path = db_path
-        self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        self._conn = sqlite3.connect(
+            str(db_path),
+            check_same_thread=False,
+            timeout=30.0,
+        )
         self._conn.row_factory = sqlite3.Row
+        self._conn.execute("PRAGMA journal_mode=WAL")
+        self._conn.execute("PRAGMA busy_timeout=30000")
+        self._conn.execute("PRAGMA synchronous=NORMAL")
         self._bootstrap()
 
     def _bootstrap(self) -> None:

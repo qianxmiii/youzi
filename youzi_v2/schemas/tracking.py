@@ -43,6 +43,7 @@ class TrackingSyncResult(BaseModel):
     batches: int = Field(default=0, description="查询批次数")
     job_id: str | None = Field(default=None, alias="jobId")
     unassigned: int = Field(default=0, description="承运商同步：未匹配 vendor 的单数")
+    logs: list[str] = Field(default_factory=list, description="同步过程日志（批次进度、每单返回摘要）")
 
     model_config = {"populate_by_name": True}
 

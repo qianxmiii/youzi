@@ -104,6 +104,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "supplierName": "supplier_name",
         "carrierCode": "carrier_code",
         "carrierId": "carrier_id",
+        "trackingNumber": "tracking_number",
         "customerShipmentId": "customer_shipment_id",
         "amazonRefId": "amazon_ref_id",
         "vesselName": "vessel_name",
@@ -252,6 +253,8 @@ class ShipmentsRepository:
         latest_desc: str,
         *,
         log_count: int | None = None,
+        status_code: str | None = None,
+        delivered_time: str | None = None,
     ) -> None:
         sn = shipment_no.strip()
         count = log_count
@@ -261,15 +264,30 @@ class ShipmentsRepository:
                     "SELECT COUNT(*) AS c FROM internal_tracking_logs WHERE shipment_no = ?",
                     (sn,),
                 ).fetchone()["c"]
+            sets = [
+                "latest_tracking_time = ?",
+                "latest_tracking_desc = ?",
+                "tracking_log_count = ?",
+                "updated_time = ?",
+            ]
+            params: list[Any] = [
+                latest_time,
+                latest_desc or "",
+                int(count),
+                now_str(),
+            ]
+            sc = (status_code or "").strip()
+            if sc:
+                sets.append("status_code = ?")
+                params.append(sc)
+            dt = (delivered_time or "").strip()
+            if dt:
+                sets.append("delivered_time = ?")
+                params.append(dt)
+            params.append(sn)
             self._conn.execute(
-                f"""
-                UPDATE {TABLE_NAME}
-                SET latest_tracking_time = ?,
-                    latest_tracking_desc = ?,
-                    tracking_log_count = ?
-                WHERE shipment_no = ?
-                """,
-                (latest_time, latest_desc or "", int(count), sn),
+                f"UPDATE {TABLE_NAME} SET {', '.join(sets)} WHERE shipment_no = ?",
+                params,
             )
             self._conn.commit()
 
@@ -456,7 +474,7 @@ class ShipmentsRepository:
                 rows = self._conn.execute(
                     f"""
                     SELECT shipment_no, customer, channel_code, carrier_code,
-                           latest_tracking_time, latest_tracking_desc
+                           status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
                       AND shipment_no IN ({placeholders})
@@ -468,7 +486,7 @@ class ShipmentsRepository:
                 rows = self._conn.execute(
                     f"""
                     SELECT shipment_no, customer, channel_code, carrier_code,
-                           latest_tracking_time, latest_tracking_desc
+                           status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
                     ORDER BY shipment_no
@@ -480,6 +498,7 @@ class ShipmentsRepository:
                 "customer": r["customer"] or "",
                 "channel": r["channel_code"] or "",
                 "carrier": r["carrier_code"] or "",
+                "status_code": r["status_code"] or "",
                 "latest_tracking_time": r["latest_tracking_time"] or "",
                 "latest_tracking_desc": r["latest_tracking_desc"] or "",
             }
@@ -544,8 +563,16 @@ class ShipmentsRepository:
             raise ValueError("运单号不能为空")
         existing = self.get_by_shipment_no(shipment_no)
         if existing is None:
+            if not payload.get("status_code"):
+                payload["status_code"] = "UNKNOWN"
             return self.insert_row(payload), True
-        return self.update_row(existing["id"], payload), False
+        # 更新：仅覆盖 Excel 中填写的字段，空单元格不写入
+        update_payload = {
+            k: v for k, v in payload.items() if k != "shipment_no" and v is not None
+        }
+        if not update_payload:
+            return existing, False
+        return self.update_row(existing["id"], update_payload), False
 
     def delete_row(self, item_id: str) -> bool:
         with self._database.lock:

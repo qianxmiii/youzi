@@ -23,5 +23,11 @@ youzi_v2/**/__pycache__/
 youzi_v2/data/
 youzi_v2/**/*.db
 youzi_v2/temp/
+youzi_v2/logs/
 youzi_v2/frontend/node_modules/
 youzi_v2/frontend/dist/
+
+# 运行日志仅本地留存，勿提交
+logs/
+*.log
+**/*.log

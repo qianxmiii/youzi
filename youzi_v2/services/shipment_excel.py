@@ -67,10 +67,10 @@ def _pick_sheet(wb: Any, names: list[str]) -> Any:
 
 def parse_excel_rows(
     file_path: Path,
-) -> tuple[list[tuple[int, dict[str, Any]]], list[dict[str, Any]]]:
+) -> tuple[list[tuple[int, dict[str, Any]]], list[dict[str, Any]], list[str]]:
     """
-    解析 Excel，返回 ([(excel行号, payload), ...], 错误列表)。
-    payload 键为数据库蛇形字段名。
+    解析 Excel，返回 (数据行, 行级错误, 已跳过的未映射表头)。
+    无法映射的列名仅忽略，不导致整表导入失败。
     """
     mapping = _load_mapping()
     col_map: dict[str, str] = mapping["columns"]
@@ -84,16 +84,21 @@ def parse_excel_rows(
         try:
             header_row = next(rows_iter)
         except StopIteration:
-            return [], [{"row": 1, "message": "空文件"}]
+            return [], [{"row": 1, "message": "空文件"}], []
 
         header_index: dict[int, str] = {}
+        skipped_columns: list[str] = []
         for idx, cell in enumerate(header_row):
             label = _cell_str(cell)
-            if label and label in col_map:
+            if not label:
+                continue
+            if label in col_map:
                 header_index[idx] = col_map[label]
+            else:
+                skipped_columns.append(label)
 
         if "shipment_no" not in header_index.values():
-            return [], [{"row": 1, "message": "缺少表头「运单号」"}]
+            return [], [{"row": 1, "message": "缺少表头「运单号」"}], skipped_columns
 
         payloads: list[tuple[int, dict[str, Any]]] = []
         errors: list[dict[str, Any]] = []
@@ -106,28 +111,33 @@ def parse_excel_rows(
             for idx, field in header_index.items():
                 val = row[idx] if idx < len(row) else None
                 if field == "ctns":
-                    record[field] = _cell_int(val)
+                    parsed = _cell_int(val)
+                    if parsed is not None:
+                        record[field] = parsed
                 else:
-                    record[field] = _cell_str(val)
+                    parsed = _cell_str(val)
+                    if parsed is not None:
+                        record[field] = parsed
 
             shipment_no = (record.get("shipment_no") or "").strip()
             if not shipment_no:
                 errors.append({"row": excel_row, "message": "运单号为空，已跳过"})
                 continue
 
-            record["country_code"] = _normalize_country(
-                record.get("country_code"), country_aliases
-            )
-            record["address_type"] = _infer_address_type(
+            if record.get("country_code"):
+                record["country_code"] = _normalize_country(
+                    record["country_code"], country_aliases
+                )
+            inferred = _infer_address_type(
                 record.get("customer_no"),
                 record.get("address_code"),
                 record.get("delivery_address"),
             )
-            if not record.get("status_code"):
-                record["status_code"] = "UNKNOWN"
+            if inferred:
+                record["address_type"] = inferred
 
             payloads.append((excel_row, record))
-        return payloads, errors
+        return payloads, errors, skipped_columns
     finally:
         wb.close()
 
@@ -136,7 +146,7 @@ def import_excel_file(
     repo: ShipmentsRepository,
     file_path: Path,
 ) -> dict[str, Any]:
-    rows, parse_errors = parse_excel_rows(file_path)
+    rows, parse_errors, skipped_columns = parse_excel_rows(file_path)
     created = 0
     updated = 0
     errors = list(parse_errors)
@@ -162,4 +172,5 @@ def import_excel_file(
         "updated": updated,
         "failed": len(errors),
         "errors": errors[:50],
+        "skippedColumns": skipped_columns,
     }

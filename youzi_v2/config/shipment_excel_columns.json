@@ -3,6 +3,7 @@
   "ignore_unknown_columns": true,
   "columns": {
     "运单号": "shipment_no",
+    "状态": "status_code",
     "客户订单号": "customer_no",
     "用户名": "customer",
     "件数": "ctns",
@@ -13,6 +14,14 @@
     "渠道": "channel_code",
     "承运商": "carrier_code",
     "交货仓库": "origin_warehouse_code"
+  },
+  "status_aliases": {
+    "转运中": "IN_TRANSIT",
+    "在途": "IN_TRANSIT",
+    "已签收": "DELIVERED",
+    "签收": "DELIVERED",
+    "查验": "INSPECTION",
+    "未知": "UNKNOWN"
   },
   "country_aliases": {
     "美国": "US",

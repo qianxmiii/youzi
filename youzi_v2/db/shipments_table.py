@@ -44,6 +44,8 @@ CREATE TABLE {TABLE_NAME} (
     destination_port_code TEXT,
     delivered_time TEXT,
     status_code TEXT,
+    exception_code TEXT,
+    exception_opened_time TEXT,
     latest_tracking_time TEXT,
     latest_tracking_desc TEXT,
     tracking_log_count INTEGER NOT NULL DEFAULT 0,
@@ -59,6 +61,7 @@ _INDEXES = [
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_address_type ON {TABLE_NAME}(address_type)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_carrier_code ON {TABLE_NAME}(carrier_code)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_status_code ON {TABLE_NAME}(status_code)",
+    f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code ON {TABLE_NAME}(exception_code)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_updated_time ON {TABLE_NAME}(updated_time DESC)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_latest_tracking_time ON {TABLE_NAME}(latest_tracking_time)",
 ]
@@ -115,6 +118,14 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN carrier_id TEXT")
     if "tracking_number" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN tracking_number TEXT")
+    if "exception_code" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN exception_code TEXT")
+    if "exception_opened_time" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN exception_opened_time TEXT")
+    conn.execute(
+        f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "
+        f"ON {TABLE_NAME}(exception_code)"
+    )
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_latest_tracking_time "
         f"ON {TABLE_NAME}(latest_tracking_time)"

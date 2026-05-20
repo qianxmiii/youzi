@@ -1,6 +1,8 @@
 import { api } from '@/api/client'
 import type {
   Shipment,
+  ShipmentExceptionBatchResult,
+  ShipmentExceptionEvent,
   ShipmentImportResult,
   ShipmentListResponse,
   ShipmentPayload,
@@ -17,6 +19,8 @@ export interface ShipmentFilterOptions {
   countryCodes: string[]
   channelCodes: string[]
   statusCodes: string[]
+  exceptionCodes: string[]
+  exceptionTypes: { code: string; nameZh: string }[]
 }
 
 /** 仅发送有值的查询参数，避免 ofetch 序列化异常 */
@@ -25,6 +29,9 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.search?.trim()) q.search = params.search.trim()
   if (params.shipmentNos?.length) q.shipmentNos = params.shipmentNos
   if (params.statusCode?.trim()) q.statusCode = params.statusCode.trim()
+  if (params.exceptionCode?.trim()) q.exceptionCode = params.exceptionCode.trim()
+  if (params.hasException === true) q.hasException = 'true'
+  if (params.hasException === false) q.hasException = 'false'
   if (params.customer?.trim()) q.customer = params.customer.trim()
   if (params.carrierCode?.trim()) q.carrierCode = params.carrierCode.trim()
   if (params.countryCode?.trim()) q.countryCode = params.countryCode.trim()
@@ -43,6 +50,8 @@ export interface ListShipmentsParams {
   /** 批量精确查询运单号 / 客户订单号（与 search 二选一） */
   shipmentNos?: string[]
   statusCode?: string
+  exceptionCode?: string
+  hasException?: boolean
   customer?: string
   carrierCode?: string
   countryCode?: string
@@ -107,6 +116,43 @@ export async function deleteShipment(id: string): Promise<void> {
   await api(`/api/v1/shipments/${id}`, { method: 'DELETE' })
 }
 
+export async function openShipmentExceptions(
+  shipmentNos: string[],
+  exceptionCode: string,
+  options?: { note?: string; openedTime?: string },
+): Promise<ShipmentExceptionBatchResult> {
+  return api<ShipmentExceptionBatchResult>('/api/v1/shipments/exceptions/open', {
+    method: 'POST',
+    body: {
+      shipmentNos,
+      exceptionCode,
+      note: options?.note,
+      openedTime: options?.openedTime,
+    },
+  })
+}
+
+export async function closeShipmentExceptions(
+  shipmentNos: string[],
+  options?: { note?: string; closedTime?: string },
+): Promise<ShipmentExceptionBatchResult> {
+  return api<ShipmentExceptionBatchResult>('/api/v1/shipments/exceptions/close', {
+    method: 'POST',
+    body: {
+      shipmentNos,
+      note: options?.note,
+      closedTime: options?.closedTime,
+    },
+  })
+}
+
+export async function getShipmentExceptionEvents(
+  shipmentId: string,
+  params?: { limit?: number; offset?: number },
+): Promise<{ items: ShipmentExceptionEvent[]; total: number; limit: number; offset: number }> {
+  return api(`/api/v1/shipments/${shipmentId}/exception-events`, { query: params })
+}
+
 export async function importShipmentsExcel(file: File): Promise<ShipmentImportResult> {
   const form = new FormData()
   form.append('file', file)
@@ -126,7 +172,7 @@ export async function syncTracking(shipmentNos?: string[]): Promise<TrackingSync
   })
 }
 
-/** 同步承运商轨迹（全库在途或指定单号） */
+/** 同步承运商轨迹（仅转运中；全库或指定单号） */
 export async function syncCarrierTracking(shipmentNos?: string[]): Promise<TrackingSyncResult> {
   const body = shipmentNos?.length ? { shipmentNos } : undefined
   return api<TrackingSyncResult>('/api/v1/shipments/sync-carrier-tracking', {

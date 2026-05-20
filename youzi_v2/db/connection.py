@@ -37,6 +37,7 @@ class Database:
         from . import dict_table
         from . import quote_history_table
         from . import shipments_table
+        from . import shipment_exception_events_table
         from . import carrier_tracking_logs_table
         from . import internal_tracking_logs_table
         from . import tracking_sync_jobs_table
@@ -48,6 +49,7 @@ class Database:
             quote_history_table.ensure_schema(self._conn)
             addresses_table.ensure_schema(self._conn)
             shipments_table.ensure_schema(self._conn)
+            shipment_exception_events_table.ensure_schema(self._conn)
             internal_tracking_logs_table.ensure_schema(self._conn)
             carrier_tracking_logs_table.ensure_schema(self._conn)
             tracking_sync_jobs_table.ensure_schema(self._conn)

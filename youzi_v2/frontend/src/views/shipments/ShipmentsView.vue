@@ -9,12 +9,17 @@ import {
   NSelect,
   NSpace,
   NTag,
+  NTooltip,
   useMessage,
   type DataTableColumns,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
+import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
+import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
+import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
 import {
+  closeShipmentExceptions,
   createShipment,
   deleteShipment,
   getShipmentFilterOptions,
@@ -22,6 +27,7 @@ import {
   getTrackingSyncDailyStats,
   importShipmentsExcel,
   listShipments,
+  openShipmentExceptions,
   syncCarrierTracking,
   syncTracking,
   updateShipment,
@@ -50,20 +56,28 @@ const items = ref<Shipment[]>([])
 const total = ref(0)
 const searchShipmentNo = ref('')
 const searchKeyword = ref('')
-const filterStatus = ref<string | null>(null)
+const DEFAULT_STATUS_FILTER = 'IN_TRANSIT'
+const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
 const filterCustomer = ref<string | null>(null)
 const filterCarrier = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannel = ref<string | null>(null)
 const filterStaleDays = ref<number | null>(null)
 const filterNoTracking = ref(false)
+const filterException = ref<string | null>(null)
+const filterHasException = ref<boolean | null>(null)
 const filterOptions = ref<ShipmentFilterOptions>({
   customers: [],
   carrierCodes: [],
   countryCodes: [],
   channelCodes: [],
   statusCodes: [],
+  exceptionCodes: [],
+  exceptionTypes: [],
 })
+const exceptionOpenShow = ref(false)
+const exceptionCloseShow = ref(false)
+const exceptionSubmitting = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const expandedRowKeys = ref<string[]>([])
@@ -157,12 +171,103 @@ const statusLabel: Record<string, string> = {
   UNKNOWN: '未知',
 }
 
+const exceptionLabelByCode = computed(() => {
+  const m: Record<string, string> = {}
+  for (const t of filterOptions.value.exceptionTypes) {
+    m[t.code] = t.nameZh
+  }
+  return m
+})
+
+function exceptionLabel(code: string | null | undefined) {
+  if (!code) return '—'
+  return exceptionLabelByCode.value[code] || code
+}
+
+function hasActiveException(row: Shipment) {
+  return !!(row.exceptionCode && row.exceptionCode.trim())
+}
+
+function rowClassName(row: Shipment) {
+  return hasActiveException(row) ? 'shipment-row--exception' : ''
+}
+
+function renderShipmentNo(row: Shipment) {
+  const active = hasActiveException(row)
+  const label = exceptionLabel(row.exceptionCode)
+  const duration = row.exceptionDurationLabel || '—'
+  const cell = h(
+    'span',
+    {
+      class: active
+        ? 'shipment-no-cell shipment-no-cell--exception font-semibold'
+        : 'shipment-no-cell font-medium text-zinc-100',
+    },
+    row.shipmentNo,
+  )
+  if (!active) return cell
+  return h(
+    NTooltip,
+    { trigger: 'hover' },
+    {
+      trigger: () => cell,
+      default: () => `异常：${label} · 已持续 ${duration}`,
+    },
+  )
+}
+
+const exceptionColumns: DataTableColumns<Shipment> = [
+  {
+    title: '异常',
+    key: 'exceptionCode',
+    width: 100,
+    align: 'center',
+    render: (row) => {
+      if (!row.exceptionCode) {
+        return h('span', { class: 'text-zinc-600' }, '—')
+      }
+      const type = row.exceptionCode === 'LOST' ? 'error' : 'warning'
+      return h(NTag, { size: 'small', bordered: false, type }, () => exceptionLabel(row.exceptionCode))
+    },
+  },
+  {
+    title: '异常时长',
+    key: 'exceptionDurationLabel',
+    width: 96,
+    align: 'center',
+    render: (row) => {
+      if (!row.exceptionDurationLabel) {
+        return h('span', { class: 'text-zinc-600' }, '—')
+      }
+      const secs = row.exceptionDurationSeconds ?? 0
+      const long = secs >= 7 * 86_400
+      return h(
+        'span',
+        { class: long ? 'text-red-300 text-xs font-medium' : 'text-amber-200/90 text-xs' },
+        row.exceptionDurationLabel,
+      )
+    },
+  },
+]
+
 const statusOptions = computed(() =>
   filterOptions.value.statusCodes.map((code) => ({
     label: statusLabel[code] || code,
     value: code,
   })),
 )
+
+const exceptionFilterOptions = computed(() =>
+  filterOptions.value.exceptionTypes.map((t) => ({
+    label: t.nameZh,
+    value: t.code,
+  })),
+)
+
+const hasExceptionFilterOptions = [
+  { label: '有异常', value: 'yes' },
+  { label: '无异常', value: 'no' },
+]
 
 const staleOptions = [
   { label: '≥7 天未更新', value: 7 },
@@ -223,6 +328,13 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
     ...(tokens.length ? { shipmentNos: tokens } : {}),
     ...(keyword ? { search: keyword } : {}),
     statusCode: filterStatus.value || undefined,
+    exceptionCode: filterException.value || undefined,
+    hasException:
+      filterHasException.value === true
+        ? true
+        : filterHasException.value === false
+          ? false
+          : undefined,
     customer: filterCustomer.value || undefined,
     carrierCode: filterCarrier.value || undefined,
     countryCode: filterCountry.value || undefined,
@@ -371,7 +483,9 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
 }
 
 function resetFilters() {
-  filterStatus.value = null
+  filterStatus.value = DEFAULT_STATUS_FILTER
+  filterException.value = null
+  filterHasException.value = null
   filterCustomer.value = null
   filterCarrier.value = null
   filterCountry.value = null
@@ -382,6 +496,63 @@ function resetFilters() {
   searchKeyword.value = ''
   page.value = 1
   loadList()
+}
+
+function onHasExceptionFilterChange(val: string | null) {
+  filterHasException.value = val === 'yes' ? true : val === 'no' ? false : null
+  onFiltersChanged()
+}
+
+async function handleOpenException(
+  exceptionCode: string,
+  openedTime?: string,
+  note?: string,
+) {
+  const nos = selectedShipmentNos.value
+  if (!nos.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  exceptionSubmitting.value = true
+  try {
+    const res = await openShipmentExceptions(nos, exceptionCode, { openedTime, note })
+    exceptionOpenShow.value = false
+    let text = `已标记异常 ${res.opened ?? 0} 条`
+    if (res.skipped.length) text += `，跳过 ${res.skipped.length} 条`
+    if (res.errors.length) text += `，失败 ${res.errors.length} 条`
+    message.success(text)
+    clearSelection()
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '标记异常失败')
+  } finally {
+    exceptionSubmitting.value = false
+  }
+}
+
+async function handleCloseException(closedTime?: string, note?: string) {
+  const nos = selectedShipmentNos.value
+  if (!nos.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  exceptionSubmitting.value = true
+  try {
+    const res = await closeShipmentExceptions(nos, { closedTime, note })
+    exceptionCloseShow.value = false
+    let text = `已解除异常 ${res.closed ?? 0} 条`
+    if (res.skipped.length) text += `，跳过 ${res.skipped.length} 条`
+    if (res.errors.length) text += `，失败 ${res.errors.length} 条`
+    message.success(text)
+    clearSelection()
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '解除异常失败')
+  } finally {
+    exceptionSubmitting.value = false
+  }
 }
 
 async function handleSyncSelectedInternal() {
@@ -518,7 +689,14 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     type: 'expand',
     fixed: 'left',
     width: 40,
-    renderExpand: (row) => h(ShipmentTrackingPanel, { shipmentId: row.id }),
+    renderExpand: (row) =>
+      h('div', {}, [
+        h(ShipmentTrackingPanel, { shipmentId: row.id }),
+        h(ShipmentExceptionHistory, {
+          shipmentId: row.id,
+          labelByCode: exceptionLabelByCode.value,
+        }),
+      ]),
   },
   {
     title: '运单号',
@@ -526,8 +704,22 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     width: shipmentNoColWidth.value,
     minWidth: 200,
     fixed: 'left',
-    render: (row) =>
-      h('span', { class: 'shipment-no-cell font-medium text-zinc-100' }, row.shipmentNo),
+    cellProps: (row) =>
+      hasActiveException(row) ? { class: 'shipment-td-exception-no' } : {},
+    render: (row) => renderShipmentNo(row),
+  },
+  {
+    title: '状态',
+    key: 'statusCode',
+    width: 88,
+    align: 'center',
+    render: (row) => {
+      const code = row.statusCode || 'UNKNOWN'
+      const label = statusLabel[code] || code
+      const type =
+        code === 'DELIVERED' ? 'success' : code === 'INSPECTION' ? 'warning' : 'default'
+      return h(NTag, { size: 'small', bordered: false, type }, () => label)
+    },
   },
   { title: '客户', key: 'customer', width: 100, ellipsis: { tooltip: true } },
   { title: '件数', key: 'ctns', width: 64, align: 'center' },
@@ -604,6 +796,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     },
   },
   { title: '更新时间', key: 'updatedTime', width: 160 },
+  ...exceptionColumns,
   {
     title: '操作',
     key: 'actions',
@@ -749,6 +942,24 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
           @update:value="onFiltersChanged"
         />
         <NSelect
+          :value="filterHasException === true ? 'yes' : filterHasException === false ? 'no' : null"
+          :options="hasExceptionFilterOptions"
+          placeholder="异常"
+          clearable
+          size="small"
+          class="shipments-filter-select"
+          @update:value="onHasExceptionFilterChange"
+        />
+        <NSelect
+          v-model:value="filterException"
+          :options="exceptionFilterOptions"
+          placeholder="异常类型"
+          clearable
+          size="small"
+          class="shipments-filter-select"
+          @update:value="onFiltersChanged"
+        />
+        <NSelect
           v-model:value="filterStaleDays"
           :options="staleOptions"
           :disabled="filterNoTracking"
@@ -775,6 +986,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         v-model:checked-row-keys="checkedRowKeys"
         v-model:expanded-row-keys="expandedRowKeys"
         :row-key="rowKey"
+        :row-class-name="rowClassName"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -806,8 +1018,37 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         <NButton size="small" type="primary" :loading="syncingCarrier" @click="handleSyncSelectedCarrier">
           更新选中承运商轨迹
         </NButton>
+        <NButton
+          size="small"
+          type="warning"
+          :loading="exceptionSubmitting"
+          @click="exceptionOpenShow = true"
+        >
+          标记异常
+        </NButton>
+        <NButton
+          size="small"
+          :loading="exceptionSubmitting"
+          @click="exceptionCloseShow = true"
+        >
+          解除异常
+        </NButton>
       </NSpace>
     </div>
+
+    <ShipmentExceptionOpenModal
+      :show="exceptionOpenShow"
+      :count="selectedCount"
+      :exception-types="filterOptions.exceptionTypes"
+      @close="exceptionOpenShow = false"
+      @confirm="handleOpenException"
+    />
+    <ShipmentExceptionCloseModal
+      :show="exceptionCloseShow"
+      :count="selectedCount"
+      @close="exceptionCloseShow = false"
+      @confirm="handleCloseException"
+    />
 
     <div class="shrink-0 flex justify-end border-t border-[var(--color-border)] pt-3">
       <NPagination
@@ -870,11 +1111,44 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   background: var(--color-border);
 }
 
+/* 左侧固定列不透明，横向滚动时不透底 */
+.shipments-data-table :deep(td.n-data-table-td--fixed-left) {
+  background-color: var(--n-td-color) !important;
+  z-index: 2;
+}
+
+.shipments-data-table :deep(th.n-data-table-th--fixed-left) {
+  background-color: var(--n-th-color) !important;
+  z-index: 4;
+}
+
 .shipments-data-table :deep(.shipment-no-cell) {
   display: inline-block;
   white-space: nowrap;
   word-break: keep-all;
   font-variant-numeric: tabular-nums;
+}
+
+.shipments-data-table :deep(.shipment-no-cell--exception) {
+  color: rgb(253 230 138);
+}
+
+/* 异常行：不透明底色，避免横向滚动时与后方列文字叠在一起 */
+.shipments-data-table :deep(tr.shipment-row--exception td) {
+  background: #1a1814 !important;
+}
+
+.shipments-data-table :deep(tr.shipment-row--exception:hover td) {
+  background: #221e17 !important;
+}
+
+.shipments-data-table :deep(tr.shipment-row--exception .n-data-table-td--fixed-left),
+.shipments-data-table :deep(tr.shipment-row--exception .n-data-table-th--fixed-left) {
+  z-index: 3;
+}
+
+.shipments-data-table :deep(.shipment-td-exception-no) {
+  box-shadow: inset 3px 0 0 rgb(245 158 11 / 0.95);
 }
 
 /* 运单表底部/右侧常显滚动条（Naive 默认 hover 才显示） */

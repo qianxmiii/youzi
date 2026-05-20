@@ -58,6 +58,16 @@ def _normalize_country(raw: str | None, aliases: dict[str, str]) -> str | None:
     return aliases.get(text, text)
 
 
+def _normalize_status(raw: str | None, aliases: dict[str, str]) -> str | None:
+    if not raw:
+        return None
+    text = raw.strip()
+    if text in aliases:
+        return aliases[text]
+    upper = text.upper()
+    return upper if upper else None
+
+
 def _pick_sheet(wb: Any, names: list[str]) -> Any:
     for name in names:
         if name in wb.sheetnames:
@@ -75,6 +85,7 @@ def parse_excel_rows(
     mapping = _load_mapping()
     col_map: dict[str, str] = mapping["columns"]
     country_aliases: dict[str, str] = mapping.get("country_aliases", {})
+    status_aliases: dict[str, str] = mapping.get("status_aliases", {})
     sheet_names: list[str] = mapping.get("sheet_preference", [])
 
     wb = load_workbook(file_path, read_only=True, data_only=True)
@@ -127,6 +138,10 @@ def parse_excel_rows(
             if record.get("country_code"):
                 record["country_code"] = _normalize_country(
                     record["country_code"], country_aliases
+                )
+            if record.get("status_code"):
+                record["status_code"] = _normalize_status(
+                    record["status_code"], status_aliases
                 )
             inferred = _infer_address_type(
                 record.get("customer_no"),

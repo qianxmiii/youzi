@@ -19,11 +19,13 @@ from .db.code_tables_repository import CodeTablesRepository
 from .db.connection import get_database
 from .db.dict_repository import DictRepository
 from .db.quote_history_table import QuoteHistoryRepository
+from .db.shipment_exception_events_repository import ShipmentExceptionEventsRepository
 from .db.shipments_repository import ShipmentsRepository
 from .db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from .db.tracking_logs_repository import TrackingLogsRepository
 from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
+from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
 from .schemas.shipments import ShipmentRecordIn, ShipmentUpdateIn
 from .schemas.tracking import (
     TrackingSyncDailyStats,
@@ -130,6 +132,7 @@ _database = get_database(DATA_DIR / "youzi_v2.db")
 quote_history_repo = QuoteHistoryRepository(_database)
 addresses_repo = AddressesRepository(_database)
 shipments_repo = ShipmentsRepository(_database)
+shipment_exceptions_repo = ShipmentExceptionEventsRepository(_database)
 internal_tracking_repo = TrackingLogsRepository(_database)
 carrier_tracking_repo = CarrierTrackingLogsRepository(_database)
 tracking_jobs_repo = TrackingSyncJobsRepository(_database)
@@ -288,11 +291,46 @@ def list_shipment_filter_options():
     return shipments_repo.list_filter_options()
 
 
+@app.post("/api/v1/shipments/exceptions/open")
+def open_shipment_exceptions(payload: ShipmentExceptionOpenIn):
+    """批量标记异常（写入事件表并更新 exception_code）。"""
+    nos = [n.strip() for n in payload.shipment_nos if n and n.strip()]
+    if len(nos) > 200:
+        raise HTTPException(status_code=400, detail="单次最多 200 个运单号")
+    try:
+        return shipment_exceptions_repo.open_for_shipment_nos(
+            nos,
+            payload.exception_code,
+            note=payload.note,
+            opened_time=payload.opened_time,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/shipments/exceptions/close")
+def close_shipment_exceptions(payload: ShipmentExceptionCloseIn):
+    """批量解除当前异常。"""
+    nos = [n.strip() for n in payload.shipment_nos if n and n.strip()]
+    if len(nos) > 200:
+        raise HTTPException(status_code=400, detail="单次最多 200 个运单号")
+    try:
+        return shipment_exceptions_repo.close_for_shipment_nos(
+            nos,
+            note=payload.note,
+            closed_time=payload.closed_time,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/v1/shipments")
 def list_shipments(
     search: str | None = None,
     shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
     status_code: str | None = Query(None, alias="statusCode"),
+    exception_code: str | None = Query(None, alias="exceptionCode"),
+    has_exception: bool | None = Query(None, alias="hasException"),
     customer: str | None = None,
     carrier_code: str | None = Query(None, alias="carrierCode"),
     country_code: str | None = Query(None, alias="countryCode"),
@@ -311,12 +349,27 @@ def list_shipments(
         search=search,
         shipment_nos=shipment_nos,
         status_code=status_code,
+        exception_code=exception_code,
+        has_exception=has_exception,
         customer=customer,
         carrier_code=carrier_code,
         country_code=country_code,
         channel_code=channel_code,
         min_stale_days=min_stale_days,
         no_tracking=no_tracking,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.get("/api/v1/shipments/{item_id}/exception-events")
+def list_shipment_exception_events(item_id: str, limit: int = 50, offset: int = 0):
+    """运单异常事件历史（含已关闭记录的持续时间）。"""
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    return shipment_exceptions_repo.list_by_shipment_no(
+        row["shipmentNo"],
         limit=limit,
         offset=offset,
     )
@@ -396,7 +449,8 @@ def delete_shipment(item_id: str):
 def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(None)):
     """
     从 config/config.json 的 base_url 拉取内部路由轨迹，
-    写入 internal_tracking_logs。body.shipmentNos 非空时仅同步指定运单号。
+    写入 internal_tracking_logs；仅 status=转运中(IN_TRANSIT)，已签收不同步。
+    body.shipmentNos 非空时仅处理其中仍为转运中的单号。
     """
     shipment_nos: list[str] | None = None
     if body and body.shipment_nos:
@@ -429,8 +483,8 @@ def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(Non
 @app.post("/api/v1/shipments/sync-carrier-tracking", response_model=TrackingSyncResult)
 def sync_shipments_carrier_tracking(body: TrackingSyncRequest | None = Body(None)):
     """
-    全库在途运单，按 config.vendors 匹配承运商，按 vendor 串行、每批 10 单查询，
-    写入 carrier_tracking_logs。
+    仅转运中(IN_TRANSIT)运单；按 config.vendors 匹配承运商，按 vendor 串行、每批 10 单查询，
+    写入 carrier_tracking_logs。已签收不同步。
     """
     shipment_nos: list[str] | None = None
     if body and body.shipment_nos:

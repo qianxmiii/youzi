@@ -10,6 +10,10 @@ from .connection import Database
 from ..internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER, mask_internal_summary
 from .datetime_util import now_str
 from .shipments_table import TABLE_NAME
+from .exception_duration import duration_seconds, format_duration
+
+# 轨迹同步仅处理生命周期「转运中」；已签收等状态不拉取/更新
+_STATUS_IN_TRANSIT_SQL = "status_code = 'IN_TRANSIT'"
 
 # 可写字段（不含 id / shipment_no / created_time）
 _UPDATABLE = (
@@ -40,6 +44,21 @@ _UPDATABLE = (
     "delivered_time",
     "status_code",
 )
+
+
+def _exception_duration_seconds(row: sqlite3.Row) -> int | None:
+    code = (row["exception_code"] or "").strip()
+    opened = (row["exception_opened_time"] or "").strip()
+    if not code or not opened:
+        return None
+    return duration_seconds(opened, None)
+
+
+def _exception_duration_label(row: sqlite3.Row) -> str | None:
+    secs = _exception_duration_seconds(row)
+    if secs is None:
+        return None
+    return format_duration(secs)
 
 
 def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
@@ -77,6 +96,10 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "destinationPortCode": row["destination_port_code"],
         "deliveredTime": row["delivered_time"],
         "statusCode": row["status_code"],
+        "exceptionCode": row["exception_code"],
+        "exceptionOpenedTime": row["exception_opened_time"],
+        "exceptionDurationSeconds": _exception_duration_seconds(row),
+        "exceptionDurationLabel": _exception_duration_label(row),
         "latestTrackingTime": latest_time,
         "latestTrackingDesc": latest_desc,
         "trackingLogCount": row["tracking_log_count"],
@@ -138,6 +161,8 @@ class ShipmentsRepository:
         search: str | None = None,
         shipment_nos: list[str] | None = None,
         status_code: str | None = None,
+        exception_code: str | None = None,
+        has_exception: bool | None = None,
         customer: str | None = None,
         carrier_code: str | None = None,
         country_code: str | None = None,
@@ -176,6 +201,17 @@ class ShipmentsRepository:
         if status_code and status_code.strip():
             conditions.append("status_code = ?")
             params.append(status_code.strip())
+        if exception_code and exception_code.strip():
+            conditions.append("exception_code = ?")
+            params.append(exception_code.strip())
+        if has_exception is True:
+            conditions.append(
+                "exception_code IS NOT NULL AND TRIM(exception_code) != ''"
+            )
+        elif has_exception is False:
+            conditions.append(
+                "(exception_code IS NULL OR TRIM(exception_code) = '')"
+            )
         if customer and customer.strip():
             conditions.append("customer = ?")
             params.append(customer.strip())
@@ -224,7 +260,7 @@ class ShipmentsRepository:
             "offset": offset,
         }
 
-    def list_filter_options(self) -> dict[str, list[str]]:
+    def list_filter_options(self) -> dict[str, Any]:
         """运单表中去重后的筛选选项。"""
         cols = ("customer", "carrier_code", "country_code", "channel_code", "status_code")
         out: dict[str, list[str]] = {}
@@ -238,12 +274,31 @@ class ShipmentsRepository:
                     """
                 ).fetchall()
                 out[col] = [str(r["v"]) for r in rows]
+            exc_in_use = self._conn.execute(
+                f"""
+                SELECT DISTINCT exception_code AS v FROM {TABLE_NAME}
+                WHERE exception_code IS NOT NULL AND TRIM(exception_code) != ''
+                ORDER BY exception_code
+                """
+            ).fetchall()
+            exception_defs = self._conn.execute(
+                """
+                SELECT code, name_zh FROM shipment_exception_codes
+                WHERE is_active = 1
+                ORDER BY sort_order, code
+                """
+            ).fetchall()
         return {
             "customers": out["customer"],
             "carrierCodes": out["carrier_code"],
             "countryCodes": out["country_code"],
             "channelCodes": out["channel_code"],
             "statusCodes": out["status_code"],
+            "exceptionCodes": [str(r["v"]) for r in exc_in_use],
+            "exceptionTypes": [
+                {"code": str(r["code"]), "nameZh": str(r["name_zh"] or r["code"])}
+                for r in exception_defs
+            ],
         }
 
     def update_internal_tracking_summary(
@@ -398,10 +453,7 @@ class ShipmentsRepository:
         self,
         shipment_nos: list[str] | None = None,
     ) -> list[dict[str, str]]:
-        """承运商轨迹同步：全库在途；指定运单号时含已签收。"""
-        in_transit = (
-            "(status_code IS NULL OR TRIM(status_code) = '' OR status_code != 'DELIVERED')"
-        )
+        """承运商轨迹同步：仅 status_code=IN_TRANSIT（含全库与指定运单号）。"""
         with self._database.lock:
             if shipment_nos:
                 cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))
@@ -414,6 +466,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
+                      AND {_STATUS_IN_TRANSIT_SQL}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -426,7 +479,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {in_transit}
+                      AND {_STATUS_IN_TRANSIT_SQL}
                     ORDER BY shipment_no
                     """
                 ).fetchall()
@@ -464,7 +517,7 @@ class ShipmentsRepository:
         self,
         shipment_nos: list[str] | None = None,
     ) -> list[dict[str, str]]:
-        """供物流 API 批量查询：与 check_stale_shipments 的 tracking_list 结构一致。"""
+        """内部轨迹同步：仅 status_code=IN_TRANSIT（含全库与指定运单号）。"""
         with self._database.lock:
             if shipment_nos:
                 cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))
@@ -477,6 +530,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
+                      AND {_STATUS_IN_TRANSIT_SQL}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -489,6 +543,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
+                      AND {_STATUS_IN_TRANSIT_SQL}
                     ORDER BY shipment_no
                     """
                 ).fetchall()

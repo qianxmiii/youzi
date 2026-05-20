@@ -18,6 +18,7 @@ _TABLE_LABELS: dict[str, str] = {
     "carrier_codes": "承运商",
     "port_codes": "港口",
     "shipment_status_codes": "运单状态",
+    "shipment_exception_codes": "运单异常",
 }
 
 _PORT_TYPES = frozenset({"origin", "destination", "both"})

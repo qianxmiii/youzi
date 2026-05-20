@@ -29,6 +29,10 @@ export interface Shipment {
   destinationPortCode: string | null
   deliveredTime: string | null
   statusCode: string | null
+  exceptionCode: string | null
+  exceptionOpenedTime: string | null
+  exceptionDurationSeconds: number | null
+  exceptionDurationLabel: string | null
   latestTrackingTime: string | null
   latestTrackingDesc: string | null
   trackingLogCount: number
@@ -50,6 +54,32 @@ export interface ShipmentListResponse {
   total: number
   limit: number
   offset: number
+}
+
+export interface ShipmentExceptionType {
+  code: string
+  nameZh: string
+}
+
+export interface ShipmentExceptionEvent {
+  id: string
+  shipmentNo: string
+  exceptionCode: string
+  openedTime: string
+  closedTime: string | null
+  note: string | null
+  durationSeconds: number | null
+  durationLabel: string
+  createdTime: string
+  updatedTime: string
+}
+
+export interface ShipmentExceptionBatchResult {
+  ok: boolean
+  opened?: number
+  closed?: number
+  skipped: { shipmentNo: string; message: string }[]
+  errors: { shipmentNo: string; message: string }[]
 }
 
 export interface ShipmentImportResult {

@@ -1,4 +1,4 @@
-"""承运商轨迹同步：全库在途、按 vendor 串行、每批 10 单。"""
+"""承运商轨迹同步：仅转运中(IN_TRANSIT)、按 vendor 串行、每批 10 单。"""
 
 from __future__ import annotations
 
@@ -71,7 +71,9 @@ def sync_carrier_tracking(
     errors: list[str] = []
     vendor_stats: dict[str, dict[str, int]] = {}
 
-    out_log(f"[承运商轨迹] 在途 {total} 单，已匹配 vendor {total - unassigned} 单，未匹配 {unassigned} 单")
+    out_log(
+        f"[承运商轨迹] 转运中 {total} 单，已匹配 vendor {total - unassigned} 单，未匹配 {unassigned} 单"
+    )
 
     for vendor_name in sorted(by_vendor.keys()):
         group = by_vendor[vendor_name]
@@ -172,7 +174,7 @@ def sync_carrier_tracking(
     )
 
     out_log(
-        f"[承运商轨迹] 全部完成：在途 {total} 单，更新 {updated} 单，"
+        f"[承运商轨迹] 全部完成：转运中 {total} 单，更新 {updated} 单，"
         f"新增 {log_count} 条，跳过 {skipped}，无轨迹 {empty}，"
         f"失败/未匹配 {not_found + unassigned}"
     )

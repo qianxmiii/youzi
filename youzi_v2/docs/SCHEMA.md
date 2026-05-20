@@ -91,11 +91,31 @@
 | `origin_port_code` | 出发港口 | `port_codes` |
 | `destination_port_code` | 到达港口 | `port_codes` |
 | `delivered_time` | 签收时间 | |
-| `status_code` | 状态 | `shipment_status_codes` |
+| `status_code` | 生命周期状态 | `shipment_status_codes` |
+| `exception_code` | 当前异常（快照，可空） | `shipment_exception_codes` |
+| `exception_opened_time` | 当前异常开始时间 | |
 | `created_time` | 创建时间 | |
 | `updated_time` | 更新时间 | |
 
 **索引**：`shipment_no`(UNIQUE)、`customer`、`channel_code`、`country_code`、`carrier_code`、`status_code`、`updated_time`。
+
+---
+
+## 运单异常事件表 `shipment_exception_events`
+
+每次标记/解除一条记录；`closed_time` 为空表示进行中。持续时间 = `closed_time - opened_time`（未关闭则用当前时间）。
+
+| 列名 | 说明 |
+|------|------|
+| `shipment_no` | 运单号 |
+| `exception_code` | 异常类型 |
+| `opened_time` | 开始 |
+| `closed_time` | 结束（可空） |
+| `note` | 备注 |
+
+码表：`shipment_exception_codes`（查验中、掉件、暂扣、破损等）。
+
+API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST .../close`（`closedTime` 可选）、`GET /api/v1/shipments/{id}/exception-events`。
 
 ---
 
@@ -143,6 +163,7 @@
 | Excel 表头 | 字段 |
 |------------|------|
 | 运单号 | `shipment_no` |
+| 状态 | `status_code`（中文如 转运中→`IN_TRANSIT`，或直接填码） |
 | 客户订单号 | `customer_no` |
 | 用户名 | `customer` |
 | 件数 | `ctns` |

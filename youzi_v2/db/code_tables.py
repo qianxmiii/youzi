@@ -21,6 +21,7 @@ _CODE_TABLE_DEFS: list[tuple[str, str]] = [
         "port_type TEXT NOT NULL DEFAULT 'both',",
     ),
     ("shipment_status_codes", ""),
+    ("shipment_exception_codes", ""),
 ]
 
 _STATUS_SEEDS: list[tuple[str, str, str, int]] = [
@@ -28,6 +29,13 @@ _STATUS_SEEDS: list[tuple[str, str, str, int]] = [
     ("DELIVERED", "已签收", "Delivered", 20),
     ("INSPECTION", "查验", "Inspection", 30),
     ("UNKNOWN", "未知", "Unknown", 99),
+]
+
+_EXCEPTION_SEEDS: list[tuple[str, str, str, int]] = [
+    ("INSPECTION", "查验中", "Inspection", 10),
+    ("LOST", "掉件", "Lost", 20),
+    ("HOLD", "暂扣", "Hold", 30),
+    ("DAMAGED", "破损", "Damaged", 40),
 ]
 
 
@@ -53,6 +61,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
 
 def seed_if_empty(conn: sqlite3.Connection) -> None:
     _seed_status_codes(conn)
+    _seed_exception_codes(conn)
 
 
 def _seed_status_codes(conn: sqlite3.Connection) -> None:
@@ -68,6 +77,22 @@ def _seed_status_codes(conn: sqlite3.Connection) -> None:
         ) VALUES (?, ?, ?, ?, 1, ?, ?)
         """,
         [(code, zh, en, order, now, now) for code, zh, en, order in _STATUS_SEEDS],
+    )
+
+
+def _seed_exception_codes(conn: sqlite3.Connection) -> None:
+    table = "shipment_exception_codes"
+    row = conn.execute(f"SELECT COUNT(*) AS c FROM {table}").fetchone()
+    if row and row["c"] and row["c"] > 0:
+        return
+    now = now_str()
+    conn.executemany(
+        f"""
+        INSERT INTO {table} (
+            code, name_zh, name_en, sort_order, is_active, created_time, updated_time
+        ) VALUES (?, ?, ?, ?, 1, ?, ?)
+        """,
+        [(code, zh, en, order, now, now) for code, zh, en, order in _EXCEPTION_SEEDS],
     )
 
 

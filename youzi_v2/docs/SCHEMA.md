@@ -173,5 +173,7 @@ API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST 
 | 渠道 | `channel_code` |
 | 承运商 | `carrier_code` |
 | 交货仓库 | `origin_warehouse_code` |
+| 内部轨迹时间 | `latest_tracking_time`（**仅导出**） |
+| 内部最新轨迹 | `latest_tracking_desc`（**仅导出**） |
 
 导入时自动推断 `address_type`：订单号/地址含 FBA→`AMZ`，含 WFS→`WFS`，含 3PL→`3PL`；默认状态 `UNKNOWN`。

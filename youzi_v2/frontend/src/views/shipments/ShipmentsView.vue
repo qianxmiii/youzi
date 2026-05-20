@@ -20,8 +20,8 @@ import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentException
 import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
 import {
   closeShipmentExceptions,
-  createShipment,
   deleteShipment,
+  exportShipmentsExcel,
   getShipmentFilterOptions,
   getShipmentTrackingLogs,
   getTrackingSyncDailyStats,
@@ -48,6 +48,7 @@ const { loadDictTypes, dictLabel } = useDictLabels()
 const countryLabel = (raw: string | null | undefined) => dictLabel('country_code', raw)
 const loading = ref(false)
 const importing = ref(false)
+const exporting = ref(false)
 const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
 const carrierDaily = ref<TrackingSyncDailyStats | null>(null)
@@ -83,7 +84,7 @@ const pageSize = ref(20)
 const expandedRowKeys = ref<string[]>([])
 
 const modalShow = ref(false)
-const modalMode = ref<'create' | 'edit'>('create')
+const modalMode = ref<'edit'>('edit')
 const editingRow = ref<Shipment | null>(null)
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -94,13 +95,22 @@ const selectedCount = computed(() => checkedRowKeys.value.length)
 const shipmentNoTokens = computed(() => parseBatchSearchTokens(searchShipmentNo.value))
 const batchShipmentSearchActive = computed(() => shipmentNoTokens.value.length > 1)
 
-/** 按当前页最长运单号估算列宽，避免截断 */
+/** 按当前页最长运单号估算列宽（略收窄，为其它列腾空间） */
 const shipmentNoColWidth = computed(() => {
   let maxLen = 10
   for (const row of items.value) {
     maxLen = Math.max(maxLen, (row.shipmentNo || '').length)
   }
-  return Math.min(400, Math.max(200, Math.ceil(maxLen * 8.5) + 28))
+  return Math.min(280, Math.max(152, Math.ceil(maxLen * 7) + 20))
+})
+
+/** 按当前页最长客户名估算列宽 */
+const customerColWidth = computed(() => {
+  let maxLen = 4
+  for (const row of items.value) {
+    maxLen = Math.max(maxLen, (row.customer || '').length)
+  }
+  return Math.min(180, Math.max(108, Math.ceil(maxLen * 7) + 20))
 })
 
 const selectedShipmentNos = computed(() =>
@@ -190,6 +200,34 @@ function hasActiveException(row: Shipment) {
 
 function rowClassName(row: Shipment) {
   return hasActiveException(row) ? 'shipment-row--exception' : ''
+}
+
+function renderTrackingSummaryCell(
+  time: string | null | undefined,
+  desc: string | null | undefined,
+) {
+  const t = (time || '').trim()
+  const d = (desc || '').trim()
+  if (!t && !d) {
+    return h('span', { class: 'text-zinc-600' }, '—')
+  }
+  const block = h('div', { class: 'tracking-summary-cell min-w-0 max-w-full' }, [
+    t
+      ? h('div', { class: 'text-xs text-zinc-500 tabular-nums leading-tight' }, t)
+      : null,
+    d
+      ? h(
+          'div',
+          { class: 'text-xs text-zinc-200 leading-snug truncate', title: d },
+          d,
+        )
+      : h('div', { class: 'text-xs text-zinc-600' }, '—'),
+  ])
+  const tip = [t, d].filter(Boolean).join('\n')
+  if (tip.length > 36) {
+    return h(NTooltip, { trigger: 'hover' }, { trigger: () => block, default: () => tip })
+  }
+  return block
 }
 
 function renderShipmentNo(row: Shipment) {
@@ -290,6 +328,20 @@ const countryOptions = computed(() =>
 const channelOptions = computed(() =>
   filterOptions.value.channelCodes.map((v) => ({ label: v, value: v })),
 )
+
+/** 横向滚动宽度 = 各列 width 之和 + 余量（避免滑条到不了最右侧） */
+function sumTableColumnWidths(cols: DataTableColumns<Shipment>): number {
+  let total = 0
+  for (const col of cols) {
+    if (col.type === 'selection' || col.type === 'expand') {
+      total += typeof col.width === 'number' ? col.width : 40
+      continue
+    }
+    const w = 'width' in col ? col.width : undefined
+    if (typeof w === 'number') total += w
+  }
+  return total
+}
 
 /** 运单表常显滚动条（Naive 默认隐藏原生条，用 Scrollbar 轨道） */
 const tableScrollbarProps = {
@@ -412,12 +464,6 @@ onMounted(async () => {
   await loadList()
 })
 
-function openCreate() {
-  modalMode.value = 'create'
-  editingRow.value = null
-  modalShow.value = true
-}
-
 function openEdit(row: Shipment) {
   modalMode.value = 'edit'
   editingRow.value = row
@@ -426,17 +472,41 @@ function openEdit(row: Shipment) {
 
 async function handleFormSubmit(payload: ShipmentPayload) {
   try {
-    if (modalMode.value === 'create') {
-      await createShipment(payload)
-      message.success('运单已创建')
-    } else if (editingRow.value) {
-      await updateShipment(editingRow.value.id, payload)
-      message.success('运单已更新')
-    }
+    if (!editingRow.value) return
+    await updateShipment(editingRow.value.id, payload)
+    message.success('运单已更新')
     modalShow.value = false
     await loadList()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '保存失败')
+  }
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    const params = buildListParams()
+    const blob = await exportShipmentsExcel({
+      ...params,
+      limit: Math.min(total.value || 10_000, 10_000),
+      offset: 0,
+    })
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').slice(0, 14)
+    downloadBlob(blob, `运单导出_${ts}.xlsx`)
+    message.success(`已导出 ${total.value} 条运单（当前筛选）`)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '导出失败')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -702,7 +772,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     title: '运单号',
     key: 'shipmentNo',
     width: shipmentNoColWidth.value,
-    minWidth: 200,
+    minWidth: 152,
     fixed: 'left',
     cellProps: (row) =>
       hasActiveException(row) ? { class: 'shipment-td-exception-no' } : {},
@@ -721,7 +791,13 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       return h(NTag, { size: 'small', bordered: false, type }, () => label)
     },
   },
-  { title: '客户', key: 'customer', width: 100, ellipsis: { tooltip: true } },
+  {
+    title: '客户',
+    key: 'customer',
+    width: customerColWidth.value,
+    minWidth: 108,
+    ellipsis: { tooltip: true },
+  },
   { title: '件数', key: 'ctns', width: 64, align: 'center' },
   {
     title: '国家',
@@ -747,32 +823,24 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     render: (row) => displayField(row.zipcode) || '—',
   },
   {
-    title: '内部轨迹时间',
-    key: 'latestTrackingTime',
-    width: 152,
+    title: '内部轨迹',
+    key: 'latestTracking',
+    width: 220,
     ellipsis: { tooltip: true },
-    render: (row) => (hasEffectiveInternalTracking(row) ? row.latestTrackingTime : null) || '—',
+    render: (row) => {
+      if (!hasEffectiveInternalTracking(row)) {
+        return h('span', { class: 'text-zinc-600' }, '—')
+      }
+      return renderTrackingSummaryCell(row.latestTrackingTime, row.latestTrackingDesc)
+    },
   },
   {
-    title: '内部最新轨迹',
-    key: 'latestTrackingDesc',
-    width: 180,
+    title: '承运商轨迹',
+    key: 'latestCarrier',
+    width: 220,
     ellipsis: { tooltip: true },
-    render: (row) => (hasEffectiveInternalTracking(row) ? row.latestTrackingDesc : null) || '—',
-  },
-  {
-    title: '承运商轨迹时间',
-    key: 'latestCarrierTime',
-    width: 152,
-    ellipsis: { tooltip: true },
-    render: (row) => row.latestCarrierTime || '—',
-  },
-  {
-    title: '承运商最新轨迹',
-    key: 'latestCarrierDesc',
-    width: 180,
-    ellipsis: { tooltip: true },
-    render: (row) => row.latestCarrierDesc || '—',
+    render: (row) =>
+      renderTrackingSummaryCell(row.latestCarrierTime, row.latestCarrierDesc),
   },
   {
     title: '未更新',
@@ -823,6 +891,8 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       ]),
   },
 ])
+
+const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 </script>
 
 <template>
@@ -831,7 +901,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       <div>
         <h2 class="text-lg font-semibold text-white">运单管理</h2>
         <p class="text-xs text-zinc-500">
-          共 {{ total }} 条 · 支持 Excel 按运单号 upsert
+          共 {{ total }} 条 · 支持导入/导出运单 Excel
           <span v-if="batchShipmentSearchActive" class="text-violet-400">
             · 批量运单号 {{ shipmentNoTokens.length }} 个
           </span>
@@ -839,15 +909,13 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       </div>
       <NSpace align="center">
         <NButton size="small" :loading="syncingTracking" @click="handleSyncTracking()">
-          更新内部轨迹
+          更新全部内部轨迹
         </NButton>
         <NButton size="small" :loading="syncingCarrier" @click="handleSyncCarrierTracking()">
-          更新承运商轨迹
+          更新全部承运商轨迹
         </NButton>
-        <NButton size="small" :loading="importing" @click="triggerImport">
-          导入 Excel
-        </NButton>
-        <NButton size="small" type="primary" @click="openCreate">新增运单</NButton>
+        <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
+        <NButton size="small" :loading="exporting" @click="handleExport">导出运单</NButton>
       </NSpace>
     </div>
 
@@ -990,7 +1058,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         :columns="columns"
         :data="items"
         :loading="loading"
-        :scroll-x="1900 + shipmentNoColWidth"
+        :scroll-x="tableScrollX"
         :scrollbar-props="tableScrollbarProps"
         size="small"
         flex-height
@@ -1120,6 +1188,10 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
 .shipments-data-table :deep(th.n-data-table-th--fixed-left) {
   background-color: var(--n-th-color) !important;
   z-index: 4;
+}
+
+.shipments-data-table :deep(.tracking-summary-cell) {
+  line-height: 1.35;
 }
 
 .shipments-data-table :deep(.shipment-no-cell) {

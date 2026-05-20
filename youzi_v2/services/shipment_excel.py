@@ -6,9 +6,12 @@ import json
 from pathlib import Path
 from typing import Any
 
-from openpyxl import load_workbook
+from io import BytesIO
+
+from openpyxl import Workbook, load_workbook
 
 from youzi_v2.db.shipments_repository import ShipmentsRepository
+from youzi_v2.internal_tracking import mask_internal_summary
 
 _CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "shipment_excel_columns.json"
 
@@ -84,6 +87,7 @@ def parse_excel_rows(
     """
     mapping = _load_mapping()
     col_map: dict[str, str] = mapping["columns"]
+    export_only: set[str] = set(mapping.get("export_only_fields", []))
     country_aliases: dict[str, str] = mapping.get("country_aliases", {})
     status_aliases: dict[str, str] = mapping.get("status_aliases", {})
     sheet_names: list[str] = mapping.get("sheet_preference", [])
@@ -103,10 +107,14 @@ def parse_excel_rows(
             label = _cell_str(cell)
             if not label:
                 continue
-            if label in col_map:
-                header_index[idx] = col_map[label]
-            else:
+            if label not in col_map:
                 skipped_columns.append(label)
+                continue
+            field = col_map[label]
+            if field in export_only:
+                skipped_columns.append(label)
+                continue
+            header_index[idx] = field
 
         if "shipment_no" not in header_index.values():
             return [], [{"row": 1, "message": "缺少表头「运单号」"}], skipped_columns
@@ -155,6 +163,84 @@ def parse_excel_rows(
         return payloads, errors, skipped_columns
     finally:
         wb.close()
+
+
+_API_TO_SNAKE: dict[str, str] = {
+    "shipmentNo": "shipment_no",
+    "statusCode": "status_code",
+    "customerNo": "customer_no",
+    "customer": "customer",
+    "ctns": "ctns",
+    "countryCode": "country_code",
+    "addressCode": "address_code",
+    "deliveryAddress": "delivery_address",
+    "zipcode": "zipcode",
+    "channelCode": "channel_code",
+    "carrierCode": "carrier_code",
+    "originWarehouseCode": "origin_warehouse_code",
+    "latestTrackingTime": "latest_tracking_time",
+    "latestTrackingDesc": "latest_tracking_desc",
+}
+
+_STATUS_EXPORT_LABELS: dict[str, str] = {
+    "IN_TRANSIT": "转运中",
+    "DELIVERED": "已签收",
+    "INSPECTION": "查验",
+    "UNKNOWN": "未知",
+}
+
+
+def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any]) -> Any:
+    if field in ("latest_tracking_time", "latest_tracking_desc"):
+        time_raw = row.get("latest_tracking_time")
+        desc_raw = row.get("latest_tracking_desc")
+        latest_time, latest_desc = mask_internal_summary(time_raw, desc_raw)
+        val = latest_time if field == "latest_tracking_time" else latest_desc
+    else:
+        val = row.get(field)
+    if val is None or (isinstance(val, str) and not val.strip()):
+        return None
+    if field == "status_code":
+        code = str(val).strip().upper()
+        aliases = mapping.get("status_aliases", {})
+        for zh, en in aliases.items():
+            if en == code:
+                return zh
+        return _STATUS_EXPORT_LABELS.get(code, val)
+    if field == "country_code":
+        code = str(val).strip()
+        for zh, en in mapping.get("country_aliases", {}).items():
+            if en == code:
+                return zh
+        return val
+    if field == "ctns":
+        try:
+            return int(val)
+        except (TypeError, ValueError):
+            return val
+    return val
+
+
+def build_export_excel_bytes(items: list[dict[str, Any]]) -> bytes:
+    """按 shipment_excel_columns.json 表头导出，与导入模板一致。"""
+    mapping = _load_mapping()
+    col_map: dict[str, str] = mapping["columns"]
+    headers = list(col_map.keys())
+    fields = [col_map[h] for h in headers]
+
+    wb = Workbook()
+    ws = wb.active
+    sheet_names: list[str] = mapping.get("sheet_preference", [])
+    ws.title = (sheet_names[0] if sheet_names else "运单信息")[:31]
+    ws.append(headers)
+
+    for item in items:
+        row = {_API_TO_SNAKE.get(k, k): v for k, v in item.items()}
+        ws.append([_export_cell_value(f, row, mapping) for f in fields])
+
+    buf = BytesIO()
+    wb.save(buf)
+    return buf.getvalue()
 
 
 def import_excel_file(

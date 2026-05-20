@@ -8,6 +8,7 @@ from typing import Any, Callable
 from ..db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
+from .sync_log import make_sync_logger
 from .carrier_vendors import (
     BATCH_SIZE,
     detect_platform,
@@ -32,7 +33,7 @@ def sync_carrier_tracking(
     shipment_nos: list[str] | None = None,
     log: LogFn | None = None,
 ) -> dict[str, Any]:
-    out_log = log or (lambda m: None)
+    log_lines, out_log = make_sync_logger(log)
     job_id = jobs_repo.create_job("carrier", trigger)
 
     try:
@@ -106,6 +107,7 @@ def sync_carrier_tracking(
                 if tn and not (row.get("tracking_number") or "").strip():
                     if shipments_repo.set_tracking_number_if_empty(sn, tn):
                         row["tracking_number"] = tn
+                bill_hint = (row.get("carrier_id") or "").strip()
                 if err:
                     err_line = f"{vendor_name}/{sn}: {err}"
                     errors.append(err_line)
@@ -114,7 +116,13 @@ def sync_carrier_tracking(
                     continue
                 if not logs:
                     empty += 1
+                    hint = f" billNo={bill_hint}" if bill_hint else ""
+                    out_log(f"[承运商轨迹] {sn} 无轨迹{hint}")
                     continue
+                out_log(
+                    f"[承运商轨迹] {sn} 返回 {len(logs)} 条"
+                    + (f" billNo={bill_hint}" if bill_hint else "")
+                )
 
                 latest_time, latest_desc = latest_from_logs(logs)
                 stored_time = row.get("latest_carrier_time") or ""
@@ -184,4 +192,5 @@ def sync_carrier_tracking(
         "batches": sum(v["batches"] for v in vendor_stats.values()),
         "unassigned": unassigned,
         "vendorStats": vendor_stats,
+        "logs": log_lines[-200:],
     }

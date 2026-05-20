@@ -5,7 +5,12 @@ from youzi_v2.internal_tracking import (
     is_internal_no_tracking_desc,
     mask_internal_summary,
 )
-from youzi_v2.services.logistics_tracking import latest_from_logs, logs_from_api_item
+from youzi_v2.services.logistics_tracking import (
+    latest_from_logs,
+    logs_from_api_item,
+    status_code_from_api_item,
+    status_label_from_api_item,
+)
 
 
 def test_is_placeholder():
@@ -40,3 +45,10 @@ def test_logs_from_api_item_skips_placeholder():
     logs = logs_from_api_item(item)
     assert len(logs) == 1
     assert logs[0][1] == "已出库"
+
+
+def test_status_code_from_api_item():
+    assert status_code_from_api_item({"status": "2"}) == "IN_TRANSIT"
+    assert status_code_from_api_item({"status": 3}) == "DELIVERED"
+    assert status_code_from_api_item({"status": "1"}) is None
+    assert status_label_from_api_item({"status": "2"}) == "转运中"

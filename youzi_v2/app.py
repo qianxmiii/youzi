@@ -417,6 +417,13 @@ def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(Non
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except sqlite3.OperationalError as exc:
+        if "locked" in str(exc).lower():
+            raise HTTPException(
+                status_code=503,
+                detail="数据库繁忙（可能正在同步或迁移），请稍后重试。",
+            ) from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/shipments/sync-carrier-tracking", response_model=TrackingSyncResult)
@@ -443,6 +450,13 @@ def sync_shipments_carrier_tracking(body: TrackingSyncRequest | None = Body(None
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except sqlite3.OperationalError as exc:
+        if "locked" in str(exc).lower():
+            raise HTTPException(
+                status_code=503,
+                detail="数据库繁忙（可能正在同步或迁移），请稍后重试。",
+            ) from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @app.post("/api/v1/shipments/import")

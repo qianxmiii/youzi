@@ -1,5 +1,6 @@
 {
   "sheet_preference": ["运单信息", "Sheet1", "sheet1"],
+  "ignore_unknown_columns": true,
   "columns": {
     "运单号": "shipment_no",
     "客户订单号": "customer_no",
@@ -8,6 +9,7 @@
     "国家": "country_code",
     "派送仓库": "address_code",
     "派送地址": "delivery_address",
+    "邮编": "zipcode",
     "渠道": "channel_code",
     "承运商": "carrier_code",
     "交货仓库": "origin_warehouse_code"

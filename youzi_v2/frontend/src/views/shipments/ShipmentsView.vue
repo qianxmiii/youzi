@@ -50,8 +50,6 @@ const items = ref<Shipment[]>([])
 const total = ref(0)
 const searchShipmentNo = ref('')
 const searchKeyword = ref('')
-/** 承运商轨迹同步：指定运单号（逗号/换行）；留空则全库在途 */
-const carrierTrackingInput = ref('')
 const filterStatus = ref<string | null>(null)
 const filterCustomer = ref<string | null>(null)
 const filterCarrier = ref<string | null>(null)
@@ -81,7 +79,6 @@ const selectedCount = computed(() => checkedRowKeys.value.length)
 
 const shipmentNoTokens = computed(() => parseBatchSearchTokens(searchShipmentNo.value))
 const batchShipmentSearchActive = computed(() => shipmentNoTokens.value.length > 1)
-const carrierTrackingTokens = computed(() => parseBatchSearchTokens(carrierTrackingInput.value))
 
 /** 按当前页最长运单号估算列宽，避免截断 */
 const shipmentNoColWidth = computed(() => {
@@ -132,6 +129,9 @@ function notifyTrackingSyncResult(res: TrackingSyncResult, label: string) {
   }
   if (res.errors.length) {
     console.warn(`sync ${label} errors:`, res.errors)
+  }
+  if (res.logs?.length) {
+    console.info(`sync ${label} log:\n${res.logs.join('\n')}`)
   }
 }
 
@@ -370,22 +370,6 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
   }
 }
 
-async function handleSyncCarrierTrackingFromInput() {
-  const tokens = carrierTrackingTokens.value
-  if (tokens.length) {
-    await handleSyncCarrierTracking(tokens)
-    return
-  }
-  await handleSyncCarrierTracking()
-}
-
-function onCarrierTrackingInputKeydown(e: KeyboardEvent) {
-  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-    e.preventDefault()
-    void handleSyncCarrierTrackingFromInput()
-  }
-}
-
 function resetFilters() {
   filterStatus.value = null
   filterCustomer.value = null
@@ -506,7 +490,16 @@ async function onFileSelected(ev: Event) {
   importing.value = true
   try {
     const res = await importShipmentsExcel(file)
-    message.success(`导入完成：新增 ${res.created}，更新 ${res.updated}，失败 ${res.failed}`)
+    let text =
+      `导入完成：新增 ${res.created} 条，更新 ${res.updated} 条（按运单号匹配）` +
+      (res.failed ? `，跳过/失败 ${res.failed} 行` : '')
+    if (res.skippedColumns?.length) {
+      const preview = res.skippedColumns.slice(0, 5).join('、')
+      const more =
+        res.skippedColumns.length > 5 ? ` 等 ${res.skippedColumns.length} 列` : ''
+      text += `；未映射列已忽略：${preview}${more}`
+    }
+    message.success(text, { duration: 8000 })
     if (res.failed > 0 && res.errors.length) {
       console.warn('import errors', res.errors)
     }
@@ -547,7 +540,20 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   },
   { title: '渠道', key: 'channelCode', width: 160, ellipsis: { tooltip: true } },
   { title: '承运商', key: 'carrierCode', width: 90, ellipsis: { tooltip: true } },
-  { title: '派送地址', key: 'deliveryAddress', width: 180, ellipsis: { tooltip: true } },
+  {
+    title: '派送地址',
+    key: 'addressCode',
+    width: 100,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.addressCode) || '—',
+  },
+  {
+    title: '邮编',
+    key: 'zipcode',
+    width: 96,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.zipcode) || '—',
+  },
   {
     title: '内部轨迹时间',
     key: 'latestTrackingTime',
@@ -642,25 +648,8 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         <NButton size="small" :loading="syncingTracking" @click="handleSyncTracking()">
           更新内部轨迹
         </NButton>
-        <NInput
-          v-model:value="carrierTrackingInput"
-          type="textarea"
-          placeholder="承运商轨迹运单号（逗号/换行，留空=全库在途）"
-          :autosize="{ minRows: 1, maxRows: 2 }"
-          clearable
-          size="small"
-          class="carrier-tracking-query-input"
-          @keydown="onCarrierTrackingInputKeydown"
-        />
-        <NButton
-          size="small"
-          :loading="syncingCarrier"
-          @click="handleSyncCarrierTrackingFromInput"
-        >
+        <NButton size="small" :loading="syncingCarrier" @click="handleSyncCarrierTracking()">
           更新承运商轨迹
-          <span v-if="carrierTrackingTokens.length" class="opacity-80">
-            ({{ carrierTrackingTokens.length }})
-          </span>
         </NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">
           导入 Excel
@@ -842,16 +831,6 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
 </template>
 
 <style scoped>
-.carrier-tracking-query-input {
-  width: min(280px, 32vw);
-  min-width: 200px;
-}
-
-.carrier-tracking-query-input :deep(.n-input__textarea-el) {
-  min-height: 28px;
-  line-height: 1.4;
-}
-
 .shipments-filters-bar {
   border-radius: 0.5rem;
 }

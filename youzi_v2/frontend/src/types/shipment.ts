@@ -59,6 +59,8 @@ export interface ShipmentImportResult {
   updated: number
   failed: number
   errors: { row?: number; message: string; shipmentNo?: string }[]
+  /** Excel 表头中未配置映射、已忽略的列名 */
+  skippedColumns?: string[]
 }
 
 export function emptyShipmentForm(): ShipmentPayload {

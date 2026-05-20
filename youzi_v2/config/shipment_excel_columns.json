@@ -13,8 +13,11 @@
     "邮编": "zipcode",
     "渠道": "channel_code",
     "承运商": "carrier_code",
-    "交货仓库": "origin_warehouse_code"
+    "交货仓库": "origin_warehouse_code",
+    "内部轨迹时间": "latest_tracking_time",
+    "内部最新轨迹": "latest_tracking_desc"
   },
+  "export_only_fields": ["latest_tracking_time", "latest_tracking_desc"],
   "status_aliases": {
     "转运中": "IN_TRANSIT",
     "在途": "IN_TRANSIT",

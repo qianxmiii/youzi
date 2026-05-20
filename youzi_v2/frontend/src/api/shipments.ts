@@ -153,6 +153,20 @@ export async function getShipmentExceptionEvents(
   return api(`/api/v1/shipments/${shipmentId}/exception-events`, { query: params })
 }
 
+const SHIPMENT_EXPORT_MAX = 10_000
+
+export async function exportShipmentsExcel(params: ListShipmentsParams): Promise<Blob> {
+  const q = buildShipmentListQuery({
+    ...params,
+    limit: Math.min(params.limit ?? SHIPMENT_EXPORT_MAX, SHIPMENT_EXPORT_MAX),
+    offset: 0,
+  })
+  return api<Blob>('/api/v1/shipments/export', {
+    query: q,
+    responseType: 'blob',
+  })
+}
+
 export async function importShipmentsExcel(file: File): Promise<ShipmentImportResult> {
   const form = new FormData()
   form.append('file', file)

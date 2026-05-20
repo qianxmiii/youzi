@@ -3,13 +3,21 @@ import shutil
 import sqlite3
 import subprocess
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import Body, FastAPI, File, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.requests import Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import (
+    FileResponse,
+    HTMLResponse,
+    RedirectResponse,
+    Response,
+    StreamingResponse,
+)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
@@ -34,7 +42,7 @@ from .schemas.tracking import (
 )
 from .services.carrier_tracking_sync import sync_carrier_tracking
 from .services.code_table_excel import build_template_bytes, import_excel_file as import_code_table_excel
-from .services.shipment_excel import import_excel_file
+from .services.shipment_excel import build_export_excel_bytes, import_excel_file
 from .services.tracking_sync import sync_all_tracking
 
 BASE_DIR = Path(__file__).resolve().parent
@@ -359,6 +367,65 @@ def list_shipments(
         no_tracking=no_tracking,
         limit=limit,
         offset=offset,
+    )
+
+
+_SHIPMENT_EXPORT_MAX = 10_000
+
+
+@app.get("/api/v1/shipments/export")
+def export_shipments_excel(
+    search: str | None = None,
+    shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
+    status_code: str | None = Query(None, alias="statusCode"),
+    exception_code: str | None = Query(None, alias="exceptionCode"),
+    has_exception: bool | None = Query(None, alias="hasException"),
+    customer: str | None = None,
+    carrier_code: str | None = Query(None, alias="carrierCode"),
+    country_code: str | None = Query(None, alias="countryCode"),
+    channel_code: str | None = Query(None, alias="channelCode"),
+    min_stale_days: int | None = Query(None, alias="minStaleDays"),
+    no_tracking: bool | None = Query(None, alias="noTracking"),
+    limit: int = Query(_SHIPMENT_EXPORT_MAX, le=_SHIPMENT_EXPORT_MAX),
+    offset: int = 0,
+):
+    """导出当前筛选条件下的运单列表（Excel，表头与导入模板一致）。"""
+    if shipment_nos:
+        cleaned = [n.strip() for n in shipment_nos if n and n.strip()]
+        if len(cleaned) > 200:
+            raise HTTPException(status_code=400, detail="单次最多查询 200 个单号")
+        shipment_nos = cleaned
+    result = shipments_repo.list_rows(
+        search=search,
+        shipment_nos=shipment_nos,
+        status_code=status_code,
+        exception_code=exception_code,
+        has_exception=has_exception,
+        customer=customer,
+        carrier_code=carrier_code,
+        country_code=country_code,
+        channel_code=channel_code,
+        min_stale_days=min_stale_days,
+        no_tracking=no_tracking,
+        limit=limit,
+        offset=offset,
+    )
+    total = int(result.get("total") or 0)
+    if total > _SHIPMENT_EXPORT_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"当前筛选共 {total} 条，超过导出上限 {_SHIPMENT_EXPORT_MAX}，请缩小筛选范围"
+            ),
+        )
+    data = build_export_excel_bytes(result.get("items") or [])
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"运单导出_{ts}.xlsx"
+    encoded = quote(filename)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
     )
 
 

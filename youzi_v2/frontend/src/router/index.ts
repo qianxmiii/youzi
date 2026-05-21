@@ -57,6 +57,12 @@ const router = createRouter({
           meta: { title: '运单管理' },
         },
         {
+          path: 'statistics',
+          name: 'statistics',
+          component: () => import('@/views/statistics/StatisticsView.vue'),
+          meta: { title: '统计管理' },
+        },
+        {
           path: 'admin',
           name: 'admin',
           component: () => import('@/views/admin/AdminCodeTablesView.vue'),
@@ -67,6 +73,12 @@ const router = createRouter({
           name: 'customers',
           component: () => import('@/views/admin/CustomersView.vue'),
           meta: { title: '客户管理' },
+        },
+        {
+          path: 'channels',
+          name: 'channels',
+          component: () => import('@/views/channels/ChannelsView.vue'),
+          meta: { title: '渠道管理' },
         },
       ],
     },

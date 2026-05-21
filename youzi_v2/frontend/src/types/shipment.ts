@@ -6,6 +6,8 @@ export interface Shipment {
   isVip?: boolean
   customerNo: string | null
   channelCode: string | null
+  channelNameZh?: string | null
+  channelCategory?: string | null
   countryCode: string | null
   addressType: 'AMZ' | 'WFS' | '3PL' | string | null
   addressCode: string | null

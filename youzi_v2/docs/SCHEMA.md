@@ -112,6 +112,30 @@
 
 接口：`POST /api/v1/customers/sync-from-shipments` 从运单抓取客户；侧栏「客户管理」。
 
+## 渠道码表 `channel_codes`（扩展）
+
+在通用码表字段基础上增加：
+
+| 列 | 说明 |
+|----|------|
+| `country` | 国家/地区（如 美国、欧洲） |
+| `category` | 大类：空运 / 海运 / 快递 / 卡航 / 铁路 |
+| `note` | 备注 |
+
+- `code`：渠道英文编码（与运单 `channel_code` 一致）
+- `name_zh`：中文名称（如 美国普船）
+- `name_en`：英文名称（默认同 `code`）
+
+接口：`GET/POST/PATCH/DELETE /api/v1/channels`；`POST /api/v1/channels/seed-defaults` 导入内置 26 条；侧栏「渠道管理」`/channels`。
+
+## 运单统计 API
+
+`GET /api/v1/statistics/shipments/overview` — 全库运单聚合：
+
+- **statusDistribution**：异常 / 无轨迹 / 转运中 / 其它（互斥分类）
+- **channelDistribution**、**seaChannelDistribution**（Sea/Truck）、**carrierDistribution**
+- **transitBaseline**：ATD→ATA 平均天数与标准差（有样本时）
+
 ---
 
 ## 运单异常事件表 `shipment_exception_events`

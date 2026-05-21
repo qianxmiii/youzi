@@ -22,7 +22,6 @@ import {
   deleteShipment,
   exportShipmentsExcel,
   getShipmentFilterOptions,
-  getShipmentTrackingLogs,
   getTrackingSyncDailyStats,
   importShipmentsExcel,
   listShipments,
@@ -37,10 +36,7 @@ import type { ShipmentFilterOptions } from '@/api/shipments'
 import type { TrackingSyncDailyStats, TrackingSyncResult } from '@/types/tracking'
 import { useDictLabels } from '@/composables/useDictLabels'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
-import {
-  hasEffectiveInternalTracking,
-  isInternalNoTrackingDesc,
-} from '@/utils/internalTracking'
+import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 
 const message = useMessage()
 const { loadDictTypes, dictLabel } = useDictLabels()
@@ -51,7 +47,6 @@ const exporting = ref(false)
 const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
 const carrierDaily = ref<TrackingSyncDailyStats | null>(null)
-const copyingTracking = ref(false)
 const items = ref<Shipment[]>([])
 const total = ref(0)
 const searchShipmentNo = ref('')
@@ -62,7 +57,9 @@ const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
 const filterCustomer = ref<string | null>(null)
 const filterCarrier = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
-const filterChannel = ref<string | null>(null)
+const filterChannelNameZh = ref<string | null>(null)
+const filterChannelCategory = ref<string | null>(null)
+const filtersExpanded = ref(false)
 const filterStaleDays = ref<number | null>(null)
 const filterNoTracking = ref(false)
 const filterException = ref<string | null>(null)
@@ -72,6 +69,8 @@ const filterOptions = ref<ShipmentFilterOptions>({
   carrierCodes: [],
   countryCodes: [],
   channelCodes: [],
+  channelNameZhs: [],
+  channelCategories: [],
   statusCodes: [],
   exceptionCodes: [],
   exceptionTypes: [],
@@ -381,9 +380,31 @@ const countryOptions = computed(() =>
     value: code,
   })),
 )
-const channelOptions = computed(() =>
-  filterOptions.value.channelCodes.map((v) => ({ label: v, value: v })),
+const channelNameZhOptions = computed(() =>
+  filterOptions.value.channelNameZhs.map((v) => ({ label: v, value: v })),
 )
+const channelCategoryOptions = computed(() =>
+  filterOptions.value.channelCategories.map((v) => ({ label: v, value: v })),
+)
+
+const advancedFiltersActiveCount = computed(() => {
+  let n = 0
+  if (filterCarrier.value) n++
+  if (filterCountry.value) n++
+  if (filterChannelNameZh.value) n++
+  if (filterChannelCategory.value) n++
+  if (filterHasException.value != null) n++
+  if (filterException.value) n++
+  if (filterStaleDays.value != null && filterStaleDays.value !== '') n++
+  if (filterNoTracking.value) n++
+  return n
+})
+
+function channelDisplayLabel(row: Shipment): string {
+  const zh = row.channelNameZh?.trim()
+  if (zh) return zh
+  return row.channelCode?.trim() || '—'
+}
 
 /** 横向滚动宽度 = 各列 width 之和 + 余量（避免滑条到不了最右侧） */
 function sumTableColumnWidths(cols: DataTableColumns<Shipment>): number {
@@ -399,16 +420,14 @@ function sumTableColumnWidths(cols: DataTableColumns<Shipment>): number {
   return total
 }
 
-/** 运单表常显滚动条（Naive 默认隐藏原生条，用 Scrollbar 轨道） */
+/** 运单表滚动条：悬停显示、细轨道，避免常显抢眼 */
 const tableScrollbarProps = {
-  trigger: 'none' as const,
-  size: 12,
+  trigger: 'hover' as const,
+  size: 6,
   themeOverrides: {
-    railColor: 'rgba(255, 255, 255, 0.06)',
-    color: 'rgba(82, 82, 91, 0.95)',
-    colorHover: 'rgba(161, 161, 170, 1)',
-    height: '12px',
-    width: '12px',
+    railColor: 'transparent',
+    color: 'rgba(113, 113, 122, 0.35)',
+    colorHover: 'rgba(161, 161, 170, 0.55)',
   },
 }
 
@@ -449,7 +468,8 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
     customer: filterCustomer.value || undefined,
     carrierCode: filterCarrier.value || undefined,
     countryCode: filterCountry.value || undefined,
-    channelCode: filterChannel.value || undefined,
+    channelNameZh: filterChannelNameZh.value || undefined,
+    channelCategory: filterChannelCategory.value || undefined,
     minStaleDays:
       filterNoTracking.value || staleDays == null || Number.isNaN(staleDays) || staleDays <= 0
         ? undefined
@@ -615,7 +635,9 @@ function resetFilters() {
   filterCustomer.value = null
   filterCarrier.value = null
   filterCountry.value = null
-  filterChannel.value = null
+  filterChannelNameZh.value = null
+  filterChannelCategory.value = null
+  filtersExpanded.value = false
   filterStaleDays.value = null
   filterNoTracking.value = false
   searchShipmentNo.value = ''
@@ -739,22 +761,23 @@ function formatTrackingCopyBlock(
   return `${head}\n${tracking.time}\n${tracking.desc}`
 }
 
-async function resolveLatestTracking(row: Shipment): Promise<{ desc: string; time: string }> {
+/** 列表已有字段：优先内部最新轨迹，否则承运商摘要 */
+function latestTrackingForCopy(row: Shipment): { desc: string; time: string } {
   if (hasEffectiveInternalTracking(row)) {
     return {
       desc: row.latestTrackingDesc?.trim() || '—',
       time: row.latestTrackingTime?.trim() || '—',
     }
   }
-  const res = await getShipmentTrackingLogs(row.id, { limit: 20, offset: 0 })
-  const log = res.items.find((item) => !isInternalNoTrackingDesc(item.trackingDesc))
-  if (!log) {
-    return { desc: '—', time: '—' }
+  const carrierDesc = row.latestCarrierDesc?.trim()
+  const carrierTime = row.latestCarrierTime?.trim()
+  if (carrierDesc || carrierTime) {
+    return {
+      desc: carrierDesc || '—',
+      time: carrierTime || '—',
+    }
   }
-  return {
-    desc: log.trackingDesc?.trim() || '—',
-    time: log.trackingTime?.trim() || '—',
-  }
+  return { desc: '—', time: '—' }
 }
 
 async function copySelectedLatestTracking() {
@@ -763,20 +786,14 @@ async function copySelectedLatestTracking() {
     message.warning('请先勾选运单')
     return
   }
-  copyingTracking.value = true
   try {
-    const blocks = await Promise.all(
-      rows.map(async (row) => {
-        const tracking = await resolveLatestTracking(row)
-        return formatTrackingCopyBlock(row, tracking)
-      }),
+    const blocks = rows.map((row) =>
+      formatTrackingCopyBlock(row, latestTrackingForCopy(row)),
     )
     await navigator.clipboard.writeText(blocks.join('\n\n'))
     message.success(`已复制 ${rows.length} 条最新轨迹`)
   } catch (e) {
     message.error(e instanceof Error ? e.message : '复制失败')
-  } finally {
-    copyingTracking.value = false
   }
 }
 
@@ -850,7 +867,27 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     ellipsis: { tooltip: true },
     render: (row) => countryLabel(row.countryCode),
   },
-  { title: '渠道', key: 'channelCode', width: 160, ellipsis: { tooltip: true } },
+  {
+    title: '渠道',
+    key: 'channelCode',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      const label = channelDisplayLabel(row)
+      const code = row.channelCode?.trim()
+      if (!code || label === code) {
+        return h('span', label)
+      }
+      return h(
+        NTooltip,
+        { placement: 'top' },
+        {
+          trigger: () => h('span', { class: 'cursor-default' }, label),
+          default: () => code,
+        },
+      )
+    },
+  },
   { title: '承运商', key: 'carrierCode', width: 90, ellipsis: { tooltip: true } },
   {
     title: '派送地址',
@@ -1001,117 +1038,147 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     </div>
 
     <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
-      <div class="flex min-w-0 flex-wrap items-center gap-2">
-        <NInput
-          v-model:value="searchShipmentNo"
-          type="textarea"
-          placeholder="运单号（逗号/换行）"
-          :autosize="{ minRows: 1, maxRows: 3 }"
-          clearable
-          size="small"
-          class="shipments-filter-shipment-no"
-        />
-        <NInput
-          v-model:value="searchKeyword"
-          placeholder="客户/订单号/地址"
-          clearable
-          size="small"
-          class="shipments-filter-keyword"
-        />
-        <NInput
-          v-model:value="searchTrackingContent"
-          placeholder="轨迹内容（搜全部节点）"
-          clearable
-          size="small"
-          class="shipments-filter-tracking"
-        />
-        <span class="shipments-filter-divider" aria-hidden="true" />
-        <NSelect
-          v-model:value="filterCustomer"
-          :options="customerOptions"
-          placeholder="客户"
-          clearable
-          filterable
-          size="small"
-          class="shipments-filter-select"
-          @update:value="onFiltersChanged"
-        />
-        <NSelect
-          v-model:value="filterCarrier"
-          :options="carrierOptions"
-          placeholder="承运商"
-          clearable
-          filterable
-          size="small"
-          class="shipments-filter-select"
-          @update:value="onFiltersChanged"
-        />
-        <NSelect
-          v-model:value="filterCountry"
-          :options="countryOptions"
-          placeholder="国家"
-          clearable
-          filterable
-          size="small"
-          class="shipments-filter-select shipments-filter-select--wide"
-          @update:value="onFiltersChanged"
-        />
-        <NSelect
-          v-model:value="filterChannel"
-          :options="channelOptions"
-          placeholder="渠道"
-          clearable
-          filterable
-          size="small"
-          class="shipments-filter-select shipments-filter-select--wide"
-          @update:value="onFiltersChanged"
-        />
-        <NSelect
-          v-model:value="filterStatus"
-          :options="statusOptions"
-          placeholder="状态"
-          clearable
-          size="small"
-          class="shipments-filter-select"
-          @update:value="onFiltersChanged"
-        />
-        <NSelect
-          :value="filterHasException === true ? 'yes' : filterHasException === false ? 'no' : null"
-          :options="hasExceptionFilterOptions"
-          placeholder="异常"
-          clearable
-          size="small"
-          class="shipments-filter-select"
-          @update:value="onHasExceptionFilterChange"
-        />
-        <NSelect
-          v-model:value="filterException"
-          :options="exceptionFilterOptions"
-          placeholder="异常类型"
-          clearable
-          size="small"
-          class="shipments-filter-select"
-          @update:value="onFiltersChanged"
-        />
-        <NSelect
-          v-model:value="filterStaleDays"
-          :options="staleOptions"
-          :disabled="filterNoTracking"
-          placeholder="停滞"
-          clearable
-          size="small"
-          class="shipments-filter-select"
-          @update:value="onFiltersChanged"
-        />
-        <NCheckbox
-          v-model:checked="filterNoTracking"
-          size="small"
-          class="shrink-0 whitespace-nowrap"
-          @update:checked="onNoTrackingChanged"
+      <div class="flex min-w-0 flex-col gap-2">
+        <div class="flex min-w-0 flex-wrap items-center gap-2">
+          <NInput
+            v-model:value="searchShipmentNo"
+            type="textarea"
+            placeholder="运单号（逗号/换行）"
+            :autosize="{ minRows: 1, maxRows: 3 }"
+            clearable
+            size="small"
+            class="shipments-filter-shipment-no"
+          />
+          <NInput
+            v-model:value="searchKeyword"
+            placeholder="客户/订单号/地址"
+            clearable
+            size="small"
+            class="shipments-filter-keyword"
+          />
+          <NInput
+            v-model:value="searchTrackingContent"
+            placeholder="轨迹内容（搜全部节点）"
+            clearable
+            size="small"
+            class="shipments-filter-tracking"
+          />
+          <span class="shipments-filter-divider" aria-hidden="true" />
+          <NSelect
+            v-model:value="filterCustomer"
+            :options="customerOptions"
+            placeholder="客户"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="filterStatus"
+            :options="statusOptions"
+            placeholder="状态"
+            clearable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NButton
+            size="small"
+            quaternary
+            class="shrink-0"
+            @click="filtersExpanded = !filtersExpanded"
+          >
+            {{ filtersExpanded ? '收起筛选' : '更多筛选' }}
+            <span
+              v-if="!filtersExpanded && advancedFiltersActiveCount > 0"
+              class="ml-1 rounded bg-violet-500/25 px-1.5 text-[10px] text-violet-200"
+            >
+              {{ advancedFiltersActiveCount }}
+            </span>
+          </NButton>
+          <NButton size="small" quaternary class="shrink-0" @click="resetFilters">重置</NButton>
+        </div>
+        <div
+          v-show="filtersExpanded"
+          class="flex min-w-0 flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-2"
         >
-          无轨迹
-        </NCheckbox>
-        <NButton size="small" quaternary class="shrink-0" @click="resetFilters">重置</NButton>
+          <NSelect
+            v-model:value="filterChannelNameZh"
+            :options="channelNameZhOptions"
+            placeholder="渠道（中文）"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="filterChannelCategory"
+            :options="channelCategoryOptions"
+            placeholder="大类"
+            clearable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="filterCarrier"
+            :options="carrierOptions"
+            placeholder="承运商"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="filterCountry"
+            :options="countryOptions"
+            placeholder="国家"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            :value="filterHasException === true ? 'yes' : filterHasException === false ? 'no' : null"
+            :options="hasExceptionFilterOptions"
+            placeholder="异常"
+            clearable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onHasExceptionFilterChange"
+          />
+          <NSelect
+            v-model:value="filterException"
+            :options="exceptionFilterOptions"
+            placeholder="异常类型"
+            clearable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="filterStaleDays"
+            :options="staleOptions"
+            :disabled="filterNoTracking"
+            placeholder="停滞"
+            clearable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NCheckbox
+            v-model:checked="filterNoTracking"
+            size="small"
+            class="shrink-0 whitespace-nowrap"
+            @update:checked="onNoTrackingChanged"
+          >
+            无轨迹
+          </NCheckbox>
+        </div>
       </div>
     </div>
 
@@ -1142,9 +1209,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       <NSpace size="small">
         <NButton size="small" quaternary @click="clearSelection">取消选择</NButton>
         <NButton size="small" @click="copySelectedShipmentNos">复制运单号</NButton>
-        <NButton size="small" :loading="copyingTracking" @click="copySelectedLatestTracking">
-          查询并复制最新轨迹
-        </NButton>
+        <NButton size="small" @click="copySelectedLatestTracking">复制最新轨迹</NButton>
         <NButton size="small" :loading="syncingTracking" @click="handleSyncSelectedInternal">
           更新选中内部轨迹
         </NButton>
@@ -1332,7 +1397,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   box-shadow: inset 3px 0 0 rgb(245 158 11 / 0.95);
 }
 
-/* 运单表底部/右侧常显滚动条（Naive 默认 hover 才显示） */
 .shipments-table-panel {
   display: flex;
   flex-direction: column;
@@ -1343,23 +1407,8 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   min-height: 0;
 }
 
-.shipments-table-panel :deep(.n-scrollbar-rail--horizontal) {
-  height: 12px !important;
-  opacity: 1 !important;
-}
-
-.shipments-table-panel :deep(.n-scrollbar-rail--horizontal .n-scrollbar-rail__scrollbar) {
-  height: 8px !important;
-  border-radius: 4px;
-}
-
-.shipments-table-panel :deep(.n-scrollbar-rail--vertical) {
-  width: 12px !important;
-  opacity: 1 !important;
-}
-
-.shipments-table-panel :deep(.n-scrollbar-rail--vertical .n-scrollbar-rail__scrollbar) {
-  width: 8px !important;
-  border-radius: 4px;
+/* Naive 滚动条圆角、弱化轨道占位 */
+.shipments-table-panel :deep(.n-scrollbar-rail__scrollbar) {
+  border-radius: 9999px !important;
 }
 </style>

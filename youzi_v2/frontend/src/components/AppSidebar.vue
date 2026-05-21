@@ -41,7 +41,10 @@ function itemLabel(name: string, badge?: string) {
       </div>
     </div>
 
-    <nav class="flex-1 overflow-x-hidden overflow-y-auto py-3" :class="collapsed ? 'px-1.5' : 'px-2'">
+    <nav
+      class="scrollbar-subtle flex-1 overflow-x-hidden overflow-y-auto py-3"
+      :class="collapsed ? 'px-1.5' : 'px-2'"
+    >
       <div
         v-for="(group, gi) in navGroups"
         :key="group.label"

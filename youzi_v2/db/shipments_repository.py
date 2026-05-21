@@ -12,7 +12,13 @@ from .datetime_util import now_str
 from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
 from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipments_table import TABLE_NAME
+from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
 from .exception_duration import duration_seconds, format_duration
+
+_LIST_FROM = (
+    f"{TABLE_NAME} s LEFT JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code"
+)
+_LIST_SELECT = "s.*, cc.name_zh AS _channel_name_zh, cc.category AS _channel_category"
 
 # 轨迹同步仅处理生命周期「转运中」；已签收等状态不拉取/更新
 _STATUS_IN_TRANSIT_SQL = "status_code = 'IN_TRANSIT'"
@@ -73,6 +79,18 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "customer": row["customer"],
         "customerNo": row["customer_no"],
         "channelCode": row["channel_code"],
+        "channelNameZh": (
+            (row["_channel_name_zh"] or "").strip()
+            if "_channel_name_zh" in row.keys()
+            else ""
+        )
+        or None,
+        "channelCategory": (
+            (row["_channel_category"] or "").strip()
+            if "_channel_category" in row.keys()
+            else ""
+        )
+        or None,
         "countryCode": row["country_code"],
         "addressType": row["address_type"],
         "addressCode": row["address_code"],
@@ -170,6 +188,8 @@ class ShipmentsRepository:
         carrier_code: str | None = None,
         country_code: str | None = None,
         channel_code: str | None = None,
+        channel_name_zh: str | None = None,
+        channel_category: str | None = None,
         min_stale_days: int | None = None,
         no_tracking: bool | None = None,
         limit: int = 100,
@@ -185,19 +205,19 @@ class ShipmentsRepository:
         if cleaned_nos:
             if len(cleaned_nos) == 1:
                 q = f"%{cleaned_nos[0]}%"
-                conditions.append("(shipment_no LIKE ? OR customer_no LIKE ?)")
+                conditions.append("(s.shipment_no LIKE ? OR s.customer_no LIKE ?)")
                 params.extend([q, q])
             else:
                 placeholders = ", ".join("?" * len(cleaned_nos))
                 conditions.append(
-                    f"(shipment_no IN ({placeholders}) OR customer_no IN ({placeholders}))"
+                    f"(s.shipment_no IN ({placeholders}) OR s.customer_no IN ({placeholders}))"
                 )
                 params.extend(cleaned_nos + cleaned_nos)
         if search and search.strip():
             q = f"%{search.strip()}%"
             conditions.append(
-                "(customer LIKE ? OR customer_no LIKE ? "
-                "OR address_code LIKE ? OR delivery_address LIKE ?)"
+                "(s.customer LIKE ? OR s.customer_no LIKE ? "
+                "OR s.address_code LIKE ? OR s.delivery_address LIKE ?)"
             )
             params.extend([q, q, q, q])
         if tracking_search and tracking_search.strip():
@@ -205,70 +225,76 @@ class ShipmentsRepository:
             conditions.append(
                 f"""
                 (
-                  shipment_no IN (
+                  s.shipment_no IN (
                     SELECT shipment_no FROM {INTERNAL_TRACKING_TABLE}
                     WHERE tracking_desc LIKE ?
                     UNION
                     SELECT shipment_no FROM {CARRIER_TRACKING_TABLE}
                     WHERE tracking_desc LIKE ?
                   )
-                  OR latest_tracking_desc LIKE ?
-                  OR latest_carrier_desc LIKE ?
+                  OR s.latest_tracking_desc LIKE ?
+                  OR s.latest_carrier_desc LIKE ?
                 )
                 """
             )
             params.extend([tq, tq, tq, tq])
         if status_code and status_code.strip():
-            conditions.append("status_code = ?")
+            conditions.append("s.status_code = ?")
             params.append(status_code.strip())
         if exception_code and exception_code.strip():
-            conditions.append("exception_code = ?")
+            conditions.append("s.exception_code = ?")
             params.append(exception_code.strip())
         if has_exception is True:
             conditions.append(
-                "exception_code IS NOT NULL AND TRIM(exception_code) != ''"
+                "s.exception_code IS NOT NULL AND TRIM(s.exception_code) != ''"
             )
         elif has_exception is False:
             conditions.append(
-                "(exception_code IS NULL OR TRIM(exception_code) = '')"
+                "(s.exception_code IS NULL OR TRIM(s.exception_code) = '')"
             )
         if customer and customer.strip():
-            conditions.append("customer = ?")
+            conditions.append("s.customer = ?")
             params.append(customer.strip())
         if carrier_code and carrier_code.strip():
-            conditions.append("carrier_code = ?")
+            conditions.append("s.carrier_code = ?")
             params.append(carrier_code.strip())
         if country_code and country_code.strip():
-            conditions.append("country_code = ?")
+            conditions.append("s.country_code = ?")
             params.append(country_code.strip())
         if channel_code and channel_code.strip():
-            conditions.append("channel_code = ?")
+            conditions.append("s.channel_code = ?")
             params.append(channel_code.strip())
+        if channel_name_zh and channel_name_zh.strip():
+            conditions.append("cc.name_zh = ?")
+            params.append(channel_name_zh.strip())
+        if channel_category and channel_category.strip():
+            conditions.append("cc.category = ?")
+            params.append(channel_category.strip())
         if no_tracking:
             conditions.append(
-                f"(latest_tracking_time IS NULL OR TRIM(latest_tracking_time) = '' "
-                f"OR TRIM(latest_tracking_desc) = ?)"
+                f"(s.latest_tracking_time IS NULL OR TRIM(s.latest_tracking_time) = '' "
+                f"OR TRIM(s.latest_tracking_desc) = ?)"
             )
             params.append(INTERNAL_WAREHOUSE_PLACEHOLDER)
         elif min_stale_days is not None and min_stale_days > 0:
             conditions.append(
                 """
-                latest_tracking_time IS NOT NULL AND TRIM(latest_tracking_time) != ''
-                AND datetime(latest_tracking_time) <= datetime('now', ?)
+                s.latest_tracking_time IS NOT NULL AND TRIM(s.latest_tracking_time) != ''
+                AND datetime(s.latest_tracking_time) <= datetime('now', ?)
                 """
             )
             params.append(f"-{int(min_stale_days)} days")
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         with self._database.lock:
             total = self._conn.execute(
-                f"SELECT COUNT(*) AS c FROM {TABLE_NAME} {where}",
+                f"SELECT COUNT(*) AS c FROM {_LIST_FROM} {where}",
                 params,
             ).fetchone()["c"]
             rows = self._conn.execute(
                 f"""
-                SELECT * FROM {TABLE_NAME} {where}
-                ORDER BY datetime(latest_tracking_time) DESC,
-                         datetime(updated_time) DESC
+                SELECT {_LIST_SELECT} FROM {_LIST_FROM} {where}
+                ORDER BY datetime(s.latest_tracking_time) DESC,
+                         datetime(s.updated_time) DESC
                 LIMIT ? OFFSET ?
                 """,
                 [*params, limit, offset],
@@ -308,11 +334,31 @@ class ShipmentsRepository:
                 ORDER BY sort_order, code
                 """
             ).fetchall()
+            channel_name_rows = self._conn.execute(
+                f"""
+                SELECT DISTINCT cc.name_zh AS v
+                FROM {TABLE_NAME} s
+                INNER JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code
+                WHERE cc.name_zh IS NOT NULL AND TRIM(cc.name_zh) != ''
+                ORDER BY cc.name_zh
+                """
+            ).fetchall()
+            channel_category_rows = self._conn.execute(
+                f"""
+                SELECT DISTINCT cc.category AS v
+                FROM {TABLE_NAME} s
+                INNER JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code
+                WHERE cc.category IS NOT NULL AND TRIM(cc.category) != ''
+                ORDER BY cc.category
+                """
+            ).fetchall()
         return {
             "customers": out["customer"],
             "carrierCodes": out["carrier_code"],
             "countryCodes": out["country_code"],
             "channelCodes": out["channel_code"],
+            "channelNameZhs": [str(r["v"]) for r in channel_name_rows],
+            "channelCategories": [str(r["v"]) for r in channel_category_rows],
             "statusCodes": out["status_code"],
             "exceptionCodes": [str(r["v"]) for r in exc_in_use],
             "exceptionTypes": [

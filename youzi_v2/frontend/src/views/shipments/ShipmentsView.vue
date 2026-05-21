@@ -14,10 +14,9 @@ import {
   type DataTableColumns,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
-import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
 import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
-import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
+import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import {
   closeShipmentExceptions,
   deleteShipment,
@@ -82,7 +81,9 @@ const exceptionCloseShow = ref(false)
 const exceptionSubmitting = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
-const expandedRowKeys = ref<string[]>([])
+const trackingDrawerShow = ref(false)
+const trackingDrawerShipment = ref<Shipment | null>(null)
+const trackingDrawerTab = ref<'internal' | 'carrier'>('internal')
 
 const modalShow = ref(false)
 const modalMode = ref<'edit'>('edit')
@@ -203,7 +204,15 @@ function rowClassName(row: Shipment) {
   return hasActiveException(row) ? 'shipment-row--exception' : ''
 }
 
+function openTrackingDrawer(row: Shipment, tab: 'internal' | 'carrier' = 'internal') {
+  trackingDrawerShipment.value = row
+  trackingDrawerTab.value = tab
+  trackingDrawerShow.value = true
+}
+
 function renderTrackingSummaryCell(
+  row: Shipment,
+  tab: 'internal' | 'carrier',
   time: string | null | undefined,
   desc: string | null | undefined,
 ) {
@@ -224,11 +233,24 @@ function renderTrackingSummaryCell(
         )
       : h('div', { class: 'text-xs text-zinc-600' }, '—'),
   ])
+  const clickable = h(
+    'button',
+    {
+      type: 'button',
+      class:
+        'tracking-summary-btn w-full min-w-0 cursor-pointer rounded px-0.5 py-0.5 text-left transition-colors hover:bg-zinc-800/60',
+      onClick: (e: MouseEvent) => {
+        e.stopPropagation()
+        openTrackingDrawer(row, tab)
+      },
+    },
+    [block],
+  )
   const tip = [t, d].filter(Boolean).join('\n')
   if (tip.length > 36) {
-    return h(NTooltip, { trigger: 'hover' }, { trigger: () => block, default: () => tip })
+    return h(NTooltip, { trigger: 'hover' }, { trigger: () => clickable, default: () => tip })
   }
-  return block
+  return clickable
 }
 
 function renderVipBadge(row: Shipment) {
@@ -269,13 +291,21 @@ function renderShipmentNo(row: Shipment) {
     noCell,
     renderVipBadge(row),
   ])
-  if (!active) return inner
+  const withNoTip = h(
+    NTooltip,
+    { trigger: 'hover' },
+    {
+      trigger: () => inner,
+      default: () => row.shipmentNo,
+    },
+  )
+  if (!active) return withNoTip
   return h(
     NTooltip,
     { trigger: 'hover' },
     {
       trigger: () => inner,
-      default: () => `异常：${label} · 已持续 ${duration}`,
+      default: () => `异常：${label} · 已持续 ${duration}\n${row.shipmentNo}`,
     },
   )
 }
@@ -359,7 +389,7 @@ const channelOptions = computed(() =>
 function sumTableColumnWidths(cols: DataTableColumns<Shipment>): number {
   let total = 0
   for (const col of cols) {
-    if (col.type === 'selection' || col.type === 'expand') {
+    if (col.type === 'selection') {
       total += typeof col.width === 'number' ? col.width : 40
       continue
     }
@@ -452,7 +482,6 @@ async function loadList() {
 function onFiltersChanged() {
   page.value = 1
   checkedRowKeys.value = []
-  expandedRowKeys.value = []
   void loadList()
 }
 
@@ -467,14 +496,12 @@ watch([searchShipmentNo, searchKeyword, searchTrackingContent], () => {
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
     checkedRowKeys.value = []
-    expandedRowKeys.value = []
     void loadList()
   }, 300)
 })
 
 watch([page, pageSize], () => {
   checkedRowKeys.value = []
-  expandedRowKeys.value = []
   void loadList()
 })
 
@@ -786,19 +813,6 @@ async function onFileSelected(ev: Event) {
 const columns = computed<DataTableColumns<Shipment>>(() => [
   { type: 'selection', fixed: 'left', width: 40 },
   {
-    type: 'expand',
-    fixed: 'left',
-    width: 40,
-    renderExpand: (row) =>
-      h('div', {}, [
-        h(ShipmentTrackingPanel, { shipmentId: row.id }),
-        h(ShipmentExceptionHistory, {
-          shipmentId: row.id,
-          labelByCode: exceptionLabelByCode.value,
-        }),
-      ]),
-  },
-  {
     title: '运单号',
     key: 'shipmentNo',
     width: shipmentNoColWidth.value,
@@ -861,7 +875,12 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       if (!hasEffectiveInternalTracking(row)) {
         return h('span', { class: 'text-zinc-600' }, '—')
       }
-      return renderTrackingSummaryCell(row.latestTrackingTime, row.latestTrackingDesc)
+      return renderTrackingSummaryCell(
+        row,
+        'internal',
+        row.latestTrackingTime,
+        row.latestTrackingDesc,
+      )
     },
   },
   {
@@ -870,7 +889,12 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     width: 220,
     ellipsis: { tooltip: true },
     render: (row) =>
-      renderTrackingSummaryCell(row.latestCarrierTime, row.latestCarrierDesc),
+      renderTrackingSummaryCell(
+        row,
+        'carrier',
+        row.latestCarrierTime,
+        row.latestCarrierDesc,
+      ),
   },
   {
     title: '未更新',
@@ -898,10 +922,15 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   {
     title: '操作',
     key: 'actions',
-    width: 128,
+    width: 168,
     fixed: 'right',
     render: (row) =>
       h(NSpace, { size: 4 }, () => [
+        h(
+          NButton,
+          { size: 'tiny', quaternary: true, onClick: () => openTrackingDrawer(row, 'internal') },
+          () => '轨迹',
+        ),
         h(
           NButton,
           { size: 'tiny', quaternary: true, type: 'primary', onClick: () => openEdit(row) },
@@ -1089,7 +1118,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     <div class="panel shipments-table-panel min-h-0 flex-1 overflow-hidden p-0">
       <NDataTable
         v-model:checked-row-keys="checkedRowKeys"
-        v-model:expanded-row-keys="expandedRowKeys"
         :row-key="rowKey"
         :row-class-name="rowClassName"
         :columns="columns"
@@ -1173,6 +1201,13 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       @close="modalShow = false"
       @submit="handleFormSubmit"
     />
+
+    <ShipmentTrackingDrawer
+      v-model:show="trackingDrawerShow"
+      :shipment="trackingDrawerShipment"
+      :initial-tab="trackingDrawerTab"
+      :exception-label-by-code="exceptionLabelByCode"
+    />
   </div>
 </template>
 
@@ -1222,10 +1257,16 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   background: var(--color-border);
 }
 
-/* 左侧固定列不透明，横向滚动时不透底 */
-.shipments-data-table :deep(td.n-data-table-td--fixed-left) {
+/* 左侧固定列：默认不透明防横滚透底；行 hover 与整行其它列同一规则同步变色 */
+.shipments-data-table :deep(.n-data-table-tbody .n-data-table-td--fixed-left) {
   background-color: var(--n-td-color) !important;
   z-index: 2;
+}
+
+.shipments-data-table :deep(
+    .n-data-table-tbody .n-data-table-tr:not(.n-data-table-tr--summary):hover > .n-data-table-td
+  ) {
+  background-color: var(--n-td-color-hover) !important;
 }
 
 .shipments-data-table :deep(th.n-data-table-th--fixed-left) {
@@ -1235,6 +1276,12 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
 .shipments-data-table :deep(.tracking-summary-cell) {
   line-height: 1.35;
+}
+
+.shipments-data-table :deep(.tracking-summary-btn) {
+  border: none;
+  background: transparent;
+  font: inherit;
 }
 
 .shipments-data-table :deep(.shipment-no-cell) {
@@ -1264,16 +1311,20 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 }
 
 /* 异常行：不透明底色，避免横向滚动时与后方列文字叠在一起 */
-.shipments-data-table :deep(tr.shipment-row--exception td) {
+.shipments-data-table :deep(
+    .n-data-table-tbody .n-data-table-tr.shipment-row--exception > .n-data-table-td
+  ) {
   background: #1a1814 !important;
 }
 
-.shipments-data-table :deep(tr.shipment-row--exception:hover td) {
+.shipments-data-table :deep(
+    .n-data-table-tbody .n-data-table-tr.shipment-row--exception:hover > .n-data-table-td
+  ) {
   background: #221e17 !important;
 }
 
-.shipments-data-table :deep(tr.shipment-row--exception .n-data-table-td--fixed-left),
-.shipments-data-table :deep(tr.shipment-row--exception .n-data-table-th--fixed-left) {
+.shipments-data-table :deep(.n-data-table-tr.shipment-row--exception .n-data-table-td--fixed-left),
+.shipments-data-table :deep(.n-data-table-tr.shipment-row--exception .n-data-table-th--fixed-left) {
   z-index: 3;
 }
 

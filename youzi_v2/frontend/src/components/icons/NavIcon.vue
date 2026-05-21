@@ -82,6 +82,15 @@ defineProps<{ name: string }>()
         stroke-linejoin="round"
       />
     </template>
+    <template v-else-if="name === 'chart'">
+      <path
+        d="M3 12.5v2.5h2.5M3 8v1.5h5M3 3.5v1.5h7.5M12 3.5v9l3 2 4.5-7"
+        stroke="currentColor"
+        stroke-width="1.25"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </template>
     <template v-else-if="name === 'truck'">
       <path
         d="M2.5 11V6.5h6V11M8.5 6.5 11 4.5h2.5V11"

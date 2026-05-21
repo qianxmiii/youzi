@@ -18,6 +18,8 @@ export interface ShipmentFilterOptions {
   carrierCodes: string[]
   countryCodes: string[]
   channelCodes: string[]
+  channelNameZhs: string[]
+  channelCategories: string[]
   statusCodes: string[]
   exceptionCodes: string[]
   exceptionTypes: { code: string; nameZh: string }[]
@@ -37,6 +39,8 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.carrierCode?.trim()) q.carrierCode = params.carrierCode.trim()
   if (params.countryCode?.trim()) q.countryCode = params.countryCode.trim()
   if (params.channelCode?.trim()) q.channelCode = params.channelCode.trim()
+  if (params.channelNameZh?.trim()) q.channelNameZh = params.channelNameZh.trim()
+  if (params.channelCategory?.trim()) q.channelCategory = params.channelCategory.trim()
   if (params.minStaleDays != null && params.minStaleDays > 0) {
     q.minStaleDays = String(params.minStaleDays)
   }
@@ -59,6 +63,8 @@ export interface ListShipmentsParams {
   carrierCode?: string
   countryCode?: string
   channelCode?: string
+  channelNameZh?: string
+  channelCategory?: string
   minStaleDays?: number
   noTracking?: boolean
   limit?: number

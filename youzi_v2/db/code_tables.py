@@ -12,7 +12,10 @@ from .datetime_util import now_str
 
 # (table_name, optional extra columns in CREATE)
 _CODE_TABLE_DEFS: list[tuple[str, str]] = [
-    ("channel_codes", ""),
+    (
+        "channel_codes",
+        "country TEXT NOT NULL DEFAULT '',\n    category TEXT NOT NULL DEFAULT '',\n    note TEXT NOT NULL DEFAULT '',",
+    ),
     ("country_codes", ""),
     ("address_codes", ""),
     ("carrier_codes", ""),
@@ -54,14 +57,48 @@ CREATE TABLE IF NOT EXISTS {table} (
 """
 
 
+def _migrate_channel_codes(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(channel_codes)").fetchall()}
+    for col, ddl in (
+        ("country", "ALTER TABLE channel_codes ADD COLUMN country TEXT NOT NULL DEFAULT ''"),
+        ("category", "ALTER TABLE channel_codes ADD COLUMN category TEXT NOT NULL DEFAULT ''"),
+        ("note", "ALTER TABLE channel_codes ADD COLUMN note TEXT NOT NULL DEFAULT ''"),
+    ):
+        if col not in cols:
+            conn.execute(ddl)
+
+
 def ensure_schema(conn: sqlite3.Connection) -> None:
     for table, extra in _CODE_TABLE_DEFS:
         conn.execute(_create_code_table_sql(table, extra))
+    _migrate_channel_codes(conn)
 
 
 def seed_if_empty(conn: sqlite3.Connection) -> None:
     _seed_status_codes(conn)
     _seed_exception_codes(conn)
+    _seed_channel_codes(conn)
+
+
+def _seed_channel_codes(conn: sqlite3.Connection) -> None:
+    row = conn.execute("SELECT COUNT(*) AS c FROM channel_codes").fetchone()
+    if row and row["c"] and row["c"] > 0:
+        return
+    from .channel_seeds import CHANNEL_SEEDS
+
+    now = now_str()
+    conn.executemany(
+        """
+        INSERT INTO channel_codes (
+            code, name_zh, name_en, country, category, note,
+            sort_order, is_active, created_time, updated_time
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+        """,
+        [
+            (code, name_zh, code, country, category, note, order, now, now)
+            for code, name_zh, country, category, note, order in CHANNEL_SEEDS
+        ],
+    )
 
 
 def _seed_status_codes(conn: sqlite3.Connection) -> None:

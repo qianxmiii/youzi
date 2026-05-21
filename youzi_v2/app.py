@@ -33,10 +33,14 @@ from .db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from .db.tracking_logs_repository import TrackingLogsRepository
 from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .db.customers_repository import CustomersRepository
+from .db.channels_repository import ChannelsRepository
+from .db.shipment_statistics_repository import ShipmentStatisticsRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
 from .schemas.shipments import ShipmentRecordIn, ShipmentUpdateIn
 from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
+from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
+from .schemas.statistics import ShipmentStatisticsOverview
 from .schemas.tracking import (
     TrackingSyncDailyStats,
     TrackingSyncRequest,
@@ -149,6 +153,8 @@ tracking_jobs_repo = TrackingSyncJobsRepository(_database)
 code_tables_repo = CodeTablesRepository(_database)
 dict_repo = DictRepository(_database)
 customers_repo = CustomersRepository(_database)
+channels_repo = ChannelsRepository(_database)
+shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
@@ -353,6 +359,8 @@ def list_shipments(
     carrier_code: str | None = Query(None, alias="carrierCode"),
     country_code: str | None = Query(None, alias="countryCode"),
     channel_code: str | None = Query(None, alias="channelCode"),
+    channel_name_zh: str | None = Query(None, alias="channelNameZh"),
+    channel_category: str | None = Query(None, alias="channelCategory"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
     limit: int = 100,
@@ -374,6 +382,8 @@ def list_shipments(
         carrier_code=carrier_code,
         country_code=country_code,
         channel_code=channel_code,
+        channel_name_zh=channel_name_zh,
+        channel_category=channel_category,
         min_stale_days=min_stale_days,
         no_tracking=no_tracking,
         limit=limit,
@@ -381,6 +391,12 @@ def list_shipments(
     )
     _apply_vip_flags(result.get("items") or [])
     return result
+
+
+@app.get("/api/v1/statistics/shipments/overview", response_model=ShipmentStatisticsOverview)
+def get_shipment_statistics_overview():
+    """运单统计：状态分布、渠道/承运商占比、ATD→ATA 时效基准（预览）。"""
+    return ShipmentStatisticsOverview(**shipment_statistics_repo.overview())
 
 
 @app.get("/api/v1/customers")
@@ -430,6 +446,67 @@ def delete_customer(item_id: str):
     return Response(status_code=204)
 
 
+@app.get("/api/v1/channels/meta")
+def get_channels_meta():
+    return {"categories": channels_repo.categories()}
+
+
+@app.get("/api/v1/channels")
+def list_channels(
+    search: str | None = None,
+    country: str | None = None,
+    category: str | None = None,
+    active_only: bool | None = Query(None, alias="activeOnly"),
+    limit: int = 200,
+    offset: int = 0,
+):
+    return channels_repo.list_rows(
+        search=search,
+        country=country,
+        category=category,
+        active_only=active_only,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.post("/api/v1/channels/seed-defaults", response_model=ChannelSeedResult)
+def seed_default_channels():
+    """写入/更新内置渠道列表（按 code 匹配，不删除已有记录）。"""
+    return ChannelSeedResult(**channels_repo.seed_defaults())
+
+
+@app.post("/api/v1/channels", status_code=201)
+def create_channel(body: ChannelIn):
+    try:
+        return channels_repo.create(body.model_dump(by_alias=False))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/api/v1/channels/{code}")
+def update_channel(code: str, body: ChannelUpdateIn):
+    data = body.model_dump(exclude_unset=True, by_alias=False)
+    if not data:
+        row = channels_repo.get_row(code)
+        if row is None:
+            raise HTTPException(status_code=404, detail="渠道不存在")
+        return row
+    try:
+        return channels_repo.update(code, data)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="渠道不存在") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/channels/{code}", status_code=204)
+def delete_channel(code: str):
+    if not channels_repo.delete(code):
+        raise HTTPException(status_code=404, detail="渠道不存在")
+    return Response(status_code=204)
+
+
 _SHIPMENT_EXPORT_MAX = 10_000
 
 
@@ -445,6 +522,8 @@ def export_shipments_excel(
     carrier_code: str | None = Query(None, alias="carrierCode"),
     country_code: str | None = Query(None, alias="countryCode"),
     channel_code: str | None = Query(None, alias="channelCode"),
+    channel_name_zh: str | None = Query(None, alias="channelNameZh"),
+    channel_category: str | None = Query(None, alias="channelCategory"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
     limit: int = Query(_SHIPMENT_EXPORT_MAX, le=_SHIPMENT_EXPORT_MAX),
@@ -467,6 +546,8 @@ def export_shipments_excel(
         carrier_code=carrier_code,
         country_code=country_code,
         channel_code=channel_code,
+        channel_name_zh=channel_name_zh,
+        channel_category=channel_category,
         min_stale_days=min_stale_days,
         no_tracking=no_tracking,
         limit=limit,

@@ -56,4 +56,32 @@
   .nav-item-active {
     @apply bg-white/[0.08] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)];
   }
+
+  /* 原生滚动条：默认几乎隐藏，悬停区域时淡显 */
+  .scrollbar-subtle {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+  }
+
+  .scrollbar-subtle:hover {
+    scrollbar-color: rgb(63 63 70 / 0.55) transparent;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .scrollbar-subtle::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: transparent;
+  }
+
+  .scrollbar-subtle:hover::-webkit-scrollbar-thumb {
+    background: rgb(63 63 70 / 0.45);
+  }
 }

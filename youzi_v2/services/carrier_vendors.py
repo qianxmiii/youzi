@@ -34,6 +34,32 @@ def _carrier_fail(msg: str) -> CarrierFetch:
     return [], msg, None, None
 
 
+def _repair_utf8_mojibake(text: str) -> str:
+    """修复 UTF-8 被误按 Latin-1 解码后再存回的乱码（如壹合 NextSLS text/html 响应）。"""
+    if not text:
+        return text
+    try:
+        return text.encode("latin-1").decode("utf-8")
+    except (UnicodeDecodeError, UnicodeEncodeError):
+        return text
+
+
+def _maybe_repair_text(text: str) -> str:
+    s = (text or "").strip()
+    if not s or all(ord(c) < 128 for c in s):
+        return s
+    repaired = _repair_utf8_mojibake(s)
+    return repaired if repaired != s else s
+
+
+def _response_json(resp: requests.Response) -> Any:
+    """按 UTF-8 解析 JSON，避免 Content-Type 为 text/html 时 requests 误用 Latin-1。"""
+    try:
+        return json.loads(resp.content.decode("utf-8"))
+    except UnicodeDecodeError:
+        return json.loads(resp.content.decode("utf-8", errors="replace"))
+
+
 def _extract_carrier_id(data: dict[str, Any]) -> str:
     """NextSLS shipment_id、拓普达 jobNum、华威尔 orderno 等。"""
     if not isinstance(data, dict):
@@ -131,7 +157,7 @@ def _normalize_details(raw_details: list[dict[str, Any]]) -> list[tuple[str, str
     out: list[tuple[str, str]] = []
     for item in raw_details:
         t = normalize_tracking_time(item.get("track_occur_date") or item.get("zztm") or "")
-        d = (item.get("track_description") or item.get("guiji") or "").strip()
+        d = _maybe_repair_text(item.get("track_description") or item.get("guiji") or "")
         if t:
             out.append((t, d))
     return out
@@ -159,7 +185,7 @@ def parse_topda_item(item: dict[str, Any]) -> list[tuple[str, str]]:
         if not isinstance(tr, dict):
             continue
         t = _topda_event_time(tr.get("time") or tr.get("eventTime") or "")
-        d = (tr.get("context") or "").strip()
+        d = _maybe_repair_text(tr.get("context") or "")
         if t and d:
             logs.append((t, d))
     for hn in item.get("headNodes") or []:
@@ -167,7 +193,7 @@ def parse_topda_item(item: dict[str, Any]) -> list[tuple[str, str]]:
             continue
         t = _topda_event_time(hn.get("time") or hn.get("eventTime") or "")
         node = (hn.get("node") or "").strip()
-        d = (hn.get("context") or "").strip() or _TOPDA_NODE_LABELS.get(node, node)
+        d = _maybe_repair_text(hn.get("context") or "") or _TOPDA_NODE_LABELS.get(node, node)
         if t and d:
             logs.append((t, d))
     return _sort_logs_desc(logs)
@@ -201,7 +227,7 @@ def parse_nextsls_shipment(shipment: dict[str, Any]) -> list[tuple[str, str]]:
         if not isinstance(tr, dict):
             continue
         t = _topda_event_time(tr.get("time") or "")
-        d = (tr.get("info") or "").strip()
+        d = _maybe_repair_text(tr.get("info") or "")
         if t and d:
             logs.append((t, d))
     return _sort_logs_desc(logs)
@@ -223,7 +249,7 @@ def parse_txfba_track_list(items: list[dict[str, Any]]) -> list[tuple[str, str]]
         if not isinstance(tr, dict):
             continue
         t = normalize_tracking_time(tr.get("trackTime") or "")
-        d = (tr.get("trackInfo") or "").strip()
+        d = _maybe_repair_text(tr.get("trackInfo") or "")
         if t and d:
             logs.append((t, d))
     return _sort_logs_desc(logs)
@@ -293,11 +319,11 @@ def _fetch_rtb56(
     try:
         resp = requests.post(vendor["apiUrl"], data=params, timeout=timeout)
         resp.raise_for_status()
-        result = resp.json()
+        result = _response_json(resp)
     except Exception as exc:
         return _carrier_fail(str(exc))
     if not result.get("success"):
-        return _carrier_fail(result.get("cnmessage") or "承运商 API 返回失败")
+        return _carrier_fail(_maybe_repair_text(result.get("cnmessage") or "") or "承运商 API 返回失败")
     data = result.get("data") or []
     if not data:
         return _carrier_ok([])
@@ -355,9 +381,10 @@ def _fetch_nextsls(
         resp = requests.get(api_url, params=params, headers=headers, timeout=timeout)
         resp.raise_for_status()
         content_type = (resp.headers.get("content-type") or "").lower()
-        if "json" not in content_type and resp.text.lstrip().startswith("<"):
+        body = resp.content.lstrip()
+        if "json" not in content_type and body.startswith(b"<"):
             return _carrier_fail("NextSLS 返回 HTML 而非 JSON，请检查 apiUrl 配置")
-        result = resp.json()
+        result = _response_json(resp)
     except json.JSONDecodeError:
         return _carrier_fail("NextSLS 响应非 JSON，请检查 apiUrl 与参数")
     except Exception as exc:
@@ -383,7 +410,7 @@ def _fetch_huawell_cms_batch(
     try:
         resp = requests.post(api_url, json=body, timeout=timeout)
         resp.raise_for_status()
-        payload = resp.json()
+        payload = _response_json(resp)
     except Exception as exc:
         err = str(exc)
         return {n: ([], err, None, None) for n in tracking_numbers}
@@ -425,12 +452,12 @@ def _fetch_common_pack(
     try:
         resp = requests.post(vendor["apiUrl"], json=params, timeout=timeout)
         resp.raise_for_status()
-        result = resp.json()
+        result = _response_json(resp)
     except Exception as exc:
         return _carrier_fail(str(exc))
     data = result.get("data") if isinstance(result, dict) else None
     if not data or "details" not in data:
-        msg = result.get("msg") if isinstance(result, dict) else "响应格式异常"
+        msg = _maybe_repair_text(result.get("msg") if isinstance(result, dict) else "") or "响应格式异常"
         return _carrier_fail(msg)
     return _carrier_ok(_normalize_details(data.get("details") or []))
 
@@ -470,7 +497,7 @@ def _fetch_txfba_track_by_bill_no(
             timeout=timeout,
         )
         try:
-            payload = resp.json()
+            payload = _response_json(resp)
         except Exception:
             payload = None
         if resp.status_code >= 400:
@@ -486,7 +513,7 @@ def _fetch_txfba_track_by_bill_no(
     if not isinstance(payload, dict):
         return _carrier_fail("腾信 API 响应格式异常")
     if payload.get("code") != 200:
-        msg = (payload.get("message") or "").strip() or "腾信查询失败"
+        msg = _maybe_repair_text(payload.get("message") or "") or "腾信查询失败"
         return _carrier_fail(f"code={payload.get('code')} {msg}")
 
     data = payload.get("data")
@@ -552,7 +579,7 @@ def _fetch_topda_batch(
     try:
         resp = requests.get(url, timeout=timeout)
         resp.raise_for_status()
-        payload = resp.json()
+        payload = _response_json(resp)
     except Exception as exc:
         err = str(exc)
         return {n: ([], err, None, None) for n in tracking_numbers}

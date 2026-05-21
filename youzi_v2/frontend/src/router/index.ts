@@ -62,6 +62,12 @@ const router = createRouter({
           component: () => import('@/views/admin/AdminCodeTablesView.vue'),
           meta: { title: '后台管理' },
         },
+        {
+          path: 'customers',
+          name: 'customers',
+          component: () => import('@/views/admin/CustomersView.vue'),
+          meta: { title: '客户管理' },
+        },
       ],
     },
   ],

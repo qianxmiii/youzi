@@ -3,6 +3,7 @@
 from youzi_v2.services.carrier_vendors import (
     _extract_carrier_id,
     _extract_outer_tracking_number,
+    _maybe_repair_text,
     _nextsls_mode,
     _nextsls_number_param,
     _parse_nextsls_json,
@@ -54,6 +55,13 @@ def test_extract_outer_tracking_number():
         == "UPS 1ZK351H66829979895"
     )
     assert _extract_outer_tracking_number({"outer_carrier_tracking_number": ""}) == ""
+
+
+def test_repair_utf8_mojibake_nextsls_trace():
+    garbled = "æµ·è¿å®éå·²å¼è¹"
+    fixed = _maybe_repair_text(garbled)
+    assert "海运" in fixed
+    assert "æµ·" not in fixed
 
 
 def test_parse_nextsls_json_returns_carrier_id():

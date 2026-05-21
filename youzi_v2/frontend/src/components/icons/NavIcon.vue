@@ -64,6 +64,24 @@ defineProps<{ name: string }>()
       />
       <circle cx="8" cy="5.5" r="2" stroke="currentColor" stroke-width="1.25" />
     </template>
+    <template v-else-if="name === 'users'">
+      <circle cx="5.5" cy="5.5" r="2" stroke="currentColor" stroke-width="1.25" />
+      <circle cx="10.5" cy="5.5" r="2" stroke="currentColor" stroke-width="1.25" />
+      <path
+        d="M2.5 13c0-1.66 1.34-3 3-3h1c.55 0 1.05.15 1.5.4.45-.25.95-.4 1.5-.4h1c1.66 0 3 1.34 3 3"
+        stroke="currentColor"
+        stroke-width="1.25"
+        stroke-linecap="round"
+      />
+    </template>
+    <template v-else-if="name === 'star'">
+      <path
+        d="M8 2.8 9.55 6.2l3.7.55-2.68 2.6.63 3.65L8 11.1l-3.2 1.9.63-3.65-2.68-2.6 3.7-.55L8 2.8Z"
+        stroke="currentColor"
+        stroke-width="1.1"
+        stroke-linejoin="round"
+      />
+    </template>
     <template v-else-if="name === 'truck'">
       <path
         d="M2.5 11V6.5h6V11M8.5 6.5 11 4.5h2.5V11"

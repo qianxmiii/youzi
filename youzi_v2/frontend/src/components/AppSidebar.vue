@@ -30,11 +30,11 @@ function itemLabel(name: string, badge?: string) {
       class="flex h-14 shrink-0 items-center border-b border-[var(--color-border)]"
       :class="collapsed ? 'justify-center px-0' : 'gap-2.5 px-4'"
     >
-      <div
-        class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-violet-500 to-fuchsia-600 text-xs font-bold text-white shadow-lg shadow-violet-500/20"
-      >
-        Y
-      </div>
+      <img
+        src="/youzi-app-icon.png"
+        alt="Youzi"
+        class="h-7 w-7 shrink-0 rounded-lg object-cover shadow-lg shadow-violet-500/20"
+      />
       <div v-if="!collapsed" class="min-w-0">
         <div class="truncate text-sm font-semibold tracking-tight text-white">Youzi</div>
         <div class="text-[11px] text-zinc-500">v2 · 迁移中</div>

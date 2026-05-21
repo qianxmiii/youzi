@@ -9,6 +9,8 @@ from typing import Any
 from .connection import Database
 from ..internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER, mask_internal_summary
 from .datetime_util import now_str
+from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
+from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipments_table import TABLE_NAME
 from .exception_duration import duration_seconds, format_duration
 
@@ -159,6 +161,7 @@ class ShipmentsRepository:
         self,
         *,
         search: str | None = None,
+        tracking_search: str | None = None,
         shipment_nos: list[str] | None = None,
         status_code: str | None = None,
         exception_code: str | None = None,
@@ -194,10 +197,27 @@ class ShipmentsRepository:
             q = f"%{search.strip()}%"
             conditions.append(
                 "(customer LIKE ? OR customer_no LIKE ? "
-                "OR address_code LIKE ? OR delivery_address LIKE ? "
-                "OR latest_tracking_desc LIKE ?)"
+                "OR address_code LIKE ? OR delivery_address LIKE ?)"
             )
-            params.extend([q, q, q, q, q])
+            params.extend([q, q, q, q])
+        if tracking_search and tracking_search.strip():
+            tq = f"%{tracking_search.strip()}%"
+            conditions.append(
+                f"""
+                (
+                  shipment_no IN (
+                    SELECT shipment_no FROM {INTERNAL_TRACKING_TABLE}
+                    WHERE tracking_desc LIKE ?
+                    UNION
+                    SELECT shipment_no FROM {CARRIER_TRACKING_TABLE}
+                    WHERE tracking_desc LIKE ?
+                  )
+                  OR latest_tracking_desc LIKE ?
+                  OR latest_carrier_desc LIKE ?
+                )
+                """
+            )
+            params.extend([tq, tq, tq, tq])
         if status_code and status_code.strip():
             conditions.append("status_code = ?")
             params.append(status_code.strip())
@@ -512,6 +532,26 @@ class ShipmentsRepository:
                 (shipment_no.strip(),),
             ).fetchone()
         return _row_to_api(row) if row else None
+
+    def get_by_shipment_or_customer_no(self, no: str) -> dict[str, Any] | None:
+        """运单号精确匹配；否则按客户订单号匹配首条。"""
+        key = no.strip()
+        if not key:
+            return None
+        row = self.get_by_shipment_no(key)
+        if row:
+            return row
+        with self._database.lock:
+            found = self._conn.execute(
+                f"""
+                SELECT * FROM {TABLE_NAME}
+                WHERE customer_no = ?
+                ORDER BY datetime(updated_time) DESC
+                LIMIT 1
+                """,
+                (key,),
+            ).fetchone()
+        return _row_to_api(found) if found else None
 
     def list_for_tracking_sync(
         self,

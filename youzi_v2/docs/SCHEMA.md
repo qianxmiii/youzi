@@ -99,6 +99,19 @@
 
 **索引**：`shipment_no`(UNIQUE)、`customer`、`channel_code`、`country_code`、`carrier_code`、`status_code`、`updated_time`。
 
+## 客户表 `customers`
+
+从运单 `customer` 同步全部去重客户名；`is_vip=1` 时运单列表运单号后显示 VIP 标识（与 `customer` trim 后精确匹配）。
+
+| 列 | 说明 |
+|----|------|
+| `customer_name` | 客户名（UNIQUE） |
+| `is_vip` | 是否 VIP（0/1） |
+| `shipment_count` | 关联运单数（同步时刷新） |
+| `note` | 备注 |
+
+接口：`POST /api/v1/customers/sync-from-shipments` 从运单抓取客户；侧栏「客户管理」。
+
 ---
 
 ## 运单异常事件表 `shipment_exception_events`

@@ -32,9 +32,11 @@ from .db.shipments_repository import ShipmentsRepository
 from .db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from .db.tracking_logs_repository import TrackingLogsRepository
 from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
+from .db.customers_repository import CustomersRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
 from .schemas.shipments import ShipmentRecordIn, ShipmentUpdateIn
+from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
 from .schemas.tracking import (
     TrackingSyncDailyStats,
     TrackingSyncRequest,
@@ -146,9 +148,16 @@ carrier_tracking_repo = CarrierTrackingLogsRepository(_database)
 tracking_jobs_repo = TrackingSyncJobsRepository(_database)
 code_tables_repo = CodeTablesRepository(_database)
 dict_repo = DictRepository(_database)
+customers_repo = CustomersRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
+
+
+def _apply_vip_flags(items: list[dict[str, Any]]) -> None:
+    vip_names = customers_repo.vip_customer_name_set()
+    for item in items:
+        item["isVip"] = (item.get("customer") or "").strip() in vip_names
 
 
 def resolve_template_xls() -> Path:
@@ -335,6 +344,7 @@ def close_shipment_exceptions(payload: ShipmentExceptionCloseIn):
 @app.get("/api/v1/shipments")
 def list_shipments(
     search: str | None = None,
+    tracking_search: str | None = Query(None, alias="trackingSearch"),
     shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
     status_code: str | None = Query(None, alias="statusCode"),
     exception_code: str | None = Query(None, alias="exceptionCode"),
@@ -353,8 +363,9 @@ def list_shipments(
         if len(cleaned) > 200:
             raise HTTPException(status_code=400, detail="单次最多查询 200 个单号")
         shipment_nos = cleaned
-    return shipments_repo.list_rows(
+    result = shipments_repo.list_rows(
         search=search,
+        tracking_search=tracking_search,
         shipment_nos=shipment_nos,
         status_code=status_code,
         exception_code=exception_code,
@@ -368,6 +379,55 @@ def list_shipments(
         limit=limit,
         offset=offset,
     )
+    _apply_vip_flags(result.get("items") or [])
+    return result
+
+
+@app.get("/api/v1/customers")
+def list_customers(
+    search: str | None = None,
+    vip_only: bool | None = Query(None, alias="vipOnly"),
+    limit: int = 200,
+    offset: int = 0,
+):
+    return customers_repo.list_rows(
+        search=search, vip_only=vip_only, limit=limit, offset=offset
+    )
+
+
+@app.post("/api/v1/customers/sync-from-shipments", response_model=CustomerSyncResult)
+def sync_customers_from_shipments():
+    """从运单表抓取全部去重客户名写入客户表（已存在的不覆盖 VIP 状态）。"""
+    return CustomerSyncResult(**customers_repo.sync_from_shipments())
+
+
+@app.post("/api/v1/customers", status_code=201)
+def create_customer(body: CustomerIn):
+    try:
+        return customers_repo.create(
+            body.customer_name, note=body.note, is_vip=body.is_vip
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/api/v1/customers/{item_id}")
+def update_customer(item_id: str, body: CustomerUpdateIn):
+    row = None
+    if body.is_vip is not None:
+        row = customers_repo.set_vip(item_id, body.is_vip)
+    if body.note is not None:
+        row = customers_repo.update_note(item_id, body.note)
+    if row is None:
+        raise HTTPException(status_code=404, detail="客户不存在")
+    return row
+
+
+@app.delete("/api/v1/customers/{item_id}", status_code=204)
+def delete_customer(item_id: str):
+    if not customers_repo.delete(item_id):
+        raise HTTPException(status_code=404, detail="客户不存在")
+    return Response(status_code=204)
 
 
 _SHIPMENT_EXPORT_MAX = 10_000
@@ -376,6 +436,7 @@ _SHIPMENT_EXPORT_MAX = 10_000
 @app.get("/api/v1/shipments/export")
 def export_shipments_excel(
     search: str | None = None,
+    tracking_search: str | None = Query(None, alias="trackingSearch"),
     shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
     status_code: str | None = Query(None, alias="statusCode"),
     exception_code: str | None = Query(None, alias="exceptionCode"),
@@ -397,6 +458,7 @@ def export_shipments_excel(
         shipment_nos = cleaned
     result = shipments_repo.list_rows(
         search=search,
+        tracking_search=tracking_search,
         shipment_nos=shipment_nos,
         status_code=status_code,
         exception_code=exception_code,
@@ -480,6 +542,7 @@ def get_shipment(item_id: str):
     row = shipments_repo.get_by_id(item_id)
     if row is None:
         raise HTTPException(status_code=404, detail="运单不存在")
+    _apply_vip_flags([row])
     return row
 
 

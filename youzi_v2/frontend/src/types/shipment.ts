@@ -2,6 +2,8 @@ export interface Shipment {
   id: string
   shipmentNo: string
   customer: string | null
+  /** 客户名在 VIP 客户表中 */
+  isVip?: boolean
   customerNo: string | null
   channelCode: string | null
   countryCode: string | null

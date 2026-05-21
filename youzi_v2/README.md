@@ -2,6 +2,44 @@
 
 Vue 3 + Tailwind + FastAPI 新壳（Linear / Vercel 风格），从仓库根目录 `index.html` 逐步迁移功能。
 
+## 启动
+
+本地开发需 **两个终端**，均在 **仓库根目录**（含 `youzi_v2/` 的那一层）执行。
+
+### 1. 后端 API（端口 3001）
+
+```bash
+pip install -r youzi_v2/requirements.txt
+uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001 --reload
+```
+
+### 2. 前端（端口 5173）
+
+**Windows PowerShell**（若 `npm` 报「禁止运行脚本」，改用 `npm.cmd`）：
+
+```powershell
+cd youzi_v2/frontend
+npm.cmd install
+npm.cmd run dev
+```
+
+**macOS / Linux / Git Bash**：
+
+```bash
+cd youzi_v2/frontend
+npm install
+npm run dev
+```
+
+### 访问地址
+
+| 服务 | URL |
+|------|-----|
+| 新前端（Vue） | http://localhost:5173 |
+| 后端 API / Legacy 后台 | http://localhost:3001/ |
+
+前端通过 Vite 将 `/api` 代理到 `http://127.0.0.1:3001`。需局域网访问时，后端使用 `--host 0.0.0.0`，前端已配置 `host: true`，可用终端打印的 `Network: http://192.168.x.x:5173`。
+
 ## 结构
 
 ```text
@@ -13,41 +51,6 @@ youzi_v2/
 ├── templates/         # Legacy 后台页面
 └── data/              # 本地数据库（gitignore）
 ```
-
-## 开发（推荐）
-
-**终端 1 — API（仓库根目录）**
-
-```bash
-pip install -r youzi_v2/requirements.txt
-uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001 --reload
-```
-
-**终端 2 — 新前端**
-
-Windows PowerShell（若 `npm` 报「禁止运行脚本」，请用 `npm.cmd`）：
-
-```powershell
-cd c:\Files\git\youzi\youzi_v2\frontend
-npm.cmd install
-npm.cmd run dev
-```
-
-macOS / Linux / Git Bash：
-
-```bash
-cd youzi_v2/frontend
-npm install
-npm run dev
-```
-
-浏览器打开：**http://localhost:5173**（或终端里 Vite 打印的 `Network: http://192.168.x.x:5173`）
-
-- 新 UI：工作台、侧栏路由（占位页标「待迁」）
-- API：`/api` 代理到 `3001`（报价历史、地址簿等仍走现有接口）
-- Legacy 后台：http://localhost:3001/ （Jinja admin）
-
-**只能用 localhost？** 若后端用了 `--host 127.0.0.1`，或 Vite 未开 `host: true`，手机/别的电脑无法用局域网 IP 打开。请用上面的 `0.0.0.0` + 本仓库已配置的 Vite `host: true`。
 
 ## 生产构建（单端口，可选）
 

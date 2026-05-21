@@ -27,6 +27,7 @@ export interface ShipmentFilterOptions {
 export function buildShipmentListQuery(params: ListShipmentsParams): Record<string, string | string[]> {
   const q: Record<string, string | string[]> = {}
   if (params.search?.trim()) q.search = params.search.trim()
+  if (params.trackingSearch?.trim()) q.trackingSearch = params.trackingSearch.trim()
   if (params.shipmentNos?.length) q.shipmentNos = params.shipmentNos
   if (params.statusCode?.trim()) q.statusCode = params.statusCode.trim()
   if (params.exceptionCode?.trim()) q.exceptionCode = params.exceptionCode.trim()
@@ -47,6 +48,8 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
 
 export interface ListShipmentsParams {
   search?: string
+  /** 在全部内部/承运商轨迹节点描述中模糊匹配 */
+  trackingSearch?: string
   /** 批量精确查询运单号 / 客户订单号（与 search 二选一） */
   shipmentNos?: string[]
   statusCode?: string

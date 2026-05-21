@@ -41,6 +41,7 @@ class Database:
         from . import carrier_tracking_logs_table
         from . import internal_tracking_logs_table
         from . import tracking_sync_jobs_table
+        from . import customers_table
 
         with self._lock:
             app_settings_table.ensure_schema(self._conn)
@@ -53,6 +54,7 @@ class Database:
             internal_tracking_logs_table.ensure_schema(self._conn)
             carrier_tracking_logs_table.ensure_schema(self._conn)
             tracking_sync_jobs_table.ensure_schema(self._conn)
+            customers_table.ensure_schema(self._conn)
             self._conn.commit()
         app_settings_table.seed_if_empty(self._conn)
         code_tables.seed_if_empty(self._conn)

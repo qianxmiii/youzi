@@ -57,6 +57,7 @@ const items = ref<Shipment[]>([])
 const total = ref(0)
 const searchShipmentNo = ref('')
 const searchKeyword = ref('')
+const searchTrackingContent = ref('')
 const DEFAULT_STATUS_FILTER = 'IN_TRANSIT'
 const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
 const filterCustomer = ref<string | null>(null)
@@ -230,11 +231,32 @@ function renderTrackingSummaryCell(
   return block
 }
 
+function renderVipBadge(row: Shipment) {
+  if (!row.isVip) return null
+  const tip = row.customer ? `VIP 客户：${row.customer}` : 'VIP 客户'
+  return h(
+    NTooltip,
+    { trigger: 'hover' },
+    {
+      trigger: () =>
+        h(
+          'span',
+          {
+            class: 'shipment-vip-badge shrink-0',
+            'aria-label': 'VIP',
+          },
+          'VIP',
+        ),
+      default: () => tip,
+    },
+  )
+}
+
 function renderShipmentNo(row: Shipment) {
   const active = hasActiveException(row)
   const label = exceptionLabel(row.exceptionCode)
   const duration = row.exceptionDurationLabel || '—'
-  const cell = h(
+  const noCell = h(
     'span',
     {
       class: active
@@ -243,12 +265,16 @@ function renderShipmentNo(row: Shipment) {
     },
     row.shipmentNo,
   )
-  if (!active) return cell
+  const inner = h('span', { class: 'inline-flex max-w-full items-center gap-1' }, [
+    noCell,
+    renderVipBadge(row),
+  ])
+  if (!active) return inner
   return h(
     NTooltip,
     { trigger: 'hover' },
     {
-      trigger: () => cell,
+      trigger: () => inner,
       default: () => `异常：${label} · 已持续 ${duration}`,
     },
   )
@@ -379,6 +405,9 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
   return {
     ...(tokens.length ? { shipmentNos: tokens } : {}),
     ...(keyword ? { search: keyword } : {}),
+    ...(searchTrackingContent.value.trim()
+      ? { trackingSearch: searchTrackingContent.value.trim() }
+      : {}),
     statusCode: filterStatus.value || undefined,
     exceptionCode: filterException.value || undefined,
     hasException:
@@ -433,7 +462,7 @@ function onNoTrackingChanged(checked: boolean) {
 }
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
-watch([searchShipmentNo, searchKeyword], () => {
+watch([searchShipmentNo, searchKeyword, searchTrackingContent], () => {
   page.value = 1
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
@@ -564,6 +593,7 @@ function resetFilters() {
   filterNoTracking.value = false
   searchShipmentNo.value = ''
   searchKeyword.value = ''
+  searchTrackingContent.value = ''
   page.value = 1
   loadList()
 }
@@ -954,10 +984,17 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         />
         <NInput
           v-model:value="searchKeyword"
-          placeholder="订单号/地址/轨迹"
+          placeholder="客户/订单号/地址"
           clearable
           size="small"
           class="shipments-filter-keyword"
+        />
+        <NInput
+          v-model:value="searchTrackingContent"
+          placeholder="轨迹内容（搜全部节点）"
+          clearable
+          size="small"
+          class="shipments-filter-tracking"
         />
         <span class="shipments-filter-divider" aria-hidden="true" />
         <NSelect
@@ -1162,6 +1199,12 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   flex: 0 1 152px;
 }
 
+.shipments-filters-bar .shipments-filter-tracking {
+  width: min(200px, 22vw);
+  min-width: 160px;
+  flex: 1 1 160px;
+}
+
 .shipments-filters-bar .shipments-filter-select {
   width: 7.25rem;
   min-width: 6.5rem;
@@ -1203,6 +1246,21 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
 .shipments-data-table :deep(.shipment-no-cell--exception) {
   color: rgb(253 230 138);
+}
+
+.shipments-data-table :deep(.shipment-vip-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  border-radius: 3px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: 0.02em;
+  color: rgb(251 191 36);
+  background: rgb(245 158 11 / 0.15);
+  border: 1px solid rgb(245 158 11 / 0.35);
 }
 
 /* 异常行：不透明底色，避免横向滚动时与后方列文字叠在一起 */

@@ -8,7 +8,6 @@ import {
   NPopconfirm,
   NSpace,
   NSwitch,
-  NTag,
   useMessage,
   type DataTableColumns,
 } from 'naive-ui'
@@ -20,6 +19,7 @@ import {
   syncCustomersFromShipments,
   updateCustomer,
 } from '@/api/customers'
+import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import type { Customer } from '@/api/customers'
 
 const message = useMessage()
@@ -122,13 +122,7 @@ const columns: DataTableColumns<Customer> = [
     render: (row) =>
       h('span', { class: 'inline-flex items-center gap-1.5' }, [
         h('span', row.customerName),
-        row.isVip
-          ? h(
-              NTag,
-              { size: 'tiny', bordered: false, type: 'warning' },
-              () => 'VIP',
-            )
-          : null,
+        row.isVip ? h(VipStarBadge) : null,
       ]),
   },
   {
@@ -201,7 +195,7 @@ onMounted(async () => {
       <div>
         <h2 class="text-lg font-semibold text-white">客户管理</h2>
         <p class="text-xs text-zinc-500">
-          从运单同步全部客户；开启 VIP 后，该客户在运单列表运单号后显示 VIP 标识。
+          从运单同步全部客户；开启 VIP 后，该客户在运单列表运单号旁显示金色星标。
         </p>
       </div>
       <NButton size="small" type="primary" :loading="syncing" @click="handleSync">

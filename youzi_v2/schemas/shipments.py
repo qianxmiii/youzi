@@ -163,3 +163,44 @@ class ShipmentUpdateIn(BaseModel):
 
     def to_payload(self) -> dict[str, Any]:
         return self.model_dump(exclude_none=True)
+
+
+class ShipmentBatchIdsIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        validation_alias=AliasChoices("ids", "shipmentIds"),
+    )
+
+
+class ShipmentBatchUpdateIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        validation_alias=AliasChoices("ids", "shipmentIds"),
+    )
+    updates: ShipmentUpdateIn
+
+
+class ShipmentBatchItemError(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str = ""
+    shipment_no: str = Field(default="", alias="shipmentNo")
+    message: str = ""
+
+
+class ShipmentBatchResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int = 0
+    updated: int = 0
+    deleted: int = 0
+    skipped: list[ShipmentBatchItemError] = Field(default_factory=list)
+    errors: list[ShipmentBatchItemError] = Field(default_factory=list)

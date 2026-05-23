@@ -37,10 +37,17 @@ from .db.channels_repository import ChannelsRepository
 from .db.shipment_statistics_repository import ShipmentStatisticsRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
-from .schemas.shipments import ShipmentRecordIn, ShipmentUpdateIn
+from .schemas.shipments import (
+    ShipmentBatchIdsIn,
+    ShipmentBatchResult,
+    ShipmentBatchUpdateIn,
+    ShipmentRecordIn,
+    ShipmentUpdateIn,
+)
 from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
 from .schemas.statistics import ShipmentStatisticsOverview
+from .schemas.tracking_freshness import TrackingFreshnessStats
 from .schemas.tracking import (
     TrackingSyncDailyStats,
     TrackingSyncRequest,
@@ -314,6 +321,12 @@ def list_shipment_filter_options():
     return shipments_repo.list_filter_options()
 
 
+@app.get("/api/v1/shipments/tracking-freshness-stats", response_model=TrackingFreshnessStats)
+def get_shipment_tracking_freshness_stats():
+    """全库轨迹新鲜度：内部/承运商分别统计今日、三日内（含今日）、更早、无。"""
+    return TrackingFreshnessStats(**shipments_repo.tracking_freshness_stats())
+
+
 @app.post("/api/v1/shipments/exceptions/open")
 def open_shipment_exceptions(payload: ShipmentExceptionOpenIn):
     """批量标记异常（写入事件表并更新 exception_code）。"""
@@ -361,6 +374,9 @@ def list_shipments(
     channel_code: str | None = Query(None, alias="channelCode"),
     channel_name_zh: str | None = Query(None, alias="channelNameZh"),
     channel_category: str | None = Query(None, alias="channelCategory"),
+    internal_freshness: str | None = Query(None, alias="internalFreshness"),
+    carrier_freshness: str | None = Query(None, alias="carrierFreshness"),
+    carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
     limit: int = 100,
@@ -371,24 +387,30 @@ def list_shipments(
         if len(cleaned) > 200:
             raise HTTPException(status_code=400, detail="单次最多查询 200 个单号")
         shipment_nos = cleaned
-    result = shipments_repo.list_rows(
-        search=search,
-        tracking_search=tracking_search,
-        shipment_nos=shipment_nos,
-        status_code=status_code,
-        exception_code=exception_code,
-        has_exception=has_exception,
-        customer=customer,
-        carrier_code=carrier_code,
-        country_code=country_code,
-        channel_code=channel_code,
-        channel_name_zh=channel_name_zh,
-        channel_category=channel_category,
-        min_stale_days=min_stale_days,
-        no_tracking=no_tracking,
-        limit=limit,
-        offset=offset,
-    )
+    try:
+        result = shipments_repo.list_rows(
+            search=search,
+            tracking_search=tracking_search,
+            shipment_nos=shipment_nos,
+            status_code=status_code,
+            exception_code=exception_code,
+            has_exception=has_exception,
+            customer=customer,
+            carrier_code=carrier_code,
+            country_code=country_code,
+            channel_code=channel_code,
+            channel_name_zh=channel_name_zh,
+            channel_category=channel_category,
+            internal_freshness=internal_freshness,
+            carrier_freshness=carrier_freshness,
+            carrier_ahead_of_internal=carrier_ahead_of_internal,
+            min_stale_days=min_stale_days,
+            no_tracking=no_tracking,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     _apply_vip_flags(result.get("items") or [])
     return result
 
@@ -524,6 +546,9 @@ def export_shipments_excel(
     channel_code: str | None = Query(None, alias="channelCode"),
     channel_name_zh: str | None = Query(None, alias="channelNameZh"),
     channel_category: str | None = Query(None, alias="channelCategory"),
+    internal_freshness: str | None = Query(None, alias="internalFreshness"),
+    carrier_freshness: str | None = Query(None, alias="carrierFreshness"),
+    carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
     limit: int = Query(_SHIPMENT_EXPORT_MAX, le=_SHIPMENT_EXPORT_MAX),
@@ -535,24 +560,30 @@ def export_shipments_excel(
         if len(cleaned) > 200:
             raise HTTPException(status_code=400, detail="单次最多查询 200 个单号")
         shipment_nos = cleaned
-    result = shipments_repo.list_rows(
-        search=search,
-        tracking_search=tracking_search,
-        shipment_nos=shipment_nos,
-        status_code=status_code,
-        exception_code=exception_code,
-        has_exception=has_exception,
-        customer=customer,
-        carrier_code=carrier_code,
-        country_code=country_code,
-        channel_code=channel_code,
-        channel_name_zh=channel_name_zh,
-        channel_category=channel_category,
-        min_stale_days=min_stale_days,
-        no_tracking=no_tracking,
-        limit=limit,
-        offset=offset,
-    )
+    try:
+        result = shipments_repo.list_rows(
+            search=search,
+            tracking_search=tracking_search,
+            shipment_nos=shipment_nos,
+            status_code=status_code,
+            exception_code=exception_code,
+            has_exception=has_exception,
+            customer=customer,
+            carrier_code=carrier_code,
+            country_code=country_code,
+            channel_code=channel_code,
+            channel_name_zh=channel_name_zh,
+            channel_category=channel_category,
+            internal_freshness=internal_freshness,
+            carrier_freshness=carrier_freshness,
+            carrier_ahead_of_internal=carrier_ahead_of_internal,
+            min_stale_days=min_stale_days,
+            no_tracking=no_tracking,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     total = int(result.get("total") or 0)
     if total > _SHIPMENT_EXPORT_MAX:
         raise HTTPException(
@@ -654,6 +685,82 @@ def delete_shipment(item_id: str):
     carrier_tracking_repo.delete_by_shipment_no(row["shipmentNo"])
     shipments_repo.delete_row(item_id)
     return {"deleted": True}
+
+
+@app.post("/api/v1/shipments/batch-delete", response_model=ShipmentBatchResult)
+def batch_delete_shipments(body: ShipmentBatchIdsIn):
+    """批量删除运单（含内部/承运商轨迹）；单次最多 200 条。"""
+    ids = [i.strip() for i in body.ids if i and i.strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids 不能为空")
+    deleted = 0
+    skipped: list[dict[str, str]] = []
+    errors: list[dict[str, str]] = []
+    for item_id in ids:
+        row = shipments_repo.get_by_id(item_id)
+        if row is None:
+            skipped.append({"id": item_id, "shipmentNo": "", "message": "运单不存在"})
+            continue
+        sn = row["shipmentNo"]
+        try:
+            internal_tracking_repo.delete_by_shipment_no(sn)
+            carrier_tracking_repo.delete_by_shipment_no(sn)
+            if shipments_repo.delete_row(item_id):
+                deleted += 1
+            else:
+                errors.append({"id": item_id, "shipmentNo": sn, "message": "删除失败"})
+        except Exception as exc:
+            errors.append({"id": item_id, "shipmentNo": sn, "message": str(exc)})
+    return ShipmentBatchResult(
+        total=len(ids),
+        deleted=deleted,
+        skipped=skipped,
+        errors=errors,
+    )
+
+
+@app.patch("/api/v1/shipments/batch-update", response_model=ShipmentBatchResult)
+def batch_update_shipments(body: ShipmentBatchUpdateIn):
+    """批量修改运单字段（运单号不可改）；仅更新 updates 中提供的字段。"""
+    ids = [i.strip() for i in body.ids if i and i.strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids 不能为空")
+    payload = body.updates.to_payload()
+    if not payload:
+        raise HTTPException(status_code=400, detail="请至少填写一项要修改的字段")
+    updated = 0
+    skipped: list[dict[str, str]] = []
+    errors: list[dict[str, str]] = []
+    for item_id in ids:
+        row = shipments_repo.get_by_id(item_id)
+        if row is None:
+            skipped.append({"id": item_id, "shipmentNo": "", "message": "运单不存在"})
+            continue
+        try:
+            shipments_repo.update_row(item_id, payload)
+            updated += 1
+        except KeyError:
+            skipped.append(
+                {
+                    "id": item_id,
+                    "shipmentNo": row.get("shipmentNo", ""),
+                    "message": "运单不存在",
+                }
+            )
+        except ValueError as exc:
+            errors.append(
+                {
+                    "id": item_id,
+                    "shipmentNo": row.get("shipmentNo", ""),
+                    "message": str(exc),
+                }
+            )
+    return ShipmentBatchResult(
+        total=len(ids),
+        updated=updated,
+        skipped=skipped,
+        errors=errors,
+    )
 
 
 @app.post("/api/v1/shipments/sync-tracking", response_model=TrackingSyncResult)

@@ -50,8 +50,21 @@ def sync_carrier_tracking(
         raise
 
     vendor_map = {v["name"]: v for v in vendors if v.get("name")}
+    requested_nos = (
+        len([s for s in shipment_nos if s and s.strip()]) if shipment_nos else 0
+    )
     rows = shipments_repo.list_for_carrier_sync(shipment_nos)
     total = len(rows)
+    excluded_not_in_transit = max(0, requested_nos - total) if shipment_nos else 0
+    if shipment_nos:
+        out_log(
+            f"[承运商轨迹] 指定 {requested_nos} 单，转运中可同步 {total} 单"
+            + (
+                f"，已跳过非转运中/已签收 {excluded_not_in_transit} 单"
+                if excluded_not_in_transit
+                else ""
+            )
+        )
 
     by_vendor: dict[str, list[dict[str, str]]] = {}
     unassigned = 0
@@ -193,6 +206,7 @@ def sync_carrier_tracking(
         "batchSize": BATCH_SIZE,
         "batches": sum(v["batches"] for v in vendor_stats.values()),
         "unassigned": unassigned,
+        "excludedNotInTransit": excluded_not_in_transit,
         "vendorStats": vendor_stats,
         "logs": log_lines[-200:],
     }

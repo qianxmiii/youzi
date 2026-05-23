@@ -86,6 +86,20 @@ export interface ShipmentExceptionBatchResult {
   errors: { shipmentNo: string; message: string }[]
 }
 
+export interface ShipmentBatchItemError {
+  id?: string
+  shipmentNo?: string
+  message: string
+}
+
+export interface ShipmentBatchResult {
+  total: number
+  updated?: number
+  deleted?: number
+  skipped: ShipmentBatchItemError[]
+  errors: ShipmentBatchItemError[]
+}
+
 export interface ShipmentImportResult {
   ok: boolean
   totalRows: number

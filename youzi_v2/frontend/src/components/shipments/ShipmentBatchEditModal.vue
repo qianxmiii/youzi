@@ -1,0 +1,180 @@
+<script setup lang="ts">
+import {
+  NButton,
+  NForm,
+  NFormItem,
+  NInput,
+  NInputNumber,
+  NModal,
+  NSelect,
+  NSpace,
+  useMessage,
+} from 'naive-ui'
+import { ref, watch } from 'vue'
+import { useDictLabels } from '@/composables/useDictLabels'
+import type { ShipmentPayload } from '@/types/shipment'
+
+const props = defineProps<{
+  show: boolean
+  count: number
+  statusOptions: { label: string; value: string }[]
+  channelOptions: { label: string; value: string }[]
+  carrierOptions: { label: string; value: string }[]
+  countryOptions: { label: string; value: string }[]
+}>()
+
+const emit = defineEmits<{
+  close: []
+  submit: [updates: Partial<ShipmentPayload>]
+}>()
+
+const message = useMessage()
+const { loadDictTypes, dictOptions } = useDictLabels()
+const addressTypeOptions = dictOptions('address_type')
+
+const statusCode = ref<string | null>(null)
+const customer = ref('')
+const customerNo = ref('')
+const channelCode = ref<string | null>(null)
+const countryCode = ref<string | null>(null)
+const carrierCode = ref<string | null>(null)
+const addressType = ref<string | null>(null)
+const addressCode = ref('')
+const ctns = ref<number | null>(null)
+const productName = ref('')
+const supplierName = ref('')
+
+watch(
+  () => props.show,
+  (visible) => {
+    if (!visible) return
+    void loadDictTypes('address_type')
+    statusCode.value = null
+    customer.value = ''
+    customerNo.value = ''
+    channelCode.value = null
+    countryCode.value = null
+    carrierCode.value = null
+    addressType.value = null
+    addressCode.value = ''
+    ctns.value = null
+    productName.value = ''
+    supplierName.value = ''
+  },
+)
+
+function buildUpdates(): Partial<ShipmentPayload> | null {
+  const updates: Partial<ShipmentPayload> = {}
+  if (statusCode.value) updates.statusCode = statusCode.value
+  if (customer.value.trim()) updates.customer = customer.value.trim()
+  if (customerNo.value.trim()) updates.customerNo = customerNo.value.trim()
+  if (channelCode.value) updates.channelCode = channelCode.value
+  if (countryCode.value) updates.countryCode = countryCode.value
+  if (carrierCode.value) updates.carrierCode = carrierCode.value
+  if (addressType.value) updates.addressType = addressType.value
+  if (addressCode.value.trim()) updates.addressCode = addressCode.value.trim()
+  if (ctns.value != null && !Number.isNaN(ctns.value)) updates.ctns = ctns.value
+  if (productName.value.trim()) updates.productName = productName.value.trim()
+  if (supplierName.value.trim()) updates.supplierName = supplierName.value.trim()
+  if (Object.keys(updates).length === 0) return null
+  return updates
+}
+
+function handleSubmit() {
+  const updates = buildUpdates()
+  if (!updates) {
+    message.warning('请至少填写或选择一项要批量修改的内容')
+    return
+  }
+  emit('submit', updates)
+}
+</script>
+
+<template>
+  <NModal
+    :show="show"
+    preset="card"
+    :title="`批量修改（${count} 条）`"
+    class="max-w-lg"
+    :mask-closable="false"
+    @update:show="(v: boolean) => !v && emit('close')"
+  >
+    <p class="mb-3 text-xs leading-relaxed text-zinc-500">
+      仅更新下方已填写的字段，留空项保持各运单原值不变。运单号不可批量修改。
+    </p>
+    <NForm label-placement="top" size="small">
+      <div class="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
+        <NFormItem label="状态">
+          <NSelect
+            v-model:value="statusCode"
+            :options="statusOptions"
+            clearable
+            placeholder="不修改"
+          />
+        </NFormItem>
+        <NFormItem label="客户">
+          <NInput v-model:value="customer" clearable placeholder="不修改" />
+        </NFormItem>
+        <NFormItem label="客户订单号">
+          <NInput v-model:value="customerNo" clearable placeholder="不修改" />
+        </NFormItem>
+        <NFormItem label="渠道">
+          <NSelect
+            v-model:value="channelCode"
+            :options="channelOptions"
+            filterable
+            tag
+            clearable
+            placeholder="不修改"
+          />
+        </NFormItem>
+        <NFormItem label="国家">
+          <NSelect
+            v-model:value="countryCode"
+            :options="countryOptions"
+            filterable
+            tag
+            clearable
+            placeholder="不修改"
+          />
+        </NFormItem>
+        <NFormItem label="承运商">
+          <NSelect
+            v-model:value="carrierCode"
+            :options="carrierOptions"
+            filterable
+            tag
+            clearable
+            placeholder="不修改"
+          />
+        </NFormItem>
+        <NFormItem label="地址类型">
+          <NSelect
+            v-model:value="addressType"
+            :options="addressTypeOptions"
+            clearable
+            placeholder="不修改"
+          />
+        </NFormItem>
+        <NFormItem label="派送仓库/代码">
+          <NInput v-model:value="addressCode" clearable placeholder="不修改" />
+        </NFormItem>
+        <NFormItem label="件数">
+          <NInputNumber v-model:value="ctns" :min="0" clearable class="w-full" placeholder="不修改" />
+        </NFormItem>
+        <NFormItem label="品名">
+          <NInput v-model:value="productName" clearable placeholder="不修改" />
+        </NFormItem>
+        <NFormItem label="供应商">
+          <NInput v-model:value="supplierName" clearable placeholder="不修改" />
+        </NFormItem>
+      </div>
+    </NForm>
+    <template #footer>
+      <NSpace justify="end">
+        <NButton @click="emit('close')">取消</NButton>
+        <NButton type="primary" @click="handleSubmit">应用到所选</NButton>
+      </NSpace>
+    </template>
+  </NModal>
+</template>

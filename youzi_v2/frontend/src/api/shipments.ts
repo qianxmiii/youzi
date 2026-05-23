@@ -1,6 +1,7 @@
 import { api } from '@/api/client'
 import type {
   Shipment,
+  ShipmentBatchResult,
   ShipmentExceptionBatchResult,
   ShipmentExceptionEvent,
   ShipmentImportResult,
@@ -12,6 +13,10 @@ import type {
   TrackingSyncDailyStats,
   TrackingSyncResult,
 } from '@/types/tracking'
+import type {
+  TrackingFreshnessBucket,
+  TrackingFreshnessStats,
+} from '@/utils/trackingFreshness'
 
 export interface ShipmentFilterOptions {
   customers: string[]
@@ -41,6 +46,9 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.channelCode?.trim()) q.channelCode = params.channelCode.trim()
   if (params.channelNameZh?.trim()) q.channelNameZh = params.channelNameZh.trim()
   if (params.channelCategory?.trim()) q.channelCategory = params.channelCategory.trim()
+  if (params.internalFreshness) q.internalFreshness = params.internalFreshness
+  if (params.carrierFreshness) q.carrierFreshness = params.carrierFreshness
+  if (params.carrierAheadOfInternal) q.carrierAheadOfInternal = 'true'
   if (params.minStaleDays != null && params.minStaleDays > 0) {
     q.minStaleDays = String(params.minStaleDays)
   }
@@ -65,6 +73,9 @@ export interface ListShipmentsParams {
   channelCode?: string
   channelNameZh?: string
   channelCategory?: string
+  internalFreshness?: TrackingFreshnessBucket
+  carrierFreshness?: TrackingFreshnessBucket
+  carrierAheadOfInternal?: boolean
   minStaleDays?: number
   noTracking?: boolean
   limit?: number
@@ -77,6 +88,10 @@ export async function listShipments(params: ListShipmentsParams): Promise<Shipme
 
 export async function getShipmentFilterOptions(): Promise<ShipmentFilterOptions> {
   return api<ShipmentFilterOptions>('/api/v1/shipments/filter-options')
+}
+
+export async function getTrackingFreshnessStats(): Promise<TrackingFreshnessStats> {
+  return api<TrackingFreshnessStats>('/api/v1/shipments/tracking-freshness-stats')
 }
 
 export async function getShipmentTrackingLogs(
@@ -123,6 +138,23 @@ export async function updateShipment(
 
 export async function deleteShipment(id: string): Promise<void> {
   await api(`/api/v1/shipments/${id}`, { method: 'DELETE' })
+}
+
+export async function batchDeleteShipments(ids: string[]): Promise<ShipmentBatchResult> {
+  return api<ShipmentBatchResult>('/api/v1/shipments/batch-delete', {
+    method: 'POST',
+    body: { ids },
+  })
+}
+
+export async function batchUpdateShipments(
+  ids: string[],
+  updates: Partial<Omit<ShipmentPayload, 'shipmentNo'>>,
+): Promise<ShipmentBatchResult> {
+  return api<ShipmentBatchResult>('/api/v1/shipments/batch-update', {
+    method: 'PATCH',
+    body: { ids, updates },
+  })
 }
 
 export async function openShipmentExceptions(

@@ -14,14 +14,21 @@ from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipments_table import TABLE_NAME
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
 from .exception_duration import duration_seconds, format_duration
+from .tracking_freshness import (
+    carrier_ahead_of_internal_sql,
+    carrier_freshness_sql,
+    freshness_stats_sql,
+    internal_freshness_sql,
+    validate_freshness,
+)
 
 _LIST_FROM = (
     f"{TABLE_NAME} s LEFT JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code"
 )
 _LIST_SELECT = "s.*, cc.name_zh AS _channel_name_zh, cc.category AS _channel_category"
 
-# 轨迹同步仅处理生命周期「转运中」；已签收等状态不拉取/更新
-_STATUS_IN_TRANSIT_SQL = "status_code = 'IN_TRANSIT'"
+# 轨迹同步：仅转运中；已签收(DELIVERED)、查验等不参与拉取
+_TRACKING_SYNC_ELIGIBLE_SQL = "status_code = 'IN_TRANSIT'"
 
 # 可写字段（不含 id / shipment_no / created_time）
 _UPDATABLE = (
@@ -190,6 +197,9 @@ class ShipmentsRepository:
         channel_code: str | None = None,
         channel_name_zh: str | None = None,
         channel_category: str | None = None,
+        internal_freshness: str | None = None,
+        carrier_freshness: str | None = None,
+        carrier_ahead_of_internal: bool | None = None,
         min_stale_days: int | None = None,
         no_tracking: bool | None = None,
         limit: int = 100,
@@ -270,6 +280,22 @@ class ShipmentsRepository:
         if channel_category and channel_category.strip():
             conditions.append("cc.category = ?")
             params.append(channel_category.strip())
+        if internal_freshness:
+            frag, frag_params = internal_freshness_sql(
+                validate_freshness(internal_freshness) or ""
+            )
+            conditions.append(frag)
+            params.extend(frag_params)
+        if carrier_freshness:
+            frag, frag_params = carrier_freshness_sql(
+                validate_freshness(carrier_freshness) or ""
+            )
+            conditions.append(frag)
+            params.extend(frag_params)
+        if carrier_ahead_of_internal is True:
+            frag, frag_params = carrier_ahead_of_internal_sql("s")
+            conditions.append(frag)
+            params.extend(frag_params)
         if no_tracking:
             conditions.append(
                 f"(s.latest_tracking_time IS NULL OR TRIM(s.latest_tracking_time) = '' "
@@ -304,6 +330,26 @@ class ShipmentsRepository:
             "total": total,
             "limit": limit,
             "offset": offset,
+        }
+
+    def tracking_freshness_stats(self) -> dict[str, Any]:
+        sql, params = freshness_stats_sql()
+        with self._database.lock:
+            row = self._conn.execute(sql, params).fetchone()
+        return {
+            "internal": {
+                "today": int(row["internal_today"] or 0),
+                "within3d": int(row["internal_within3d"] or 0),
+                "older": int(row["internal_older"] or 0),
+                "none": int(row["internal_none"] or 0),
+            },
+            "carrier": {
+                "today": int(row["carrier_today"] or 0),
+                "within3d": int(row["carrier_within3d"] or 0),
+                "older": int(row["carrier_older"] or 0),
+                "none": int(row["carrier_none"] or 0),
+            },
+            "carrierAheadOfInternal": int(row["carrier_ahead_of_internal"] or 0),
         }
 
     def list_filter_options(self) -> dict[str, Any]:
@@ -532,7 +578,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_STATUS_IN_TRANSIT_SQL}
+                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -545,7 +591,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_STATUS_IN_TRANSIT_SQL}
+                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
                     ORDER BY shipment_no
                     """
                 ).fetchall()
@@ -616,7 +662,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_STATUS_IN_TRANSIT_SQL}
+                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -629,7 +675,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_STATUS_IN_TRANSIT_SQL}
+                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
                     ORDER BY shipment_no
                     """
                 ).fetchall()

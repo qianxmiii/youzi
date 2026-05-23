@@ -3,6 +3,7 @@ import { NDrawer, NTag } from 'naive-ui'
 import { computed } from 'vue'
 import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
 import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
+import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import type { Shipment } from '@/types/shipment'
 
 const props = defineProps<{
@@ -44,11 +45,7 @@ const title = computed(() => props.shipment?.shipmentNo || '运单轨迹')
       <div v-if="shipment" class="min-w-0 pr-2">
         <div class="flex flex-wrap items-center gap-2">
           <span class="font-mono text-base font-semibold text-white">{{ shipment.shipmentNo }}</span>
-          <span
-            v-if="shipment.isVip"
-            class="shipment-vip-badge shrink-0"
-            aria-label="VIP"
-          >VIP</span>
+          <VipStarBadge v-if="shipment.isVip" size="md" />
           <NTag
             v-if="shipment.statusCode"
             size="small"
@@ -85,17 +82,4 @@ const title = computed(() => props.shipment?.shipmentNo || '运单轨迹')
   padding: 0 16px 20px;
 }
 
-.shipment-vip-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  border-radius: 3px;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.2;
-  color: rgb(251 191 36);
-  background: rgb(245 158 11 / 0.15);
-  border: 1px solid rgb(245 158 11 / 0.35);
-}
 </style>

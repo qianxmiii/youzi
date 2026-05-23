@@ -17,11 +17,17 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
+import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
+import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
+import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import {
+  batchDeleteShipments,
+  batchUpdateShipments,
   closeShipmentExceptions,
   deleteShipment,
   exportShipmentsExcel,
   getShipmentFilterOptions,
+  getTrackingFreshnessStats,
   getTrackingSyncDailyStats,
   importShipmentsExcel,
   listShipments,
@@ -31,12 +37,20 @@ import {
   updateShipment,
 } from '@/api/shipments'
 import ShipmentFormModal from '@/components/shipments/ShipmentFormModal.vue'
-import type { Shipment, ShipmentPayload } from '@/types/shipment'
+import type { Shipment, ShipmentBatchResult, ShipmentPayload } from '@/types/shipment'
 import type { ShipmentFilterOptions } from '@/api/shipments'
 import type { TrackingSyncDailyStats, TrackingSyncResult } from '@/types/tracking'
 import { useDictLabels } from '@/composables/useDictLabels'
+import { formatRelativeTime } from '@/utils/formatDateTime'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
+import {
+  FRESHNESS_DOT_CLASS,
+  isCarrierTrackingNewerThanInternal,
+  trackingFreshnessLevel,
+  type TrackingFreshnessBucket,
+  type TrackingFreshnessStats,
+} from '@/utils/trackingFreshness'
 
 const message = useMessage()
 const { loadDictTypes, dictLabel } = useDictLabels()
@@ -47,6 +61,10 @@ const exporting = ref(false)
 const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
 const carrierDaily = ref<TrackingSyncDailyStats | null>(null)
+const freshnessStats = ref<TrackingFreshnessStats | null>(null)
+const filterInternalFreshness = ref<TrackingFreshnessBucket | null>(null)
+const filterCarrierFreshness = ref<TrackingFreshnessBucket | null>(null)
+const filterCarrierAheadOfInternal = ref(false)
 const items = ref<Shipment[]>([])
 const total = ref(0)
 const searchShipmentNo = ref('')
@@ -78,6 +96,8 @@ const filterOptions = ref<ShipmentFilterOptions>({
 const exceptionOpenShow = ref(false)
 const exceptionCloseShow = ref(false)
 const exceptionSubmitting = ref(false)
+const batchEditShow = ref(false)
+const batchSubmitting = ref(false)
 const page = ref(1)
 const pageSize = ref(20)
 const trackingDrawerShow = ref(false)
@@ -122,6 +142,12 @@ const selectedRows = computed(() =>
   items.value.filter((row) => checkedRowKeys.value.includes(row.id)),
 )
 
+const selectedIds = computed(() => selectedRows.value.map((row) => row.id))
+
+const channelCodeOptions = computed(() =>
+  filterOptions.value.channelCodes.map((v) => ({ label: v, value: v })),
+)
+
 function rowKey(row: Shipment) {
   return row.id
 }
@@ -134,6 +160,9 @@ function formatTrackingMessage(res: TrackingSyncResult, label = '轨迹') {
     (res.skipped ? `，跳过 ${res.skipped} 单` : '') +
     (res.notFound ? `，未返回/失败 ${res.notFound} 单` : '') +
     (res.empty ? `，无轨迹 ${res.empty} 单` : '') +
+    (res.excludedNotInTransit
+      ? `，已跳过非转运中 ${res.excludedNotInTransit} 单`
+      : '') +
     unassigned
   if (res.errors.length) {
     const preview = res.errors.slice(0, 3).join('；')
@@ -166,6 +195,44 @@ async function loadCarrierDailyStats() {
   } catch {
     carrierDaily.value = null
   }
+}
+
+async function loadFreshnessStats() {
+  try {
+    freshnessStats.value = await getTrackingFreshnessStats()
+  } catch {
+    freshnessStats.value = null
+  }
+}
+
+const carrierSyncHint = computed(() => {
+  if (!carrierDaily.value) return null
+  const d = carrierDaily.value
+  let s = `今日同步任务已更新 ${d.updatedShipments} 单、新增 ${d.newLogCount} 条节点`
+  if (d.lastFinished) s += ` · 上次 ${d.lastFinished}`
+  return s
+})
+
+function applyFreshnessFilter(source: 'internal' | 'carrier', bucket: TrackingFreshnessBucket) {
+  if (source === 'internal') {
+    filterInternalFreshness.value = bucket
+  } else {
+    filterCarrierFreshness.value = bucket
+  }
+  filtersExpanded.value = true
+  onFiltersChanged()
+}
+
+function clearFreshnessFilter(source: 'internal' | 'carrier') {
+  if (source === 'internal') filterInternalFreshness.value = null
+  else filterCarrierFreshness.value = null
+  onFiltersChanged()
+}
+
+function toggleCarrierAheadFilter() {
+  filterCarrierAheadOfInternal.value = !filterCarrierAheadOfInternal.value
+  filtersExpanded.value = true
+  onFiltersChanged()
 }
 
 function daysSince(time: string | null | undefined): number | null {
@@ -220,24 +287,74 @@ function renderTrackingSummaryCell(
   if (!t && !d) {
     return h('span', { class: 'text-zinc-600' }, '—')
   }
-  const block = h('div', { class: 'tracking-summary-cell min-w-0 max-w-full' }, [
-    t
-      ? h('div', { class: 'text-xs text-zinc-500 tabular-nums leading-tight' }, t)
-      : null,
-    d
-      ? h(
-          'div',
-          { class: 'text-xs text-zinc-200 leading-snug truncate', title: d },
-          d,
-        )
-      : h('div', { class: 'text-xs text-zinc-600' }, '—'),
+  const carrierAhead = isCarrierTrackingNewerThanInternal(row)
+  const effective =
+    tab === 'internal' ? hasEffectiveInternalTracking(row) : Boolean(t)
+  const level = trackingFreshnessLevel(time, effective)
+  const dot = h('span', {
+    class: `mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${FRESHNESS_DOT_CLASS[level]}`,
+    'aria-hidden': 'true',
+  })
+  const timeRow =
+    tab === 'carrier' && carrierAhead
+      ? h('div', { class: 'flex min-w-0 items-center gap-1 leading-tight' }, [
+          h('div', { class: 'truncate text-xs text-amber-200/95 tabular-nums' }, t),
+          h(
+            'span',
+            {
+              class:
+                'shrink-0 rounded border border-amber-500/35 bg-amber-500/15 px-1 text-[9px] font-medium text-amber-300/95',
+            },
+            '承新',
+          ),
+        ])
+      : t
+        ? h(
+            'div',
+            {
+              class: [
+                'text-xs tabular-nums leading-tight',
+                tab === 'internal' && carrierAhead ? 'text-zinc-600' : 'text-zinc-500',
+              ],
+            },
+            t,
+          )
+        : null
+  const block = h('div', { class: 'tracking-summary-cell min-w-0 max-w-full flex gap-1.5' }, [
+    dot,
+    h('div', { class: 'min-w-0 flex-1' }, [
+      timeRow,
+      d
+        ? h(
+            'div',
+            {
+              class: [
+                'text-xs leading-snug truncate',
+                tab === 'carrier' && carrierAhead
+                  ? 'text-amber-100/90'
+                  : tab === 'internal' && carrierAhead
+                    ? 'text-zinc-500'
+                    : 'text-zinc-200',
+              ],
+              title: d,
+            },
+            d,
+          )
+        : h('div', { class: 'text-xs text-zinc-600' }, '—'),
+    ]),
   ])
+  const btnClass = [
+    'tracking-summary-btn w-full min-w-0 cursor-pointer rounded px-1 py-0.5 text-left transition-colors hover:bg-zinc-800/60',
+    tab === 'carrier' && carrierAhead ? 'tracking-summary-btn--carrier-ahead' : '',
+    tab === 'internal' && carrierAhead ? 'tracking-summary-btn--internal-behind' : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
   const clickable = h(
     'button',
     {
       type: 'button',
-      class:
-        'tracking-summary-btn w-full min-w-0 cursor-pointer rounded px-0.5 py-0.5 text-left transition-colors hover:bg-zinc-800/60',
+      class: btnClass,
       onClick: (e: MouseEvent) => {
         e.stopPropagation()
         openTrackingDrawer(row, tab)
@@ -254,7 +371,12 @@ function renderTrackingSummaryCell(
 
 function renderVipBadge(row: Shipment) {
   if (!row.isVip) return null
-  const tip = row.customer ? `VIP 客户：${row.customer}` : 'VIP 客户'
+  return h(VipStarBadge)
+}
+
+function renderUpdatedTime(row: Shipment) {
+  const formatted = formatRelativeTime(row.updatedTime)
+  if (!formatted) return '—'
   return h(
     NTooltip,
     { trigger: 'hover' },
@@ -262,13 +384,10 @@ function renderVipBadge(row: Shipment) {
       trigger: () =>
         h(
           'span',
-          {
-            class: 'shipment-vip-badge shrink-0',
-            'aria-label': 'VIP',
-          },
-          'VIP',
+          { class: 'cursor-default text-zinc-400 tabular-nums' },
+          formatted.relative,
         ),
-      default: () => tip,
+      default: () => formatted.absolute,
     },
   )
 }
@@ -397,6 +516,9 @@ const advancedFiltersActiveCount = computed(() => {
   if (filterException.value) n++
   if (filterStaleDays.value != null && filterStaleDays.value !== '') n++
   if (filterNoTracking.value) n++
+  if (filterInternalFreshness.value) n++
+  if (filterCarrierFreshness.value) n++
+  if (filterCarrierAheadOfInternal.value) n++
   return n
 })
 
@@ -470,6 +592,9 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
     countryCode: filterCountry.value || undefined,
     channelNameZh: filterChannelNameZh.value || undefined,
     channelCategory: filterChannelCategory.value || undefined,
+    internalFreshness: filterInternalFreshness.value || undefined,
+    carrierFreshness: filterCarrierFreshness.value || undefined,
+    carrierAheadOfInternal: filterCarrierAheadOfInternal.value || undefined,
     minStaleDays:
       filterNoTracking.value || staleDays == null || Number.isNaN(staleDays) || staleDays <= 0
         ? undefined
@@ -537,6 +662,7 @@ onMounted(async () => {
   await loadDictTypes('country_code')
   await loadFilterOptions()
   await loadCarrierDailyStats()
+  await loadFreshnessStats()
   await loadList()
 })
 
@@ -597,6 +723,58 @@ async function handleDelete(row: Shipment) {
   }
 }
 
+function notifyBatchResult(res: ShipmentBatchResult, verb: '删除' | '更新') {
+  const ok = verb === '删除' ? (res.deleted ?? 0) : (res.updated ?? 0)
+  let text = `${verb}完成：成功 ${ok} / ${res.total} 条`
+  if (res.skipped.length) text += `，跳过 ${res.skipped.length} 条`
+  if (res.errors.length) text += `，失败 ${res.errors.length} 条`
+  if (res.errors.length && ok === 0) {
+    message.error(text, { duration: 8000 })
+  } else if (res.skipped.length || res.errors.length) {
+    message.warning(text, { duration: 6000 })
+  } else {
+    message.success(text)
+  }
+}
+
+async function handleBatchDelete() {
+  const ids = selectedIds.value
+  if (!ids.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  batchSubmitting.value = true
+  try {
+    const res = await batchDeleteShipments(ids)
+    notifyBatchResult(res, '删除')
+    clearSelection()
+    if (items.value.length <= ids.length && page.value > 1) page.value -= 1
+    await loadList()
+    await loadFreshnessStats()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '批量删除失败')
+  } finally {
+    batchSubmitting.value = false
+  }
+}
+
+async function handleBatchEditSubmit(updates: Partial<ShipmentPayload>) {
+  const ids = selectedIds.value
+  if (!ids.length) return
+  batchSubmitting.value = true
+  try {
+    const res = await batchUpdateShipments(ids, updates)
+    notifyBatchResult(res, '更新')
+    batchEditShow.value = false
+    clearSelection()
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '批量修改失败')
+  } finally {
+    batchSubmitting.value = false
+  }
+}
+
 function triggerImport() {
   fileInputRef.value?.click()
 }
@@ -606,6 +784,7 @@ async function handleSyncTracking(shipmentNos?: string[]) {
   try {
     const res = await syncTracking(shipmentNos)
     notifyTrackingSyncResult(res, '内部轨迹')
+    await loadFreshnessStats()
     await loadList()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '更新内部轨迹失败')
@@ -620,6 +799,7 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
     const res = await syncCarrierTracking(shipmentNos)
     notifyTrackingSyncResult(res, '承运商轨迹')
     await loadCarrierDailyStats()
+    await loadFreshnessStats()
     await loadList()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '更新承运商轨迹失败')
@@ -637,6 +817,9 @@ function resetFilters() {
   filterCountry.value = null
   filterChannelNameZh.value = null
   filterChannelCategory.value = null
+  filterInternalFreshness.value = null
+  filterCarrierFreshness.value = null
+  filterCarrierAheadOfInternal.value = false
   filtersExpanded.value = false
   filterStaleDays.value = null
   filterNoTracking.value = false
@@ -704,20 +887,46 @@ async function handleCloseException(closedTime?: string, note?: string) {
   }
 }
 
+/** 轨迹同步仅处理转运中；已签收等不请求 API */
+function shipmentNosEligibleForTrackingSync(rows: Shipment[]): {
+  nos: string[]
+  excluded: number
+} {
+  const eligible = rows.filter((r) => r.statusCode === 'IN_TRANSIT')
+  return {
+    nos: eligible.map((r) => r.shipmentNo),
+    excluded: rows.length - eligible.length,
+  }
+}
+
 async function handleSyncSelectedInternal() {
-  const nos = selectedShipmentNos.value
-  if (!nos.length) {
+  if (!selectedRows.value.length) {
     message.warning('请先勾选运单')
     return
+  }
+  const { nos, excluded } = shipmentNosEligibleForTrackingSync(selectedRows.value)
+  if (!nos.length) {
+    message.warning('所选运单均非转运中，已签收不会更新内部轨迹')
+    return
+  }
+  if (excluded > 0) {
+    message.info(`已跳过 ${excluded} 条非转运中运单`, { duration: 5000 })
   }
   await handleSyncTracking(nos)
 }
 
 async function handleSyncSelectedCarrier() {
-  const nos = selectedShipmentNos.value
-  if (!nos.length) {
+  if (!selectedRows.value.length) {
     message.warning('请先勾选运单')
     return
+  }
+  const { nos, excluded } = shipmentNosEligibleForTrackingSync(selectedRows.value)
+  if (!nos.length) {
+    message.warning('所选运单均非转运中，已签收不会更新承运商轨迹')
+    return
+  }
+  if (excluded > 0) {
+    message.info(`已跳过 ${excluded} 条非转运中运单`, { duration: 5000 })
   }
   await handleSyncCarrierTracking(nos)
 }
@@ -861,13 +1070,6 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   },
   { title: '件数', key: 'ctns', width: 64, align: 'center' },
   {
-    title: '国家',
-    key: 'countryCode',
-    width: 96,
-    ellipsis: { tooltip: true },
-    render: (row) => countryLabel(row.countryCode),
-  },
-  {
     title: '渠道',
     key: 'channelCode',
     width: 120,
@@ -921,10 +1123,29 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     },
   },
   {
-    title: '承运商轨迹',
     key: 'latestCarrier',
     width: 220,
     ellipsis: { tooltip: true },
+    title: () =>
+      h('span', { class: 'inline-flex items-center gap-1' }, [
+        '承运商轨迹',
+        h(
+          NTooltip,
+          { trigger: 'hover' },
+          {
+            trigger: () =>
+              h(
+                'span',
+                {
+                  class:
+                    'cursor-help rounded border border-amber-500/30 bg-amber-500/10 px-1 text-[9px] font-normal text-amber-300/90',
+                },
+                '承新',
+              ),
+            default: () => '节点时间晚于内部轨迹时，单元格左侧琥珀色高亮',
+          },
+        ),
+      ]),
     render: (row) =>
       renderTrackingSummaryCell(
         row,
@@ -954,7 +1175,12 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       )
     },
   },
-  { title: '更新时间', key: 'updatedTime', width: 160 },
+  {
+    title: '更新时间',
+    key: 'updatedTime',
+    width: 108,
+    render: (row) => renderUpdatedTime(row),
+  },
   ...exceptionColumns,
   {
     title: '操作',
@@ -1004,10 +1230,20 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </p>
       </div>
       <NSpace align="center">
-        <NButton size="small" :loading="syncingTracking" @click="handleSyncTracking()">
+        <NButton
+          size="small"
+          :loading="syncingTracking"
+          title="仅同步状态为转运中的运单，已签收不查"
+          @click="handleSyncTracking()"
+        >
           更新全部内部轨迹
         </NButton>
-        <NButton size="small" :loading="syncingCarrier" @click="handleSyncCarrierTracking()">
+        <NButton
+          size="small"
+          :loading="syncingCarrier"
+          title="仅同步状态为转运中的运单，已签收不查"
+          @click="handleSyncCarrierTracking()"
+        >
           更新全部承运商轨迹
         </NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
@@ -1023,19 +1259,16 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       @change="onFileSelected"
     />
 
-    <div
-      v-if="carrierDaily"
-      class="shrink-0 rounded-lg border border-sky-500/25 bg-sky-500/10 px-3 py-2 text-xs text-zinc-300"
-    >
-      承运商轨迹 · 今日已更新
-      <strong class="text-white">{{ carrierDaily.updatedShipments }}</strong>
-      单，新增
-      <strong class="text-white">{{ carrierDaily.newLogCount }}</strong>
-      条节点
-      <span v-if="carrierDaily.lastFinished" class="text-zinc-500">
-        · 上次同步 {{ carrierDaily.lastFinished }}
-      </span>
-    </div>
+    <ShipmentTrackingFreshnessBar
+      :stats="freshnessStats"
+      :internal-active="filterInternalFreshness"
+      :carrier-active="filterCarrierFreshness"
+      :carrier-ahead-active="filterCarrierAheadOfInternal"
+      :carrier-sync-hint="carrierSyncHint"
+      @apply="applyFreshnessFilter"
+      @clear="clearFreshnessFilter"
+      @toggle-carrier-ahead="toggleCarrierAheadFilter"
+    />
 
     <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
       <div class="flex min-w-0 flex-col gap-2">
@@ -1208,6 +1441,16 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       </span>
       <NSpace size="small">
         <NButton size="small" quaternary @click="clearSelection">取消选择</NButton>
+        <NButton size="small" @click="batchEditShow = true">批量修改</NButton>
+        <NPopconfirm
+          :positive-button-props="{ type: 'error' }"
+          @positive-click="handleBatchDelete"
+        >
+          <template #trigger>
+            <NButton size="small" type="error" :loading="batchSubmitting">批量删除</NButton>
+          </template>
+          确定删除所选 {{ selectedCount }} 条运单？关联轨迹将一并删除且不可恢复。
+        </NPopconfirm>
         <NButton size="small" @click="copySelectedShipmentNos">复制运单号</NButton>
         <NButton size="small" @click="copySelectedLatestTracking">复制最新轨迹</NButton>
         <NButton size="small" :loading="syncingTracking" @click="handleSyncSelectedInternal">
@@ -1233,6 +1476,17 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </NButton>
       </NSpace>
     </div>
+
+    <ShipmentBatchEditModal
+      :show="batchEditShow"
+      :count="selectedCount"
+      :status-options="statusOptions"
+      :channel-options="channelCodeOptions"
+      :carrier-options="carrierOptions"
+      :country-options="countryOptions"
+      @close="batchEditShow = false"
+      @submit="handleBatchEditSubmit"
+    />
 
     <ShipmentExceptionOpenModal
       :show="exceptionOpenShow"
@@ -1349,6 +1603,22 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   font: inherit;
 }
 
+/* 承运商节点新于内部：琥珀色左边线 + 浅底 */
+.shipments-data-table :deep(.tracking-summary-btn--carrier-ahead) {
+  border-left: 2px solid rgb(251 191 36 / 0.75);
+  background: rgb(245 158 11 / 0.08);
+  box-shadow: inset 0 0 0 1px rgb(245 158 11 / 0.12);
+}
+
+.shipments-data-table :deep(.tracking-summary-btn--carrier-ahead:hover) {
+  background: rgb(245 158 11 / 0.14);
+}
+
+/* 内部相对滞后：略淡化，与承运高亮成对比 */
+.shipments-data-table :deep(.tracking-summary-btn--internal-behind) {
+  opacity: 0.82;
+}
+
 .shipments-data-table :deep(.shipment-no-cell) {
   display: inline-block;
   white-space: nowrap;
@@ -1358,21 +1628,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
 .shipments-data-table :deep(.shipment-no-cell--exception) {
   color: rgb(253 230 138);
-}
-
-.shipments-data-table :deep(.shipment-vip-badge) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  border-radius: 3px;
-  font-size: 9px;
-  font-weight: 700;
-  line-height: 1.2;
-  letter-spacing: 0.02em;
-  color: rgb(251 191 36);
-  background: rgb(245 158 11 / 0.15);
-  border: 1px solid rgb(245 158 11 / 0.35);
 }
 
 /* 异常行：不透明底色，避免横向滚动时与后方列文字叠在一起 */

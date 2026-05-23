@@ -45,14 +45,26 @@ def sync_all_tracking(
     base_url = config["base_url"]
     batch_size = BATCH_SIZE
 
+    requested_nos = (
+        len([s for s in shipment_nos if s and s.strip()]) if shipment_nos else 0
+    )
     tracking_list = shipments_repo.list_for_tracking_sync(shipment_nos)
     total = len(tracking_list)
+    excluded_not_in_transit = max(0, requested_nos - total) if shipment_nos else 0
     if shipment_nos:
-        requested = len([s for s in shipment_nos if s and s.strip()])
-        out_log(f"[轨迹同步] 指定 {requested} 单，库内匹配 {total} 单")
+        out_log(
+            f"[轨迹同步] 指定 {requested_nos} 单，转运中可同步 {total} 单"
+            + (
+                f"，已跳过非转运中/已签收 {excluded_not_in_transit} 单"
+                if excluded_not_in_transit
+                else ""
+            )
+        )
     if total == 0:
-        out_log("[轨迹同步] 无待同步运单，跳过")
-        return _empty_result(batch_size, log_lines)
+        out_log("[轨迹同步] 无待同步运单（仅转运中），跳过")
+        return _empty_result(
+            batch_size, log_lines, excluded_not_in_transit=excluded_not_in_transit
+        )
 
     out_log(f"[轨迹同步] 开始，base_url={base_url}")
 
@@ -151,6 +163,7 @@ def sync_all_tracking(
         "empty": empty,
         "notFound": not_found,
         "logCount": log_count,
+        "excludedNotInTransit": excluded_not_in_transit,
         "errors": unique_errors,
         "batchSize": batch_size,
         "batches": total_batches,
@@ -158,7 +171,12 @@ def sync_all_tracking(
     }
 
 
-def _empty_result(batch_size: int, log_lines: list[str] | None = None) -> dict[str, Any]:
+def _empty_result(
+    batch_size: int,
+    log_lines: list[str] | None = None,
+    *,
+    excluded_not_in_transit: int = 0,
+) -> dict[str, Any]:
     return {
         "total": 0,
         "updated": 0,
@@ -166,6 +184,7 @@ def _empty_result(batch_size: int, log_lines: list[str] | None = None) -> dict[s
         "empty": 0,
         "notFound": 0,
         "logCount": 0,
+        "excludedNotInTransit": excluded_not_in_transit,
         "errors": [],
         "batchSize": batch_size,
         "batches": 0,

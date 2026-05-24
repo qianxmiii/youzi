@@ -14,6 +14,10 @@ from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipments_table import TABLE_NAME
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
 from .exception_duration import duration_seconds, format_duration
+from ..tracking_sync_eligibility import (
+    carrier_tracking_sync_eligible_sql,
+    internal_tracking_sync_eligible_sql,
+)
 from .tracking_freshness import (
     carrier_ahead_of_internal_sql,
     carrier_freshness_sql,
@@ -27,8 +31,6 @@ _LIST_FROM = (
 )
 _LIST_SELECT = "s.*, cc.name_zh AS _channel_name_zh, cc.category AS _channel_category"
 
-# 轨迹同步：仅转运中；已签收(DELIVERED)、查验等不参与拉取
-_TRACKING_SYNC_ELIGIBLE_SQL = "status_code = 'IN_TRANSIT'"
 
 # 可写字段（不含 id / shipment_no / created_time）
 _UPDATABLE = (
@@ -578,7 +580,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
+                      AND {carrier_tracking_sync_eligible_sql()}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -591,7 +593,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
+                      AND {carrier_tracking_sync_eligible_sql()}
                     ORDER BY shipment_no
                     """
                 ).fetchall()
@@ -649,7 +651,7 @@ class ShipmentsRepository:
         self,
         shipment_nos: list[str] | None = None,
     ) -> list[dict[str, str]]:
-        """内部轨迹同步：仅 status_code=IN_TRANSIT（含全库与指定运单号）。"""
+        """内部轨迹同步：转运中/未知/查验；已签收(DELIVERED)不拉取。"""
         with self._database.lock:
             if shipment_nos:
                 cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))
@@ -662,7 +664,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
+                      AND {internal_tracking_sync_eligible_sql()}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -675,7 +677,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {_TRACKING_SYNC_ELIGIBLE_SQL}
+                      AND {internal_tracking_sync_eligible_sql()}
                     ORDER BY shipment_no
                     """
                 ).fetchall()

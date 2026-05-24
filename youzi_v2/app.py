@@ -57,6 +57,7 @@ from .services.carrier_tracking_sync import sync_carrier_tracking
 from .services.code_table_excel import build_template_bytes, import_excel_file as import_code_table_excel
 from .services.shipment_excel import build_export_excel_bytes, import_excel_file
 from .services.tracking_sync import sync_all_tracking
+from .services.tracking_sync_scheduler import start_tracking_sync_scheduler
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
@@ -165,6 +166,26 @@ shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
+_tracking_sync_stop: Any = None
+
+
+@app.on_event("startup")
+def _start_scheduled_tracking_sync() -> None:
+    global _tracking_sync_stop
+    _tracking_sync_stop = start_tracking_sync_scheduler(
+        shipments_repo,
+        internal_tracking_repo,
+        carrier_tracking_repo,
+        tracking_jobs_repo,
+        LOGISTICS_CONFIG_PATH,
+    )
+
+
+@app.on_event("shutdown")
+def _stop_scheduled_tracking_sync() -> None:
+    global _tracking_sync_stop
+    if _tracking_sync_stop is not None:
+        _tracking_sync_stop.set()
 
 
 def _apply_vip_flags(items: list[dict[str, Any]]) -> None:
@@ -767,8 +788,8 @@ def batch_update_shipments(body: ShipmentBatchUpdateIn):
 def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(None)):
     """
     从 config/config.json 的 base_url 拉取内部路由轨迹，
-    写入 internal_tracking_logs；仅 status=转运中(IN_TRANSIT)，已签收不同步。
-    body.shipmentNos 非空时仅处理其中仍为转运中的单号。
+    写入 internal_tracking_logs；转运中/未知/查验可同步，已签收(DELIVERED)不同步。
+    body.shipmentNos 非空时仅处理其中符合上述状态的运单号。
     """
     shipment_nos: list[str] | None = None
     if body and body.shipment_nos:

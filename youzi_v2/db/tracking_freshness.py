@@ -94,7 +94,7 @@ def carrier_ahead_of_internal_sql(alias: str = "s") -> tuple[str, list]:
 
 
 def freshness_stats_sql() -> tuple[str, list]:
-    """全库四档计数（内部、承运商各四列）+ 承新于内。"""
+    """全库四档运单计数（内部、承运商各四列）+ 承新于内运单数。"""
     ie = _internal_effective_sql("s")
     ce = _carrier_effective_sql("s")
     ahead = carrier_ahead_of_internal_sql("s")[0]

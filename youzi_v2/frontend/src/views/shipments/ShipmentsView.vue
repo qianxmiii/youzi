@@ -20,6 +20,7 @@ import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawe
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
 import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
+import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
 import {
   batchDeleteShipments,
   batchUpdateShipments,
@@ -116,13 +117,20 @@ const selectedCount = computed(() => checkedRowKeys.value.length)
 const shipmentNoTokens = computed(() => parseBatchSearchTokens(searchShipmentNo.value))
 const batchShipmentSearchActive = computed(() => shipmentNoTokens.value.length > 1)
 
-/** 按当前页最长运单号估算列宽（略收窄，为其它列腾空间） */
+/** 按当前页最长运单号 + 侧栏标识（VIP / 异常）估算列宽 */
 const shipmentNoColWidth = computed(() => {
   let maxLen = 10
+  let maxBadges = 0
   for (const row of items.value) {
     maxLen = Math.max(maxLen, (row.shipmentNo || '').length)
+    let badges = 0
+    if (row.isVip) badges++
+    if (hasActiveException(row)) badges++
+    maxBadges = Math.max(maxBadges, badges)
   }
-  return Math.min(280, Math.max(152, Math.ceil(maxLen * 7) + 20))
+  const textW = Math.ceil(maxLen * 7) + 28
+  const badgeW = maxBadges > 0 ? 8 + maxBadges * 22 : 0
+  return Math.min(320, Math.max(176, textW + badgeW))
 })
 
 /** 按当前页最长客户名估算列宽 */
@@ -161,7 +169,7 @@ function formatTrackingMessage(res: TrackingSyncResult, label = '轨迹') {
     (res.notFound ? `，未返回/失败 ${res.notFound} 单` : '') +
     (res.empty ? `，无轨迹 ${res.empty} 单` : '') +
     (res.excludedNotInTransit
-      ? `，已跳过非转运中 ${res.excludedNotInTransit} 单`
+      ? `，已跳过不可同步 ${res.excludedNotInTransit} 单`
       : '') +
     unassigned
   if (res.errors.length) {
@@ -264,10 +272,6 @@ function exceptionLabel(code: string | null | undefined) {
 
 function hasActiveException(row: Shipment) {
   return !!(row.exceptionCode && row.exceptionCode.trim())
-}
-
-function rowClassName(row: Shipment) {
-  return hasActiveException(row) ? 'shipment-row--exception' : ''
 }
 
 function openTrackingDrawer(row: Shipment, tab: 'internal' | 'carrier' = 'internal') {
@@ -392,38 +396,32 @@ function renderUpdatedTime(row: Shipment) {
   )
 }
 
+function renderExceptionBadge(row: Shipment) {
+  if (!hasActiveException(row) || !row.exceptionCode) return null
+  return h(ExceptionStatusBadge, {
+    code: row.exceptionCode,
+    label: exceptionLabel(row.exceptionCode),
+    durationLabel: row.exceptionDurationLabel,
+  })
+}
+
 function renderShipmentNo(row: Shipment) {
-  const active = hasActiveException(row)
-  const label = exceptionLabel(row.exceptionCode)
-  const duration = row.exceptionDurationLabel || '—'
   const noCell = h(
     'span',
-    {
-      class: active
-        ? 'shipment-no-cell shipment-no-cell--exception font-semibold'
-        : 'shipment-no-cell font-medium text-zinc-100',
-    },
+    { class: 'shipment-no-cell font-medium text-zinc-100' },
     row.shipmentNo,
   )
-  const inner = h('span', { class: 'inline-flex max-w-full items-center gap-1' }, [
+  const inner = h('span', { class: 'shipment-no-cell-row' }, [
     noCell,
     renderVipBadge(row),
+    renderExceptionBadge(row),
   ])
-  const withNoTip = h(
-    NTooltip,
-    { trigger: 'hover' },
-    {
-      trigger: () => inner,
-      default: () => row.shipmentNo,
-    },
-  )
-  if (!active) return withNoTip
   return h(
     NTooltip,
     { trigger: 'hover' },
     {
       trigger: () => inner,
-      default: () => `异常：${label} · 已持续 ${duration}\n${row.shipmentNo}`,
+      default: () => row.shipmentNo,
     },
   )
 }
@@ -432,32 +430,30 @@ const exceptionColumns: DataTableColumns<Shipment> = [
   {
     title: '异常',
     key: 'exceptionCode',
-    width: 100,
+    width: 88,
     align: 'center',
     render: (row) => {
       if (!row.exceptionCode) {
         return h('span', { class: 'text-zinc-600' }, '—')
       }
-      const type = row.exceptionCode === 'LOST' ? 'error' : 'warning'
-      return h(NTag, { size: 'small', bordered: false, type }, () => exceptionLabel(row.exceptionCode))
+      return h(ExceptionStatusBadge, {
+        code: row.exceptionCode,
+        label: exceptionLabel(row.exceptionCode),
+        durationLabel: row.exceptionDurationLabel,
+        showLabel: true,
+      })
     },
   },
   {
     title: '异常时长',
     key: 'exceptionDurationLabel',
-    width: 96,
+    width: 88,
     align: 'center',
     render: (row) => {
       if (!row.exceptionDurationLabel) {
         return h('span', { class: 'text-zinc-600' }, '—')
       }
-      const secs = row.exceptionDurationSeconds ?? 0
-      const long = secs >= 7 * 86_400
-      return h(
-        'span',
-        { class: long ? 'text-red-300 text-xs font-medium' : 'text-amber-200/90 text-xs' },
-        row.exceptionDurationLabel,
-      )
+      return h('span', { class: 'text-xs tabular-nums text-zinc-400' }, row.exceptionDurationLabel)
     },
   },
 ]
@@ -887,8 +883,22 @@ async function handleCloseException(closedTime?: string, note?: string) {
   }
 }
 
-/** 轨迹同步仅处理转运中；已签收等不请求 API */
-function shipmentNosEligibleForTrackingSync(rows: Shipment[]): {
+const INTERNAL_TRACKING_SYNC_STATUSES = new Set(['IN_TRANSIT', 'UNKNOWN', 'INSPECTION'])
+
+function shipmentNosEligibleForInternalTrackingSync(rows: Shipment[]): {
+  nos: string[]
+  excluded: number
+} {
+  const eligible = rows.filter((r) =>
+    INTERNAL_TRACKING_SYNC_STATUSES.has(r.statusCode || 'UNKNOWN'),
+  )
+  return {
+    nos: eligible.map((r) => r.shipmentNo),
+    excluded: rows.length - eligible.length,
+  }
+}
+
+function shipmentNosEligibleForCarrierTrackingSync(rows: Shipment[]): {
   nos: string[]
   excluded: number
 } {
@@ -904,13 +914,13 @@ async function handleSyncSelectedInternal() {
     message.warning('请先勾选运单')
     return
   }
-  const { nos, excluded } = shipmentNosEligibleForTrackingSync(selectedRows.value)
+  const { nos, excluded } = shipmentNosEligibleForInternalTrackingSync(selectedRows.value)
   if (!nos.length) {
-    message.warning('所选运单均非转运中，已签收不会更新内部轨迹')
+    message.warning('所选运单均为已签收，不会更新内部轨迹')
     return
   }
   if (excluded > 0) {
-    message.info(`已跳过 ${excluded} 条非转运中运单`, { duration: 5000 })
+    message.info(`已跳过 ${excluded} 条已签收运单`, { duration: 5000 })
   }
   await handleSyncTracking(nos)
 }
@@ -920,7 +930,7 @@ async function handleSyncSelectedCarrier() {
     message.warning('请先勾选运单')
     return
   }
-  const { nos, excluded } = shipmentNosEligibleForTrackingSync(selectedRows.value)
+  const { nos, excluded } = shipmentNosEligibleForCarrierTrackingSync(selectedRows.value)
   if (!nos.length) {
     message.warning('所选运单均非转运中，已签收不会更新承运商轨迹')
     return
@@ -956,17 +966,19 @@ function formatCtnsField(ctns: number | null | undefined): string {
   return `${ctns}ctns`
 }
 
-/** 复制格式：运单号 = 客户订单号 = 地址代码 = 件数ctns → 物流时间 → 物流轨迹 */
+/** 复制格式：运单号 = 客户订单号 [= 货件号] = 地址代码 = 件数ctns → 物流时间 → 物流轨迹 */
 function formatTrackingCopyBlock(
   row: Shipment,
   tracking: { desc: string; time: string },
 ): string {
-  const head = [
+  const headParts = [
     displayField(row.shipmentNo),
     displayField(row.customerNo),
-    displayField(row.addressCode),
-    formatCtnsField(row.ctns),
-  ].join(' = ')
+  ]
+  const shipmentId = displayField(row.customerShipmentId)
+  if (shipmentId) headParts.push(shipmentId)
+  headParts.push(displayField(row.addressCode), formatCtnsField(row.ctns))
+  const head = headParts.join(' = ')
   return `${head}\n${tracking.time}\n${tracking.desc}`
 }
 
@@ -1042,10 +1054,9 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     title: '运单号',
     key: 'shipmentNo',
     width: shipmentNoColWidth.value,
-    minWidth: 152,
+    minWidth: 176,
     fixed: 'left',
-    cellProps: (row) =>
-      hasActiveException(row) ? { class: 'shipment-td-exception-no' } : {},
+    cellProps: () => ({ class: 'shipment-td-no' }),
     render: (row) => renderShipmentNo(row),
   },
   {
@@ -1142,7 +1153,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
                 },
                 '承新',
               ),
-            default: () => '节点时间晚于内部轨迹时，单元格左侧琥珀色高亮',
+            default: () => '该运单承运最新节点时间晚于内部时，单元格琥珀色高亮（非按节点条数统计）',
           },
         ),
       ]),
@@ -1233,7 +1244,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         <NButton
           size="small"
           :loading="syncingTracking"
-          title="仅同步状态为转运中的运单，已签收不查"
+          title="同步转运中、未知、查验；已签收不查"
           @click="handleSyncTracking()"
         >
           更新全部内部轨迹
@@ -1241,7 +1252,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         <NButton
           size="small"
           :loading="syncingCarrier"
-          title="仅同步状态为转运中的运单，已签收不查"
+          title="仅同步转运中运单，已签收不查"
           @click="handleSyncCarrierTracking()"
         >
           更新全部承运商轨迹
@@ -1264,6 +1275,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :internal-active="filterInternalFreshness"
       :carrier-active="filterCarrierFreshness"
       :carrier-ahead-active="filterCarrierAheadOfInternal"
+      :filtered-carrier-ahead-count="filterCarrierAheadOfInternal ? total : null"
       :carrier-sync-hint="carrierSyncHint"
       @apply="applyFreshnessFilter"
       @clear="clearFreshnessFilter"
@@ -1419,7 +1431,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       <NDataTable
         v-model:checked-row-keys="checkedRowKeys"
         :row-key="rowKey"
-        :row-class-name="rowClassName"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -1576,16 +1587,39 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   background: var(--color-border);
 }
 
-/* 左侧固定列：默认不透明防横滚透底；行 hover 与整行其它列同一规则同步变色 */
+/* 左侧固定列：不透明 + 轻阴影，横滚时不与右侧双行轨迹叠字 */
 .shipments-data-table :deep(.n-data-table-tbody .n-data-table-td--fixed-left) {
   background-color: var(--n-td-color) !important;
-  z-index: 2;
+  z-index: 3;
+  box-shadow: 6px 0 10px -6px rgb(0 0 0 / 0.45);
 }
 
 .shipments-data-table :deep(
     .n-data-table-tbody .n-data-table-tr:not(.n-data-table-tr--summary):hover > .n-data-table-td
   ) {
   background-color: var(--n-td-color-hover) !important;
+}
+
+.shipments-data-table :deep(
+    .n-data-table-tbody
+      .n-data-table-tr:not(.n-data-table-tr--summary):hover
+      > .n-data-table-td--fixed-left
+  ) {
+  background-color: var(--n-td-color-hover) !important;
+}
+
+.shipments-data-table :deep(.shipment-td-no) {
+  padding-right: 10px !important;
+  overflow: hidden;
+}
+
+.shipments-data-table :deep(.shipment-no-cell-row) {
+  display: inline-flex;
+  max-width: 100%;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
 }
 
 .shipments-data-table :deep(th.n-data-table-th--fixed-left) {
@@ -1624,32 +1658,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   white-space: nowrap;
   word-break: keep-all;
   font-variant-numeric: tabular-nums;
-}
-
-.shipments-data-table :deep(.shipment-no-cell--exception) {
-  color: rgb(253 230 138);
-}
-
-/* 异常行：不透明底色，避免横向滚动时与后方列文字叠在一起 */
-.shipments-data-table :deep(
-    .n-data-table-tbody .n-data-table-tr.shipment-row--exception > .n-data-table-td
-  ) {
-  background: #1a1814 !important;
-}
-
-.shipments-data-table :deep(
-    .n-data-table-tbody .n-data-table-tr.shipment-row--exception:hover > .n-data-table-td
-  ) {
-  background: #221e17 !important;
-}
-
-.shipments-data-table :deep(.n-data-table-tr.shipment-row--exception .n-data-table-td--fixed-left),
-.shipments-data-table :deep(.n-data-table-tr.shipment-row--exception .n-data-table-th--fixed-left) {
-  z-index: 3;
-}
-
-.shipments-data-table :deep(.shipment-td-exception-no) {
-  box-shadow: inset 3px 0 0 rgb(245 158 11 / 0.95);
 }
 
 .shipments-table-panel {

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   NButton,
+  NDatePicker,
   NForm,
   NFormItem,
   NInput,
@@ -14,6 +15,7 @@ import { computed, ref, watch } from 'vue'
 import { useDictLabels } from '@/composables/useDictLabels'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
+import { dateOnlyToTimestamp, formatDateOnlyForApi } from '@/utils/formatDateTime'
 
 const { loadDictTypes, dictOptions } = useDictLabels()
 
@@ -31,6 +33,24 @@ const emit = defineEmits<{
 const message = useMessage()
 const form = ref<ShipmentPayload>(emptyShipmentForm())
 const submitting = ref(false)
+const etd = ref<number | null>(null)
+const eta = ref<number | null>(null)
+const atd = ref<number | null>(null)
+const ata = ref<number | null>(null)
+
+function syncVoyageDatesFromForm() {
+  etd.value = dateOnlyToTimestamp(form.value.etd)
+  eta.value = dateOnlyToTimestamp(form.value.eta)
+  atd.value = dateOnlyToTimestamp(form.value.atd)
+  ata.value = dateOnlyToTimestamp(form.value.ata)
+}
+
+function applyVoyageDatesToForm() {
+  form.value.etd = etd.value != null ? formatDateOnlyForApi(etd.value) : null
+  form.value.eta = eta.value != null ? formatDateOnlyForApi(eta.value) : null
+  form.value.atd = atd.value != null ? formatDateOnlyForApi(atd.value) : null
+  form.value.ata = ata.value != null ? formatDateOnlyForApi(ata.value) : null
+}
 
 const title = computed(() => (props.mode === 'create' ? '新增运单' : '编辑运单'))
 
@@ -84,8 +104,13 @@ watch(
         deliveredTime: props.initial.deliveredTime,
         statusCode: props.initial.statusCode || 'UNKNOWN',
       }
+      syncVoyageDatesFromForm()
     } else {
       form.value = emptyShipmentForm()
+      etd.value = null
+      eta.value = null
+      atd.value = null
+      ata.value = null
     }
   },
 )
@@ -96,6 +121,7 @@ function handleSubmit() {
     message.warning('请填写运单号')
     return
   }
+  applyVoyageDatesToForm()
   submitting.value = true
   emit('submit', { ...form.value, shipmentNo: no })
   submitting.value = false
@@ -179,16 +205,16 @@ function handleSubmit() {
           <NInput v-model:value="form.vesselVoyage" />
         </NFormItem>
         <NFormItem label="ETD">
-          <NInput v-model:value="form.etd" placeholder="YYYY-MM-DD HH:mm:ss" />
+          <NDatePicker v-model:value="etd" type="date" clearable class="w-full" />
         </NFormItem>
         <NFormItem label="ETA">
-          <NInput v-model:value="form.eta" placeholder="YYYY-MM-DD HH:mm:ss" />
+          <NDatePicker v-model:value="eta" type="date" clearable class="w-full" />
         </NFormItem>
         <NFormItem label="ATD">
-          <NInput v-model:value="form.atd" placeholder="YYYY-MM-DD HH:mm:ss" />
+          <NDatePicker v-model:value="atd" type="date" clearable class="w-full" />
         </NFormItem>
         <NFormItem label="ATA">
-          <NInput v-model:value="form.ata" placeholder="YYYY-MM-DD HH:mm:ss" />
+          <NDatePicker v-model:value="ata" type="date" clearable class="w-full" />
         </NFormItem>
         <NFormItem label="出发港口">
           <NInput v-model:value="form.originPortCode" />

@@ -21,6 +21,14 @@ def _load_mapping() -> dict[str, Any]:
         return json.load(f)
 
 
+def _import_column_map(mapping: dict[str, Any]) -> dict[str, str]:
+    """导入用：规范表头 + column_aliases（导出仍仅用 columns，避免重复列）。"""
+    col_map: dict[str, str] = dict(mapping["columns"])
+    for label, field in mapping.get("column_aliases", {}).items():
+        col_map[str(label).strip()] = field
+    return col_map
+
+
 def _cell_str(value: Any) -> str | None:
     if value is None:
         return None
@@ -86,7 +94,7 @@ def parse_excel_rows(
     无法映射的列名仅忽略，不导致整表导入失败。
     """
     mapping = _load_mapping()
-    col_map: dict[str, str] = mapping["columns"]
+    col_map = _import_column_map(mapping)
     export_only: set[str] = set(mapping.get("export_only_fields", []))
     country_aliases: dict[str, str] = mapping.get("country_aliases", {})
     status_aliases: dict[str, str] = mapping.get("status_aliases", {})
@@ -169,6 +177,8 @@ _API_TO_SNAKE: dict[str, str] = {
     "shipmentNo": "shipment_no",
     "statusCode": "status_code",
     "customerNo": "customer_no",
+    "customerShipmentId": "customer_shipment_id",
+    "amazonRefId": "amazon_ref_id",
     "customer": "customer",
     "ctns": "ctns",
     "countryCode": "country_code",

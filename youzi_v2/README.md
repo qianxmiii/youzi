@@ -94,4 +94,22 @@ curl -X POST "http://127.0.0.1:3001/api/v1/shipments/import" \
   -F "file=@运单数据.xlsx"
 ```
 
-表头需与 `config/shipment_excel_columns.json` 一致（运单号、客户订单号、用户名、件数…）。
+表头需与 `config/shipment_excel_columns.json` 一致（运单号、客户订单号、货件号、用户名、件数…）。
+
+### 轨迹定时同步（每 2 小时）
+
+后端 `uvicorn` 启动后默认开启后台任务：**每 2 小时**全量同步 **内部轨迹 + 承运商轨迹**（仅 `IN_TRANSIT` 转运中运单，与页面手动同步一致）。日志写入 `youzi_v2/logs/tracking-sync-YYYY-MM-DD.log`。
+
+| 环境变量 | 说明 | 默认 |
+|----------|------|------|
+| `YOUZI_TRACKING_SYNC_INTERVAL_HOURS` | 间隔（小时）；`0` 关闭 | `2` |
+| `YOUZI_TRACKING_SYNC_INITIAL_DELAY_SEC` | 启动后首次执行延迟（秒） | `60` |
+
+不依赖后端常驻时，可用系统计划任务每 2 小时执行一次：
+
+```bash
+# 仓库根目录
+python youzi_v2/scripts/sync_all_tracking_scheduled.py
+```
+
+仅承运商轨迹的旧脚本：`youzi_v2/scripts/sync_carrier_tracking.py`。

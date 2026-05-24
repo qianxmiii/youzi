@@ -53,15 +53,15 @@ def sync_all_tracking(
     excluded_not_in_transit = max(0, requested_nos - total) if shipment_nos else 0
     if shipment_nos:
         out_log(
-            f"[轨迹同步] 指定 {requested_nos} 单，转运中可同步 {total} 单"
+            f"[轨迹同步] 指定 {requested_nos} 单，可同步 {total} 单"
             + (
-                f"，已跳过非转运中/已签收 {excluded_not_in_transit} 单"
+                f"，已跳过已签收等 {excluded_not_in_transit} 单"
                 if excluded_not_in_transit
                 else ""
             )
         )
     if total == 0:
-        out_log("[轨迹同步] 无待同步运单（仅转运中），跳过")
+        out_log("[轨迹同步] 无待同步运单（已签收不参与），跳过")
         return _empty_result(
             batch_size, log_lines, excluded_not_in_transit=excluded_not_in_transit
         )

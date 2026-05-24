@@ -13,6 +13,7 @@ from typing import Any, Callable
 import requests
 
 from ..internal_tracking import is_internal_no_tracking_desc
+from .sync_log_format import format_api_payload_for_log
 
 BATCH_SIZE = 10
 DEFAULT_TIMEOUT = 30
@@ -109,6 +110,12 @@ def query_logistics_api(
                 f"[轨迹同步] 第 {batch_index}/{total_batches} 批完成，"
                 f"本批返回 {len(data)} 条"
             )
+            for item in data:
+                sn = (item.get("odd") or "").strip()
+                if sn:
+                    out_log(
+                        f"[轨迹同步] {sn} 返回报文 {format_api_payload_for_log(item)}"
+                    )
 
     out_log(f"[轨迹同步] API 查询结束，累计返回 {len(all_results)} 条")
     return all_results, errors

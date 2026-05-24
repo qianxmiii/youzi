@@ -8,14 +8,18 @@ from typing import Any, Callable
 from ..db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
+from .carrier_batch_schedule import (
+    is_carrier_full_batch,
+    record_carrier_batch_finished,
+    should_run_scheduled_carrier_batch,
+)
 from .sync_log import make_sync_logger
+from ..carrier_tracking_entry import latest_from_logs
 from .carrier_vendors import (
     BATCH_SIZE,
     detect_platform,
     fetch_tracking_batch,
     fetch_tracking_one,
-    fetch_txfba_batch_for_rows,
-    latest_from_logs,
     load_vendors_config,
     resolve_vendor_for_row,
 )
@@ -34,6 +38,13 @@ def sync_carrier_tracking(
     log: LogFn | None = None,
 ) -> dict[str, Any]:
     log_lines, out_log = make_sync_logger(log)
+
+    if trigger == "scheduled" and is_carrier_full_batch(shipment_nos):
+        ok, skip_reason = should_run_scheduled_carrier_batch(shipments_repo._database)
+        if not ok:
+            out_log(f"[承运商轨迹] 跳过全库同步：{skip_reason}")
+            return _skipped_carrier_batch_result(log_lines, skip_reason or "")
+
     job_id = jobs_repo.create_job("carrier", trigger)
 
     try:
@@ -102,10 +113,8 @@ def sync_carrier_tracking(
 
             platform = detect_platform(vendor)
             batch_nos = [r["shipment_no"] for r in batch]
-            if platform == "txfba":
-                tracking_map = fetch_txfba_batch_for_rows(batch, vendor)
-            elif platform in ("topda", "huawell_cms"):
-                tracking_map = fetch_tracking_batch(batch_nos, vendor)
+            if platform in ("topda", "huawell_cms"):
+                tracking_map = fetch_tracking_batch(batch_nos, vendor, log=out_log)
             else:
                 tracking_map = {sn: fetch_tracking_one(sn, vendor) for sn in batch_nos}
 
@@ -129,31 +138,42 @@ def sync_carrier_tracking(
                     out_log(f"[承运商轨迹] 失败 {err_line}")
                     not_found += 1
                     continue
-                if not logs:
-                    empty += 1
-                    hint = f" billNo={bill_hint}" if bill_hint else ""
-                    out_log(f"[承运商轨迹] {sn} 无轨迹{hint}")
-                    continue
-                out_log(
-                    f"[承运商轨迹] {sn} 返回 {len(logs)} 条"
-                    + (f" billNo={bill_hint}" if bill_hint else "")
-                )
-
                 latest_time, latest_desc = latest_from_logs(logs)
                 stored_time = row.get("latest_carrier_time") or ""
                 stored_desc = row.get("latest_carrier_desc") or ""
-                if latest_time == stored_time and latest_desc == stored_desc:
-                    skipped += 1
-                    continue
 
-                inserted = carrier_repo.merge_logs_for_shipment(
+                if not logs:
+                    empty += 1
+                    hint = f" billNo={bill_hint}" if bill_hint else ""
+                    out_log(f"[承运商轨迹] {sn} API 无轨迹{hint}")
+                else:
+                    out_log(
+                        f"[承运商轨迹] {sn} 返回 {len(logs)} 条"
+                        + (f" billNo={bill_hint}" if bill_hint else "")
+                    )
+
+                recon = carrier_repo.reconcile_logs_for_shipment(
                     sn,
                     vendor_name,
                     row.get("carrier_code") or "",
                     logs,
                 )
+                inserted = int(recon["inserted"])
+                deleted = int(recon["deleted"])
+                unchanged = bool(recon["unchanged"])
                 log_count += inserted
                 v_stat["newLogs"] += inserted
+
+                summary_same = latest_time == stored_time and latest_desc == stored_desc
+                if unchanged and summary_same:
+                    skipped += 1
+                    continue
+
+                if deleted:
+                    out_log(f"[承运商轨迹] {sn} 对齐：删除本地多余 {deleted} 条")
+                if inserted:
+                    out_log(f"[承运商轨迹] {sn} 对齐：写入 {inserted} 条")
+
                 count = carrier_repo.count_by_shipment_no(sn)
                 shipments_repo.update_carrier_tracking_summary(
                     sn,
@@ -185,6 +205,8 @@ def sync_carrier_tracking(
         errors=errors,
         summary={"vendors": vendor_stats, "unassigned": unassigned},
     )
+    if is_carrier_full_batch(shipment_nos) and status in ("success", "partial"):
+        record_carrier_batch_finished(shipments_repo._database)
 
     out_log(
         f"[承运商轨迹] 全部完成：转运中 {total} 单，更新 {updated} 单，"
@@ -208,5 +230,29 @@ def sync_carrier_tracking(
         "unassigned": unassigned,
         "excludedNotInTransit": excluded_not_in_transit,
         "vendorStats": vendor_stats,
+        "logs": log_lines[-200:],
+    }
+
+
+def _skipped_carrier_batch_result(
+    log_lines: list[str],
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "jobId": None,
+        "total": 0,
+        "updated": 0,
+        "skipped": 0,
+        "empty": 0,
+        "notFound": 0,
+        "logCount": 0,
+        "errors": [],
+        "batchSize": BATCH_SIZE,
+        "batches": 0,
+        "unassigned": 0,
+        "excludedNotInTransit": 0,
+        "vendorStats": {},
+        "intervalSkipped": True,
+        "skipReason": reason,
         "logs": log_lines[-200:],
     }

@@ -32,4 +32,5 @@ CHANNEL_SEEDS: list[tuple[str, str, str, str, str, int]] = [
     ("European Sea truck  DDU", "欧洲海运", "欧洲", "海运", "", 240),
     ("AU Air express", "澳大利亚空运", "澳大利亚", "空运", "", 250),
     ("UK Sea truck  DDU", "英国海运", "英国", "海运", "", 260),
+    ("Canada Sea Express", "加拿大普船", "加拿大", "海运", "", 270),
 ]

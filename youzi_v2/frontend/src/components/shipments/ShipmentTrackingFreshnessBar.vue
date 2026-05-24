@@ -8,6 +8,8 @@ const props = defineProps<{
   internalActive: TrackingFreshnessBucket | null
   carrierActive: TrackingFreshnessBucket | null
   carrierAheadActive: boolean
+  /** 已启用「承新于内」筛选时，用列表 total 与分页一致 */
+  filteredCarrierAheadCount?: number | null
   carrierSyncHint?: string | null
 }>()
 
@@ -56,13 +58,32 @@ const rows = [
   },
 ]
 
+/** 全库统计为运单数（非轨迹节点条数） */
+const globalCarrierAheadCount = computed(
+  () => props.stats?.carrierAheadOfInternal ?? 0,
+)
+
+const displayCarrierAheadCount = computed(() => {
+  if (props.carrierAheadActive && props.filteredCarrierAheadCount != null) {
+    return props.filteredCarrierAheadCount
+  }
+  return globalCarrierAheadCount.value
+})
+
+const carrierAheadTitle = computed(() => {
+  if (props.carrierAheadActive) {
+    return `当前列表 ${displayCarrierAheadCount.value} 单（承运最新时间晚于内部）；再点取消筛选`
+  }
+  return `全库 ${globalCarrierAheadCount.value} 单：承运最新时间晚于内部（按运单计，非轨迹节点数）；再点筛选`
+})
+
 const summaryLine = computed(() => {
   const s = props.stats
   if (!s) return '统计加载中…'
   return [
-    `内部今日 ${s.internal.today}`,
-    `承运今日 ${s.carrier.today}`,
-    `承新于内 ${s.carrierAheadOfInternal}`,
+    `内部今日 ${s.internal.today}单`,
+    `承运今日 ${s.carrier.today}单`,
+    `承新于内 ${displayCarrierAheadCount.value}单`,
   ].join(' · ')
 })
 
@@ -80,8 +101,6 @@ const hasActiveFilter = computed(
     Boolean(props.carrierActive) ||
     props.carrierAheadActive,
 )
-
-const carrierAheadCount = computed(() => props.stats?.carrierAheadOfInternal ?? 0)
 
 watch(hasActiveFilter, (on) => {
   if (on) expanded.value = true
@@ -204,16 +223,17 @@ function toggleExpanded() {
         :class="
           carrierAheadActive
             ? 'border-amber-500/30 bg-amber-500/12 text-amber-200 ring-1 ring-amber-500/25'
-            : carrierAheadCount > 0
+            : displayCarrierAheadCount > 0
               ? 'border-slate-800 bg-slate-900/50 text-zinc-400 hover:border-amber-500/25 hover:bg-amber-500/10 hover:text-amber-200'
               : 'cursor-not-allowed border-slate-800/80 bg-slate-900/30 text-zinc-600 opacity-40'
         "
-        :disabled="carrierAheadCount === 0 && !carrierAheadActive"
-        title="承运最新节点晚于内部（再点取消）"
+        :disabled="displayCarrierAheadCount === 0 && !carrierAheadActive"
+        :title="carrierAheadTitle"
         @click.stop="emit('toggleCarrierAhead')"
       >
         <span>承新于内</span>
-        <span class="font-semibold">{{ carrierAheadCount }}</span>
+        <span class="font-semibold tabular-nums">{{ displayCarrierAheadCount }}</span>
+        <span class="text-[10px] font-normal text-zinc-500">单</span>
       </button>
 
       <span class="shrink-0 pt-0.5 text-[10px] text-zinc-600">

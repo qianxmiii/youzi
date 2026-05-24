@@ -1,4 +1,4 @@
-"""华威尔 CMS 轨迹解析单元测试。"""
+"""HWE CMS 轨迹解析单元测试。"""
 
 from youzi_v2.services.carrier_vendors import _fetch_huawell_cms_batch, detect_platform
 

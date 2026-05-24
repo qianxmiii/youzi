@@ -91,6 +91,16 @@ defineProps<{ name: string }>()
         stroke-linejoin="round"
       />
     </template>
+    <template v-else-if="name === 'clock'">
+      <circle cx="8" cy="8" r="5.25" stroke="currentColor" stroke-width="1.25" />
+      <path
+        d="M8 5v3.2l2.2 1.3"
+        stroke="currentColor"
+        stroke-width="1.25"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+      />
+    </template>
     <template v-else-if="name === 'truck'">
       <path
         d="M2.5 11V6.5h6V11M8.5 6.5 11 4.5h2.5V11"

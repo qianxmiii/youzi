@@ -89,6 +89,23 @@ class CarrierTrackingReconcileTest(unittest.TestCase):
         self.assertEqual(rows[0].vendor_event_id, eid)
         self.assertEqual(rows[0].tracking_desc, "新文案")
 
+    def test_reconcile_same_time_desc_different_event_id(self) -> None:
+        """TX等同时间同文案、不同 billTrackNo 应能并存。"""
+        desc = "报关放行：国内报关已放行，等待出发"
+        api = [
+            CarrierTrackingLogEntry.from_row(
+                "2026-04-27 16:11:35", desc, "txfba:2049067670449319942"
+            ),
+            CarrierTrackingLogEntry.from_row(
+                "2026-04-27 16:11:35", desc, "txfba:2049067668477997063"
+            ),
+        ]
+        r = self.repo.reconcile_logs_for_shipment(self.sn, "腾信", "TX", api)
+        self.assertFalse(r["unchanged"])
+        self.assertEqual(r["inserted"], 2)
+        entries = self.repo._list_entries_for_vendor(self.sn, "腾信")
+        self.assertEqual(len(entries), 2)
+
     def test_reconcile_empty_api_clears_vendor_logs(self) -> None:
         self.repo.reconcile_logs_for_shipment(
             self.sn, self.vendor, "TOPDA", [("2026-05-01 12:00:00", "测试")]

@@ -26,6 +26,9 @@ from .tracking_freshness import (
     validate_freshness,
 )
 
+# 与前端承运商筛选「（未填写）」选项值一致
+CARRIER_CODE_FILTER_EMPTY = "__EMPTY__"
+
 _LIST_FROM = (
     f"{TABLE_NAME} s LEFT JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code"
 )
@@ -268,8 +271,14 @@ class ShipmentsRepository:
             conditions.append("s.customer = ?")
             params.append(customer.strip())
         if carrier_code and carrier_code.strip():
-            conditions.append("s.carrier_code = ?")
-            params.append(carrier_code.strip())
+            cc = carrier_code.strip()
+            if cc == CARRIER_CODE_FILTER_EMPTY:
+                conditions.append(
+                    "(s.carrier_code IS NULL OR TRIM(s.carrier_code) = '')"
+                )
+            else:
+                conditions.append("s.carrier_code = ?")
+                params.append(cc)
         if country_code and country_code.strip():
             conditions.append("s.country_code = ?")
             params.append(country_code.strip())
@@ -566,8 +575,12 @@ class ShipmentsRepository:
     def list_for_carrier_sync(
         self,
         shipment_nos: list[str] | None = None,
+        *,
+        include_delivered: bool = False,
     ) -> list[dict[str, str]]:
-        """承运商轨迹同步：仅 status_code=IN_TRANSIT（含全库与指定运单号）。"""
+        """承运商轨迹：全库/批处理仅 IN_TRANSIT；指定单号时可含已签收。"""
+        allow_delivered = bool(shipment_nos) and include_delivered
+        status_sql = carrier_tracking_sync_eligible_sql(include_delivered=allow_delivered)
         with self._database.lock:
             if shipment_nos:
                 cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))
@@ -580,7 +593,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {carrier_tracking_sync_eligible_sql()}
+                      AND {status_sql}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -593,7 +606,7 @@ class ShipmentsRepository:
                            tracking_number, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {carrier_tracking_sync_eligible_sql()}
+                      AND {status_sql}
                     ORDER BY shipment_no
                     """
                 ).fetchall()
@@ -650,8 +663,12 @@ class ShipmentsRepository:
     def list_for_tracking_sync(
         self,
         shipment_nos: list[str] | None = None,
+        *,
+        include_delivered: bool = False,
     ) -> list[dict[str, str]]:
-        """内部轨迹同步：转运中/未知/查验；已签收(DELIVERED)不拉取。"""
+        """内部轨迹：全库/批处理不含已签收；指定单号时可含已签收。"""
+        allow_delivered = bool(shipment_nos) and include_delivered
+        status_sql = internal_tracking_sync_eligible_sql(include_delivered=allow_delivered)
         with self._database.lock:
             if shipment_nos:
                 cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))
@@ -664,7 +681,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {internal_tracking_sync_eligible_sql()}
+                      AND {status_sql}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
@@ -677,7 +694,7 @@ class ShipmentsRepository:
                            status_code, latest_tracking_time, latest_tracking_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
-                      AND {internal_tracking_sync_eligible_sql()}
+                      AND {status_sql}
                     ORDER BY shipment_no
                     """
                 ).fetchall()

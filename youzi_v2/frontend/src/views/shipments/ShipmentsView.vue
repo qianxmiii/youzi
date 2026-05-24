@@ -41,6 +41,7 @@ import ShipmentFormModal from '@/components/shipments/ShipmentFormModal.vue'
 import type { Shipment, ShipmentBatchResult, ShipmentPayload } from '@/types/shipment'
 import type { ShipmentFilterOptions } from '@/api/shipments'
 import type { TrackingSyncDailyStats, TrackingSyncResult } from '@/types/tracking'
+import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
 import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
@@ -486,9 +487,10 @@ const staleOptions = [
 const customerOptions = computed(() =>
   filterOptions.value.customers.map((v) => ({ label: v, value: v })),
 )
-const carrierOptions = computed(() =>
-  filterOptions.value.carrierCodes.map((v) => ({ label: v, value: v })),
-)
+const carrierOptions = computed(() => [
+  { label: '（未填写）', value: CARRIER_FILTER_EMPTY },
+  ...filterOptions.value.carrierCodes.map((v) => ({ label: v, value: v })),
+])
 const countryOptions = computed(() =>
   filterOptions.value.countryCodes.map((code) => ({
     label: countryLabel(code) === code ? code : `${countryLabel(code)} (${code})`,
@@ -883,44 +885,15 @@ async function handleCloseException(closedTime?: string, note?: string) {
   }
 }
 
-const INTERNAL_TRACKING_SYNC_STATUSES = new Set(['IN_TRANSIT', 'UNKNOWN', 'INSPECTION'])
-
-function shipmentNosEligibleForInternalTrackingSync(rows: Shipment[]): {
-  nos: string[]
-  excluded: number
-} {
-  const eligible = rows.filter((r) =>
-    INTERNAL_TRACKING_SYNC_STATUSES.has(r.statusCode || 'UNKNOWN'),
-  )
-  return {
-    nos: eligible.map((r) => r.shipmentNo),
-    excluded: rows.length - eligible.length,
-  }
-}
-
-function shipmentNosEligibleForCarrierTrackingSync(rows: Shipment[]): {
-  nos: string[]
-  excluded: number
-} {
-  const eligible = rows.filter((r) => r.statusCode === 'IN_TRANSIT')
-  return {
-    nos: eligible.map((r) => r.shipmentNo),
-    excluded: rows.length - eligible.length,
-  }
-}
-
 async function handleSyncSelectedInternal() {
   if (!selectedRows.value.length) {
     message.warning('请先勾选运单')
     return
   }
-  const { nos, excluded } = shipmentNosEligibleForInternalTrackingSync(selectedRows.value)
+  const nos = selectedShipmentNos.value
   if (!nos.length) {
-    message.warning('所选运单均为已签收，不会更新内部轨迹')
+    message.warning('所选运单无有效运单号')
     return
-  }
-  if (excluded > 0) {
-    message.info(`已跳过 ${excluded} 条已签收运单`, { duration: 5000 })
   }
   await handleSyncTracking(nos)
 }
@@ -930,13 +903,10 @@ async function handleSyncSelectedCarrier() {
     message.warning('请先勾选运单')
     return
   }
-  const { nos, excluded } = shipmentNosEligibleForCarrierTrackingSync(selectedRows.value)
+  const nos = selectedShipmentNos.value
   if (!nos.length) {
-    message.warning('所选运单均非转运中，已签收不会更新承运商轨迹')
+    message.warning('所选运单无有效运单号')
     return
-  }
-  if (excluded > 0) {
-    message.info(`已跳过 ${excluded} 条非转运中运单`, { duration: 5000 })
   }
   await handleSyncCarrierTracking(nos)
 }
@@ -1464,10 +1434,21 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </NPopconfirm>
         <NButton size="small" @click="copySelectedShipmentNos">复制运单号</NButton>
         <NButton size="small" @click="copySelectedLatestTracking">复制最新轨迹</NButton>
-        <NButton size="small" :loading="syncingTracking" @click="handleSyncSelectedInternal">
+        <NButton
+          size="small"
+          :loading="syncingTracking"
+          title="含已签收；按勾选运单号同步"
+          @click="handleSyncSelectedInternal"
+        >
           更新选中内部轨迹
         </NButton>
-        <NButton size="small" type="primary" :loading="syncingCarrier" @click="handleSyncSelectedCarrier">
+        <NButton
+          size="small"
+          type="primary"
+          :loading="syncingCarrier"
+          title="含已签收；按勾选运单号同步"
+          @click="handleSyncSelectedCarrier"
+        >
           更新选中承运商轨迹
         </NButton>
         <NButton

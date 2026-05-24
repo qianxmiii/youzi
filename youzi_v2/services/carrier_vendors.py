@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Callable
+from typing import Any, Callable
 from urllib.parse import urlencode
 
 import requests
@@ -25,6 +25,16 @@ LogFn = Callable[[str], None]
 
 # (轨迹列表, 错误, carrier_id, 尾程单号 tracking_number)
 CarrierFetch = tuple[list[CarrierTrackingLogEntry], str | None, str | None, str | None]
+
+
+def _vendor_ssl_verify(vendor: dict[str, Any], *, default: bool = True) -> bool:
+    """config 中 sslVerify: false 时跳过证书校验（WY等站点证书/代理常不匹配）。"""
+    raw = vendor.get("sslVerify")
+    if raw is None:
+        return default
+    if isinstance(raw, bool):
+        return raw
+    return str(raw).strip().lower() not in ("0", "false", "no", "off")
 
 
 def _carrier_ok(
@@ -69,7 +79,7 @@ def _response_json(resp: requests.Response) -> Any:
 
 
 def _extract_carrier_id(data: dict[str, Any]) -> str:
-    """NextSLS shipment_id、拓普达 jobNum、华威尔 orderno 等。"""
+    """NextSLS shipment_id、Topda jobNum、HWE orderno 等。"""
     if not isinstance(data, dict):
         return ""
     for key in ("shipment_id", "jobNum", "orderno", "order_no", "billNo"):
@@ -120,7 +130,7 @@ def load_vendors_config(config_path: Path) -> list[dict[str, Any]]:
 
 def detect_platform(vendor: dict[str, Any]) -> str | None:
     explicit = (vendor.get("platform") or "").strip().lower()
-    if explicit in ("rtb56", "common_pack", "topda", "nextsls", "huawell_cms"):
+    if explicit in ("rtb56", "common_pack", "topda", "nextsls", "huawell_cms", "txfba", "wy"):
         return explicit
     if vendor.get("appToken") and vendor.get("appKey"):
         return "rtb56"
@@ -135,6 +145,10 @@ def detect_platform(vendor: dict[str, Any]) -> str | None:
         return "topda"
     if "nextsls.com" in api_url_lower:
         return "nextsls"
+    if "txfba.com" in api_url_lower:
+        return "txfba"
+    if "wy-express.com" in api_url_lower:
+        return "wy"
     return None
 
 
@@ -159,6 +173,20 @@ def resolve_vendor_for_row(
     return None
 
 
+def carrier_vendor_unassigned_reason(
+    row: dict[str, str],
+    vendor_map: dict[str, dict[str, Any]],
+) -> str:
+    """说明运单为何未匹配到 config.json 中的 vendors。"""
+    cc = (row.get("carrier_code") or "").strip()
+    sup = (row.get("supplier_name") or "").strip()
+    if not cc and not sup:
+        sample = "、".join(sorted(vendor_map.keys())[:6])
+        return f"未填写承运商/供应商，请在运单中填写以匹配 config：{sample}…"
+    label = cc or sup
+    return f"承运商/供应商「{label}」与 config.vendors 未匹配，请改运单或补 aliases"
+
+
 def _normalize_details(raw_details: list[dict[str, Any]]) -> list[CarrierTrackingLogEntry]:
     out: list[CarrierTrackingLogEntry] = []
     for item in raw_details:
@@ -174,7 +202,7 @@ def _topda_event_time(raw: str) -> str:
 
 
 def _topda_row_time(row: dict[str, Any]) -> str:
-    """拓普达：eventTime 含秒，优先于 time（仅到分钟）。"""
+    """Topda：eventTime 含秒，优先于 time（仅到分钟）。"""
     return _topda_event_time(row.get("eventTime") or row.get("time") or "")
 
 
@@ -200,7 +228,7 @@ def _topda_head_event_id(hn: dict[str, Any]) -> str | None:
 
 
 def parse_topda_item(item: dict[str, Any]) -> list[CarrierTrackingLogEntry]:
-    """解析拓普达 pubTracking 单条结果 → 轨迹列表（含 trackings.id）按时间倒序。"""
+    """解析Topda pubTracking 单条结果 → 轨迹列表（含 trackings.id）按时间倒序。"""
     logs: list[CarrierTrackingLogEntry] = []
     tracking_nodes: set[str] = set()
     for tr in item.get("trackings") or []:
@@ -272,6 +300,403 @@ def _topda_item_keys(item: dict[str, Any]) -> list[str]:
             keys.append(v)
     return keys
 
+
+def _txfba_detail_api_url(vendor: dict[str, Any]) -> str:
+    return (
+        vendor.get("detailApiUrl")
+        or vendor.get("apiUrl")
+        or "https://interface.txfba.com/bussOrderTrack/getOrderTrackDetailList"
+    ).strip()
+
+
+def _txfba_request_headers(vendor: dict[str, Any]) -> dict[str, str]:
+    # TX网关要求 ownersystem（与 txfba.com 员工端一致）；缺省会返回 HTTP 404 而非 CORS 问题
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "ownersystem": (vendor.get("ownersystem") or "EMPLOYEE_TERMINAL").strip()
+        or "EMPLOYEE_TERMINAL",
+    }
+    token = (vendor.get("token") or vendor.get("appToken") or "").strip()
+    if token:
+        header_name = (vendor.get("tokenHeader") or "token").strip() or "token"
+        headers[header_name] = token
+    extra = vendor.get("headers")
+    if isinstance(extra, dict):
+        headers.update({str(k): str(v) for k, v in extra.items()})
+    cookie = (vendor.get("cookie") or "").strip()
+    if cookie:
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _txfba_track_desc(tr: dict[str, Any]) -> str:
+    name = _maybe_repair_text((tr.get("trackName") or "").strip())
+    info = _maybe_repair_text((tr.get("trackInfo") or "").strip())
+    if name and info and name not in info:
+        return f"{name}：{info}"
+    return info or name
+
+
+def _txfba_event_id(tr: dict[str, Any]) -> str | None:
+    raw = tr.get("billTrackNo")
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return f"txfba:{s}" if s else None
+
+
+def parse_txfba_detail_group(item: dict[str, Any]) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None]:
+    """TX getOrderTrackDetailList 单条 data：billNo=carrier_id，trackTime/trackInfo=轨迹。"""
+    carrier_id = (str(item.get("billNo") or "")).strip() or None
+    express_main: str | None = None
+    logs: list[CarrierTrackingLogEntry] = []
+    for tr in item.get("trackList") or []:
+        if not isinstance(tr, dict):
+            continue
+        t = normalize_tracking_time(tr.get("trackTime") or "")
+        d = _txfba_track_desc(tr)
+        if not t or not d:
+            continue
+        if not express_main:
+            em = (str(tr.get("expressMainNo") or "")).strip()
+            if em:
+                express_main = em
+        logs.append(CarrierTrackingLogEntry.from_row(t, d, _txfba_event_id(tr)))
+    return sort_logs_desc(logs), carrier_id, express_main
+
+
+def _txfba_format_http_error(resp: requests.Response) -> str:
+    try:
+        payload = _response_json(resp)
+        if isinstance(payload, dict):
+            msg = _maybe_repair_text(
+                str(payload.get("message") or payload.get("error") or "")
+            )
+            if msg:
+                return f"HTTP {resp.status_code}: {msg}"
+    except Exception:
+        pass
+    hint = ""
+    if resp.status_code in (401, 403, 404):
+        hint = "（请检查 config 中TX token/cookie 是否已配置）"
+    return f"HTTP {resp.status_code}{hint}"
+
+
+def _txfba_post_detail(
+    bill_no_list: list[str],
+    vendor: dict[str, Any],
+    *,
+    timeout: int,
+) -> tuple[list[dict[str, Any]], str | None]:
+    api_url = _txfba_detail_api_url(vendor)
+    body = {"billNoList": bill_no_list}
+    try:
+        resp = requests.post(
+            api_url,
+            json=body,
+            headers=_txfba_request_headers(vendor),
+            timeout=timeout,
+        )
+        if resp.status_code >= 400:
+            return [], _txfba_format_http_error(resp)
+        payload = _response_json(resp)
+    except requests.RequestException as exc:
+        return [], str(exc)
+    if not isinstance(payload, dict):
+        return [], "TX API 响应格式异常"
+    code = payload.get("code")
+    if code not in (200, "200"):
+        msg = _maybe_repair_text(str(payload.get("message") or payload.get("msg") or ""))
+        return [], msg or f"code={code}"
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return [], None
+    return [x for x in data if isinstance(x, dict)], None
+
+
+def _txfba_bill_for_row(row: dict[str, str], vendor: dict[str, Any] | None = None) -> str:
+    """billNoList 查询键：默认运单号（customerBillNo）；可配置 txfbaBillNoMode=carrier_id。"""
+    sn = (row.get("shipment_no") or "").strip()
+    cid = (row.get("carrier_id") or "").strip()
+    mode = ((vendor or {}).get("txfbaBillNoMode") or "").strip().lower()
+    if mode == "carrier_id":
+        return cid or sn
+    return sn or cid
+
+
+def _txfba_target_shipments(
+    item: dict[str, Any],
+    bill_to_sns: dict[str, set[str]],
+    pending_sns: set[str],
+) -> set[str]:
+    targets: set[str] = set()
+    group_bill = (str(item.get("billNo") or "")).strip()
+    if group_bill:
+        targets.update(bill_to_sns.get(group_bill, set()))
+    for tr in item.get("trackList") or []:
+        if not isinstance(tr, dict):
+            continue
+        cbn = (str(tr.get("customerBillNo") or "")).strip()
+        if cbn and cbn in pending_sns:
+            targets.add(cbn)
+    return targets
+
+
+def fetch_txfba_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    """TX批量：POST billNoList（默认运单号；响应 billNo 回写 carrier_id）。"""
+    out: dict[str, CarrierFetch] = {}
+    bill_to_sns: dict[str, set[str]] = {}
+    for row in rows:
+        sn = (row.get("shipment_no") or "").strip()
+        if not sn:
+            continue
+        out[sn] = ([], None, None, None)
+        bill = _txfba_bill_for_row(row, vendor)
+        if not bill:
+            out[sn] = ([], "TX查询缺少 billNo（需运单号）", None, None)
+            continue
+        bill_to_sns.setdefault(bill, set()).add(sn)
+
+    bills = [b for b in bill_to_sns if b]
+    if not bills:
+        return out
+
+    pending = set(out.keys())
+    for i in range(0, len(bills), BATCH_SIZE):
+        chunk = bills[i : i + BATCH_SIZE]
+        groups, err = _txfba_post_detail(chunk, vendor, timeout=timeout)
+        if err:
+            for bill in chunk:
+                for sn in bill_to_sns.get(bill, set()):
+                    out[sn] = ([], err, None, None)
+            continue
+        matched: set[str] = set()
+        for item in groups:
+            targets = _txfba_target_shipments(item, bill_to_sns, pending)
+            if not targets:
+                continue
+            logs, cid, tn = parse_txfba_detail_group(item)
+            for sn in targets:
+                out[sn] = (logs, None, cid, tn)
+                matched.add(sn)
+                if log is not None:
+                    log(
+                        f"[承运商轨迹] {sn} 返回报文 {format_api_payload_for_log(item)}"
+                    )
+        for bill in chunk:
+            for sn in bill_to_sns.get(bill, set()):
+                if sn not in matched and out[sn][1] is None:
+                    out[sn] = ([], "TX API 未返回该单", None, None)
+    return out
+
+
+def _wy_api_url(vendor: dict[str, Any]) -> str:
+    return (
+        vendor.get("detailApiUrl")
+        or vendor.get("apiUrl")
+        or "https://www.wy-express.com/root-api/c/order/getPublicLogisticsTrackList"
+    ).strip()
+
+
+def _wy_request_headers(vendor: dict[str, Any]) -> dict[str, str]:
+    headers: dict[str, str] = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    auth = (
+        (vendor.get("authorization") or vendor.get("Authorization") or "")
+    ).strip()
+    if auth:
+        headers["authorization"] = auth
+    token = (vendor.get("token") or vendor.get("appToken") or "").strip()
+    if token:
+        header_name = (vendor.get("tokenHeader") or "authorization").strip() or "authorization"
+        headers[header_name] = token
+    extra = vendor.get("headers")
+    if isinstance(extra, dict):
+        headers.update({str(k): str(v) for k, v in extra.items()})
+    return headers
+
+
+def _wy_track_desc(node: dict[str, Any]) -> str:
+    name = _maybe_repair_text((node.get("nodeName") or "").strip())
+    info = _maybe_repair_text((node.get("nodeDesc") or "").strip())
+    if name and info and name not in info:
+        return f"{name}：{info}"
+    return info or name
+
+
+def _wy_event_id(node: dict[str, Any]) -> str | None:
+    raw = node.get("id")
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return f"wy:{s}" if s else None
+
+
+def parse_wy_track_group(item: dict[str, Any]) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None]:
+    """WY单条 trackList：customerOrderNumber=查询键，systemOrderNumber=carrier_id。"""
+    carrier_id = (str(item.get("systemOrderNumber") or "")).strip() or None
+    logs: list[CarrierTrackingLogEntry] = []
+    for group in item.get("list") or []:
+        if not isinstance(group, dict):
+            continue
+        for node in group.get("childNodeList") or []:
+            if not isinstance(node, dict):
+                continue
+            t = normalize_tracking_time(node.get("nodeTime") or "")
+            d = _wy_track_desc(node)
+            if not t or not d:
+                continue
+            logs.append(CarrierTrackingLogEntry.from_row(t, d, _wy_event_id(node)))
+    return sort_logs_desc(logs), carrier_id, None
+
+
+def _wy_format_http_error(resp: requests.Response) -> str:
+    try:
+        payload = _response_json(resp)
+        if isinstance(payload, dict):
+            msg = _maybe_repair_text(str(payload.get("msg") or payload.get("message") or ""))
+            if msg:
+                return f"HTTP {resp.status_code}: {msg}"
+    except Exception:
+        pass
+    hint = ""
+    if resp.status_code in (401, 403):
+        hint = "（请检查 config 中WY authorization 是否已配置）"
+    return f"HTTP {resp.status_code}{hint}"
+
+
+def _wy_post_track(
+    order_no_list: list[str],
+    vendor: dict[str, Any],
+    *,
+    timeout: int,
+) -> tuple[list[dict[str, Any]], str | None]:
+    api_url = _wy_api_url(vendor)
+    body = {"customerOrderNumberList": order_no_list}
+    headers = _wy_request_headers(vendor)
+    if not headers.get("authorization"):
+        return [], "WY缺少 authorization 配置"
+    verify_ssl = _vendor_ssl_verify(vendor, default=False)
+    try:
+        resp = requests.post(
+            api_url,
+            json=body,
+            headers=headers,
+            timeout=timeout,
+            verify=verify_ssl,
+        )
+        if resp.status_code >= 400:
+            return [], _wy_format_http_error(resp)
+        payload = _response_json(resp)
+    except requests.RequestException as exc:
+        msg = str(exc)
+        if verify_ssl and ("CERTIFICATE_VERIFY_FAILED" in msg or "SSLError" in msg):
+            msg += "（可在 config WY项设置 \"sslVerify\": false）"
+        return [], msg
+    if not isinstance(payload, dict):
+        return [], "WY API 响应格式异常"
+    code = payload.get("code")
+    if code not in (200, "200"):
+        msg = _maybe_repair_text(str(payload.get("msg") or payload.get("message") or ""))
+        return [], msg or f"code={code}"
+    data = payload.get("data")
+    if isinstance(data, dict):
+        track_list = data.get("trackList")
+        if isinstance(track_list, list):
+            return [x for x in track_list if isinstance(x, dict)], None
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)], None
+    return [], None
+
+
+def _wy_order_no_for_row(row: dict[str, str], vendor: dict[str, Any] | None = None) -> str:
+    sn = (row.get("shipment_no") or "").strip()
+    cid = (row.get("carrier_id") or "").strip()
+    mode = ((vendor or {}).get("wyOrderNoMode") or "").strip().lower()
+    if mode in ("system_order", "carrier_id"):
+        return cid or sn
+    return sn or cid
+
+
+def _wy_target_shipments(
+    item: dict[str, Any],
+    order_to_sns: dict[str, set[str]],
+    pending_sns: set[str],
+) -> set[str]:
+    targets: set[str] = set()
+    for key in ("customerOrderNumber", "systemOrderNumber"):
+        val = (str(item.get(key) or "")).strip()
+        if val:
+            targets.update(order_to_sns.get(val, set()))
+    cust = (str(item.get("customerOrderNumber") or "")).strip()
+    if cust and cust in pending_sns:
+        targets.add(cust)
+    return targets
+
+
+def fetch_wy_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    """WY批量：POST customerOrderNumberList（默认运单号）。"""
+    out: dict[str, CarrierFetch] = {}
+    order_to_sns: dict[str, set[str]] = {}
+    for row in rows:
+        sn = (row.get("shipment_no") or "").strip()
+        if not sn:
+            continue
+        out[sn] = ([], None, None, None)
+        order_no = _wy_order_no_for_row(row, vendor)
+        if not order_no:
+            out[sn] = ([], "WY查询缺少 customerOrderNumber（需运单号）", None, None)
+            continue
+        order_to_sns.setdefault(order_no, set()).add(sn)
+
+    orders = [o for o in order_to_sns if o]
+    if not orders:
+        return out
+
+    pending = set(out.keys())
+    for i in range(0, len(orders), BATCH_SIZE):
+        chunk = orders[i : i + BATCH_SIZE]
+        groups, err = _wy_post_track(chunk, vendor, timeout=timeout)
+        if err:
+            for order_no in chunk:
+                for sn in order_to_sns.get(order_no, set()):
+                    out[sn] = ([], err, None, None)
+            continue
+        matched: set[str] = set()
+        for item in groups:
+            targets = _wy_target_shipments(item, order_to_sns, pending)
+            if not targets:
+                continue
+            logs, cid, tn = parse_wy_track_group(item)
+            for sn in targets:
+                out[sn] = (logs, None, cid, tn)
+                matched.add(sn)
+                if log is not None:
+                    log(
+                        f"[承运商轨迹] {sn} 返回报文 {format_api_payload_for_log(item)}"
+                    )
+        for order_no in chunk:
+            for sn in order_to_sns.get(order_no, set()):
+                if sn not in matched and out[sn][1] is None:
+                    out[sn] = ([], "WY API 未返回该单", None, None)
+    return out
+
+
 def fetch_tracking_batch(
     tracking_numbers: list[str],
     vendor: dict[str, Any],
@@ -288,6 +713,12 @@ def fetch_tracking_batch(
         return _fetch_topda_batch(cleaned, vendor, timeout=timeout, log=log)
     if platform == "huawell_cms":
         return _fetch_huawell_cms_batch(cleaned, vendor, timeout=timeout)
+    if platform == "txfba":
+        rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
+        return fetch_txfba_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+    if platform == "wy":
+        rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
+        return fetch_wy_batch_for_rows(rows, vendor, timeout=timeout, log=log)
     out: dict[str, CarrierFetch] = {}
     for num in cleaned:
         out[num] = fetch_tracking_one(num, vendor, timeout=timeout)
@@ -317,6 +748,18 @@ def fetch_tracking_one(
         return _fetch_huawell_cms_batch([sn], vendor, timeout=timeout).get(
             sn, ([], "未返回", None, None)
         )
+    if platform == "txfba":
+        return fetch_txfba_batch_for_rows(
+            [{"shipment_no": sn, "carrier_id": ""}],
+            vendor,
+            timeout=timeout,
+        ).get(sn, ([], "未返回", None, None))
+    if platform == "wy":
+        return fetch_wy_batch_for_rows(
+            [{"shipment_no": sn, "carrier_id": ""}],
+            vendor,
+            timeout=timeout,
+        ).get(sn, ([], "未返回", None, None))
     return _carrier_fail(f"未知平台: {vendor.get('name')}")
 
 
@@ -418,8 +861,10 @@ def _fetch_huawell_cms_batch(
     *,
     timeout: int,
 ) -> dict[str, CarrierFetch]:
-    """华威尔 CMS 批量轨迹：POST order_numbers。"""
-    api_url = (vendor.get("apiUrl") or "http://47.115.60.246:8000/cms/tracking").strip()
+    """HWE CMS 批量轨迹：POST order_numbers。"""
+    api_url = (vendor.get("apiUrl") or "").strip()
+    if not api_url:
+        return {n: ([], "HWE CMS 配置缺少 apiUrl", None, None) for n in tracking_numbers}
     uuid_val = (vendor.get("uuid") or vendor.get("UUID") or "").strip()
     body = {"order_numbers": tracking_numbers, "uuid": uuid_val}
     out: dict[str, CarrierFetch] = {n: ([], None, None, None) for n in tracking_numbers}
@@ -431,7 +876,7 @@ def _fetch_huawell_cms_batch(
         err = str(exc)
         return {n: ([], err, None, None) for n in tracking_numbers}
     if not isinstance(payload, list):
-        return {n: ([], "华威尔 CMS 响应格式异常", None, None) for n in tracking_numbers}
+        return {n: ([], "HWE CMS 响应格式异常", None, None) for n in tracking_numbers}
     for item in payload:
         if not isinstance(item, dict):
             continue
@@ -453,7 +898,7 @@ def _fetch_huawell_cms_batch(
 
 
 def _common_pack_ids_from_data(data: dict[str, Any]) -> tuple[str | None, str | None]:
-    """鑫鲲鹏 common_pack：orderno → carrier_id，zycode → 尾程 tracking_number。"""
+    """XKP common_pack：orderno → carrier_id，zycode → 尾程 tracking_number。"""
     cid = (str(data.get("orderno") or "")).strip() or None
     tn = (str(data.get("zycode") or "")).strip() or None
     return cid, tn
@@ -523,7 +968,7 @@ def _fetch_topda_batch(
         return {n: ([], err, None, None) for n in tracking_numbers}
 
     if not isinstance(payload, list):
-        err = "拓普达 API 响应格式异常"
+        err = "Topda API 响应格式异常"
         return {n: ([], err, None, None) for n in tracking_numbers}
 
     for item in payload:

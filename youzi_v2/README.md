@@ -76,6 +76,10 @@ uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001
 | `/shipments` | 待迁 | `stales.html` |
 | `/admin` | 待迁 | `templates/admin.html` |
 
+## 私密配置（`config/config.json`）
+
+- 私密项写在仓库根目录 `config/config.json`（勿提交 Git）；承运商在 `vendors` 中配置。详见 `config/README.md`。
+
 ## API
 
 | 路径 | 说明 |

@@ -19,17 +19,29 @@ CREATE TABLE IF NOT EXISTS {TABLE_NAME} (
 )
 """
 
+_DEDUP_INDEX = f"idx_{TABLE_NAME}_dedup"
+
 _INDEXES = [
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_shipment_no ON {TABLE_NAME}(shipment_no)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_vendor ON {TABLE_NAME}(vendor_name)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_shipment_time "
     f"ON {TABLE_NAME}(shipment_no, tracking_time DESC)",
-    f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{TABLE_NAME}_dedup "
-    f"ON {TABLE_NAME}(shipment_no, vendor_name, tracking_time, tracking_desc)",
     f"CREATE UNIQUE INDEX IF NOT EXISTS idx_{TABLE_NAME}_vendor_event_id "
     f"ON {TABLE_NAME}(shipment_no, vendor_name, vendor_event_id) "
     f"WHERE vendor_event_id IS NOT NULL AND TRIM(vendor_event_id) != ''",
 ]
+
+# 无 vendor_event_id 时按 time+desc 去重；有 event_id 时允许多条同文案（同秒重复节点）
+_DEDUP_INDEX_SQL = (
+    f"CREATE UNIQUE INDEX IF NOT EXISTS {_DEDUP_INDEX} "
+    f"ON {TABLE_NAME}(shipment_no, vendor_name, tracking_time, tracking_desc) "
+    f"WHERE vendor_event_id IS NULL OR TRIM(vendor_event_id) = ''"
+)
+
+
+def _migrate_dedup_index(conn: sqlite3.Connection) -> None:
+    conn.execute(f"DROP INDEX IF EXISTS {_DEDUP_INDEX}")
+    conn.execute(_DEDUP_INDEX_SQL)
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -41,3 +53,4 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN vendor_event_id TEXT")
     for stmt in _INDEXES:
         conn.execute(stmt)
+    _migrate_dedup_index(conn)

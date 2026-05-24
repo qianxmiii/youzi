@@ -38,4 +38,12 @@ def normalize_tracking_time(raw: str | None) -> str:
         return f"{text}:00"
     if _RE_DATE.match(text):
         return f"{text} 00:00:00"
+    if "/" in text:
+        slash = text.replace("/", "-")
+        if _RE_DATETIME_SEC.match(slash):
+            return slash
+        if _RE_DATETIME_MIN.match(slash):
+            return f"{slash}:00"
+        if _RE_DATE.match(slash):
+            return f"{slash} 00:00:00"
     return text

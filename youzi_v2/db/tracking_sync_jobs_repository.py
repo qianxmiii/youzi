@@ -85,6 +85,65 @@ class TrackingSyncJobsRepository:
             )
             self._conn.commit()
 
+    def list_jobs(
+        self,
+        *,
+        source: str | None = None,
+        limit: int = 30,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        limit = max(1, min(limit, 100))
+        offset = max(0, offset)
+        where = ""
+        params: list[Any] = []
+        if source:
+            where = "WHERE source = ?"
+            params.append(source.strip())
+
+        with self._database.lock:
+            total = self._conn.execute(
+                f"SELECT COUNT(*) AS c FROM {TABLE_NAME} {where}",
+                params,
+            ).fetchone()["c"]
+            rows = self._conn.execute(
+                f"""
+                SELECT * FROM {TABLE_NAME}
+                {where}
+                ORDER BY datetime(started_time) DESC, id DESC
+                LIMIT ? OFFSET ?
+                """,
+                [*params, limit, offset],
+            ).fetchall()
+
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            errors_raw = row["errors_json"] or "[]"
+            try:
+                errors = json.loads(errors_raw)
+                if not isinstance(errors, list):
+                    errors = []
+            except json.JSONDecodeError:
+                errors = []
+            items.append(
+                {
+                    "id": row["id"],
+                    "source": row["source"],
+                    "triggerType": row["trigger_type"],
+                    "status": row["status"],
+                    "totalShipments": int(row["total_shipments"]),
+                    "updatedShipments": int(row["updated_shipments"]),
+                    "newLogCount": int(row["new_log_count"]),
+                    "skipped": int(row["skipped"]),
+                    "emptyCount": int(row["empty_count"]),
+                    "notFound": int(row["not_found"]),
+                    "errorCount": int(row["error_count"]),
+                    "errors": [str(e) for e in errors[:5]],
+                    "startedTime": row["started_time"],
+                    "finishedTime": row["finished_time"],
+                }
+            )
+        return {"items": items, "total": int(total), "limit": limit, "offset": offset}
+
     def today_stats(self, source: str) -> dict[str, Any]:
         """当日已完成任务的 updated_shipments / new_log_count 合计。"""
         with self._database.lock:

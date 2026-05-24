@@ -17,9 +17,23 @@ def _status_in_sql(codes: frozenset[str], alias: str = "") -> str:
     return f"{prefix}status_code IN ({quoted})"
 
 
-def internal_tracking_sync_eligible_sql(alias: str = "") -> str:
-    return _status_in_sql(INTERNAL_TRACKING_SYNC_STATUS_CODES, alias)
+def internal_tracking_sync_eligible_sql(
+    alias: str = "",
+    *,
+    include_delivered: bool = False,
+) -> str:
+    codes = INTERNAL_TRACKING_SYNC_STATUS_CODES
+    if include_delivered:
+        codes = codes | frozenset({"DELIVERED"})
+    return _status_in_sql(codes, alias)
 
 
-def carrier_tracking_sync_eligible_sql(alias: str = "") -> str:
-    return _status_in_sql(CARRIER_TRACKING_SYNC_STATUS_CODES, alias)
+def carrier_tracking_sync_eligible_sql(
+    alias: str = "",
+    *,
+    include_delivered: bool = False,
+) -> str:
+    codes = CARRIER_TRACKING_SYNC_STATUS_CODES
+    if include_delivered:
+        codes = codes | frozenset({"DELIVERED"})
+    return _status_in_sql(codes, alias)

@@ -3,6 +3,26 @@ export function formatTimestampForApi(ts: number): string {
   return formatAbsoluteDateTime(new Date(ts))
 }
 
+/** 解析 API/库内时间为本地「日」0 点毫秒，供 NDatePicker type="date" */
+export function dateOnlyToTimestamp(value: string | null | undefined): number | null {
+  const raw = (value ?? '').trim()
+  if (!raw) return null
+  const head = raw.slice(0, 10)
+  if (/^\d{4}-\d{2}-\d{2}$/.test(head)) {
+    const [y, m, d] = head.split('-').map(Number)
+    return new Date(y, m - 1, d).getTime()
+  }
+  const parsed = parseDateTimeInput(raw)
+  if (!parsed) return null
+  return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate()).getTime()
+}
+
+/** 日期控件 → API：YYYY-MM-DD 00:00:00 */
+export function formatDateOnlyForApi(ts: number): string {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} 00:00:00`
+}
+
 export function nowTimestamp(): number {
   return Date.now()
 }

@@ -202,6 +202,8 @@ API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST 
 | 运单号 | `shipment_no` |
 | 状态 | `status_code`（中文如 转运中→`IN_TRANSIT`，或直接填码） |
 | 客户订单号 | `customer_no` |
+| 货件号 | `customer_shipment_id`（导入别名：`Amazon ID`） |
+| 亚马逊预约号 | `amazon_ref_id`（导入别名：`Amazon Reference ID`） |
 | 用户名 | `customer` |
 | 件数 | `ctns` |
 | 国家 | `country_code`（如 美国→US） |

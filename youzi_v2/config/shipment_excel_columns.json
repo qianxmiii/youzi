@@ -5,6 +5,8 @@
     "运单号": "shipment_no",
     "状态": "status_code",
     "客户订单号": "customer_no",
+    "货件号": "customer_shipment_id",
+    "亚马逊预约号": "amazon_ref_id",
     "用户名": "customer",
     "件数": "ctns",
     "国家": "country_code",
@@ -16,6 +18,10 @@
     "交货仓库": "origin_warehouse_code",
     "内部轨迹时间": "latest_tracking_time",
     "内部最新轨迹": "latest_tracking_desc"
+  },
+  "column_aliases": {
+    "Amazon ID": "customer_shipment_id",
+    "Amazon Reference ID": "amazon_ref_id"
   },
   "export_only_fields": ["latest_tracking_time", "latest_tracking_desc"],
   "status_aliases": {

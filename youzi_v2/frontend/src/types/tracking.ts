@@ -44,5 +44,6 @@ export interface CarrierTrackingLog {
   carrierCode: string
   trackingTime: string
   trackingDesc: string
+  vendorEventId?: string | null
   createdTime: string
 }

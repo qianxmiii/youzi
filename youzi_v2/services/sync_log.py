@@ -6,19 +6,20 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
+from .sync_log_format import format_sync_log_line
+
 LogFn = Callable[[str], None]
 
 _LOG_DIR = Path(__file__).resolve().parents[1] / "logs"
 
 
-def _append_local_log(msg: str) -> None:
+def _append_local_log(line: str) -> None:
     try:
         _LOG_DIR.mkdir(parents=True, exist_ok=True)
         day = datetime.now().strftime("%Y-%m-%d")
         path = _LOG_DIR / f"tracking-sync-{day}.log"
-        ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         with path.open("a", encoding="utf-8") as f:
-            f.write(f"[{ts}] {msg}\n")
+            f.write(f"{line}\n")
     except OSError:
         pass
 
@@ -27,10 +28,11 @@ def make_sync_logger(extra: LogFn | None = None) -> tuple[list[str], LogFn]:
     lines: list[str] = []
 
     def out_log(msg: str) -> None:
-        lines.append(msg)
-        print(msg, flush=True)
-        _append_local_log(msg)
+        line = format_sync_log_line(msg)
+        lines.append(line)
+        print(line, flush=True)
+        _append_local_log(line)
         if extra is not None:
-            extra(msg)
+            extra(line)
 
     return lines, out_log

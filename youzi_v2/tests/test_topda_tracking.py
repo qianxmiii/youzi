@@ -28,16 +28,53 @@ SAMPLE_ITEM = {
 def test_parse_topda_item_sorts_newest_first():
     logs = parse_topda_item(SAMPLE_ITEM)
     assert len(logs) >= 4
-    assert logs[0][0] == "2026-05-18 16:12"
-    assert "装柜" in logs[0][1]
+    assert logs[0].tracking_time == "2026-05-18 16:12:00"
+    assert "装柜" in logs[0].tracking_desc
 
 
 def test_parse_topda_head_node_labels():
     logs = parse_topda_item(SAMPLE_ITEM)
-    texts = [d for _, d in logs]
+    texts = [e.tracking_desc for e in logs]
     assert any("已订舱" in t for t in texts)
     assert any("已提货" in t for t in texts)
 
 
 def test_extract_carrier_id_job_num():
     assert _extract_carrier_id({**SAMPLE_ITEM, "jobNum": "JOB-888"}) == "JOB-888"
+
+
+SAME_MINUTE_TRACKINGS = {
+    "trackingNum": "DPSECO260417030",
+    "trackings": [
+        {
+            "id": 26917259,
+            "time": "2026-05-22 09:56",
+            "eventTime": "2026-05-22T09:56:26+08:00",
+            "context": "您的订单2026-05-22 到港，等待卸船中，如有更新会及时再通知",
+            "node": "arrivedPod",
+        },
+        {
+            "id": 26917295,
+            "time": "2026-05-22 09:56",
+            "eventTime": "2026-05-22T09:56:40+08:00",
+            "context": "您的订单2026-05-22 已卸船，提柜时间待确认中",
+            "node": "已卸船",
+        },
+    ],
+    "headNodes": [
+        {"time": "2026-05-22", "node": "arrivedPod", "context": None},
+    ],
+}
+
+
+def test_parse_topda_same_minute_uses_event_time_order():
+    logs = parse_topda_item(SAME_MINUTE_TRACKINGS)
+    assert logs[0].tracking_time == "2026-05-22 09:56:40"
+    assert "已卸船" in logs[0].tracking_desc
+    assert logs[0].vendor_event_id == "topda:26917295"
+    assert logs[1].tracking_time == "2026-05-22 09:56:26"
+    assert "到港" in logs[1].tracking_desc
+    assert logs[1].vendor_event_id == "topda:26917259"
+    assert not any(
+        e.tracking_time == "2026-05-22 00:00:00" and "已到港" in e.tracking_desc for e in logs
+    )

@@ -4,12 +4,19 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Callable, Callable
 from urllib.parse import urlencode
 
 import requests
 
+from ..carrier_tracking_entry import (
+    CarrierTrackingLogEntry,
+    coerce_carrier_logs,
+    latest_from_logs,
+    sort_logs_desc,
+)
 from ..db.datetime_util import normalize_tracking_time
+from .sync_log_format import format_api_payload_for_log
 
 BATCH_SIZE = 10
 DEFAULT_TIMEOUT = 30
@@ -17,17 +24,18 @@ DEFAULT_TIMEOUT = 30
 LogFn = Callable[[str], None]
 
 # (轨迹列表, 错误, carrier_id, 尾程单号 tracking_number)
-CarrierFetch = tuple[list[tuple[str, str]], str | None, str | None, str | None]
+CarrierFetch = tuple[list[CarrierTrackingLogEntry], str | None, str | None, str | None]
 
 
 def _carrier_ok(
-    logs: list[tuple[str, str]],
+    logs: list[CarrierTrackingLogEntry] | list,
     carrier_id: str | None = None,
     tracking_number: str | None = None,
 ) -> CarrierFetch:
     cid = (carrier_id or "").strip() or None
     tn = (tracking_number or "").strip() or None
-    return logs, None, cid, tn
+    entries = sort_logs_desc(coerce_carrier_logs(logs))
+    return entries, None, cid, tn
 
 
 def _carrier_fail(msg: str) -> CarrierFetch:
@@ -112,7 +120,7 @@ def load_vendors_config(config_path: Path) -> list[dict[str, Any]]:
 
 def detect_platform(vendor: dict[str, Any]) -> str | None:
     explicit = (vendor.get("platform") or "").strip().lower()
-    if explicit in ("rtb56", "common_pack", "topda", "nextsls", "huawell_cms", "txfba"):
+    if explicit in ("rtb56", "common_pack", "topda", "nextsls", "huawell_cms"):
         return explicit
     if vendor.get("appToken") and vendor.get("appKey"):
         return "rtb56"
@@ -127,8 +135,6 @@ def detect_platform(vendor: dict[str, Any]) -> str | None:
         return "topda"
     if "nextsls.com" in api_url_lower:
         return "nextsls"
-    if "txfba.com" in api_url_lower:
-        return "txfba"
     return None
 
 
@@ -153,13 +159,13 @@ def resolve_vendor_for_row(
     return None
 
 
-def _normalize_details(raw_details: list[dict[str, Any]]) -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
+def _normalize_details(raw_details: list[dict[str, Any]]) -> list[CarrierTrackingLogEntry]:
+    out: list[CarrierTrackingLogEntry] = []
     for item in raw_details:
         t = normalize_tracking_time(item.get("track_occur_date") or item.get("zztm") or "")
         d = _maybe_repair_text(item.get("track_description") or item.get("guiji") or "")
         if t:
-            out.append((t, d))
+            out.append(CarrierTrackingLogEntry.from_row(t, d))
     return out
 
 
@@ -167,36 +173,61 @@ def _topda_event_time(raw: str) -> str:
     return normalize_tracking_time(raw)
 
 
-def _sort_logs_desc(logs: list[tuple[str, str]]) -> list[tuple[str, str]]:
-    seen: set[tuple[str, str]] = set()
-    unique: list[tuple[str, str]] = []
-    for item in logs:
-        if item in seen:
-            continue
-        seen.add(item)
-        unique.append(item)
-    return sorted(unique, key=lambda x: x[0], reverse=True)
+def _topda_row_time(row: dict[str, Any]) -> str:
+    """拓普达：eventTime 含秒，优先于 time（仅到分钟）。"""
+    return _topda_event_time(row.get("eventTime") or row.get("time") or "")
 
 
-def parse_topda_item(item: dict[str, Any]) -> list[tuple[str, str]]:
-    """解析拓普达 pubTracking 单条结果 → [(time, desc), ...] 按时间倒序。"""
-    logs: list[tuple[str, str]] = []
+def _topda_tracking_event_id(tr: dict[str, Any]) -> str | None:
+    raw = tr.get("id")
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return f"topda:{s}" if s else None
+
+
+def _topda_head_event_id(hn: dict[str, Any]) -> str | None:
+    node = (hn.get("node") or "").strip()
+    if not node:
+        return None
+    gid = hn.get("guideId")
+    if gid is not None and str(gid).strip():
+        return f"topda-head:{gid}:{node}"
+    t = _topda_row_time(hn)
+    if t:
+        return f"topda-head:{node}:{t}"
+    return f"topda-head:{node}"
+
+
+def parse_topda_item(item: dict[str, Any]) -> list[CarrierTrackingLogEntry]:
+    """解析拓普达 pubTracking 单条结果 → 轨迹列表（含 trackings.id）按时间倒序。"""
+    logs: list[CarrierTrackingLogEntry] = []
+    tracking_nodes: set[str] = set()
     for tr in item.get("trackings") or []:
         if not isinstance(tr, dict):
             continue
-        t = _topda_event_time(tr.get("time") or tr.get("eventTime") or "")
+        node = (tr.get("node") or "").strip()
+        if node:
+            tracking_nodes.add(node)
+        t = _topda_row_time(tr)
         d = _maybe_repair_text(tr.get("context") or "")
         if t and d:
-            logs.append((t, d))
+            logs.append(
+                CarrierTrackingLogEntry.from_row(t, d, _topda_tracking_event_id(tr))
+            )
     for hn in item.get("headNodes") or []:
         if not isinstance(hn, dict):
             continue
-        t = _topda_event_time(hn.get("time") or hn.get("eventTime") or "")
         node = (hn.get("node") or "").strip()
+        if node and node in tracking_nodes:
+            continue
+        t = _topda_row_time(hn)
         d = _maybe_repair_text(hn.get("context") or "") or _TOPDA_NODE_LABELS.get(node, node)
         if t and d:
-            logs.append((t, d))
-    return _sort_logs_desc(logs)
+            logs.append(
+                CarrierTrackingLogEntry.from_row(t, d, _topda_head_event_id(hn))
+            )
+    return sort_logs_desc(logs)
 
 
 def _nextsls_mode(vendor: dict[str, Any]) -> str:
@@ -220,17 +251,17 @@ def _nextsls_number_param(vendor: dict[str, Any]) -> str:
     return "numbers"
 
 
-def parse_nextsls_shipment(shipment: dict[str, Any]) -> list[tuple[str, str]]:
+def parse_nextsls_shipment(shipment: dict[str, Any]) -> list[CarrierTrackingLogEntry]:
     """NextSLS（皓鹏 lists / 欧科 trace）单票 shipment → 轨迹列表，时间倒序。"""
-    logs: list[tuple[str, str]] = []
+    logs: list[CarrierTrackingLogEntry] = []
     for tr in shipment.get("traces") or []:
         if not isinstance(tr, dict):
             continue
         t = _topda_event_time(tr.get("time") or "")
         d = _maybe_repair_text(tr.get("info") or "")
         if t and d:
-            logs.append((t, d))
-    return _sort_logs_desc(logs)
+            logs.append(CarrierTrackingLogEntry.from_row(t, d))
+    return sort_logs_desc(logs)
 
 
 def _topda_item_keys(item: dict[str, Any]) -> list[str]:
@@ -241,25 +272,12 @@ def _topda_item_keys(item: dict[str, Any]) -> list[str]:
             keys.append(v)
     return keys
 
-
-def parse_txfba_track_list(items: list[dict[str, Any]]) -> list[tuple[str, str]]:
-    """腾信 getOrderTrackList → [(trackTime, trackInfo), ...] 时间倒序。"""
-    logs: list[tuple[str, str]] = []
-    for tr in items:
-        if not isinstance(tr, dict):
-            continue
-        t = normalize_tracking_time(tr.get("trackTime") or "")
-        d = _maybe_repair_text(tr.get("trackInfo") or "")
-        if t and d:
-            logs.append((t, d))
-    return _sort_logs_desc(logs)
-
-
 def fetch_tracking_batch(
     tracking_numbers: list[str],
     vendor: dict[str, Any],
     *,
     timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
 ) -> dict[str, CarrierFetch]:
     """批量查询；返回 {运单号: (轨迹, 错误, carrier_id, tracking_number)}。"""
     cleaned = list(dict.fromkeys(n.strip() for n in tracking_numbers if n and n.strip()))
@@ -267,7 +285,7 @@ def fetch_tracking_batch(
         return {}
     platform = detect_platform(vendor)
     if platform == "topda":
-        return _fetch_topda_batch(cleaned, vendor, timeout=timeout)
+        return _fetch_topda_batch(cleaned, vendor, timeout=timeout, log=log)
     if platform == "huawell_cms":
         return _fetch_huawell_cms_batch(cleaned, vendor, timeout=timeout)
     out: dict[str, CarrierFetch] = {}
@@ -299,8 +317,6 @@ def fetch_tracking_one(
         return _fetch_huawell_cms_batch([sn], vendor, timeout=timeout).get(
             sn, ([], "未返回", None, None)
         )
-    if platform == "txfba":
-        return _carrier_fail("腾信请使用运单 carrier_id（billNo）查询，不支持按运单号直查")
     return _carrier_fail(f"未知平台: {vendor.get('name')}")
 
 
@@ -419,7 +435,7 @@ def _fetch_huawell_cms_batch(
     for item in payload:
         if not isinstance(item, dict):
             continue
-        logs = _sort_logs_desc(_normalize_details(item.get("details") or []))
+        logs = sort_logs_desc(_normalize_details(item.get("details") or []))
         cid = _extract_carrier_id(item)
         tn = _extract_outer_tracking_number(item)
         keys: set[str] = set()
@@ -434,6 +450,13 @@ def _fetch_huawell_cms_batch(
             if key in out:
                 out[key] = (logs, None, cid or None, tn or None)
     return out
+
+
+def _common_pack_ids_from_data(data: dict[str, Any]) -> tuple[str | None, str | None]:
+    """鑫鲲鹏 common_pack：orderno → carrier_id，zycode → 尾程 tracking_number。"""
+    cid = (str(data.get("orderno") or "")).strip() or None
+    tn = (str(data.get("zycode") or "")).strip() or None
+    return cid, tn
 
 
 def _fetch_common_pack(
@@ -459,104 +482,19 @@ def _fetch_common_pack(
     if not data or "details" not in data:
         msg = _maybe_repair_text(result.get("msg") if isinstance(result, dict) else "") or "响应格式异常"
         return _carrier_fail(msg)
-    return _carrier_ok(_normalize_details(data.get("details") or []))
-
-
-def _txfba_request_headers(vendor: dict[str, Any]) -> dict[str, str]:
-    headers: dict[str, str] = {"Content-Type": "application/json", "Accept": "application/json"}
-    token = (vendor.get("token") or vendor.get("appToken") or "").strip()
-    if token:
-        header_name = (vendor.get("tokenHeader") or "token").strip() or "token"
-        headers[header_name] = token
-    extra = vendor.get("headers")
-    if isinstance(extra, dict):
-        headers.update({str(k): str(v) for k, v in extra.items()})
-    cookie = (vendor.get("cookie") or "").strip()
-    if cookie:
-        headers["Cookie"] = cookie
-    return headers
-
-
-def _fetch_txfba_track_by_bill_no(
-    bill_no: str,
-    vendor: dict[str, Any],
-    *,
-    timeout: int,
-) -> CarrierFetch:
-    """腾信 getOrderTrackList：按 billNo（运单 carrier_id）拉全量轨迹。"""
-    api_url = (
-        vendor.get("apiUrl")
-        or "https://interface.txfba.com/bussOrderTrack/getOrderTrackList"
-    ).strip()
-    body = {"billNo": bill_no.strip()}
-    try:
-        resp = requests.post(
-            api_url,
-            json=body,
-            headers=_txfba_request_headers(vendor),
-            timeout=timeout,
-        )
-        try:
-            payload = _response_json(resp)
-        except Exception:
-            payload = None
-        if resp.status_code >= 400:
-            snippet = (resp.text or "")[:200].replace("\n", " ")
-            return _carrier_fail(
-                f"HTTP {resp.status_code} {snippet or resp.reason}"
-            )
-        if payload is None:
-            return _carrier_fail("腾信响应非 JSON")
-    except Exception as exc:
-        return _carrier_fail(str(exc))
-
-    if not isinstance(payload, dict):
-        return _carrier_fail("腾信 API 响应格式异常")
-    if payload.get("code") != 200:
-        msg = _maybe_repair_text(payload.get("message") or "") or "腾信查询失败"
-        return _carrier_fail(f"code={payload.get('code')} {msg}")
-
-    data = payload.get("data")
-    if not isinstance(data, list) or not data:
-        return _carrier_ok([])
-
-    logs = parse_txfba_track_list(data)
-    tn = ""
-    for item in data:
-        if isinstance(item, dict):
-            tn = _extract_outer_tracking_number(item)
-            if tn:
-                break
-    return _carrier_ok(logs, None, tn or None)
-
-
-def fetch_txfba_batch_for_rows(
-    rows: list[dict[str, str]],
-    vendor: dict[str, Any],
-    *,
-    timeout: int = DEFAULT_TIMEOUT,
-) -> dict[str, CarrierFetch]:
-    """按运单行查询：carrier_id 为腾信 billNo，结果键为 shipment_no。"""
-    out: dict[str, CarrierFetch] = {}
-    for row in rows:
-        sn = row["shipment_no"]
-        bill_no = (row.get("carrier_id") or "").strip()
-        if not bill_no:
-            out[sn] = ([], "腾信查询缺少 carrier_id（billNo，请手动填写）", None, None)
-            continue
-        logs, err, _, tn = _fetch_txfba_track_by_bill_no(bill_no, vendor, timeout=timeout)
-        if err:
-            out[sn] = ([], err, None, None)
-            continue
-        out[sn] = (logs, None, None, tn)
-    return out
-
+    carrier_id, outer_tn = _common_pack_ids_from_data(data)
+    return _carrier_ok(
+        _normalize_details(data.get("details") or []),
+        carrier_id,
+        outer_tn,
+    )
 
 def _fetch_topda_batch(
     tracking_numbers: list[str],
     vendor: dict[str, Any],
     *,
     timeout: int,
+    log: LogFn | None = None,
 ) -> dict[str, CarrierFetch]:
     host = (vendor.get("host") or "topda.ai-ops.vip").strip()
     api_url = (vendor.get("apiUrl") or f"https://{host}/edi/pubTracking").strip()
@@ -602,10 +540,10 @@ def _fetch_topda_batch(
         for key in keys:
             if key in out:
                 out[key] = (logs, None, cid or None, tn or None)
+                if log is not None:
+                    log(
+                        f"[承运商轨迹] {key} 返回报文 {format_api_payload_for_log(item)}"
+                    )
     return out
 
 
-def latest_from_logs(logs: list[tuple[str, str]]) -> tuple[str, str]:
-    if not logs:
-        return "", ""
-    return logs[0][0], logs[0][1]

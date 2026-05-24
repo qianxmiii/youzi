@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlencode
@@ -130,7 +131,20 @@ def load_vendors_config(config_path: Path) -> list[dict[str, Any]]:
 
 def detect_platform(vendor: dict[str, Any]) -> str | None:
     explicit = (vendor.get("platform") or "").strip().lower()
-    if explicit in ("rtb56", "common_pack", "topda", "nextsls", "huawell_cms", "txfba", "wy"):
+    if explicit in (
+        "rtb56",
+        "common_pack",
+        "topda",
+        "nextsls",
+        "huawell_cms",
+        "txfba",
+        "wy",
+        "yorky",
+        "juren",
+        "qiyun",
+        "olt",
+        "haojie",
+    ):
         return explicit
     if vendor.get("appToken") and vendor.get("appKey"):
         return "rtb56"
@@ -149,6 +163,18 @@ def detect_platform(vendor: dict[str, Any]) -> str | None:
         return "txfba"
     if "wy-express.com" in api_url_lower:
         return "wy"
+    if "56yorky.com" in api_url_lower:
+        return "yorky"
+    if "tracequery/out/list" in api_url_lower or "tms-saas" in api_url_lower:
+        return "juren"
+    if "webtrack" in api_url_lower:
+        return "qiyun"
+    if "120.24.174.13" in api_url_lower:
+        return "haojie"
+    if "olt56.com" in api_url_lower:
+        return "olt"
+    if "/tracklist" in api_url_lower:
+        return "olt"
     return None
 
 
@@ -697,6 +723,774 @@ def fetch_wy_batch_for_rows(
     return out
 
 
+def _yorky_api_url(vendor: dict[str, Any]) -> str:
+    return (
+        vendor.get("detailApiUrl")
+        or vendor.get("apiUrl")
+        or "https://www.56yorky.com/api/open/depot/trackInfo"
+    ).strip()
+
+
+def _yorky_request_headers(vendor: dict[str, Any]) -> dict[str, str]:
+    headers: dict[str, str] = {"Accept": "application/json"}
+    token = (
+        (vendor.get("token") or vendor.get("appToken") or vendor.get("authorization") or "")
+    ).strip()
+    if token:
+        header_name = (vendor.get("tokenHeader") or "Authorization").strip() or "Authorization"
+        headers[header_name] = token
+    extra = vendor.get("headers")
+    if isinstance(extra, dict):
+        headers.update({str(k): str(v) for k, v in extra.items()})
+    return headers
+
+
+def _yorky_query_params(vendor: dict[str, Any], track_nos: list[str]) -> dict[str, str]:
+    return {
+        "trackNos": ",".join(track_nos),
+        "remove": str(vendor.get("remove") if vendor.get("remove") is not None else "T"),
+        "language": str(vendor.get("language") or "zh_CN"),
+    }
+
+
+def _yorky_track_desc(node: dict[str, Any]) -> str:
+    status = _maybe_repair_text((node.get("trackStatusText") or "").strip())
+    info = _maybe_repair_text((node.get("trackDesc") or "").strip())
+    if status and info and status not in info:
+        return f"{status}：{info}"
+    return info or status
+
+
+def _yorky_event_id(raw: Any, *, prefix: str) -> str | None:
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return f"yorky:{prefix}:{s}" if s else None
+
+
+def _yorky_logs_from_item(item: dict[str, Any]) -> list[CarrierTrackingLogEntry]:
+    logs: list[CarrierTrackingLogEntry] = []
+    for tr in item.get("trackInfoList") or []:
+        if not isinstance(tr, dict):
+            continue
+        t = normalize_tracking_time(tr.get("trackTime") or "")
+        d = _yorky_track_desc(tr)
+        if not t or not d:
+            continue
+        logs.append(CarrierTrackingLogEntry.from_row(t, d, _yorky_event_id(tr.get("id"), prefix="t")))
+    if not logs:
+        for ch in item.get("inputChanges") or []:
+            if not isinstance(ch, dict):
+                continue
+            t = normalize_tracking_time(ch.get("createTime") or "")
+            code = _maybe_repair_text((ch.get("busiCode") or "").strip())
+            remark = _maybe_repair_text((ch.get("remark") or "").strip())
+            if code and remark and code not in remark:
+                d = f"{code}：{remark}"
+            else:
+                d = remark or code
+            if not t or not d:
+                continue
+            logs.append(
+                CarrierTrackingLogEntry.from_row(
+                    t, d, _yorky_event_id(ch.get("changeSn"), prefix="c")
+                )
+            )
+    return sort_logs_desc(logs)
+
+
+def parse_yorky_track_item(item: dict[str, Any]) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None]:
+    """聚美：userNo=运单号，trackNo=尾程单号 tracking_number。"""
+    logs = _yorky_logs_from_item(item)
+    tn = (str(item.get("trackNo") or "")).strip() or None
+    return logs, None, tn
+
+
+def _yorky_get_track(
+    track_nos: list[str],
+    vendor: dict[str, Any],
+    *,
+    timeout: int,
+) -> tuple[list[dict[str, Any]], str | None]:
+    api_url = _yorky_api_url(vendor)
+    try:
+        resp = requests.get(
+            api_url,
+            params=_yorky_query_params(vendor, track_nos),
+            headers=_yorky_request_headers(vendor),
+            timeout=timeout,
+            verify=_vendor_ssl_verify(vendor, default=True),
+        )
+        if resp.status_code >= 400:
+            try:
+                payload = _response_json(resp)
+                msg = ""
+                if isinstance(payload, dict):
+                    msg = _maybe_repair_text(
+                        str(payload.get("message") or payload.get("msg") or "")
+                    )
+                return [], f"HTTP {resp.status_code}" + (f": {msg}" if msg else "")
+            except Exception:
+                return [], f"HTTP {resp.status_code}"
+        payload = _response_json(resp)
+    except requests.RequestException as exc:
+        return [], str(exc)
+    if not isinstance(payload, dict):
+        return [], "聚美 API 响应格式异常"
+    code = payload.get("code")
+    if code not in (200, "200"):
+        msg = _maybe_repair_text(str(payload.get("message") or payload.get("msg") or ""))
+        return [], msg or f"code={code}"
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return [], None
+    return [x for x in data if isinstance(x, dict)], None
+
+
+def _yorky_track_no_for_row(row: dict[str, str]) -> str:
+    return (row.get("shipment_no") or "").strip()
+
+
+def fetch_yorky_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    """聚美批量：GET trackNos=运单号逗号分隔。"""
+    out: dict[str, CarrierFetch] = {}
+    sn_to_row: dict[str, str] = {}
+    for row in rows:
+        sn = (row.get("shipment_no") or "").strip()
+        if not sn:
+            continue
+        out[sn] = ([], None, None, None)
+        bill = _yorky_track_no_for_row(row)
+        if not bill:
+            out[sn] = ([], "聚美查询缺少运单号", None, None)
+            continue
+        sn_to_row[bill] = sn
+
+    bills = list(sn_to_row.keys())
+    if not bills:
+        return out
+
+    for i in range(0, len(bills), BATCH_SIZE):
+        chunk = bills[i : i + BATCH_SIZE]
+        groups, err = _yorky_get_track(chunk, vendor, timeout=timeout)
+        if err:
+            for bill in chunk:
+                sn = sn_to_row[bill]
+                out[sn] = ([], err, None, None)
+            continue
+        matched: set[str] = set()
+        for item in groups:
+            user_no = (str(item.get("userNo") or "")).strip()
+            sn = sn_to_row.get(user_no)
+            if not sn:
+                continue
+            logs, cid, tn = parse_yorky_track_item(item)
+            out[sn] = (logs, None, cid, tn)
+            matched.add(sn)
+            if log is not None:
+                log(f"[承运商轨迹] {sn} 返回报文 {format_api_payload_for_log(item)}")
+        for bill in chunk:
+            sn = sn_to_row[bill]
+            if sn not in matched and out[sn][1] is None:
+                out[sn] = ([], "聚美 API 未返回该单", None, None)
+    return out
+
+
+def _juren_api_url(vendor: dict[str, Any]) -> str:
+    return (
+        vendor.get("detailApiUrl")
+        or vendor.get("apiUrl")
+        or "http://39.108.124.3:21000/tms-saas-all/oms/tms/tracequery/out/list"
+    ).strip()
+
+
+def _juren_request_headers(vendor: dict[str, Any]) -> dict[str, str]:
+    headers: dict[str, str] = {"Accept": "application/json"}
+    token = (
+        (vendor.get("token") or vendor.get("appToken") or vendor.get("authorization") or "")
+    ).strip()
+    if token:
+        header_name = (vendor.get("tokenHeader") or "Authorization").strip() or "Authorization"
+        headers[header_name] = token
+    extra = vendor.get("headers")
+    if isinstance(extra, dict):
+        headers.update({str(k): str(v) for k, v in extra.items()})
+    return headers
+
+
+def _juren_query_params(vendor: dict[str, Any], shipment_nos: list[str]) -> dict[str, str]:
+    sep = str(vendor.get("noListSeparator") or "\n")
+    return {
+        "noList": sep.join(shipment_nos),
+        "queryType": str(vendor.get("queryType") if vendor.get("queryType") is not None else "99"),
+        "companyId": str(vendor.get("companyId") if vendor.get("companyId") is not None else "32"),
+    }
+
+
+def _juren_track_time(node: dict[str, Any]) -> str:
+    t = normalize_tracking_time(node.get("scanTime") or "")
+    if t:
+        return t
+    raw_ms = node.get("scanDatetime")
+    if isinstance(raw_ms, (int, float)) and raw_ms > 0:
+        from datetime import datetime
+
+        return datetime.fromtimestamp(float(raw_ms) / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
+    return normalize_tracking_time(node.get("createDatetime") or "")
+
+
+def _juren_track_desc(node: dict[str, Any]) -> str:
+    status = _maybe_repair_text((node.get("scanStatus") or "").strip())
+    remark = _maybe_repair_text((node.get("remark") or "").strip())
+    if status and remark and status not in remark:
+        return f"{status}：{remark}"
+    return remark or status
+
+
+def _juren_event_id(node: dict[str, Any]) -> str | None:
+    ms = node.get("scanDatetime")
+    code = (str(node.get("scanCode") or "")).strip()
+    if isinstance(ms, (int, float)) and ms > 0:
+        return f"juren:{int(ms)}:{code}" if code else f"juren:{int(ms)}"
+    t = _juren_track_time(node)
+    if t and code:
+        return f"juren:{t}:{code}"
+    if t:
+        return f"juren:{t}"
+    return None
+
+
+def parse_juren_track_item(item: dict[str, Any]) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None]:
+    """JUREN：jobno=运单号，refno=尾程单号 tracking_number。"""
+    logs: list[CarrierTrackingLogEntry] = []
+    for node in item.get("podInfoDTOList") or []:
+        if not isinstance(node, dict):
+            continue
+        if node.get("isshow") == 0:
+            continue
+        t = _juren_track_time(node)
+        d = _juren_track_desc(node)
+        if not t or not d:
+            continue
+        logs.append(CarrierTrackingLogEntry.from_row(t, d, _juren_event_id(node)))
+    tn = (str(item.get("refno") or "")).strip() or None
+    return sort_logs_desc(logs), None, tn
+
+
+def _juren_get_track(
+    shipment_nos: list[str],
+    vendor: dict[str, Any],
+    *,
+    timeout: int,
+) -> tuple[list[dict[str, Any]], str | None]:
+    api_url = _juren_api_url(vendor)
+    try:
+        resp = requests.get(
+            api_url,
+            params=_juren_query_params(vendor, shipment_nos),
+            headers=_juren_request_headers(vendor),
+            timeout=timeout,
+            verify=_vendor_ssl_verify(vendor, default=True),
+        )
+        if resp.status_code >= 400:
+            try:
+                payload = _response_json(resp)
+                msg = ""
+                if isinstance(payload, dict):
+                    msg = _maybe_repair_text(
+                        str(payload.get("message") or payload.get("solution") or "")
+                    )
+                return [], f"HTTP {resp.status_code}" + (f": {msg}" if msg else "")
+            except Exception:
+                return [], f"HTTP {resp.status_code}"
+        payload = _response_json(resp)
+    except requests.RequestException as exc:
+        return [], str(exc)
+    if not isinstance(payload, dict):
+        return [], "JUREN API 响应格式异常"
+    code = payload.get("result_code")
+    if code not in (0, "0"):
+        msg = _maybe_repair_text(str(payload.get("message") or payload.get("solution") or ""))
+        return [], msg or f"result_code={code}"
+    body = payload.get("body")
+    if not isinstance(body, list):
+        return [], None
+    return [x for x in body if isinstance(x, dict)], None
+
+
+def _juren_shipment_no_for_row(row: dict[str, str]) -> str:
+    return (row.get("shipment_no") or "").strip()
+
+
+def fetch_juren_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    """JUREN 批量：GET noList=运单号（默认换行分隔）。"""
+    out: dict[str, CarrierFetch] = {}
+    sn_to_row: dict[str, str] = {}
+    for row in rows:
+        sn = (row.get("shipment_no") or "").strip()
+        if not sn:
+            continue
+        out[sn] = ([], None, None, None)
+        bill = _juren_shipment_no_for_row(row)
+        if not bill:
+            out[sn] = ([], "JUREN 查询缺少运单号", None, None)
+            continue
+        sn_to_row[bill] = sn
+
+    bills = list(sn_to_row.keys())
+    if not bills:
+        return out
+
+    for i in range(0, len(bills), BATCH_SIZE):
+        chunk = bills[i : i + BATCH_SIZE]
+        groups, err = _juren_get_track(chunk, vendor, timeout=timeout)
+        if err:
+            for bill in chunk:
+                sn = sn_to_row[bill]
+                out[sn] = ([], err, None, None)
+            continue
+        matched: set[str] = set()
+        for item in groups:
+            jobno = (str(item.get("jobno") or item.get("refno") or "")).strip()
+            sn = sn_to_row.get(jobno)
+            if not sn:
+                continue
+            logs, cid, tn = parse_juren_track_item(item)
+            out[sn] = (logs, None, cid, tn)
+            matched.add(sn)
+            if log is not None:
+                log(f"[承运商轨迹] {sn} 返回报文 {format_api_payload_for_log(item)}")
+        for bill in chunk:
+            sn = sn_to_row[bill]
+            if sn not in matched and out[sn][1] is None:
+                out[sn] = ([], "JUREN API 未返回该单", None, None)
+    return out
+
+
+def _qiyun_api_url(vendor: dict[str, Any]) -> str:
+    return (
+        vendor.get("detailApiUrl")
+        or vendor.get("apiUrl")
+        or "http://120.25.160.216:8080/WebTrack?action=repeat"
+    ).strip()
+
+
+def _qiyun_request_headers(vendor: dict[str, Any]) -> dict[str, str]:
+    headers: dict[str, str] = {
+        "Accept": "application/xml, text/xml, */*; q=0.01",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    extra = vendor.get("headers")
+    if isinstance(extra, dict):
+        headers.update({str(k): str(v) for k, v in extra.items()})
+    cookie_raw = (
+        vendor.get("cookie")
+        or vendor.get("Cookie")
+        or vendor.get("cookies")
+        or vendor.get("Cookies")
+        or ""
+    )
+    cookie = cookie_raw.strip() if isinstance(cookie_raw, str) else ""
+    if cookie and "Cookie" not in headers:
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _qiyun_request_cookies(vendor: dict[str, Any]) -> dict[str, str] | None:
+    raw = vendor.get("cookies")
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    return None
+
+
+def _qiyun_form_body(shipment_no: str, vendor: dict[str, Any]) -> dict[str, str]:
+    bill_key = (vendor.get("billidParam") or "billid").strip() or "billid"
+    return {
+        "index": str(vendor.get("index") if vendor.get("index") is not None else "0"),
+        bill_key: shipment_no,
+        "isRepeat": str(vendor.get("isRepeat") if vendor.get("isRepeat") is not None else "no"),
+        "language": str(vendor.get("language") or "zh"),
+    }
+
+
+def _qiyun_track_desc(place: str, intro: str) -> str:
+    p = _maybe_repair_text(place)
+    i = _maybe_repair_text(intro)
+    if p and i and p not in i:
+        return f"{p}：{i}"
+    return i or p
+
+
+def _qiyun_event_id(item: ET.Element) -> str | None:
+    idx = (item.get("index") or "").strip()
+    if idx:
+        return f"qiyun:{idx}"
+    t = normalize_tracking_time(item.get("sdate") or "")
+    intro = (item.get("intro") or "").strip()
+    if t and intro:
+        return f"qiyun:{t}:{intro[:48]}"
+    if t:
+        return f"qiyun:{t}"
+    return None
+
+
+def _qiyun_find_track(root: ET.Element, expected_sn: str) -> ET.Element | None:
+    tracks = root.findall(".//track")
+    if not tracks:
+        return None
+    sn = expected_sn.strip()
+    for tr in tracks:
+        if (tr.get("refernum") or "").strip() == sn:
+            return tr
+    if len(tracks) == 1:
+        return tracks[0]
+    return None
+
+
+def parse_qiyun_track_element(
+    track: ET.Element,
+    *,
+    expected_sn: str = "",
+) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None]:
+    """QIYUN：<track billid=carrier_id>，子节点 trackitem 为轨迹。"""
+    refernum = (track.get("refernum") or "").strip()
+    billid = (track.get("billid") or "").strip()
+    sn = (expected_sn or refernum).strip()
+    # 未登录时 billid 常回显运单号，不能当作 carrier_id
+    cid = billid if billid and (not sn or billid != sn) else None
+    tn = (track.get("transbillid") or track.get("newbillid") or "").strip() or None
+    logs: list[CarrierTrackingLogEntry] = []
+    for item in track.findall("trackitem"):
+        t = normalize_tracking_time(item.get("sdate") or "")
+        d = _qiyun_track_desc(item.get("place") or "", item.get("intro") or "")
+        if not t or not d:
+            continue
+        logs.append(CarrierTrackingLogEntry.from_row(t, d, _qiyun_event_id(item)))
+    return sort_logs_desc(logs), cid, tn
+
+
+def _qiyun_empty_track_hint(track: ET.Element, expected_sn: str) -> str | None:
+    if track.findall("trackitem"):
+        return None
+    refernum = (track.get("refernum") or "").strip()
+    if refernum and refernum != expected_sn.strip():
+        return None
+    if (track.get("intro") or "").strip():
+        return None
+    return (
+        "QIYUN 返回空轨迹（接口仅回显运单号，无 trackitem；"
+        "请在 config QIYUN vendor 配置浏览器 Cookie/Session 后重试）"
+    )
+
+
+def _qiyun_parse_xml(text: str, expected_sn: str) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None, str | None]:
+    try:
+        root = ET.fromstring(text)
+    except ET.ParseError as exc:
+        return [], None, None, f"QIYUN XML 解析失败: {exc}"
+    track = _qiyun_find_track(root, expected_sn)
+    if track is None:
+        return [], None, None, "QIYUN API 未返回该单"
+    logs, cid, tn = parse_qiyun_track_element(track, expected_sn=expected_sn)
+    if not logs:
+        hint = _qiyun_empty_track_hint(track, expected_sn)
+        if hint:
+            return [], cid, tn, hint
+    return logs, cid, tn, None
+
+
+def _qiyun_fetch_one(
+    shipment_no: str,
+    vendor: dict[str, Any],
+    *,
+    timeout: int,
+) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None, str | None]:
+    api_url = _qiyun_api_url(vendor)
+    try:
+        resp = requests.post(
+            api_url,
+            data=_qiyun_form_body(shipment_no, vendor),
+            headers=_qiyun_request_headers(vendor),
+            cookies=_qiyun_request_cookies(vendor),
+            timeout=timeout,
+            verify=_vendor_ssl_verify(vendor, default=True),
+        )
+        if resp.status_code >= 400:
+            return [], None, None, f"HTTP {resp.status_code}"
+        text = resp.content.decode(resp.encoding or "utf-8", errors="replace")
+    except requests.RequestException as exc:
+        return [], None, None, str(exc)
+    if not (text or "").strip():
+        return [], None, None, "QIYUN API 空响应"
+    return _qiyun_parse_xml(text, shipment_no)
+
+
+def fetch_qiyun_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    """QIYUN：每单 POST form billid=运单号，响应 XML。"""
+    out: dict[str, CarrierFetch] = {}
+    for row in rows:
+        sn = (row.get("shipment_no") or "").strip()
+        if not sn:
+            continue
+        logs, cid, tn, err = _qiyun_fetch_one(sn, vendor, timeout=timeout)
+        if err:
+            out[sn] = ([], err, None, None)
+            continue
+        out[sn] = (logs, None, cid, tn)
+        if log is not None:
+            log(
+                f"[承运商轨迹] {sn} QIYUN 返回 {len(logs)} 条"
+                + (f"，carrier_id={cid}" if cid else "")
+            )
+    return out
+
+
+def _tracklist_platform_key(vendor: dict[str, Any]) -> str:
+    p = (vendor.get("platform") or detect_platform(vendor) or "olt").strip().lower()
+    return p if p in ("olt", "haojie") else "olt"
+
+
+def _tracklist_api_label(vendor: dict[str, Any]) -> str:
+    return _tracklist_platform_key(vendor).upper()
+
+
+def _tracklist_api_url(vendor: dict[str, Any]) -> str:
+    explicit = (vendor.get("apiUrl") or "").strip()
+    if explicit:
+        return explicit
+    if _tracklist_platform_key(vendor) == "haojie":
+        return "http://120.24.174.13:8180/trackList"
+    return "http://oa.olt56.com/trackList"
+
+
+def _olt_request_headers(vendor: dict[str, Any]) -> dict[str, str]:
+    headers: dict[str, str] = {
+        "Accept": "application/json, text/javascript, */*; q=0.01",
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+        "X-Requested-With": "XMLHttpRequest",
+    }
+    extra = vendor.get("headers")
+    if isinstance(extra, dict):
+        headers.update({str(k): str(v) for k, v in extra.items()})
+    cookie_raw = (
+        vendor.get("cookie")
+        or vendor.get("Cookie")
+        or vendor.get("cookies")
+        or vendor.get("Cookies")
+        or ""
+    )
+    cookie = cookie_raw.strip() if isinstance(cookie_raw, str) else ""
+    if cookie and "Cookie" not in headers:
+        headers["Cookie"] = cookie
+    return headers
+
+
+def _olt_request_cookies(vendor: dict[str, Any]) -> dict[str, str] | None:
+    raw = vendor.get("cookies")
+    if isinstance(raw, dict):
+        return {str(k): str(v) for k, v in raw.items()}
+    return None
+
+
+def _olt_search_fields(vendor: dict[str, Any]) -> str:
+    return str(
+        vendor.get("searchListField")
+        or (
+            "border.systemnumber,border.customernumber1,border.waybillnumber,"
+            "border.tracknumber,border.newtracknumber,border.fbanumber"
+        )
+    )
+
+
+def _olt_form_body(shipment_nos: list[str], vendor: dict[str, Any]) -> dict[str, str]:
+    sep = str(vendor.get("noListSeparator") or "\n")
+    limit = max(10, len(shipment_nos))
+    if vendor.get("limit") is not None:
+        limit = max(int(vendor["limit"]), len(shipment_nos))
+    return {
+        "page": str(vendor.get("page") if vendor.get("page") is not None else "1"),
+        "limit": str(limit),
+        "searchList.waybillnumber": sep.join(shipment_nos),
+        "searchListField.waybillnumber": _olt_search_fields(vendor),
+        "searchLang": str(vendor.get("searchLang") or vendor.get("language") or "zh"),
+    }
+
+
+def _olt_track_desc(item: dict[str, Any]) -> str:
+    info = _maybe_repair_text((item.get("outinfo") or "").strip())
+    desc = _maybe_repair_text((item.get("outdesc") or "").strip())
+    country = _maybe_repair_text((item.get("countryname") or "").strip())
+    if info and desc and info not in desc:
+        text = f"{info}：{desc}"
+    else:
+        text = desc or info
+    if country and country not in text:
+        return f"{country} {text}".strip()
+    return text
+
+
+def _tracklist_event_id(item: dict[str, Any], vendor: dict[str, Any]) -> str | None:
+    prefix = _tracklist_platform_key(vendor)
+    pkid = item.get("pkid")
+    if pkid is not None:
+        return f"{prefix}:{pkid}"
+    t = normalize_tracking_time(item.get("outdate") or "")
+    return f"{prefix}:{t}" if t else None
+
+
+def _olt_shipment_nos_from_item(item: dict[str, Any]) -> set[str]:
+    keys: set[str] = set()
+    for field in ("customernumber1", "showcustomernumber1", "fbanumber"):
+        v = (str(item.get(field) or "")).strip()
+        if v:
+            keys.add(v)
+    return keys
+
+
+def parse_olt_track_item(
+    item: dict[str, Any],
+    vendor: dict[str, Any] | None = None,
+) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None]:
+    """trackList 系（OLT/HAOJIE）：customernumber1=运单号，systemnumber=carrier_id，showtracknumber=尾程单号。"""
+    v = vendor or {"platform": "olt"}
+    cid = (
+        (str(item.get("systemnumber") or item.get("showsystemnumber") or item.get("waybillnumber") or ""))
+        .strip()
+        or None
+    )
+    tn = (
+        (str(item.get("showtracknumber") or item.get("tracknumber") or item.get("shownewtracknumber") or ""))
+        .strip()
+        or None
+    )
+    logs: list[CarrierTrackingLogEntry] = []
+    t = normalize_tracking_time(item.get("outdate") or "")
+    d = _olt_track_desc(item)
+    if t and d:
+        logs.append(CarrierTrackingLogEntry.from_row(t, d, _tracklist_event_id(item, v)))
+    return sort_logs_desc(logs), cid, tn
+
+
+def _olt_post_track(
+    shipment_nos: list[str],
+    vendor: dict[str, Any],
+    *,
+    timeout: int,
+) -> tuple[list[dict[str, Any]], str | None]:
+    api_url = _tracklist_api_url(vendor)
+    label = _tracklist_api_label(vendor)
+    try:
+        resp = requests.post(
+            api_url,
+            data=_olt_form_body(shipment_nos, vendor),
+            headers=_olt_request_headers(vendor),
+            cookies=_olt_request_cookies(vendor),
+            timeout=timeout,
+            verify=_vendor_ssl_verify(vendor, default=True),
+        )
+        if resp.status_code >= 400:
+            return [], f"HTTP {resp.status_code}"
+        payload = _response_json(resp)
+    except requests.RequestException as exc:
+        return [], str(exc)
+    if not isinstance(payload, dict):
+        return [], f"{label} API 响应格式异常"
+    code = payload.get("code")
+    if code not in (0, "0"):
+        msg = _maybe_repair_text(str(payload.get("msg") or payload.get("message") or ""))
+        return [], msg or f"code={code}"
+    data = payload.get("data")
+    if not isinstance(data, list):
+        return [], None
+    return [x for x in data if isinstance(x, dict)], None
+
+
+def fetch_tracklist_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    """trackList 系批量（OLT/HAOJIE）：POST trackList，searchList.waybillnumber 换行分隔运单号。"""
+    label = _tracklist_api_label(vendor)
+    out: dict[str, CarrierFetch] = {}
+    sn_to_row: dict[str, str] = {}
+    for row in rows:
+        sn = (row.get("shipment_no") or "").strip()
+        if not sn:
+            continue
+        out[sn] = ([], None, None, None)
+        sn_to_row[sn] = sn
+
+    bills = list(sn_to_row.keys())
+    if not bills:
+        return out
+
+    for i in range(0, len(bills), BATCH_SIZE):
+        chunk = bills[i : i + BATCH_SIZE]
+        groups, err = _olt_post_track(chunk, vendor, timeout=timeout)
+        if err:
+            for sn in chunk:
+                out[sn] = ([], err, None, None)
+            continue
+        matched: set[str] = set()
+        for item in groups:
+            keys = _olt_shipment_nos_from_item(item)
+            targets = {sn_to_row[k] for k in keys if k in sn_to_row}
+            if not targets:
+                continue
+            logs, cid, tn = parse_olt_track_item(item, vendor)
+            for sn in targets:
+                out[sn] = (logs, None, cid, tn)
+                matched.add(sn)
+                if log is not None:
+                    log(f"[承运商轨迹] {sn} 返回报文 {format_api_payload_for_log(item)}")
+        for sn in chunk:
+            if sn not in matched and out[sn][1] is None:
+                out[sn] = ([], f"{label} API 未返回该单", None, None)
+    return out
+
+
+def fetch_olt_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    return fetch_tracklist_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+
+
+def fetch_haojie_batch_for_rows(
+    rows: list[dict[str, str]],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> dict[str, CarrierFetch]:
+    return fetch_tracklist_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+
+
 def fetch_tracking_batch(
     tracking_numbers: list[str],
     vendor: dict[str, Any],
@@ -719,6 +1513,21 @@ def fetch_tracking_batch(
     if platform == "wy":
         rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
         return fetch_wy_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+    if platform == "yorky":
+        rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
+        return fetch_yorky_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+    if platform == "juren":
+        rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
+        return fetch_juren_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+    if platform == "qiyun":
+        rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
+        return fetch_qiyun_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+    if platform == "olt":
+        rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
+        return fetch_olt_batch_for_rows(rows, vendor, timeout=timeout, log=log)
+    if platform == "haojie":
+        rows = [{"shipment_no": n, "carrier_id": ""} for n in cleaned]
+        return fetch_haojie_batch_for_rows(rows, vendor, timeout=timeout, log=log)
     out: dict[str, CarrierFetch] = {}
     for num in cleaned:
         out[num] = fetch_tracking_one(num, vendor, timeout=timeout)
@@ -756,6 +1565,36 @@ def fetch_tracking_one(
         ).get(sn, ([], "未返回", None, None))
     if platform == "wy":
         return fetch_wy_batch_for_rows(
+            [{"shipment_no": sn, "carrier_id": ""}],
+            vendor,
+            timeout=timeout,
+        ).get(sn, ([], "未返回", None, None))
+    if platform == "yorky":
+        return fetch_yorky_batch_for_rows(
+            [{"shipment_no": sn, "carrier_id": ""}],
+            vendor,
+            timeout=timeout,
+        ).get(sn, ([], "未返回", None, None))
+    if platform == "juren":
+        return fetch_juren_batch_for_rows(
+            [{"shipment_no": sn, "carrier_id": ""}],
+            vendor,
+            timeout=timeout,
+        ).get(sn, ([], "未返回", None, None))
+    if platform == "qiyun":
+        return fetch_qiyun_batch_for_rows(
+            [{"shipment_no": sn, "carrier_id": ""}],
+            vendor,
+            timeout=timeout,
+        ).get(sn, ([], "未返回", None, None))
+    if platform == "olt":
+        return fetch_olt_batch_for_rows(
+            [{"shipment_no": sn, "carrier_id": ""}],
+            vendor,
+            timeout=timeout,
+        ).get(sn, ([], "未返回", None, None))
+    if platform == "haojie":
+        return fetch_haojie_batch_for_rows(
             [{"shipment_no": sn, "carrier_id": ""}],
             vendor,
             timeout=timeout,

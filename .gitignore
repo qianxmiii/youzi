@@ -34,3 +34,4 @@ youzi_v2/frontend/dist/
 logs/
 *.log
 **/*.log
+config/README.md

@@ -23,6 +23,11 @@ from .carrier_vendors import (
     fetch_tracking_one,
     fetch_txfba_batch_for_rows,
     fetch_wy_batch_for_rows,
+    fetch_juren_batch_for_rows,
+    fetch_haojie_batch_for_rows,
+    fetch_olt_batch_for_rows,
+    fetch_qiyun_batch_for_rows,
+    fetch_yorky_batch_for_rows,
     load_vendors_config,
     resolve_vendor_for_row,
 )
@@ -129,6 +134,16 @@ def sync_carrier_tracking(
                 tracking_map = fetch_txfba_batch_for_rows(batch, vendor, log=out_log)
             elif platform == "wy":
                 tracking_map = fetch_wy_batch_for_rows(batch, vendor, log=out_log)
+            elif platform == "yorky":
+                tracking_map = fetch_yorky_batch_for_rows(batch, vendor, log=out_log)
+            elif platform == "juren":
+                tracking_map = fetch_juren_batch_for_rows(batch, vendor, log=out_log)
+            elif platform == "qiyun":
+                tracking_map = fetch_qiyun_batch_for_rows(batch, vendor, log=out_log)
+            elif platform == "olt":
+                tracking_map = fetch_olt_batch_for_rows(batch, vendor, log=out_log)
+            elif platform == "haojie":
+                tracking_map = fetch_haojie_batch_for_rows(batch, vendor, log=out_log)
             elif platform in ("topda", "huawell_cms"):
                 tracking_map = fetch_tracking_batch(batch_nos, vendor, log=out_log)
             else:

@@ -116,7 +116,7 @@ onMounted(load)
           </article>
           <article class="panel p-4">
             <h3 class="mb-1 text-sm font-medium text-white">承运商占比</h3>
-            <p class="mb-3 text-[10px] text-zinc-600">按运单 carrier_code 聚合（如腾信、森磊、拓普达等）</p>
+            <p class="mb-3 text-[10px] text-zinc-600">按运单 carrier_code 聚合</p>
             <DistributionBars
               :items="data.carrierDistribution"
               :total="data.total"

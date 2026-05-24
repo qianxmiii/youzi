@@ -17,9 +17,12 @@ from .sync_log import make_sync_logger
 from ..carrier_tracking_entry import latest_from_logs
 from .carrier_vendors import (
     BATCH_SIZE,
+    carrier_vendor_unassigned_reason,
     detect_platform,
     fetch_tracking_batch,
     fetch_tracking_one,
+    fetch_txfba_batch_for_rows,
+    fetch_wy_batch_for_rows,
     load_vendors_config,
     resolve_vendor_for_row,
 )
@@ -64,14 +67,18 @@ def sync_carrier_tracking(
     requested_nos = (
         len([s for s in shipment_nos if s and s.strip()]) if shipment_nos else 0
     )
-    rows = shipments_repo.list_for_carrier_sync(shipment_nos)
+    manual_scope = bool(shipment_nos)
+    rows = shipments_repo.list_for_carrier_sync(
+        shipment_nos,
+        include_delivered=manual_scope,
+    )
     total = len(rows)
-    excluded_not_in_transit = max(0, requested_nos - total) if shipment_nos else 0
-    if shipment_nos:
+    excluded_not_in_transit = max(0, requested_nos - total) if manual_scope else 0
+    if manual_scope:
         out_log(
-            f"[承运商轨迹] 指定 {requested_nos} 单，转运中可同步 {total} 单"
+            f"[承运商轨迹] 指定 {requested_nos} 单，可同步 {total} 单（含已签收）"
             + (
-                f"，已跳过非转运中/已签收 {excluded_not_in_transit} 单"
+                f"，未匹配 {excluded_not_in_transit} 单"
                 if excluded_not_in_transit
                 else ""
             )
@@ -79,10 +86,16 @@ def sync_carrier_tracking(
 
     by_vendor: dict[str, list[dict[str, str]]] = {}
     unassigned = 0
+    errors: list[str] = []
     for row in rows:
         vendor = resolve_vendor_for_row(row, vendor_map)
         if vendor is None:
             unassigned += 1
+            sn = row.get("shipment_no") or ""
+            reason = carrier_vendor_unassigned_reason(row, vendor_map)
+            err_line = f"未匹配承运商/{sn}: {reason}"
+            errors.append(err_line)
+            out_log(f"[承运商轨迹] {err_line}")
             continue
         name = vendor["name"]
         by_vendor.setdefault(name, []).append({**row, "_vendor": vendor})
@@ -92,7 +105,6 @@ def sync_carrier_tracking(
     empty = 0
     not_found = 0
     log_count = 0
-    errors: list[str] = []
     vendor_stats: dict[str, dict[str, int]] = {}
 
     out_log(
@@ -113,7 +125,11 @@ def sync_carrier_tracking(
 
             platform = detect_platform(vendor)
             batch_nos = [r["shipment_no"] for r in batch]
-            if platform in ("topda", "huawell_cms"):
+            if platform == "txfba":
+                tracking_map = fetch_txfba_batch_for_rows(batch, vendor, log=out_log)
+            elif platform == "wy":
+                tracking_map = fetch_wy_batch_for_rows(batch, vendor, log=out_log)
+            elif platform in ("topda", "huawell_cms"):
                 tracking_map = fetch_tracking_batch(batch_nos, vendor, log=out_log)
             else:
                 tracking_map = {sn: fetch_tracking_one(sn, vendor) for sn in batch_nos}

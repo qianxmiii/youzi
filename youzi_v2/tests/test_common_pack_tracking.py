@@ -1,4 +1,4 @@
-"""鑫鲲鹏 common_pack 报文字段回写。"""
+"""XKP common_pack 报文字段回写。"""
 
 import unittest
 

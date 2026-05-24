@@ -80,6 +80,12 @@ const router = createRouter({
           component: () => import('@/views/channels/ChannelsView.vue'),
           meta: { title: '渠道管理' },
         },
+        {
+          path: 'scheduled-tasks',
+          name: 'scheduled-tasks',
+          component: () => import('@/views/scheduled/ScheduledTasksView.vue'),
+          meta: { title: '计划任务' },
+        },
       ],
     },
   ],

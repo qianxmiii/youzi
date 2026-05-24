@@ -48,16 +48,36 @@ from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
 from .schemas.statistics import ShipmentStatisticsOverview
 from .schemas.tracking_freshness import TrackingFreshnessStats
+from .schemas.scheduled_tasks import (
+    ScheduledSyncRunResult,
+    ScheduledSyncSettingsUpdate,
+    ScheduledTaskConfig,
+    ScheduledTaskOverview,
+    TrackingSyncJobListResponse,
+)
 from .schemas.tracking import (
     TrackingSyncDailyStats,
     TrackingSyncRequest,
     TrackingSyncResult,
 )
 from .services.carrier_tracking_sync import sync_carrier_tracking
+from .services.scheduled_tasks_info import (
+    build_scheduled_task_config,
+    builtin_scheduled_tasks,
+)
+from .services.scheduled_sync_settings import (
+    get_scheduled_sync_settings,
+    save_scheduled_sync_settings,
+)
 from .services.code_table_excel import build_template_bytes, import_excel_file as import_code_table_excel
 from .services.shipment_excel import build_export_excel_bytes, import_excel_file
 from .services.tracking_sync import sync_all_tracking
-from .services.tracking_sync_scheduler import start_tracking_sync_scheduler
+from .services.tracking_sync_scheduler import (
+    run_scheduled_carrier_sync,
+    run_scheduled_internal_sync,
+    run_scheduled_tracking_sync,
+    start_tracking_sync_scheduler,
+)
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
@@ -670,6 +690,85 @@ def get_tracking_sync_daily_stats(source: str = Query("carrier")):
     return TrackingSyncDailyStats(**tracking_jobs_repo.today_stats(src))
 
 
+@app.get("/api/v1/scheduled-tasks/overview", response_model=ScheduledTaskOverview)
+def get_scheduled_tasks_overview():
+    settings = get_scheduled_sync_settings(_database)
+    return ScheduledTaskOverview(
+        config=ScheduledTaskConfig(**build_scheduled_task_config(_database)),
+        internalToday=tracking_jobs_repo.today_stats("internal"),
+        carrierToday=tracking_jobs_repo.today_stats("carrier"),
+        tasks=builtin_scheduled_tasks(settings),
+    )
+
+
+@app.put("/api/v1/scheduled-tasks/settings", response_model=ScheduledTaskConfig)
+def update_scheduled_tasks_settings(body: ScheduledSyncSettingsUpdate):
+    saved = save_scheduled_sync_settings(
+        _database,
+        internal_enabled=body.internal_enabled,
+        internal_interval_hours=body.internal_interval_hours,
+        carrier_enabled=body.carrier_enabled,
+        carrier_interval_hours=body.carrier_interval_hours,
+        initial_delay_sec=body.initial_delay_sec,
+    )
+    return ScheduledTaskConfig(
+        **saved.to_api_dict(),
+        scriptPath=str(REPO_ROOT / "youzi_v2" / "scripts" / "sync_all_tracking_scheduled.py"),
+        pollIntervalSec=60,
+    )
+
+
+@app.get("/api/v1/scheduled-tasks/jobs", response_model=TrackingSyncJobListResponse)
+def list_scheduled_task_jobs(
+    source: str | None = Query(None, description="carrier / internal，默认全部"),
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    src = source.strip().lower() if source else None
+    if src and src not in ("internal", "carrier"):
+        raise HTTPException(status_code=400, detail="source 须为 internal 或 carrier")
+    data = tracking_jobs_repo.list_jobs(source=src, limit=limit, offset=offset)
+    return TrackingSyncJobListResponse(**data)
+
+
+@app.post("/api/v1/scheduled-tasks/run-internal-sync", response_model=ScheduledSyncRunResult)
+def run_scheduled_tasks_internal_sync():
+    result = run_scheduled_internal_sync(
+        shipments_repo,
+        internal_tracking_repo,
+        tracking_jobs_repo,
+        LOGISTICS_CONFIG_PATH,
+        force=True,
+    )
+    return ScheduledSyncRunResult(**result)
+
+
+@app.post("/api/v1/scheduled-tasks/run-carrier-sync", response_model=ScheduledSyncRunResult)
+def run_scheduled_tasks_carrier_sync():
+    result = run_scheduled_carrier_sync(
+        shipments_repo,
+        carrier_tracking_repo,
+        tracking_jobs_repo,
+        LOGISTICS_CONFIG_PATH,
+        force=True,
+    )
+    return ScheduledSyncRunResult(**result)
+
+
+@app.post("/api/v1/scheduled-tasks/run-tracking-sync", response_model=ScheduledSyncRunResult)
+def run_scheduled_tasks_tracking_sync():
+    """立即执行内部 + 承运商（忽略间隔，仍受页面开关影响时可 force）。"""
+    result = run_scheduled_tracking_sync(
+        shipments_repo,
+        internal_tracking_repo,
+        carrier_tracking_repo,
+        tracking_jobs_repo,
+        LOGISTICS_CONFIG_PATH,
+        force=True,
+    )
+    return ScheduledSyncRunResult(**result)
+
+
 @app.get("/api/v1/shipments/{item_id}")
 def get_shipment(item_id: str):
     row = shipments_repo.get_by_id(item_id)
@@ -788,8 +887,7 @@ def batch_update_shipments(body: ShipmentBatchUpdateIn):
 def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(None)):
     """
     从 config/config.json 的 base_url 拉取内部路由轨迹，
-    写入 internal_tracking_logs；转运中/未知/查验可同步，已签收(DELIVERED)不同步。
-    body.shipmentNos 非空时仅处理其中符合上述状态的运单号。
+    写入 internal_tracking_logs。全库同步不含已签收；body.shipmentNos 指定单号时可含已签收。
     """
     shipment_nos: list[str] | None = None
     if body and body.shipment_nos:
@@ -802,6 +900,8 @@ def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(Non
             internal_tracking_repo,
             LOGISTICS_CONFIG_PATH,
             shipment_nos=shipment_nos,
+            jobs_repo=tracking_jobs_repo,
+            trigger="manual",
         )
     except FileNotFoundError as exc:
         raise HTTPException(
@@ -822,8 +922,8 @@ def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(Non
 @app.post("/api/v1/shipments/sync-carrier-tracking", response_model=TrackingSyncResult)
 def sync_shipments_carrier_tracking(body: TrackingSyncRequest | None = Body(None)):
     """
-    仅转运中(IN_TRANSIT)运单；按 config.vendors 匹配承运商，按 vendor 串行、每批 10 单查询，
-    写入 carrier_tracking_logs。已签收不同步。
+    按 config.vendors 匹配承运商并写入 carrier_tracking_logs。
+    全库仅转运中；body.shipmentNos 指定单号时可含已签收。
     """
     shipment_nos: list[str] | None = None
     if body and body.shipment_nos:

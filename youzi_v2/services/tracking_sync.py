@@ -7,7 +7,13 @@ from typing import Any, Callable
 
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_logs_repository import TrackingLogsRepository
+from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from ..internal_tracking import is_internal_no_tracking_desc
+from .internal_batch_schedule import (
+    is_internal_full_batch,
+    record_internal_batch_finished,
+    should_run_scheduled_internal_batch,
+)
 from .sync_log import make_sync_logger
 from .logistics_tracking import (
     BATCH_SIZE,
@@ -38,32 +44,99 @@ def sync_all_tracking(
     *,
     shipment_nos: list[str] | None = None,
     batch_size: int = BATCH_SIZE,
+    jobs_repo: TrackingSyncJobsRepository | None = None,
+    trigger: str = "manual",
     log: LogFn | None = None,
 ) -> dict[str, Any]:
     log_lines, out_log = make_sync_logger(log)
+
+    if trigger == "scheduled" and is_internal_full_batch(shipment_nos):
+        ok, skip_reason = should_run_scheduled_internal_batch(shipments_repo._database)
+        if not ok:
+            out_log(f"[轨迹同步] 跳过全库同步：{skip_reason}")
+            return _skipped_internal_batch_result(log_lines, skip_reason or "")
+
+    job_id: str | None = None
+    if jobs_repo is not None:
+        job_id = jobs_repo.create_job("internal", trigger)
+
+    try:
+        return _sync_all_tracking_body(
+            shipments_repo,
+            tracking_repo,
+            config_path,
+            shipment_nos=shipment_nos,
+            batch_size=batch_size,
+            jobs_repo=jobs_repo,
+            job_id=job_id,
+            trigger=trigger,
+            log_lines=log_lines,
+            out_log=out_log,
+        )
+    except Exception as exc:
+        if jobs_repo is not None and job_id:
+            jobs_repo.finish_job(
+                job_id,
+                status="failed",
+                total_shipments=0,
+                updated_shipments=0,
+                new_log_count=0,
+                errors=[str(exc)],
+            )
+        raise
+
+
+def _sync_all_tracking_body(
+    shipments_repo: ShipmentsRepository,
+    tracking_repo: TrackingLogsRepository,
+    config_path: Path,
+    *,
+    shipment_nos: list[str] | None,
+    batch_size: int,
+    jobs_repo: TrackingSyncJobsRepository | None,
+    job_id: str | None,
+    trigger: str,
+    log_lines: list[str],
+    out_log: LogFn,
+) -> dict[str, Any]:
     config = load_logistics_config(config_path)
     base_url = config["base_url"]
     batch_size = BATCH_SIZE
 
+    manual_scope = bool(shipment_nos)
     requested_nos = (
-        len([s for s in shipment_nos if s and s.strip()]) if shipment_nos else 0
+        len([s for s in shipment_nos if s and s.strip()]) if manual_scope else 0
     )
-    tracking_list = shipments_repo.list_for_tracking_sync(shipment_nos)
+    tracking_list = shipments_repo.list_for_tracking_sync(
+        shipment_nos,
+        include_delivered=manual_scope,
+    )
     total = len(tracking_list)
-    excluded_not_in_transit = max(0, requested_nos - total) if shipment_nos else 0
-    if shipment_nos:
+    excluded_not_in_transit = max(0, requested_nos - total) if manual_scope else 0
+    if manual_scope:
         out_log(
-            f"[轨迹同步] 指定 {requested_nos} 单，可同步 {total} 单"
+            f"[轨迹同步] 指定 {requested_nos} 单，可同步 {total} 单（含已签收）"
             + (
-                f"，已跳过已签收等 {excluded_not_in_transit} 单"
+                f"，未匹配 {excluded_not_in_transit} 单"
                 if excluded_not_in_transit
                 else ""
             )
         )
     if total == 0:
         out_log("[轨迹同步] 无待同步运单（已签收不参与），跳过")
+        if jobs_repo is not None and job_id:
+            jobs_repo.finish_job(
+                job_id,
+                status="success",
+                total_shipments=0,
+                updated_shipments=0,
+                new_log_count=0,
+            )
         return _empty_result(
-            batch_size, log_lines, excluded_not_in_transit=excluded_not_in_transit
+            batch_size,
+            log_lines,
+            excluded_not_in_transit=excluded_not_in_transit,
+            job_id=job_id,
         )
 
     out_log(f"[轨迹同步] 开始，base_url={base_url}")
@@ -156,7 +229,28 @@ def sync_all_tracking(
     if unique_errors:
         out_log(f"[轨迹同步] 接口错误 {len(unique_errors)} 条（详见响应 errors）")
 
+    status = "failed" if unique_errors and updated == 0 else ("partial" if unique_errors else "success")
+    if jobs_repo is not None and job_id:
+        jobs_repo.finish_job(
+            job_id,
+            status=status,
+            total_shipments=total,
+            updated_shipments=updated,
+            new_log_count=log_count,
+            skipped=skipped,
+            empty_count=empty,
+            not_found=not_found,
+            errors=unique_errors,
+        )
+    if (
+        is_internal_full_batch(shipment_nos)
+        and trigger == "scheduled"
+        and status in ("success", "partial")
+    ):
+        record_internal_batch_finished(shipments_repo._database)
+
     return {
+        "jobId": job_id,
         "total": total,
         "updated": updated,
         "skipped": skipped,
@@ -176,8 +270,10 @@ def _empty_result(
     log_lines: list[str] | None = None,
     *,
     excluded_not_in_transit: int = 0,
+    job_id: str | None = None,
 ) -> dict[str, Any]:
     return {
+        "jobId": job_id,
         "total": 0,
         "updated": 0,
         "skipped": 0,
@@ -189,4 +285,25 @@ def _empty_result(
         "batchSize": batch_size,
         "batches": 0,
         "logs": (log_lines or [])[-200:],
+    }
+
+
+def _skipped_internal_batch_result(
+    log_lines: list[str],
+    reason: str,
+) -> dict[str, Any]:
+    return {
+        "jobId": None,
+        "total": 0,
+        "updated": 0,
+        "skipped": 0,
+        "empty": 0,
+        "notFound": 0,
+        "logCount": 0,
+        "errors": [],
+        "batchSize": BATCH_SIZE,
+        "batches": 0,
+        "intervalSkipped": True,
+        "skipReason": reason,
+        "logs": log_lines[-200:],
     }

@@ -26,3 +26,14 @@ def test_internal_sql():
 
 def test_carrier_sql():
     assert carrier_tracking_sync_eligible_sql() == "status_code IN ('IN_TRANSIT')"
+
+
+def test_internal_sql_manual_includes_delivered():
+    sql = internal_tracking_sync_eligible_sql(include_delivered=True)
+    assert "DELIVERED" in sql
+
+
+def test_carrier_sql_manual_includes_delivered():
+    sql = carrier_tracking_sync_eligible_sql(include_delivered=True)
+    assert "DELIVERED" in sql
+    assert "IN_TRANSIT" in sql

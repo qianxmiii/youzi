@@ -1,26 +1,16 @@
-"""承运商全库批处理间隔：与定时任务 YOUZI_TRACKING_SYNC_INTERVAL_HOURS 对齐（默认 2 小时）。"""
+"""承运商全库批处理间隔（读 app_settings）。"""
 
 from __future__ import annotations
 
-import os
 from datetime import datetime, timedelta
 
 from ..db.app_settings_table import get_setting, set_setting
 from ..db.connection import Database
 from ..db.datetime_util import DATETIME_FMT, now_str
-
-SETTING_LAST_CARRIER_BATCH_FINISHED = "tracking.carrier_batch.last_finished_at"
-
-
-def carrier_batch_interval_hours() -> float:
-    return float(os.getenv("YOUZI_TRACKING_SYNC_INTERVAL_HOURS", "2"))
-
-
-def is_carrier_full_batch(shipment_nos: list[str] | None) -> bool:
-    if not shipment_nos:
-        return True
-    return not any(s and str(s).strip() for s in shipment_nos)
-
+from .scheduled_sync_settings import (
+    SETTING_LAST_CARRIER_BATCH_FINISHED,
+    get_scheduled_sync_settings,
+)
 
 def _parse_finished_at(raw: str | None) -> datetime | None:
     if not raw or not str(raw).strip():
@@ -43,19 +33,29 @@ def _format_duration(delta: timedelta) -> str:
     return f"{s}秒"
 
 
+def carrier_batch_interval_hours(database: Database | None = None) -> float:
+    if database is not None:
+        return get_scheduled_sync_settings(database).carrier_interval_hours
+    from .scheduled_sync_settings import _env_interval_hours
+
+    return max(0.0, _env_interval_hours())
+
+
+def is_carrier_full_batch(shipment_nos: list[str] | None) -> bool:
+    if not shipment_nos:
+        return True
+    return not any(s and str(s).strip() for s in shipment_nos)
+
+
 def should_run_scheduled_carrier_batch(database: Database) -> tuple[bool, str | None]:
-    """
-    定时/启动触发的全库承运商同步是否应执行。
-    返回 (True, None) 可执行；(False, 原因) 跳过。
-    """
-    hours = carrier_batch_interval_hours()
+    settings = get_scheduled_sync_settings(database)
+    if not settings.carrier_enabled:
+        return False, "承运商轨迹定时同步已关闭"
+    hours = settings.carrier_interval_hours
     if hours <= 0:
         return True, None
 
-    with database.lock:
-        last_raw = get_setting(database.conn, SETTING_LAST_CARRIER_BATCH_FINISHED)
-
-    finished = _parse_finished_at(last_raw)
+    finished = _parse_finished_at(settings.last_carrier_finished)
     if finished is None:
         return True, None
 
@@ -72,7 +72,6 @@ def should_run_scheduled_carrier_batch(database: Database) -> tuple[bool, str | 
 
 
 def record_carrier_batch_finished(database: Database) -> None:
-    """全库承运商批处理成功结束后写入完成时间。"""
     with database.lock:
         set_setting(database.conn, SETTING_LAST_CARRIER_BATCH_FINISHED, now_str())
         database.conn.commit()

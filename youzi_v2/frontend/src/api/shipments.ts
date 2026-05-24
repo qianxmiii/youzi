@@ -227,7 +227,7 @@ export async function syncTracking(shipmentNos?: string[]): Promise<TrackingSync
   })
 }
 
-/** 同步承运商轨迹（仅转运中；全库或指定单号） */
+/** 同步承运商轨迹（全库仅转运中；指定单号可含已签收） */
 export async function syncCarrierTracking(shipmentNos?: string[]): Promise<TrackingSyncResult> {
   const body = shipmentNos?.length ? { shipmentNos } : undefined
   return api<TrackingSyncResult>('/api/v1/shipments/sync-carrier-tracking', {

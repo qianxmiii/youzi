@@ -1,6 +1,10 @@
 """Topda轨迹解析单元测试（不依赖外网）。"""
 
-from youzi_v2.services.carrier_vendors import _extract_carrier_id, parse_topda_item
+from youzi_v2.services.carrier_vendors import (
+    _extract_carrier_id,
+    parse_topda_item,
+    parse_topda_tracking_bundle,
+)
 
 
 SAMPLE_ITEM = {
@@ -41,6 +45,23 @@ def test_parse_topda_head_node_labels():
 
 def test_extract_carrier_id_job_num():
     assert _extract_carrier_id({**SAMPLE_ITEM, "jobNum": "JOB-888"}) == "JOB-888"
+
+
+def test_parse_topda_tracking_bundle_main_and_subs():
+    item = {
+        "trackingNum": "DPSECO260410140",
+        "jobNum": "TPD260404860",
+        "poNum": "DPSECO260410140",
+        "subTrackings": [
+            {"trackingNum": "870833728471"},
+            {"trackingNum": "870833728482"},
+        ],
+    }
+    job, main, all_nums = parse_topda_tracking_bundle(item)
+    assert job == "TPD260404860"
+    assert main == "870833728471"
+    assert all_nums == ["870833728471", "870833728482"]
+    assert "DPSECO260410140" not in all_nums
 
 
 SAME_MINUTE_TRACKINGS = {

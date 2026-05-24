@@ -52,7 +52,7 @@ def test_extract_outer_tracking_number():
         _extract_outer_tracking_number(
             {"outer_carrier_tracking_number": "UPS 1ZK351H66829979895"}
         )
-        == "UPS 1ZK351H66829979895"
+        == "1ZK351H66829979895"
     )
     assert _extract_outer_tracking_number({"outer_carrier_tracking_number": ""}) == ""
 
@@ -78,5 +78,5 @@ def test_parse_nextsls_json_returns_carrier_id():
     logs, err, carrier_id, tracking_number = _parse_nextsls_json(payload)
     assert err is None
     assert carrier_id == "NSLS-12345"
-    assert tracking_number == "UPS 1ZK351H66829979895"
+    assert tracking_number == "1ZK351H66829979895"
     assert len(logs) == 2

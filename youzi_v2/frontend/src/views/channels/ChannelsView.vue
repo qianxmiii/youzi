@@ -242,13 +242,16 @@ onMounted(async () => {
       </NSpace>
     </div>
 
-    <div class="panel flex shrink-0 flex-wrap items-center gap-2 p-3">
-      <NInput
-        v-model:value="search"
+    <div
+      class="panel grid shrink-0 grid-cols-[7.5rem_7.5rem_minmax(12rem,1fr)] items-center gap-2 p-3"
+    >
+      <NSelect
+        v-model:value="filterCategory"
+        :options="categories.map((c) => ({ label: c, value: c }))"
         clearable
-        placeholder="搜索渠道编码、中文、国家、备注…"
-        class="w-64"
+        placeholder="大类"
         size="small"
+        class="min-w-0"
       />
       <NSelect
         v-model:value="filterCountry"
@@ -256,15 +259,14 @@ onMounted(async () => {
         clearable
         placeholder="国家"
         size="small"
-        class="w-28"
+        class="min-w-0"
       />
-      <NSelect
-        v-model:value="filterCategory"
-        :options="categories.map((c) => ({ label: c, value: c }))"
+      <NInput
+        v-model:value="search"
         clearable
-        placeholder="大类"
+        placeholder="搜索渠道编码、中文、国家、备注…"
+        class="min-w-0"
         size="small"
-        class="w-28"
       />
     </div>
 

@@ -21,7 +21,9 @@
   },
   "column_aliases": {
     "Amazon ID": "customer_shipment_id",
-    "Amazon Reference ID": "amazon_ref_id"
+    "Amazon Reference ID": "amazon_ref_id",
+    "仓库代码": "address_code",
+    "收件人邮编": "zipcode"
   },
   "export_only_fields": ["latest_tracking_time", "latest_tracking_desc"],
   "status_aliases": {

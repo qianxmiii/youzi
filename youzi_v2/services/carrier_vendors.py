@@ -17,6 +17,7 @@ from ..carrier_tracking_entry import (
     sort_logs_desc,
 )
 from ..db.datetime_util import normalize_tracking_time
+from ..last_mile_tracking import normalize_tracking_field_value
 from .sync_log_format import format_api_payload_for_log
 
 BATCH_SIZE = 10
@@ -24,8 +25,14 @@ DEFAULT_TIMEOUT = 30
 
 LogFn = Callable[[str], None]
 
-# (轨迹列表, 错误, carrier_id, 尾程单号 tracking_number)
-CarrierFetch = tuple[list[CarrierTrackingLogEntry], str | None, str | None, str | None]
+# (轨迹列表, 错误, carrier_id, 主单号/尾程 tracking_number, 全部追踪号含主单)
+CarrierFetch = tuple[
+    list[CarrierTrackingLogEntry],
+    str | None,
+    str | None,
+    str | None,
+    list[str] | None,
+]
 
 
 def _vendor_ssl_verify(vendor: dict[str, Any], *, default: bool = True) -> bool:
@@ -42,15 +49,61 @@ def _carrier_ok(
     logs: list[CarrierTrackingLogEntry] | list,
     carrier_id: str | None = None,
     tracking_number: str | None = None,
+    tracking_numbers: list[str] | None = None,
 ) -> CarrierFetch:
     cid = (carrier_id or "").strip() or None
-    tn = (tracking_number or "").strip() or None
+    tn = normalize_tracking_field_value(tracking_number) if tracking_number else None
     entries = sort_logs_desc(coerce_carrier_logs(logs))
-    return entries, None, cid, tn
+    extra = None
+    if tracking_numbers:
+        extra = [
+            normalize_tracking_field_value(n) or (n or "").strip()
+            for n in tracking_numbers
+            if (n or "").strip()
+        ]
+        extra = list(dict.fromkeys(extra))
+    return entries, None, cid, tn, extra or None
 
 
 def _carrier_fail(msg: str) -> CarrierFetch:
-    return [], msg, None, None
+    return [], msg, None, None, None
+
+
+def unpack_carrier_fetch(raw: CarrierFetch | tuple[Any, ...]) -> CarrierFetch:
+    """兼容 4 元组旧返回值。"""
+    if len(raw) >= 5:
+        return (
+            raw[0],
+            raw[1],
+            raw[2],
+            raw[3],
+            raw[4] if len(raw) > 4 else None,
+        )
+    return raw[0], raw[1], raw[2], raw[3], None
+
+
+def parse_topda_tracking_bundle(
+    item: dict[str, Any],
+) -> tuple[str | None, str | None, list[str]]:
+    """
+    TOPDA pubTracking：jobNum、subTrackings 下 trackingNum。
+    第一个子单 trackingNum 为主单号（写入 shipments.tracking_number），
+    全部子单号入库（主单号 is_main=1，且本身也在子单列表中）。
+    """
+    job = (item.get("jobNum") or "").strip() or None
+    numbers: list[str] = []
+    seen: set[str] = set()
+
+    for st in item.get("subTrackings") or []:
+        if not isinstance(st, dict):
+            continue
+        n = normalize_tracking_field_value(st.get("trackingNum"))
+        if n and n not in seen:
+            seen.add(n)
+            numbers.append(n)
+
+    main = numbers[0] if numbers else None
+    return job, main, numbers
 
 
 def _repair_utf8_mojibake(text: str) -> str:
@@ -103,7 +156,7 @@ def _extract_outer_tracking_number(data: dict[str, Any]) -> str:
         "expressMainNo",
         "last_mile_tracking_number",
     ):
-        v = (data.get(key) or "").strip()
+        v = normalize_tracking_field_value(data.get(key))
         if v:
             return v
     return ""
@@ -483,7 +536,7 @@ def fetch_txfba_batch_for_rows(
         sn = (row.get("shipment_no") or "").strip()
         if not sn:
             continue
-        out[sn] = ([], None, None, None)
+        out[sn] = ([], None, None, None, None)
         bill = _txfba_bill_for_row(row, vendor)
         if not bill:
             out[sn] = ([], "TX查询缺少 billNo（需运单号）", None, None)
@@ -683,7 +736,7 @@ def fetch_wy_batch_for_rows(
         sn = (row.get("shipment_no") or "").strip()
         if not sn:
             continue
-        out[sn] = ([], None, None, None)
+        out[sn] = ([], None, None, None, None)
         order_no = _wy_order_no_for_row(row, vendor)
         if not order_no:
             out[sn] = ([], "WY查询缺少 customerOrderNumber（需运单号）", None, None)
@@ -865,7 +918,7 @@ def fetch_yorky_batch_for_rows(
         sn = (row.get("shipment_no") or "").strip()
         if not sn:
             continue
-        out[sn] = ([], None, None, None)
+        out[sn] = ([], None, None, None, None)
         bill = _yorky_track_no_for_row(row)
         if not bill:
             out[sn] = ([], "聚美查询缺少运单号", None, None)
@@ -1042,7 +1095,7 @@ def fetch_juren_batch_for_rows(
         sn = (row.get("shipment_no") or "").strip()
         if not sn:
             continue
-        out[sn] = ([], None, None, None)
+        out[sn] = ([], None, None, None, None)
         bill = _juren_shipment_no_for_row(row)
         if not bill:
             out[sn] = ([], "JUREN 查询缺少运单号", None, None)
@@ -1439,7 +1492,7 @@ def fetch_tracklist_batch_for_rows(
         sn = (row.get("shipment_no") or "").strip()
         if not sn:
             continue
-        out[sn] = ([], None, None, None)
+        out[sn] = ([], None, None, None, None)
         sn_to_row[sn] = sn
 
     bills = list(sn_to_row.keys())
@@ -1703,19 +1756,19 @@ def _fetch_huawell_cms_batch(
     """HWE CMS 批量轨迹：POST order_numbers。"""
     api_url = (vendor.get("apiUrl") or "").strip()
     if not api_url:
-        return {n: ([], "HWE CMS 配置缺少 apiUrl", None, None) for n in tracking_numbers}
+        return {n: ([], "HWE CMS 配置缺少 apiUrl", None, None, None) for n in tracking_numbers}
     uuid_val = (vendor.get("uuid") or vendor.get("UUID") or "").strip()
     body = {"order_numbers": tracking_numbers, "uuid": uuid_val}
-    out: dict[str, CarrierFetch] = {n: ([], None, None, None) for n in tracking_numbers}
+    out: dict[str, CarrierFetch] = {n: ([], None, None, None, None) for n in tracking_numbers}
     try:
         resp = requests.post(api_url, json=body, timeout=timeout)
         resp.raise_for_status()
         payload = _response_json(resp)
     except Exception as exc:
         err = str(exc)
-        return {n: ([], err, None, None) for n in tracking_numbers}
+        return {n: ([], err, None, None, None) for n in tracking_numbers}
     if not isinstance(payload, list):
-        return {n: ([], "HWE CMS 响应格式异常", None, None) for n in tracking_numbers}
+        return {n: ([], "HWE CMS 响应格式异常", None, None, None) for n in tracking_numbers}
     for item in payload:
         if not isinstance(item, dict):
             continue
@@ -1732,7 +1785,7 @@ def _fetch_huawell_cms_batch(
                 keys.add(v)
         for key in keys:
             if key in out:
-                out[key] = (logs, None, cid or None, tn or None)
+                out[key] = (logs, None, cid or None, tn or None, None)
     return out
 
 
@@ -1783,7 +1836,8 @@ def _fetch_topda_batch(
     host = (vendor.get("host") or "topda.ai-ops.vip").strip()
     api_url = (vendor.get("apiUrl") or f"https://{host}/edi/pubTracking").strip()
     public_url = (vendor.get("publicUrl") or vendor.get("url") or "/public-tracking").strip()
-    no_sub = vendor.get("noSubTracking", True)
+    # 需要 subTrackings 子单号时设为 false（默认拉取子单）
+    no_sub = vendor.get("noSubTracking", False)
 
     # 多单号用空格分隔；勿用 '+' 字面量（requests 会编码为 %2B 导致整串当一个单号）
     so_num = " ".join(tracking_numbers)
@@ -1797,18 +1851,18 @@ def _fetch_topda_batch(
         safe="",
     )
     url = f"{api_url}?{query}"
-    out: dict[str, CarrierFetch] = {n: ([], None, None, None) for n in tracking_numbers}
+    out: dict[str, CarrierFetch] = {n: ([], None, None, None, None) for n in tracking_numbers}
     try:
         resp = requests.get(url, timeout=timeout)
         resp.raise_for_status()
         payload = _response_json(resp)
     except Exception as exc:
         err = str(exc)
-        return {n: ([], err, None, None) for n in tracking_numbers}
+        return {n: ([], err, None, None, None) for n in tracking_numbers}
 
     if not isinstance(payload, list):
         err = "Topda API 响应格式异常"
-        return {n: ([], err, None, None) for n in tracking_numbers}
+        return {n: ([], err, None, None, None) for n in tracking_numbers}
 
     for item in payload:
         if not isinstance(item, dict):
@@ -1816,14 +1870,15 @@ def _fetch_topda_batch(
         logs = parse_topda_item(item)
         if item.get("notFound"):
             logs = []
-        cid = _extract_carrier_id(item)
-        tn = _extract_outer_tracking_number(item)
+        job_num, main_tn, all_tns = parse_topda_tracking_bundle(item)
+        cid = job_num or _extract_carrier_id(item) or None
+        tn = main_tn
         keys = _topda_item_keys(item)
         if not keys:
             continue
         for key in keys:
             if key in out:
-                out[key] = (logs, None, cid or None, tn or None)
+                out[key] = (logs, None, cid, tn, all_tns or None)
                 if log is not None:
                     log(
                         f"[承运商轨迹] {key} 返回报文 {format_api_payload_for_log(item)}"

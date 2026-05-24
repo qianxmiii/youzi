@@ -13,7 +13,13 @@ from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
 from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipments_table import TABLE_NAME
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
+from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
 from .exception_duration import duration_seconds, format_duration
+from ..last_mile_tracking import (
+    is_conwest_tracking_number,
+    normalize_tracking_field_value,
+    resolve_conwest_writeback,
+)
 from ..tracking_sync_eligibility import (
     carrier_tracking_sync_eligible_sql,
     internal_tracking_sync_eligible_sql,
@@ -30,9 +36,14 @@ from .tracking_freshness import (
 CARRIER_CODE_FILTER_EMPTY = "__EMPTY__"
 
 _LIST_FROM = (
-    f"{TABLE_NAME} s LEFT JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code"
+    f"{TABLE_NAME} s "
+    f"LEFT JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code "
+    f"LEFT JOIN {CUSTOMERS_TABLE} cu ON TRIM(s.customer) = cu.customer_name"
 )
-_LIST_SELECT = "s.*, cc.name_zh AS _channel_name_zh, cc.category AS _channel_category"
+_LIST_SELECT = (
+    "s.*, cc.name_zh AS _channel_name_zh, cc.category AS _channel_category, "
+    "cu.track_query_lang AS _customer_track_query_lang"
+)
 
 
 # 可写字段（不含 id / shipment_no / created_time）
@@ -50,6 +61,8 @@ _UPDATABLE = (
     "origin_warehouse_code",
     "supplier_name",
     "carrier_code",
+    "carrier_id",
+    "tracking_number",
     "customer_shipment_id",
     "amazon_ref_id",
     "vessel_name",
@@ -115,6 +128,14 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "carrierCode": row["carrier_code"],
         "carrierId": row["carrier_id"],
         "trackingNumber": row["tracking_number"],
+        "customerLang": (
+            "en"
+            if (
+                "_customer_track_query_lang" in row.keys()
+                and (row["_customer_track_query_lang"] or "").strip().lower() == "en"
+            )
+            else "zh"
+        ),
         "customerShipmentId": row["customer_shipment_id"],
         "amazonRefId": row["amazon_ref_id"],
         "vesselName": row["vessel_name"],
@@ -175,7 +196,12 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
     for key, value in data.items():
         col = snake_map.get(key, key)
         if col in _UPDATABLE or col == "shipment_no":
-            out[col] = value
+            if col in ("carrier_id", "tracking_number") and value == "":
+                out[col] = None
+            elif col in ("carrier_id", "tracking_number") and isinstance(value, str):
+                out[col] = normalize_tracking_field_value(value)
+            else:
+                out[col] = value
     return out
 
 
@@ -186,6 +212,37 @@ class ShipmentsRepository:
     @property
     def _conn(self) -> sqlite3.Connection:
         return self._database.conn
+
+    def _persist_conwest_tracking_numbers(
+        self,
+        shipment_no: str,
+        tracking_number: str | None,
+        ctns: int | None,
+    ) -> int:
+        """Conwest：按件数展开子单号写入 shipment_tracking_numbers。"""
+        if not is_conwest_tracking_number(tracking_number):
+            return 0
+        main, nums = resolve_conwest_writeback(tracking_number, ctns)
+        if not main or len(nums) <= 1:
+            return 0
+        from .shipment_tracking_numbers_repository import ShipmentTrackingNumbersRepository
+
+        return ShipmentTrackingNumbersRepository(self._database).replace_for_shipment(
+            shipment_no, main, nums
+        )
+
+    def _shipment_ctns(self, shipment_no: str) -> int | None:
+        with self._database.lock:
+            row = self._conn.execute(
+                f"SELECT ctns FROM {TABLE_NAME} WHERE shipment_no = ?",
+                (shipment_no.strip(),),
+            ).fetchone()
+        if not row or row["ctns"] is None:
+            return None
+        try:
+            return int(row["ctns"])
+        except (TypeError, ValueError):
+            return None
 
     def list_rows(
         self,
@@ -501,10 +558,31 @@ class ShipmentsRepository:
             self._conn.commit()
             return cur.rowcount > 0
 
+    def set_tracking_number(self, shipment_no: str, tracking_number: str) -> bool:
+        """写入运单主追踪号（TOPDA 根 trackingNum 等）。"""
+        sn = shipment_no.strip()
+        tn = normalize_tracking_field_value(tracking_number)
+        if not sn or not tn:
+            return False
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {TABLE_NAME}
+                SET tracking_number = ?, updated_time = ?
+                WHERE shipment_no = ?
+                """,
+                (tn, now_str(), sn),
+            )
+            self._conn.commit()
+            wrote = cur.rowcount > 0
+        if wrote:
+            self._persist_conwest_tracking_numbers(sn, tn, self._shipment_ctns(sn))
+        return wrote
+
     def set_tracking_number_if_empty(self, shipment_no: str, tracking_number: str) -> bool:
         """尾程快递单号（UPS/FedEx 等）：仅当库内为空时写入。"""
         sn = shipment_no.strip()
-        tn = (tracking_number or "").strip()
+        tn = normalize_tracking_field_value(tracking_number)
         if not sn or not tn:
             return False
         with self._database.lock:
@@ -518,7 +596,10 @@ class ShipmentsRepository:
                 (tn, sn),
             )
             self._conn.commit()
-            return cur.rowcount > 0
+            wrote = cur.rowcount > 0
+        if wrote:
+            self._persist_conwest_tracking_numbers(sn, tn, self._shipment_ctns(sn))
+        return wrote
 
     def update_carrier_tracking_summary(
         self,
@@ -559,7 +640,7 @@ class ShipmentsRepository:
                     """,
                     (cid, sn),
                 )
-            tn = (tracking_number or "").strip()
+            tn = normalize_tracking_field_value(tracking_number)
             if tn:
                 self._conn.execute(
                     f"""
@@ -590,7 +671,7 @@ class ShipmentsRepository:
                 rows = self._conn.execute(
                     f"""
                     SELECT shipment_no, customer, carrier_code, supplier_name, carrier_id,
-                           tracking_number, latest_carrier_time, latest_carrier_desc
+                           tracking_number, ctns, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
                       AND {status_sql}
@@ -603,7 +684,7 @@ class ShipmentsRepository:
                 rows = self._conn.execute(
                     f"""
                     SELECT shipment_no, customer, carrier_code, supplier_name, carrier_id,
-                           tracking_number, latest_carrier_time, latest_carrier_desc
+                           tracking_number, ctns, latest_carrier_time, latest_carrier_desc
                     FROM {TABLE_NAME}
                     WHERE TRIM(shipment_no) != ''
                       AND {status_sql}
@@ -618,6 +699,7 @@ class ShipmentsRepository:
                 "supplier_name": r["supplier_name"] or "",
                 "carrier_id": r["carrier_id"] or "",
                 "tracking_number": r["tracking_number"] or "",
+                "ctns": r["ctns"],
                 "latest_carrier_time": r["latest_carrier_time"] or "",
                 "latest_carrier_desc": r["latest_carrier_desc"] or "",
             }
@@ -627,7 +709,10 @@ class ShipmentsRepository:
     def get_by_id(self, item_id: str) -> dict[str, Any] | None:
         with self._database.lock:
             row = self._conn.execute(
-                f"SELECT * FROM {TABLE_NAME} WHERE id = ?",
+                f"""
+                SELECT {_LIST_SELECT} FROM {_LIST_FROM}
+                WHERE s.id = ?
+                """,
                 (item_id,),
             ).fetchone()
         return _row_to_api(row) if row else None
@@ -635,7 +720,10 @@ class ShipmentsRepository:
     def get_by_shipment_no(self, shipment_no: str) -> dict[str, Any] | None:
         with self._database.lock:
             row = self._conn.execute(
-                f"SELECT * FROM {TABLE_NAME} WHERE shipment_no = ?",
+                f"""
+                SELECT {_LIST_SELECT} FROM {_LIST_FROM}
+                WHERE s.shipment_no = ?
+                """,
                 (shipment_no.strip(),),
             ).fetchone()
         return _row_to_api(row) if row else None
@@ -732,6 +820,12 @@ class ShipmentsRepository:
                 vals,
             )
             self._conn.commit()
+        if payload.get("tracking_number"):
+            self._persist_conwest_tracking_numbers(
+                shipment_no,
+                payload.get("tracking_number"),
+                payload.get("ctns"),
+            )
         row = self.get_by_id(rid)
         if row is None:
             raise RuntimeError("插入后读取失败")
@@ -759,6 +853,12 @@ class ShipmentsRepository:
         row = self.get_by_id(item_id)
         if row is None:
             raise KeyError(item_id)
+        if "tracking_number" in payload:
+            self._persist_conwest_tracking_numbers(
+                row["shipmentNo"],
+                payload.get("tracking_number"),
+                payload.get("ctns") if "ctns" in payload else row.get("ctns"),
+            )
         return row
 
     def upsert_by_shipment_no(self, data: dict[str, Any]) -> tuple[dict[str, Any], bool]:

@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
+from ..db.shipment_tracking_numbers_repository import ShipmentTrackingNumbersRepository
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .carrier_batch_schedule import (
@@ -15,6 +16,7 @@ from .carrier_batch_schedule import (
 )
 from .sync_log import make_sync_logger
 from ..carrier_tracking_entry import latest_from_logs
+from ..last_mile_tracking import is_conwest_tracking_number, resolve_conwest_writeback
 from .carrier_vendors import (
     BATCH_SIZE,
     carrier_vendor_unassigned_reason,
@@ -30,6 +32,7 @@ from .carrier_vendors import (
     fetch_yorky_batch_for_rows,
     load_vendors_config,
     resolve_vendor_for_row,
+    unpack_carrier_fetch,
 )
 
 LogFn = Callable[[str], None]
@@ -44,8 +47,11 @@ def sync_carrier_tracking(
     trigger: str = "manual",
     shipment_nos: list[str] | None = None,
     log: LogFn | None = None,
+    tracking_numbers_repo: ShipmentTrackingNumbersRepository | None = None,
 ) -> dict[str, Any]:
     log_lines, out_log = make_sync_logger(log)
+    if tracking_numbers_repo is None:
+        tracking_numbers_repo = ShipmentTrackingNumbersRepository(shipments_repo._database)
 
     if trigger == "scheduled" and is_carrier_full_batch(shipment_nos):
         ok, skip_reason = should_run_scheduled_carrier_batch(shipments_repo._database)
@@ -151,17 +157,43 @@ def sync_carrier_tracking(
 
             for row in batch:
                 sn = row["shipment_no"]
-                logs, err, carrier_id, outer_tn = tracking_map.get(
-                    sn, ([], "未返回", None, None)
+                logs, err, carrier_id, outer_tn, all_tns = unpack_carrier_fetch(
+                    tracking_map.get(sn, ([], "未返回", None, None, None))
                 )
                 cid = (carrier_id or "").strip()
                 if cid and not (row.get("carrier_id") or "").strip():
                     if shipments_repo.set_carrier_id_if_empty(sn, cid):
                         row["carrier_id"] = cid
                 tn = (outer_tn or "").strip()
-                if tn and not (row.get("tracking_number") or "").strip():
-                    if shipments_repo.set_tracking_number_if_empty(sn, tn):
-                        row["tracking_number"] = tn
+                ctns_raw = row.get("ctns")
+                try:
+                    ctns_val = int(ctns_raw) if ctns_raw is not None else None
+                except (TypeError, ValueError):
+                    ctns_val = None
+                conwest_nums: list[str] | None = None
+                if tn and is_conwest_tracking_number(tn) and ctns_val and ctns_val > 1:
+                    main_cw, conwest_nums = resolve_conwest_writeback(tn, ctns_val)
+                    if main_cw:
+                        tn = main_cw
+                if tn:
+                    if platform == "topda" or is_conwest_tracking_number(tn):
+                        if shipments_repo.set_tracking_number(sn, tn):
+                            row["tracking_number"] = tn
+                    elif not (row.get("tracking_number") or "").strip():
+                        if shipments_repo.set_tracking_number_if_empty(sn, tn):
+                            row["tracking_number"] = tn
+                if conwest_nums and len(conwest_nums) > 1:
+                    n = tracking_numbers_repo.replace_for_shipment(sn, tn, conwest_nums)
+                    if n:
+                        out_log(
+                            f"[承运商轨迹] {sn} Conwest 追踪号 {n} 条"
+                            f"（{conwest_nums[0]}～{conwest_nums[-1]}）"
+                        )
+                elif platform == "topda" and all_tns:
+                    main_tn = tn or (all_tns[0] if all_tns else "")
+                    n = tracking_numbers_repo.replace_for_shipment(sn, main_tn, all_tns)
+                    if n:
+                        out_log(f"[承运商轨迹] {sn} 追踪号表 {n} 条（主单 {main_tn}）")
                 bill_hint = (row.get("carrier_id") or "").strip()
                 if err:
                     err_line = f"{vendor_name}/{sn}: {err}"

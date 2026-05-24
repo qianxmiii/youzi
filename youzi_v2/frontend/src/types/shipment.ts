@@ -4,6 +4,8 @@ export interface Shipment {
   customer: string | null
   /** 客户名在 VIP 客户表中 */
   isVip?: boolean
+  /** 客户语言（zh/en），用于 UPS/FedEx 等官网跳转 */
+  customerLang?: 'zh' | 'en'
   customerNo: string | null
   channelCode: string | null
   channelNameZh?: string | null
@@ -127,6 +129,8 @@ export function emptyShipmentForm(): ShipmentPayload {
     originWarehouseCode: null,
     supplierName: null,
     carrierCode: null,
+    carrierId: null,
+    trackingNumber: null,
     customerShipmentId: null,
     amazonRefId: null,
     vesselName: null,
@@ -159,6 +163,8 @@ export function shipmentToForm(row: Shipment): ShipmentPayload {
     originWarehouseCode: row.originWarehouseCode,
     supplierName: row.supplierName,
     carrierCode: row.carrierCode,
+    carrierId: row.carrierId,
+    trackingNumber: row.trackingNumber,
     customerShipmentId: row.customerShipmentId,
     amazonRefId: row.amazonRefId,
     vesselName: row.vesselName,

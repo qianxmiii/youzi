@@ -20,6 +20,7 @@ import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawe
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
 import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
+import LastMileBadge from '@/components/common/LastMileBadge.vue'
 import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
 import {
   batchDeleteShipments,
@@ -27,6 +28,7 @@ import {
   closeShipmentExceptions,
   deleteShipment,
   exportShipmentsExcel,
+  getShipment,
   getShipmentFilterOptions,
   getTrackingFreshnessStats,
   getTrackingSyncDailyStats,
@@ -46,6 +48,7 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
+import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
   FRESHNESS_DOT_CLASS,
   isCarrierTrackingNewerThanInternal,
@@ -275,10 +278,15 @@ function hasActiveException(row: Shipment) {
   return !!(row.exceptionCode && row.exceptionCode.trim())
 }
 
-function openTrackingDrawer(row: Shipment, tab: 'internal' | 'carrier' = 'internal') {
-  trackingDrawerShipment.value = row
+async function openTrackingDrawer(row: Shipment, tab: 'internal' | 'carrier' = 'internal') {
   trackingDrawerTab.value = tab
   trackingDrawerShow.value = true
+  trackingDrawerShipment.value = row
+  try {
+    trackingDrawerShipment.value = await getShipment(row.id)
+  } catch {
+    /* 列表行数据兜底 */
+  }
 }
 
 function renderTrackingSummaryCell(
@@ -379,6 +387,40 @@ function renderVipBadge(row: Shipment) {
   return h(VipStarBadge)
 }
 
+function openLastMileTrackUrl(row: Shipment) {
+  const info = resolveLastMileTracking(row)
+  if (!info?.url) {
+    message.warning('暂未识别承运商官网，请手动查询')
+    return
+  }
+  window.open(info.url, '_blank', 'noopener,noreferrer')
+}
+
+function renderLastMileBadge(row: Shipment) {
+  const info = resolveLastMileTracking(row)
+  if (!info) return null
+  const badgeBtn = h(
+    'button',
+    {
+      type: 'button',
+      class: 'last-mile-badge-btn',
+      onClick: (e: MouseEvent) => {
+        e.stopPropagation()
+        openLastMileTrackUrl(row)
+      },
+    },
+    [h(LastMileBadge, { interactive: Boolean(info.url) })],
+  )
+  return h(
+    NTooltip,
+    { trigger: 'hover' },
+    {
+      trigger: () => badgeBtn,
+      default: () => formatLastMileTooltip(row) ?? `转单号：${info.number}`,
+    },
+  )
+}
+
 function renderUpdatedTime(row: Shipment) {
   const formatted = formatRelativeTime(row.updatedTime)
   if (!formatted) return '—'
@@ -415,6 +457,7 @@ function renderShipmentNo(row: Shipment) {
   const inner = h('span', { class: 'shipment-no-cell-row' }, [
     noCell,
     renderVipBadge(row),
+    renderLastMileBadge(row),
     renderExceptionBadge(row),
   ])
   return h(
@@ -673,10 +716,19 @@ function openEdit(row: Shipment) {
 async function handleFormSubmit(payload: ShipmentPayload) {
   try {
     if (!editingRow.value) return
-    await updateShipment(editingRow.value.id, payload)
+    const editId = editingRow.value.id
+    await updateShipment(editId, payload)
     message.success('运单已更新')
     modalShow.value = false
     await loadList()
+    if (trackingDrawerShipment.value?.id === editId) {
+      try {
+        trackingDrawerShipment.value = await getShipment(editId)
+      } catch {
+        trackingDrawerShipment.value =
+          items.value.find((r) => r.id === editId) ?? trackingDrawerShipment.value
+      }
+    }
   } catch (e) {
     message.error(e instanceof Error ? e.message : '保存失败')
   }
@@ -1639,6 +1691,17 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   white-space: nowrap;
   word-break: keep-all;
   font-variant-numeric: tabular-nums;
+}
+
+.shipments-data-table :deep(.last-mile-badge-btn) {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font: inherit;
+  line-height: 0;
 }
 
 .shipments-table-panel {

@@ -484,7 +484,10 @@ def sync_customers_from_shipments():
 def create_customer(body: CustomerIn):
     try:
         return customers_repo.create(
-            body.customer_name, note=body.note, is_vip=body.is_vip
+            body.customer_name,
+            note=body.note,
+            is_vip=body.is_vip,
+            customer_lang=body.customer_lang,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -492,11 +495,12 @@ def create_customer(body: CustomerIn):
 
 @app.patch("/api/v1/customers/{item_id}")
 def update_customer(item_id: str, body: CustomerUpdateIn):
-    row = None
-    if body.is_vip is not None:
-        row = customers_repo.set_vip(item_id, body.is_vip)
-    if body.note is not None:
-        row = customers_repo.update_note(item_id, body.note)
+    row = customers_repo.patch(
+        item_id,
+        is_vip=body.is_vip,
+        note=body.note,
+        customer_lang=body.customer_lang,
+    )
     if row is None:
         raise HTTPException(status_code=404, detail="客户不存在")
     return row

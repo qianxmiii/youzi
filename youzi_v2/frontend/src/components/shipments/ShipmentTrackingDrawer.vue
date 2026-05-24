@@ -2,9 +2,12 @@
 import { NDrawer, NTag } from 'naive-ui'
 import { computed } from 'vue'
 import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
+import ShipmentLastMileHeader from '@/components/shipments/ShipmentLastMileHeader.vue'
 import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
+import LastMileBadge from '@/components/common/LastMileBadge.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import type { Shipment } from '@/types/shipment'
+import { hasLastMileTracking } from '@/utils/lastMileTracking'
 
 const props = defineProps<{
   show: boolean
@@ -46,6 +49,7 @@ const title = computed(() => props.shipment?.shipmentNo || '运单轨迹')
         <div class="flex flex-wrap items-center gap-2">
           <span class="font-mono text-base font-semibold text-white">{{ shipment.shipmentNo }}</span>
           <VipStarBadge v-if="shipment.isVip" size="md" />
+          <LastMileBadge v-if="hasLastMileTracking(shipment.trackingNumber)" size="md" />
           <NTag
             v-if="shipment.statusCode"
             size="small"
@@ -63,6 +67,7 @@ const title = computed(() => props.shipment?.shipmentNo || '运单轨迹')
     </template>
 
     <div v-if="shipment" class="flex min-h-0 flex-col">
+      <ShipmentLastMileHeader class="shrink-0" :shipment="shipment" />
       <ShipmentTrackingPanel
         :key="`${shipment.id}-${initialTab || 'internal'}`"
         :shipment-id="shipment.id"
@@ -78,8 +83,14 @@ const title = computed(() => props.shipment?.shipmentNo || '运单轨迹')
 </template>
 
 <style scoped>
-.shipment-tracking-drawer :deep(.n-drawer-body-content-wrapper) {
-  padding: 0 16px 20px;
+.shipment-tracking-drawer :deep(.n-drawer-header) {
+  padding-bottom: 12px;
 }
 
+.shipment-tracking-drawer :deep(.n-drawer-body-content-wrapper) {
+  padding: 0 16px 20px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
 </style>

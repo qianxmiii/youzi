@@ -51,6 +51,12 @@ class ShipmentRecordIn(BaseModel):
     carrier_code: str | None = Field(
         default=None, validation_alias=AliasChoices("carrierCode", "carrier_code")
     )
+    carrier_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("carrierId", "carrier_id")
+    )
+    tracking_number: str | None = Field(
+        default=None, validation_alias=AliasChoices("trackingNumber", "tracking_number")
+    )
     customer_shipment_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices("customerShipmentId", "customer_shipment_id"),
@@ -127,6 +133,12 @@ class ShipmentUpdateIn(BaseModel):
     carrier_code: str | None = Field(
         default=None, validation_alias=AliasChoices("carrierCode", "carrier_code")
     )
+    carrier_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("carrierId", "carrier_id")
+    )
+    tracking_number: str | None = Field(
+        default=None, validation_alias=AliasChoices("trackingNumber", "tracking_number")
+    )
     customer_shipment_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices("customerShipmentId", "customer_shipment_id"),
@@ -162,7 +174,11 @@ class ShipmentUpdateIn(BaseModel):
     )
 
     def to_payload(self) -> dict[str, Any]:
-        return self.model_dump(exclude_none=True)
+        out = self.model_dump(exclude_none=True)
+        for name in ("carrier_id", "tracking_number"):
+            if name in self.model_fields_set and getattr(self, name) is None:
+                out[name] = None
+        return out
 
 
 class ShipmentBatchIdsIn(BaseModel):

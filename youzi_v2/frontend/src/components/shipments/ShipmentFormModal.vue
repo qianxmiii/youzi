@@ -16,6 +16,7 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
 import { dateOnlyToTimestamp, formatDateOnlyForApi } from '@/utils/formatDateTime'
+import { normalizeLastMileTrackingNumber } from '@/utils/lastMileTracking'
 
 const { loadDictTypes, dictOptions } = useDictLabels()
 
@@ -90,6 +91,8 @@ watch(
         originWarehouseCode: props.initial.originWarehouseCode,
         supplierName: props.initial.supplierName,
         carrierCode: props.initial.carrierCode,
+        carrierId: props.initial.carrierId,
+        trackingNumber: props.initial.trackingNumber,
         customerShipmentId: props.initial.customerShipmentId,
         amazonRefId: props.initial.amazonRefId,
         vesselName: props.initial.vesselName,
@@ -123,7 +126,14 @@ function handleSubmit() {
   }
   applyVoyageDatesToForm()
   submitting.value = true
-  emit('submit', { ...form.value, shipmentNo: no })
+  const carrierId = normalizeLastMileTrackingNumber(form.value.carrierId) || null
+  const trackingNumber = normalizeLastMileTrackingNumber(form.value.trackingNumber) || null
+  emit('submit', {
+    ...form.value,
+    shipmentNo: no,
+    carrierId,
+    trackingNumber,
+  })
   submitting.value = false
 }
 </script>
@@ -170,6 +180,20 @@ function handleSubmit() {
         </NFormItem>
         <NFormItem label="承运商">
           <NInput v-model:value="form.carrierCode" />
+        </NFormItem>
+        <NFormItem label="承运单号">
+          <NInput
+            v-model:value="form.carrierId"
+            placeholder="承运商侧主单号（同步可自动填入）"
+            clearable
+          />
+        </NFormItem>
+        <NFormItem label="转单号">
+          <NInput
+            v-model:value="form.trackingNumber"
+            placeholder="尾程 UPS/FedEx 等"
+            clearable
+          />
         </NFormItem>
         <NFormItem label="地址类型">
           <NSelect v-model:value="form.addressType" clearable :options="addressTypeOptions" />

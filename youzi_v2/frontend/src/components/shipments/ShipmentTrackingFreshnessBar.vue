@@ -219,21 +219,18 @@ function toggleExpanded() {
 
       <button
         type="button"
-        class="inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums transition-all duration-150 ease-out active:scale-[0.98] focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-amber-500/30"
-        :class="
-          carrierAheadActive
-            ? 'border-amber-500/30 bg-amber-500/12 text-amber-200 ring-1 ring-amber-500/25'
-            : displayCarrierAheadCount > 0
-              ? 'border-slate-800 bg-slate-900/50 text-zinc-400 hover:border-amber-500/25 hover:bg-amber-500/10 hover:text-amber-200'
-              : 'cursor-not-allowed border-slate-800/80 bg-slate-900/30 text-zinc-600 opacity-40'
-        "
+        class="freshness-ahead-btn"
+        :class="{
+          'freshness-ahead-btn--active': carrierAheadActive,
+          'freshness-ahead-btn--disabled': displayCarrierAheadCount === 0 && !carrierAheadActive,
+        }"
         :disabled="displayCarrierAheadCount === 0 && !carrierAheadActive"
         :title="carrierAheadTitle"
         @click.stop="emit('toggleCarrierAhead')"
       >
         <span>承新于内</span>
-        <span class="font-semibold tabular-nums">{{ displayCarrierAheadCount }}</span>
-        <span class="text-[10px] font-normal text-zinc-500">单</span>
+        <span class="freshness-ahead-btn-num">{{ displayCarrierAheadCount }}</span>
+        <span class="freshness-ahead-btn-unit">单</span>
       </button>
 
       <span class="shrink-0 pt-0.5 text-[10px] text-[var(--color-muted)]">

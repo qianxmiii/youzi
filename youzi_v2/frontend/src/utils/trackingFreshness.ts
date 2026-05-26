@@ -37,7 +37,10 @@ function parseTrackingDate(time: string | null | undefined): Date | null {
   return startOfLocalDay(new Date(ms))
 }
 
-/** 承运商最新节点时间晚于内部（或内部无有效轨迹而承运有） */
+/** 承新于内：双方均有有效内部轨迹时，承运须晚于内部至少该毫秒数 */
+export const CARRIER_AHEAD_MIN_MS = 60_000
+
+/** 承运商最新节点时间晚于内部（或内部无有效轨迹但承运有） */
 export function isCarrierTrackingNewerThanInternal(row: {
   latestTrackingTime?: string | null
   latestTrackingDesc?: string | null
@@ -48,7 +51,7 @@ export function isCarrierTrackingNewerThanInternal(row: {
   if (!hasEffectiveInternalTracking(row)) return true
   const internalMs = parseTrackingDateTime(row.latestTrackingTime)
   if (internalMs == null) return true
-  return carrierMs > internalMs
+  return carrierMs - internalMs > CARRIER_AHEAD_MIN_MS
 }
 
 /** 按最新节点时间计算档位（与后端 date('now','localtime') 对齐，用浏览器本地日） */
@@ -79,4 +82,16 @@ export const FRESHNESS_LABEL: Record<TrackingFreshnessBucket, string> = {
   within3d: '三日内',
   older: '超过3天',
   none: '无轨迹',
+}
+
+/**
+ * 内部轨迹距今天数（本地自然日：今日=0；节点日晚于今日时按 0 计）。
+ * 与 trackingFreshnessLevel / 后端 date('now','localtime') 口径一致。
+ */
+export function daysSinceLocalCalendar(time: string | null | undefined): number | null {
+  const nodeDay = parseTrackingDate(time)
+  if (!nodeDay) return null
+  const today = startOfLocalDay(new Date())
+  const days = Math.floor((today.getTime() - nodeDay.getTime()) / 86_400_000)
+  return Math.max(0, days)
 }

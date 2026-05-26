@@ -169,11 +169,11 @@ function toggleExpanded() {
 
 <template>
   <div
-    class="freshness-panel shrink-0 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)]/60 backdrop-blur-sm"
+    class="freshness-panel shrink-0 overflow-hidden rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)]"
   >
     <!-- 顶栏：摘要 / 展开 -->
     <div
-      class="flex cursor-pointer items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-white/[0.02]"
+      class="flex cursor-pointer items-start gap-2.5 px-3 py-2.5 transition-colors hover:bg-[var(--color-nav-hover)]"
       role="button"
       tabindex="0"
       :aria-expanded="expanded"
@@ -182,7 +182,7 @@ function toggleExpanded() {
       @keydown.space.prevent="toggleExpanded"
     >
       <svg
-        class="mt-0.5 h-4 w-4 shrink-0 text-zinc-500 transition-transform duration-200 ease-out"
+        class="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-muted)] transition-transform duration-200 ease-out"
         :class="expanded ? 'rotate-90' : ''"
         viewBox="0 0 16 16"
         fill="none"
@@ -199,18 +199,18 @@ function toggleExpanded() {
 
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-          <span class="text-xs font-semibold tracking-tight text-zinc-200">轨迹新鲜度</span>
-          <span v-if="!expanded" class="text-[11px] leading-relaxed text-zinc-500">
+          <span class="text-xs font-semibold tracking-tight text-[var(--color-fg-emphasis)]">轨迹新鲜度</span>
+          <span v-if="!expanded" class="text-[11px] leading-relaxed text-[var(--color-muted)]">
             {{ summaryLine }}
           </span>
-          <span v-else class="text-[11px] text-zinc-600">点击胶囊筛选 · 自然日</span>
+          <span v-else class="text-[11px] text-[var(--color-muted)]">点击胶囊筛选 · 自然日</span>
         </div>
-        <p v-if="activeFilterHint" class="mt-0.5 text-[10px] text-violet-400/95">
+        <p v-if="activeFilterHint" class="mt-0.5 text-[10px] text-violet-500">
           已选 {{ activeFilterHint }}
         </p>
         <p
           v-if="carrierSyncHint && !expanded"
-          class="mt-0.5 truncate text-[10px] text-zinc-600"
+          class="mt-0.5 truncate text-[10px] text-[var(--color-muted)]"
           :title="carrierSyncHint"
         >
           {{ carrierSyncHint }}
@@ -236,7 +236,7 @@ function toggleExpanded() {
         <span class="text-[10px] font-normal text-zinc-500">单</span>
       </button>
 
-      <span class="shrink-0 pt-0.5 text-[10px] text-zinc-600">
+      <span class="shrink-0 pt-0.5 text-[10px] text-[var(--color-muted)]">
         {{ expanded ? '收起' : '展开' }}
       </span>
     </div>
@@ -260,7 +260,7 @@ function toggleExpanded() {
               :class="row.dotClass"
               aria-hidden="true"
             />
-            <span class="text-[11px] font-medium tracking-tight text-zinc-500">
+            <span class="text-[11px] font-semibold tracking-tight text-[var(--color-fg-secondary)]">
               {{ row.label }}
             </span>
           </div>
@@ -290,7 +290,7 @@ function toggleExpanded() {
 
       <p
         v-if="carrierSyncHint"
-        class="mt-2.5 truncate text-[10px] text-zinc-600"
+        class="mt-2.5 truncate text-[10px] text-[var(--color-muted)]"
         :title="carrierSyncHint"
       >
         {{ carrierSyncHint }}

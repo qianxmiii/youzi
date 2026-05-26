@@ -36,8 +36,10 @@ function itemLabel(name: string, badge?: string) {
         class="h-7 w-7 shrink-0 rounded-lg object-cover shadow-lg shadow-violet-500/20"
       />
       <div v-if="!collapsed" class="min-w-0">
-        <div class="truncate text-sm font-semibold tracking-tight text-white">Youzi</div>
-        <div class="text-[11px] text-zinc-500">v2 · 迁移中</div>
+        <div class="truncate text-sm font-semibold tracking-tight text-[var(--color-fg-emphasis)]">
+          Youzi
+        </div>
+        <div class="text-[11px] text-[var(--color-muted)]">v2 · 迁移中</div>
       </div>
     </div>
 
@@ -52,7 +54,7 @@ function itemLabel(name: string, badge?: string) {
       >
         <div
           v-if="!collapsed"
-          class="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-zinc-600"
+          class="mb-1 px-2.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-muted)]"
         >
           {{ group.label }}
         </div>
@@ -77,7 +79,8 @@ function itemLabel(name: string, badge?: string) {
               <span v-if="!collapsed" class="flex-1 truncate">{{ item.name }}</span>
               <span
                 v-if="!collapsed && item.badge"
-                class="rounded-md bg-zinc-800 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500"
+                class="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+                style="background: var(--color-badge-bg); color: var(--color-badge-fg)"
               >
                 {{ item.badge }}
               </span>
@@ -95,7 +98,7 @@ function itemLabel(name: string, badge?: string) {
             href="http://127.0.0.1:3001/"
             target="_blank"
             rel="noopener"
-            class="nav-item w-full text-zinc-500 hover:text-zinc-300"
+            class="nav-item w-full"
             :class="collapsed ? 'justify-center px-0 py-2.5' : ''"
             aria-label="旧版后台"
           >
@@ -108,7 +111,7 @@ function itemLabel(name: string, badge?: string) {
 
       <button
         type="button"
-        class="nav-item mt-1 w-full text-zinc-500 hover:text-zinc-300"
+        class="nav-item mt-1 w-full"
         :class="collapsed ? 'justify-center px-0 py-2.5' : ''"
         :aria-label="collapsed ? '展开侧栏' : '收起侧栏'"
         @click="toggle"
@@ -131,7 +134,7 @@ function itemLabel(name: string, badge?: string) {
         <span v-if="!collapsed" class="text-xs">收起侧栏</span>
       </button>
 
-      <div v-if="!collapsed" class="mt-2 px-2.5 text-[10px] leading-relaxed text-zinc-600">
+      <div v-if="!collapsed" class="mt-2 px-2.5 text-[10px] leading-relaxed text-[var(--color-muted)]">
         {{ flatItems.length }} 个模块 · Linear / Vercel 风格壳
       </div>
     </div>

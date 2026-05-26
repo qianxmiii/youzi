@@ -16,7 +16,7 @@ const migration = computed(() => route.meta.migration as string | undefined)
     >
       ◌
     </div>
-    <h2 class="text-xl font-semibold tracking-tight text-white">{{ title }}</h2>
+    <h2 class="page-h2-xl">{{ title }}</h2>
     <p class="mt-2 text-sm text-zinc-500">此页面等待从旧版迁移实现。</p>
     <p v-if="migration" class="mt-4 rounded-lg border border-dashed border-zinc-700 bg-zinc-900/30 px-4 py-2 text-xs text-zinc-500">
       {{ migration }}

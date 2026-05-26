@@ -48,7 +48,7 @@ onMounted(load)
   <div class="scrollbar-subtle flex h-full min-h-0 w-full flex-col gap-4 overflow-y-auto">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 class="text-lg font-semibold text-white">统计管理</h2>
+        <h2 class="page-h2">统计管理</h2>
         <p class="mt-1 text-xs text-zinc-500">
           基于当前库内全部运单聚合；状态分类互斥（异常 → 无轨迹 → 转运中 → 其它）。
         </p>

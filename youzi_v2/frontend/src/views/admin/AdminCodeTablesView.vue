@@ -225,7 +225,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
   <div class="flex h-full min-h-0 flex-col gap-3">
     <div class="shrink-0 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="text-lg font-semibold text-white">后台管理 · 码表</h2>
+        <h2 class="page-h2">后台管理 · 码表</h2>
         <p class="text-xs text-zinc-500">维护渠道、国家、承运商等码表，支持 Excel 批量导入（按编码 upsert）</p>
       </div>
       <NSpace>

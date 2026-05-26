@@ -239,7 +239,7 @@ onMounted(load)
   <div class="scrollbar-subtle flex h-full min-h-0 w-full flex-col gap-4 overflow-y-auto">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 class="text-lg font-semibold text-white">计划任务</h2>
+        <h2 class="page-h2">计划任务</h2>
         <p class="mt-1 text-xs text-zinc-500">
           内部轨迹与承运商轨迹分开配置、分开触发；保存后立即生效（后台每 60 秒检查是否到期）。
         </p>

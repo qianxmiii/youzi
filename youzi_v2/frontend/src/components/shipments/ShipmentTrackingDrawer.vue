@@ -47,7 +47,7 @@ const title = computed(() => props.shipment?.shipmentNo || '运单轨迹')
     <template #header>
       <div v-if="shipment" class="min-w-0 pr-2">
         <div class="flex flex-wrap items-center gap-2">
-          <span class="font-mono text-base font-semibold text-white">{{ shipment.shipmentNo }}</span>
+          <span class="font-mono text-base font-semibold text-[var(--color-fg-emphasis)]">{{ shipment.shipmentNo }}</span>
           <VipStarBadge v-if="shipment.isVip" size="md" />
           <LastMileBadge v-if="hasLastMileTracking(shipment.trackingNumber)" size="md" />
           <NTag
@@ -58,12 +58,12 @@ const title = computed(() => props.shipment?.shipmentNo || '运单轨迹')
             {{ statusLabel[shipment.statusCode] || shipment.statusCode }}
           </NTag>
         </div>
-        <div v-if="shipment.customer" class="mt-1 truncate text-xs text-zinc-500">
+        <div v-if="shipment.customer" class="mt-1 truncate text-xs text-[var(--color-muted)]">
           {{ shipment.customer }}
-          <span v-if="shipment.carrierCode" class="text-zinc-600"> · {{ shipment.carrierCode }}</span>
+          <span v-if="shipment.carrierCode" class="opacity-80"> · {{ shipment.carrierCode }}</span>
         </div>
       </div>
-      <span v-else class="text-white">{{ title }}</span>
+      <span v-else class="text-[var(--color-fg-emphasis)]">{{ title }}</span>
     </template>
 
     <div v-if="shipment" class="flex min-h-0 flex-col">

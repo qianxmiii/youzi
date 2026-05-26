@@ -78,19 +78,19 @@ watch([showAll, activeTab], load)
       <NTabPane name="carrier" tab="承运商" />
     </NTabs>
     <NSpin :show="loading">
-      <div v-if="!loading && total === 0" class="text-xs text-zinc-500">暂无轨迹记录</div>
+      <div v-if="!loading && total === 0" class="text-xs text-[var(--color-muted)]">暂无轨迹记录</div>
       <ul v-else class="space-y-2">
         <li
           v-for="log in logs"
           :key="log.id"
-          class="border-l-2 pl-3 text-xs"
-          :class="activeTab === 'carrier' ? 'border-sky-500/40' : 'border-violet-500/40'"
+          class="tracking-log-item border-l-2 pl-3 text-xs"
+          :class="activeTab === 'carrier' ? 'tracking-log-item--carrier' : 'tracking-log-item--internal'"
         >
-          <div class="font-mono text-zinc-400">{{ log.trackingTime }}</div>
-          <div v-if="activeTab === 'carrier' && log.vendorName" class="text-zinc-500">
+          <div class="tracking-log-time font-mono">{{ log.trackingTime }}</div>
+          <div v-if="activeTab === 'carrier' && log.vendorName" class="tracking-log-vendor">
             {{ log.vendorName }}
           </div>
-          <div class="mt-0.5 text-zinc-200">{{ log.trackingDesc || '—' }}</div>
+          <div class="tracking-log-desc mt-0.5">{{ log.trackingDesc || '—' }}</div>
         </li>
       </ul>
       <div v-if="!isDrawer && total > PREVIEW" class="mt-3">
@@ -102,3 +102,25 @@ watch([showAll, activeTab], load)
     </NSpin>
   </div>
 </template>
+
+<style scoped>
+.tracking-log-item--internal {
+  border-color: rgb(139 92 246 / 0.45);
+}
+
+.tracking-log-item--carrier {
+  border-color: rgb(14 165 233 / 0.45);
+}
+
+.tracking-log-time {
+  color: var(--tracking-log-time);
+}
+
+.tracking-log-vendor {
+  color: var(--color-muted);
+}
+
+.tracking-log-desc {
+  color: var(--tracking-log-desc);
+}
+</style>

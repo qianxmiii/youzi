@@ -34,14 +34,14 @@ function openTrackUrl() {
 <template>
   <div
     v-if="lastMile"
-    class="mb-3 space-y-1.5 rounded-md border border-cyan-500/20 bg-cyan-950/30 px-3 py-2.5"
+    class="last-mile-header mb-3 space-y-1.5 rounded-md border px-3 py-2.5"
   >
     <div class="flex flex-wrap items-center gap-1.5">
       <LastMileBadge size="md" />
-      <span class="text-[11px] font-medium text-cyan-200/90">转单号</span>
+      <span class="last-mile-label text-[11px] font-medium">转单号</span>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <code class="max-w-full truncate font-mono text-xs text-cyan-100/95">{{ lastMile.number }}</code>
+      <code class="last-mile-code max-w-full truncate font-mono text-xs">{{ lastMile.number }}</code>
       <div class="flex shrink-0 items-center gap-1">
         <NButton size="tiny" quaternary @click="copyNumber">复制</NButton>
         <NTooltip v-if="!lastMile.url" trigger="hover">
@@ -63,3 +63,18 @@ function openTrackUrl() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.last-mile-header {
+  border-color: var(--last-mile-border);
+  background: var(--last-mile-bg);
+}
+
+.last-mile-label {
+  color: var(--last-mile-label);
+}
+
+.last-mile-code {
+  color: var(--last-mile-code);
+}
+</style>

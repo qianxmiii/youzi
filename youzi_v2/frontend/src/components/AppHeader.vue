@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchHealth, fetchLegacyHealth } from '@/api/client'
+import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
 
 const route = useRoute()
@@ -31,7 +32,7 @@ onMounted(async () => {
     <div class="flex min-w-0 items-center gap-3">
       <button
         type="button"
-        class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] bg-white/[0.04] text-zinc-400 transition hover:bg-white/[0.08] hover:text-white"
+        class="header-ghost-btn"
         :aria-label="collapsed ? '展开侧栏' : '收起侧栏'"
         :title="collapsed ? '展开侧栏' : '收起侧栏'"
         @click="toggle"
@@ -53,15 +54,17 @@ onMounted(async () => {
         </svg>
       </button>
       <div class="min-w-0">
-        <h1 class="text-sm font-semibold tracking-tight text-white">{{ title }}</h1>
-        <p v-if="migration" class="mt-0.5 text-xs text-zinc-500">迁移来源：{{ migration }}</p>
+        <h1 class="text-sm font-semibold tracking-tight text-[var(--color-fg-emphasis)]">
+          {{ title }}
+        </h1>
+        <p v-if="migration" class="mt-0.5 text-xs text-[var(--color-muted)]">
+          迁移来源：{{ migration }}
+        </p>
       </div>
     </div>
 
     <div class="flex items-center gap-3">
-      <span
-        class="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] bg-zinc-900/80 px-2.5 py-1 text-xs text-zinc-400"
-      >
+      <span class="status-pill">
         <span
           class="h-1.5 w-1.5 rounded-full"
           :class="
@@ -74,11 +77,12 @@ onMounted(async () => {
         />
         API {{ apiOk === null ? '检测中' : apiOk ? '已连接' : '未启动' }}
       </span>
+      <ThemeToggle />
       <a
         href="http://127.0.0.1:3001/"
         target="_blank"
         rel="noopener"
-        class="rounded-lg border border-[var(--color-border)] bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-zinc-300 transition hover:bg-white/[0.08] hover:text-white"
+        class="header-link-btn"
       >
         Legacy
       </a>

@@ -2,6 +2,13 @@
 
 @theme {
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --color-accent: #8b5cf6;
+  --color-accent-hover: #a78bfa;
+}
+
+:root,
+[data-theme='dark'] {
+  color-scheme: dark;
   --color-surface: #09090b;
   --color-panel: #0c0c0f;
   --color-elevated: #18181b;
@@ -9,8 +16,77 @@
   --color-border-subtle: #1f1f23;
   --color-muted: #71717a;
   --color-fg: #fafafa;
-  --color-accent: #8b5cf6;
-  --color-accent-hover: #a78bfa;
+  --color-fg-secondary: #d4d4d8;
+  --color-fg-emphasis: #ffffff;
+  --color-btn-ghost-bg: rgb(255 255 255 / 0.04);
+  --color-btn-ghost-hover: rgb(255 255 255 / 0.08);
+  --color-nav-fg: #a1a1aa;
+  --color-nav-fg-hover: #e4e4e7;
+  --color-nav-fg-active: #ffffff;
+  --color-nav-hover: rgb(255 255 255 / 0.06);
+  --color-nav-active: rgb(255 255 255 / 0.08);
+  --color-nav-active-ring: rgb(255 255 255 / 0.06);
+  --color-badge-bg: #27272a;
+  --color-badge-fg: #71717a;
+  --color-selection-bg: rgb(139 92 246 / 0.3);
+  --color-selection-fg: #fff;
+  --panel-inset-shadow: 0 1px 0 0 rgb(255 255 255 / 0.04) inset;
+  --text-gradient-from: #fff;
+  --text-gradient-to: #a1a1aa;
+  --scrollbar-thumb: rgb(63 63 70 / 0.45);
+  --scrollbar-thumb-hover: rgb(113 113 122 / 0.55);
+  --tracking-log-time: #a1a1aa;
+  --tracking-log-desc: #e4e4e7;
+  --tracking-ahead-fg: #fde68a;
+  --tracking-ahead-desc: #fef3c7;
+  --tracking-ahead-badge-fg: #fcd34d;
+  --tracking-ahead-badge-border: rgb(245 158 11 / 0.35);
+  --tracking-ahead-badge-bg: rgb(245 158 11 / 0.15);
+  --last-mile-border: rgb(6 182 212 / 0.2);
+  --last-mile-bg: rgb(8 51 68 / 0.3);
+  --last-mile-label: rgb(165 243 252 / 0.9);
+  --last-mile-code: rgb(207 250 254 / 0.95);
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --color-surface: #f4f4f5;
+  --color-panel: #ffffff;
+  --color-elevated: #ffffff;
+  --color-border: #e4e4e7;
+  --color-border-subtle: #f4f4f5;
+  --color-muted: #71717a;
+  --color-fg: #18181b;
+  --color-fg-secondary: #3f3f46;
+  --color-fg-emphasis: #09090b;
+  --color-btn-ghost-bg: rgb(24 24 27 / 0.04);
+  --color-btn-ghost-hover: rgb(24 24 27 / 0.08);
+  --color-nav-fg: #71717a;
+  --color-nav-fg-hover: #3f3f46;
+  --color-nav-fg-active: #18181b;
+  --color-nav-hover: rgb(24 24 27 / 0.05);
+  --color-nav-active: rgb(139 92 246 / 0.1);
+  --color-nav-active-ring: rgb(139 92 246 / 0.2);
+  --color-badge-bg: #f4f4f5;
+  --color-badge-fg: #71717a;
+  --color-selection-bg: rgb(139 92 246 / 0.25);
+  --color-selection-fg: #18181b;
+  --panel-inset-shadow: 0 1px 2px rgb(24 24 27 / 0.06);
+  --text-gradient-from: #18181b;
+  --text-gradient-to: #71717a;
+  --scrollbar-thumb: rgb(161 161 170 / 0.5);
+  --scrollbar-thumb-hover: rgb(113 113 122 / 0.65);
+  --tracking-log-time: #71717a;
+  --tracking-log-desc: #18181b;
+  --tracking-ahead-fg: #b45309;
+  --tracking-ahead-desc: #92400e;
+  --tracking-ahead-badge-fg: #92400e;
+  --tracking-ahead-badge-border: rgb(217 119 6 / 0.45);
+  --tracking-ahead-badge-bg: rgb(245 158 11 / 0.12);
+  --last-mile-border: rgb(8 145 178 / 0.25);
+  --last-mile-bg: rgb(236 254 255 / 0.9);
+  --last-mile-label: #0e7490;
+  --last-mile-code: #155e75;
 }
 
 @layer base {
@@ -24,7 +100,8 @@
   }
 
   ::selection {
-    @apply bg-violet-500/30 text-white;
+    background: var(--color-selection-bg);
+    color: var(--color-selection-fg);
   }
 
   * {
@@ -38,23 +115,102 @@
   }
 
   .panel {
-    @apply rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)]/60 shadow-[0_1px_0_0_rgba(255,255,255,0.04)_inset];
+    @apply rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)]/60;
+    box-shadow: var(--panel-inset-shadow);
   }
 
   .text-gradient {
-    @apply bg-gradient-to-b from-white to-zinc-400 bg-clip-text text-transparent;
+    @apply bg-clip-text text-transparent;
+    background-image: linear-gradient(
+      to bottom,
+      var(--text-gradient-from),
+      var(--text-gradient-to)
+    );
   }
 
   .nav-item {
-    @apply flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-zinc-400 transition-colors duration-150;
+    @apply flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors duration-150;
+    color: var(--color-nav-fg);
   }
 
   .nav-item:hover {
-    @apply bg-white/[0.06] text-zinc-200;
+    background: var(--color-nav-hover);
+    color: var(--color-nav-fg-hover);
   }
 
   .nav-item-active {
-    @apply bg-white/[0.08] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)];
+    background: var(--color-nav-active);
+    color: var(--color-nav-fg-active);
+    box-shadow: inset 0 0 0 1px var(--color-nav-active-ring);
+  }
+
+  .theme-toggle {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] transition;
+    background: var(--color-btn-ghost-bg);
+    color: var(--color-fg-secondary);
+  }
+
+  .theme-toggle:hover {
+    background: var(--color-btn-ghost-hover);
+    color: var(--color-fg-emphasis);
+  }
+
+  .header-ghost-btn {
+    @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[var(--color-border)] transition;
+    background: var(--color-btn-ghost-bg);
+    color: var(--color-fg-secondary);
+  }
+
+  .header-ghost-btn:hover {
+    background: var(--color-btn-ghost-hover);
+    color: var(--color-fg-emphasis);
+  }
+
+  .header-link-btn {
+    @apply rounded-lg border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium transition;
+    background: var(--color-btn-ghost-bg);
+    color: var(--color-fg-secondary);
+  }
+
+  .header-link-btn:hover {
+    background: var(--color-btn-ghost-hover);
+    color: var(--color-fg-emphasis);
+  }
+
+  /* 各菜单页主标题 / 区块标题 */
+  .page-h1 {
+    @apply text-xl font-semibold tracking-tight;
+    color: var(--color-fg-emphasis);
+  }
+
+  .page-h2 {
+    @apply text-lg font-semibold tracking-tight;
+    color: var(--color-fg-emphasis);
+  }
+
+  .page-h2-xl {
+    @apply text-xl font-semibold tracking-tight;
+    color: var(--color-fg-emphasis);
+  }
+
+  .page-h2-hero {
+    @apply text-3xl font-semibold tracking-tight;
+  }
+
+  .section-h2 {
+    @apply text-sm font-medium;
+    color: var(--color-fg-secondary);
+  }
+
+  .page-subtitle {
+    @apply text-xs;
+    color: var(--color-muted);
+  }
+
+  .status-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs;
+    background: var(--color-elevated);
+    color: var(--color-muted);
   }
 
   /* 原生滚动条：默认几乎隐藏，悬停区域时淡显 */
@@ -64,7 +220,7 @@
   }
 
   .scrollbar-subtle:hover {
-    scrollbar-color: rgb(63 63 70 / 0.55) transparent;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
   }
 
   .scrollbar-subtle::-webkit-scrollbar {
@@ -82,6 +238,6 @@
   }
 
   .scrollbar-subtle:hover::-webkit-scrollbar-thumb {
-    background: rgb(63 63 70 / 0.45);
+    background: var(--scrollbar-thumb);
   }
 }

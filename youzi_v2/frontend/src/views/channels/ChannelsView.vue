@@ -230,7 +230,7 @@ onMounted(async () => {
   <div class="flex h-full min-h-0 w-full flex-col gap-4">
     <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
       <div>
-        <h1 class="text-lg font-semibold text-white">渠道管理</h1>
+        <h1 class="page-h2">渠道管理</h1>
         <p class="mt-1 text-sm text-zinc-500">
           配置渠道中英文、国家/地区、大类（空运/海运/快递/卡航/铁路）与备注；运单
           <code class="text-zinc-400">channel_code</code> 与此处编码一致。

@@ -298,7 +298,7 @@ function renderTrackingSummaryCell(
   const t = (time || '').trim()
   const d = (desc || '').trim()
   if (!t && !d) {
-    return h('span', { class: 'text-zinc-600' }, '—')
+    return h('span', { class: 'tracking-empty' }, '—')
   }
   const carrierAhead = isCarrierTrackingNewerThanInternal(row)
   const effective =
@@ -311,15 +311,8 @@ function renderTrackingSummaryCell(
   const timeRow =
     tab === 'carrier' && carrierAhead
       ? h('div', { class: 'flex min-w-0 items-center gap-1 leading-tight' }, [
-          h('div', { class: 'truncate text-xs text-amber-200/95 tabular-nums' }, t),
-          h(
-            'span',
-            {
-              class:
-                'shrink-0 rounded border border-amber-500/35 bg-amber-500/15 px-1 text-[9px] font-medium text-amber-300/95',
-            },
-            '承新',
-          ),
+          h('div', { class: 'tracking-ahead-time truncate text-xs tabular-nums' }, t),
+          h('span', { class: 'tracking-ahead-badge shrink-0' }, '承新'),
         ])
       : t
         ? h(
@@ -327,7 +320,7 @@ function renderTrackingSummaryCell(
             {
               class: [
                 'text-xs tabular-nums leading-tight',
-                tab === 'internal' && carrierAhead ? 'text-zinc-600' : 'text-zinc-500',
+                tab === 'internal' && carrierAhead ? 'tracking-time--faded' : 'tracking-time',
               ],
             },
             t,
@@ -344,20 +337,20 @@ function renderTrackingSummaryCell(
               class: [
                 'text-xs leading-snug truncate',
                 tab === 'carrier' && carrierAhead
-                  ? 'text-amber-100/90'
+                  ? 'tracking-ahead-desc'
                   : tab === 'internal' && carrierAhead
-                    ? 'text-zinc-500'
-                    : 'text-zinc-200',
+                    ? 'tracking-desc--faded'
+                    : 'tracking-desc',
               ],
               title: d,
             },
             d,
           )
-        : h('div', { class: 'text-xs text-zinc-600' }, '—'),
+        : h('div', { class: 'tracking-empty text-xs' }, '—'),
     ]),
   ])
   const btnClass = [
-    'tracking-summary-btn w-full min-w-0 cursor-pointer rounded px-1 py-0.5 text-left transition-colors hover:bg-zinc-800/60',
+    'tracking-summary-btn w-full min-w-0 cursor-pointer rounded px-1 py-0.5 text-left transition-colors',
     tab === 'carrier' && carrierAhead ? 'tracking-summary-btn--carrier-ahead' : '',
     tab === 'internal' && carrierAhead ? 'tracking-summary-btn--internal-behind' : '',
   ]
@@ -451,7 +444,7 @@ function renderExceptionBadge(row: Shipment) {
 function renderShipmentNo(row: Shipment) {
   const noCell = h(
     'span',
-    { class: 'shipment-no-cell font-medium text-zinc-100' },
+    { class: 'shipment-no-cell font-medium' },
     row.shipmentNo,
   )
   const inner = h('span', { class: 'shipment-no-cell-row' }, [
@@ -478,7 +471,7 @@ const exceptionColumns: DataTableColumns<Shipment> = [
     align: 'center',
     render: (row) => {
       if (!row.exceptionCode) {
-        return h('span', { class: 'text-zinc-600' }, '—')
+        return h('span', { class: 'tracking-empty' }, '—')
       }
       return h(ExceptionStatusBadge, {
         code: row.exceptionCode,
@@ -495,7 +488,7 @@ const exceptionColumns: DataTableColumns<Shipment> = [
     align: 'center',
     render: (row) => {
       if (!row.exceptionDurationLabel) {
-        return h('span', { class: 'text-zinc-600' }, '—')
+        return h('span', { class: 'tracking-empty' }, '—')
       }
       return h('span', { class: 'text-xs tabular-nums text-zinc-400' }, row.exceptionDurationLabel)
     },
@@ -1145,7 +1138,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     ellipsis: { tooltip: true },
     render: (row) => {
       if (!hasEffectiveInternalTracking(row)) {
-        return h('span', { class: 'text-zinc-600' }, '—')
+        return h('span', { class: 'tracking-empty' }, '—')
       }
       return renderTrackingSummaryCell(
         row,
@@ -1166,15 +1159,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
           NTooltip,
           { trigger: 'hover' },
           {
-            trigger: () =>
-              h(
-                'span',
-                {
-                  class:
-                    'cursor-help rounded border border-amber-500/30 bg-amber-500/10 px-1 text-[9px] font-normal text-amber-300/90',
-                },
-                '承新',
-              ),
+            trigger: () => h('span', { class: 'tracking-ahead-badge cursor-help' }, '承新'),
             default: () => '该运单承运最新节点时间晚于内部时，单元格琥珀色高亮（非按节点条数统计）',
           },
         ),
@@ -1195,7 +1180,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     render: (row) => {
       const d = hasEffectiveInternalTracking(row) ? daysSince(row.latestTrackingTime) : null
       if (d === null) {
-        return h('span', { class: 'text-zinc-600' }, '—')
+        return h('span', { class: 'tracking-empty' }, '—')
       }
       return h(
         NTag,
@@ -1254,8 +1239,8 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   <div class="flex h-full min-h-0 flex-col gap-3">
     <div class="shrink-0 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="text-lg font-semibold text-white">运单管理</h2>
-        <p class="text-xs text-zinc-500">
+        <h2 class="page-h2">运单管理</h2>
+        <p class="page-subtitle">
           共 {{ total }} 条 · 支持导入/导出运单 Excel
           <span v-if="batchShipmentSearchActive" class="text-violet-400">
             · 批量运单号 {{ shipmentNoTokens.length }} 个
@@ -1670,7 +1655,49 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   font: inherit;
 }
 
-/* 承运商节点新于内部：琥珀色左边线 + 浅底 */
+.shipments-data-table :deep(.tracking-summary-btn:hover) {
+  background: var(--color-nav-hover);
+}
+
+.shipments-data-table :deep(.tracking-empty) {
+  color: var(--color-muted);
+}
+
+.shipments-data-table :deep(.tracking-time) {
+  color: var(--color-muted);
+}
+
+.shipments-data-table :deep(.tracking-time--faded) {
+  color: var(--color-muted);
+  opacity: 0.72;
+}
+
+.shipments-data-table :deep(.tracking-desc) {
+  color: var(--color-fg);
+}
+
+.shipments-data-table :deep(.tracking-desc--faded) {
+  color: var(--color-muted);
+}
+
+.shipments-data-table :deep(.tracking-ahead-time) {
+  color: var(--tracking-ahead-fg);
+}
+
+.shipments-data-table :deep(.tracking-ahead-desc) {
+  color: var(--tracking-ahead-desc);
+}
+
+.shipments-data-table :deep(.tracking-ahead-badge) {
+  border-radius: 4px;
+  border: 1px solid var(--tracking-ahead-badge-border);
+  background: var(--tracking-ahead-badge-bg);
+  padding: 0 4px;
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--tracking-ahead-badge-fg);
+}
+
 .shipments-data-table :deep(.tracking-summary-btn--carrier-ahead) {
   border-left: 2px solid rgb(251 191 36 / 0.75);
   background: rgb(245 158 11 / 0.08);
@@ -1691,6 +1718,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   white-space: nowrap;
   word-break: keep-all;
   font-variant-numeric: tabular-nums;
+  color: var(--color-fg-emphasis);
 }
 
 .shipments-data-table :deep(.last-mile-badge-btn) {

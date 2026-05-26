@@ -245,7 +245,7 @@ onMounted(async () => {
   <div class="flex h-full min-h-0 flex-col gap-3">
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
-        <h2 class="text-lg font-semibold text-white">客户管理</h2>
+        <h2 class="page-h2">客户管理</h2>
         <p class="text-xs text-zinc-500">
           运单用户名为同步键。客户语言用于 UPS/FedEx 等官网跳转（中文/英文站）。
         </p>

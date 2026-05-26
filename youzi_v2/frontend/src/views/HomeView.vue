@@ -30,10 +30,13 @@ const quickLinks = [
   <div class="mx-auto h-full max-w-5xl space-y-8 overflow-y-auto">
     <section class="space-y-2">
       <p class="text-xs font-medium uppercase tracking-widest text-violet-400/90">Youzi v2</p>
-      <h2 class="text-3xl font-semibold tracking-tight text-gradient">物流工作台</h2>
-      <p class="max-w-xl text-sm text-zinc-500">
+      <h2 class="page-h2-hero text-gradient">物流工作台</h2>
+      <p class="max-w-xl text-sm text-[var(--color-muted)]">
         Linear × Vercel 风格新壳。功能从旧版
-        <code class="rounded bg-zinc-800/80 px-1.5 py-0.5 text-zinc-400">index.html</code>
+        <code
+          class="rounded px-1.5 py-0.5 text-[var(--color-fg-secondary)]"
+          style="background: var(--color-badge-bg)"
+        >index.html</code>
         逐步迁入，API 沿用现有 FastAPI。
       </p>
     </section>
@@ -42,41 +45,43 @@ const quickLinks = [
 
     <section class="grid gap-4 sm:grid-cols-3">
       <article class="panel p-4">
-        <p class="text-xs text-zinc-500">待迁移模块</p>
-        <p class="mt-1 text-2xl font-semibold tabular-nums text-white">{{ pendingCount }}</p>
+        <p class="text-xs text-[var(--color-muted)]">待迁移模块</p>
+        <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-fg-emphasis)]">{{ pendingCount }}</p>
       </article>
       <article class="panel p-4">
-        <p class="text-xs text-zinc-500">API</p>
-        <p class="mt-1 text-2xl font-semibold text-white">{{ version }}</p>
+        <p class="text-xs text-[var(--color-muted)]">API</p>
+        <p class="mt-1 text-2xl font-semibold text-[var(--color-fg-emphasis)]">{{ version }}</p>
       </article>
       <article class="panel p-4">
-        <p class="text-xs text-zinc-500">前端</p>
-        <p class="mt-1 text-2xl font-semibold text-white">Vue 3</p>
+        <p class="text-xs text-[var(--color-muted)]">前端</p>
+        <p class="mt-1 text-2xl font-semibold text-[var(--color-fg-emphasis)]">Vue 3</p>
       </article>
     </section>
 
     <section class="space-y-3">
-      <h3 class="text-xs font-medium uppercase tracking-wider text-zinc-600">快捷入口</h3>
+      <h3 class="text-xs font-medium uppercase tracking-wider text-[var(--color-muted)]">快捷入口</h3>
       <div class="grid gap-3 sm:grid-cols-3">
         <button
           v-for="link in quickLinks"
           :key="link.to"
           type="button"
-          class="panel group p-4 text-left transition hover:border-zinc-600 hover:bg-zinc-800/40"
+          class="panel group p-4 text-left transition hover:border-[var(--color-border)] hover:bg-[var(--color-nav-hover)]"
           @click="router.push(link.to)"
         >
-          <p class="text-sm font-medium text-white group-hover:text-violet-300">{{ link.label }}</p>
-          <p class="mt-1 text-xs text-zinc-500">{{ link.desc }}</p>
+          <p class="text-sm font-medium text-[var(--color-fg-emphasis)] group-hover:text-violet-500">
+            {{ link.label }}
+          </p>
+          <p class="mt-1 text-xs text-[var(--color-muted)]">{{ link.desc }}</p>
         </button>
       </div>
     </section>
 
     <section class="panel border-dashed p-4">
-      <h3 class="text-sm font-medium text-zinc-300">迁移顺序建议</h3>
-      <ol class="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-zinc-500">
-        <li>箱规计算 → <code class="text-zinc-400">/box</code></li>
-        <li>单地址报价 + 历史 → <code class="text-zinc-400">/quote</code></li>
-        <li>地址簿 CRUD → <code class="text-zinc-400">/addresses</code></li>
+      <h3 class="text-sm font-medium text-[var(--color-fg-secondary)]">迁移顺序建议</h3>
+      <ol class="mt-3 list-decimal space-y-1.5 pl-5 text-sm text-[var(--color-muted)]">
+        <li>箱规计算 → <code class="text-[var(--color-fg-secondary)]">/box</code></li>
+        <li>单地址报价 + 历史 → <code class="text-[var(--color-fg-secondary)]">/quote</code></li>
+        <li>地址簿 CRUD → <code class="text-[var(--color-fg-secondary)]">/addresses</code></li>
         <li>批量报价、成本、运单监控</li>
       </ol>
     </section>

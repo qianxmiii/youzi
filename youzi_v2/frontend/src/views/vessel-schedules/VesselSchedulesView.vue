@@ -252,7 +252,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
   <div class="mx-auto max-w-7xl space-y-6 p-6">
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
-        <h1 class="text-xl font-semibold text-white">船期监控</h1>
+        <h1 class="page-h1">船期监控</h1>
         <p class="mt-1 text-sm text-zinc-500">
           维护船名航次挂靠计划，按 vessel_voyage 关联运单并查看海运动态
         </p>
@@ -315,7 +315,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
 
       <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
         <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 class="text-sm font-medium text-zinc-200">关联运单</h2>
+          <h2 class="section-h2">关联运单</h2>
           <NSelect
             v-model:value="statusFilter"
             :options="MARITIME_STATUS_OPTIONS"

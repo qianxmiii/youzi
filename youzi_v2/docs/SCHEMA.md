@@ -193,7 +193,36 @@ API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST 
 | DELETE | `/api/v1/shipments/{id}` | 删除 |
 | POST | `/api/v1/shipments/import` | 上传 Excel，按运单号 upsert |
 
+---
+
+## 船期 API（`youzi_v2/app.py`）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/maritime-alerts/overview` | 首页海运预警聚合 |
+| GET | `/api/v1/vessel-schedules` | 航次列表 |
+| GET | `/api/v1/vessel-schedules/template` | 下载 Excel 模板 |
+| GET | `/api/v1/vessel-schedules/{id}` | 航次详情（含挂靠 + 运单状态汇总） |
+| GET | `/api/v1/vessel-schedules/{id}/shipments` | 关联运单（`?maritimeStatus=` 筛选） |
+| POST | `/api/v1/vessel-schedules` | 新建航次 |
+| PATCH | `/api/v1/vessel-schedules/{id}` | 更新航次 / 挂靠 |
+| DELETE | `/api/v1/vessel-schedules/{id}` | 删除 |
+| POST | `/api/v1/vessel-schedules/import` | Excel 导入（按 `vessel_voyage` upsert） |
+
+表：`vessel_voyages`（`vessel_voyage` 唯一）、`voyage_port_calls`（有序挂靠）。运单关联： `shipments.vessel_voyage` 与航次字段精确匹配（`COLLATE NOCASE`）。
+
 ### Excel 列映射
+
+配置文件：`youzi_v2/config/vessel_schedule_excel_columns.json`
+
+| Excel 表头 | 字段 |
+|------------|------|
+| 船名航次 | `vessel_voyage` |
+| 序号 | `sequence` |
+| 港口 | `port_name` |
+| ETA / ATA / ETD / ATD | 对应时间列 |
+
+### 运单 Excel 列映射
 
 配置文件：`youzi_v2/config/shipment_excel_columns.json`
 

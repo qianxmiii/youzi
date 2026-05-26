@@ -228,16 +228,5 @@ export function formatLastMileTooltip(shipment: {
 }): string | null {
   const info = resolveLastMileTracking(shipment)
   if (!info) return null
-  const lines = [`转单号：${info.number}`]
-  if (info.conwestNumbers && info.conwestNumbers.length > 1) {
-    const range = formatConwestTrackingRange(info.conwestNumbers)
-    if (range) lines.push(`子单号：${range}`)
-  }
-  if (info.carrierId && info.carrierId !== info.number) {
-    lines.push(`承运单号：${info.carrierId}`)
-  }
-  if (info.url) {
-    lines.push(`官网查询：${info.carrierLabel}（17TRACK）`)
-  }
-  return lines.join('\n')
+  return info.number
 }

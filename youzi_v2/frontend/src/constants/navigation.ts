@@ -35,6 +35,7 @@ export const navGroups: NavGroup[] = [
     label: '运维',
     items: [
       { name: '运单管理', to: '/shipments', icon: 'truck' },
+      { name: '船期监控', to: '/vessel-schedules', icon: 'layers' },
       { name: '统计管理', to: '/statistics', icon: 'chart' },
       { name: '客户管理', to: '/customers', icon: 'users' },
       { name: '渠道管理', to: '/channels', icon: 'layers' },

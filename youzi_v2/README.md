@@ -73,7 +73,8 @@ uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001
 | `/cost` | 待迁 | `tab.js` DDU/DDP |
 | `/library` | 待迁 | 术语 / 书签 / 备忘录 |
 | `/addresses` | 待迁 | `/api/addresses` |
-| `/shipments` | 待迁 | `stales.html` |
+| `/shipments` | ✅ 运单管理 | `stales.html` |
+| `/vessel-schedules` | ✅ 船期监控 | — |
 | `/admin` | 待迁 | `templates/admin.html` |
 
 ## 私密配置（`config/config.json`）
@@ -90,6 +91,17 @@ uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001
 | `/api/addresses*` | 地址簿 |
 | `/api/product-import*` | 箱单转换 |
 | `/api/v1/shipments*` | 运单 CRUD + Excel 导入 |
+| `/api/v1/vessel-schedules*` | 航次船期 + 挂靠时间轴 + Excel 导入 |
+| `GET /api/v1/maritime-alerts/overview` | 首页海运预警（运单 + 挂靠） |
+
+### 船期 Excel 导入
+
+表头见 `config/vessel_schedule_excel_columns.json`（船名航次、序号、港口、ETA/ATA/ETD/ATD）。同一船名航次多行表示多港挂靠；导入按 `vessel_voyage` upsert。关联运单通过运单字段 `vessel_voyage` 精确匹配（不区分大小写）。
+
+```bash
+curl -O "http://127.0.0.1:3001/api/v1/vessel-schedules/template"
+curl -X POST "http://127.0.0.1:3001/api/v1/vessel-schedules/import" -F "file=@船期.xlsx"
+```
 
 ### 运单 Excel 导入
 

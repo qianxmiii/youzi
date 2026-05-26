@@ -32,6 +32,7 @@ class TrackingFreshnessTest(unittest.TestCase):
         sql, params = carrier_ahead_of_internal_sql("s")
         self.assertIn("latest_carrier_time", sql)
         self.assertIn("latest_tracking_time", sql)
+        self.assertIn("+1 minutes", sql)
         self.assertEqual(len(params), 1)
 
     def test_freshness_stats_sql_binding_count(self) -> None:

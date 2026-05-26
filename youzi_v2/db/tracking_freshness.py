@@ -6,6 +6,9 @@ from ..internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER
 
 FRESHNESS_BUCKETS = frozenset({"today", "within3d", "older", "none"})
 
+# 承新于内：承运时间须晚于内部至少该分钟数（双方均有有效内部轨迹时）
+CARRIER_AHEAD_MIN_MINUTES = 1
+
 
 def validate_freshness(value: str | None) -> str | None:
     if value is None or not str(value).strip():
@@ -78,16 +81,17 @@ def carrier_freshness_sql(bucket: str, alias: str = "s") -> tuple[str, list]:
 
 
 def carrier_ahead_of_internal_sql(alias: str = "s") -> tuple[str, list]:
-    """承运商最新节点时间晚于内部，或内部无有效轨迹但承运有。"""
+    """承运商最新节点时间晚于内部至少 CARRIER_AHEAD_MIN_MINUTES 分钟，或内部无有效轨迹但承运有。"""
     ce = _carrier_effective_sql(alias)
     ie = _internal_effective_sql(alias)
     p = f"{alias}." if alias else ""
     ph = INTERNAL_WAREHOUSE_PLACEHOLDER
+    offset = f"+{CARRIER_AHEAD_MIN_MINUTES} minutes"
     frag = f"""(
       {ce}
       AND (
         NOT {ie}
-        OR datetime({p}latest_carrier_time) > datetime({p}latest_tracking_time)
+        OR datetime({p}latest_carrier_time) > datetime({p}latest_tracking_time, '{offset}')
       )
     )"""
     return frag, [ph]

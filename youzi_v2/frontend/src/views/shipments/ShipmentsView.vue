@@ -50,6 +50,7 @@ import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
+  daysSinceLocalCalendar,
   FRESHNESS_DOT_CLASS,
   isCarrierTrackingNewerThanInternal,
   trackingFreshnessLevel,
@@ -245,13 +246,6 @@ function toggleCarrierAheadFilter() {
   filterCarrierAheadOfInternal.value = !filterCarrierAheadOfInternal.value
   filtersExpanded.value = true
   onFiltersChanged()
-}
-
-function daysSince(time: string | null | undefined): number | null {
-  if (!time?.trim()) return null
-  const t = new Date(time.trim().replace(' ', 'T'))
-  if (Number.isNaN(t.getTime())) return null
-  return Math.floor((Date.now() - t.getTime()) / 86_400_000)
 }
 
 const statusLabel: Record<string, string> = {
@@ -1178,7 +1172,9 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     width: 72,
     align: 'center',
     render: (row) => {
-      const d = hasEffectiveInternalTracking(row) ? daysSince(row.latestTrackingTime) : null
+      const d = hasEffectiveInternalTracking(row)
+        ? daysSinceLocalCalendar(row.latestTrackingTime)
+        : null
       if (d === null) {
         return h('span', { class: 'tracking-empty' }, '—')
       }

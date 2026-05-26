@@ -207,6 +207,65 @@
     color: var(--color-muted);
   }
 
+  /* 轨迹新鲜度 · 承新于内（透明底，仅边框） */
+  button.freshness-ahead-btn {
+    margin: 0;
+    box-sizing: border-box;
+    appearance: none;
+    -webkit-appearance: none;
+    display: inline-flex;
+    shrink: 0;
+    align-items: center;
+    gap: 0.25rem;
+    border-radius: 9999px;
+    border: 1.5px solid var(--tracking-ahead-badge-border);
+    background: transparent;
+    padding: 0.25rem 0.625rem;
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.2;
+    color: var(--tracking-ahead-fg);
+    cursor: pointer;
+    transition:
+      border-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease;
+  }
+
+  button.freshness-ahead-btn:hover:not(:disabled) {
+    background: transparent;
+    border-color: var(--tracking-ahead-fg);
+    color: var(--tracking-ahead-desc);
+  }
+
+  button.freshness-ahead-btn--active {
+    background: transparent;
+    border-color: var(--tracking-ahead-fg);
+    color: var(--tracking-ahead-desc);
+    box-shadow: 0 0 0 1px var(--tracking-ahead-badge-border);
+  }
+
+  button.freshness-ahead-btn--disabled,
+  button.freshness-ahead-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+    border-color: var(--color-border);
+    color: var(--color-muted);
+    background: transparent;
+  }
+
+  button.freshness-ahead-btn .freshness-ahead-btn-num {
+    font-weight: 600;
+  }
+
+  button.freshness-ahead-btn .freshness-ahead-btn-unit {
+    font-size: 10px;
+    font-weight: 400;
+    opacity: 0.85;
+  }
+
   .status-pill {
     @apply inline-flex items-center gap-1.5 rounded-full border border-[var(--color-border)] px-2.5 py-1 text-xs;
     background: var(--color-elevated);

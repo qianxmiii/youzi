@@ -259,6 +259,7 @@ class ShipmentsRepository:
         channel_code: str | None = None,
         channel_name_zh: str | None = None,
         channel_category: str | None = None,
+        vessel_voyage: str | None = None,
         internal_freshness: str | None = None,
         carrier_freshness: str | None = None,
         carrier_ahead_of_internal: bool | None = None,
@@ -348,6 +349,9 @@ class ShipmentsRepository:
         if channel_category and channel_category.strip():
             conditions.append("cc.category = ?")
             params.append(channel_category.strip())
+        if vessel_voyage and vessel_voyage.strip():
+            conditions.append("s.vessel_voyage = ? COLLATE NOCASE")
+            params.append(vessel_voyage.strip())
         if internal_freshness:
             frag, frag_params = internal_freshness_sql(
                 validate_freshness(internal_freshness) or ""

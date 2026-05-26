@@ -1,0 +1,27 @@
+{
+  "sheet_preference": ["船期", "Sheet1"],
+  "columns": {
+    "船名航次": "vessel_voyage",
+    "vessel_voyage": "vessel_voyage",
+    "Vessel Voyage": "vessel_voyage",
+    "序号": "sequence",
+    "sequence": "sequence",
+    "港口": "port_name",
+    "port_name": "port_name",
+    "Port": "port_name",
+    "ETA": "eta",
+    "eta": "eta",
+    "预计到港": "eta",
+    "ATA": "ata",
+    "ata": "ata",
+    "实际到港": "ata",
+    "ETD": "etd",
+    "etd": "etd",
+    "预计离港": "etd",
+    "ATD": "atd",
+    "atd": "atd",
+    "实际离港": "atd",
+    "备注": "notes",
+    "notes": "notes"
+  }
+}

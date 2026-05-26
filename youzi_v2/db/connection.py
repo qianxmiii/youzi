@@ -43,6 +43,7 @@ class Database:
         from . import tracking_sync_jobs_table
         from . import customers_table
         from . import shipment_tracking_numbers_table
+        from . import vessel_voyages_table
 
         with self._lock:
             app_settings_table.ensure_schema(self._conn)
@@ -57,6 +58,7 @@ class Database:
             tracking_sync_jobs_table.ensure_schema(self._conn)
             customers_table.ensure_schema(self._conn)
             shipment_tracking_numbers_table.ensure_schema(self._conn)
+            vessel_voyages_table.ensure_schema(self._conn)
             self._conn.commit()
         app_settings_table.seed_if_empty(self._conn)
         code_tables.seed_if_empty(self._conn)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import MaritimeAlertsPanel from '@/components/home/MaritimeAlertsPanel.vue'
 import { fetchHealth } from '@/api/client'
 import { navGroups } from '@/constants/navigation'
 
@@ -19,14 +20,14 @@ onMounted(async () => {
 })
 
 const quickLinks = [
+  { label: '船期监控', desc: '航次挂靠与海运预警', to: '/vessel-schedules' },
+  { label: '运单管理', desc: '轨迹同步与异常', to: '/shipments' },
   { label: '箱规计算', desc: '录入尺寸、材积、计费重', to: '/box' },
-  { label: '单地址报价', desc: '生成报价文本与历史', to: '/quote' },
-  { label: '地址簿', desc: '客户仓库地址', to: '/addresses' },
 ]
 </script>
 
 <template>
-  <div class="mx-auto h-full max-w-4xl space-y-8 overflow-y-auto">
+  <div class="mx-auto h-full max-w-5xl space-y-8 overflow-y-auto">
     <section class="space-y-2">
       <p class="text-xs font-medium uppercase tracking-widest text-violet-400/90">Youzi v2</p>
       <h2 class="text-3xl font-semibold tracking-tight text-gradient">物流工作台</h2>
@@ -36,6 +37,8 @@ const quickLinks = [
         逐步迁入，API 沿用现有 FastAPI。
       </p>
     </section>
+
+    <MaritimeAlertsPanel />
 
     <section class="grid gap-4 sm:grid-cols-3">
       <article class="panel p-4">

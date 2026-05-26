@@ -35,6 +35,7 @@ from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .db.customers_repository import CustomersRepository
 from .db.channels_repository import ChannelsRepository
 from .db.shipment_statistics_repository import ShipmentStatisticsRepository
+from .db.vessel_schedules_repository import VesselSchedulesRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
 from .schemas.shipments import (
@@ -46,6 +47,8 @@ from .schemas.shipments import (
 )
 from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
+from .schemas.maritime_alerts import MaritimeAlertsOverview
+from .schemas.vessel_schedules import VesselVoyageIn, VesselVoyageUpdateIn, VoyageImportResult
 from .schemas.statistics import ShipmentStatisticsOverview
 from .schemas.tracking_freshness import TrackingFreshnessStats
 from .schemas.scheduled_tasks import (
@@ -71,6 +74,11 @@ from .services.scheduled_sync_settings import (
 )
 from .services.code_table_excel import build_template_bytes, import_excel_file as import_code_table_excel
 from .services.shipment_excel import build_export_excel_bytes, import_excel_file
+from .services.maritime_alerts import build_maritime_alerts_overview
+from .services.vessel_schedule_excel import (
+    build_template_bytes as build_vessel_schedule_template_bytes,
+    import_excel_file as import_vessel_schedule_excel,
+)
 from .services.tracking_sync import sync_all_tracking
 from .services.tracking_sync_scheduler import (
     run_scheduled_carrier_sync,
@@ -183,6 +191,7 @@ dict_repo = DictRepository(_database)
 customers_repo = CustomersRepository(_database)
 channels_repo = ChannelsRepository(_database)
 shipment_statistics_repo = ShipmentStatisticsRepository(_database)
+vessel_schedules_repo = VesselSchedulesRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
@@ -415,6 +424,7 @@ def list_shipments(
     channel_code: str | None = Query(None, alias="channelCode"),
     channel_name_zh: str | None = Query(None, alias="channelNameZh"),
     channel_category: str | None = Query(None, alias="channelCategory"),
+    vessel_voyage: str | None = Query(None, alias="vesselVoyage"),
     internal_freshness: str | None = Query(None, alias="internalFreshness"),
     carrier_freshness: str | None = Query(None, alias="carrierFreshness"),
     carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
@@ -442,6 +452,7 @@ def list_shipments(
             channel_code=channel_code,
             channel_name_zh=channel_name_zh,
             channel_category=channel_category,
+            vessel_voyage=vessel_voyage,
             internal_freshness=internal_freshness,
             carrier_freshness=carrier_freshness,
             carrier_ahead_of_internal=carrier_ahead_of_internal,
@@ -572,6 +583,110 @@ def delete_channel(code: str):
     if not channels_repo.delete(code):
         raise HTTPException(status_code=404, detail="渠道不存在")
     return Response(status_code=204)
+
+
+# ---------- 船期监控 vessel-schedules ----------
+
+
+@app.get("/api/v1/maritime-alerts/overview", response_model=MaritimeAlertsOverview)
+def get_maritime_alerts_overview():
+    """首页海运预警：运单海运动态 + 航次挂靠三天内到/离港。"""
+    return MaritimeAlertsOverview(**build_maritime_alerts_overview(_database))
+
+
+@app.get("/api/v1/vessel-schedules")
+def list_vessel_schedules(
+    search: str | None = None,
+    limit: int = 100,
+    offset: int = 0,
+):
+    return vessel_schedules_repo.list_rows(search=search, limit=limit, offset=offset)
+
+
+@app.get("/api/v1/vessel-schedules/template")
+def download_vessel_schedule_template():
+    data = build_vessel_schedule_template_bytes()
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="vessel_schedule_template.xlsx"'},
+    )
+
+
+@app.get("/api/v1/vessel-schedules/{voyage_id}")
+def get_vessel_schedule(voyage_id: str):
+    row = vessel_schedules_repo.get_detail(voyage_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="航次不存在")
+    return row
+
+
+@app.get("/api/v1/vessel-schedules/{voyage_id}/shipments")
+def list_vessel_schedule_shipments(
+    voyage_id: str,
+    maritime_status: str | None = Query(None, alias="maritimeStatus"),
+    limit: int = 200,
+    offset: int = 0,
+):
+    row = vessel_schedules_repo.get_detail(voyage_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="航次不存在")
+    return vessel_schedules_repo.list_shipments_for_voyage(
+        row["vesselVoyage"],
+        maritime_status=maritime_status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.post("/api/v1/vessel-schedules", status_code=201)
+def create_vessel_schedule(body: VesselVoyageIn):
+    try:
+        return vessel_schedules_repo.create(body.model_dump(by_alias=False))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.patch("/api/v1/vessel-schedules/{voyage_id}")
+def update_vessel_schedule(voyage_id: str, body: VesselVoyageUpdateIn):
+    try:
+        return vessel_schedules_repo.update(
+            voyage_id,
+            body.model_dump(by_alias=False, exclude_unset=True),
+        )
+    except ValueError as exc:
+        status = 404 if "不存在" in str(exc) else 400
+        raise HTTPException(status_code=status, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/vessel-schedules/{voyage_id}", status_code=204)
+def delete_vessel_schedule(voyage_id: str):
+    try:
+        vessel_schedules_repo.delete(voyage_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return Response(status_code=204)
+
+
+@app.post("/api/v1/vessel-schedules/import", response_model=VoyageImportResult)
+async def import_vessel_schedules_excel(file: UploadFile = File(...)):
+    filename = (file.filename or "").lower()
+    if not filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 或 .xls 文件")
+    task_id = str(uuid.uuid4())
+    extension = Path(filename).suffix if Path(filename).suffix else ".xlsx"
+    upload_path = UPLOAD_DIR / f"vessel_schedule_{task_id}{extension}"
+    with upload_path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    try:
+        return import_vessel_schedule_excel(vessel_schedules_repo, upload_path)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if upload_path.exists():
+            upload_path.unlink(missing_ok=True)
 
 
 _SHIPMENT_EXPORT_MAX = 10_000

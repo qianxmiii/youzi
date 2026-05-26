@@ -57,6 +57,12 @@ const router = createRouter({
           meta: { title: '运单管理' },
         },
         {
+          path: 'vessel-schedules',
+          name: 'vessel-schedules',
+          component: () => import('@/views/vessel-schedules/VesselSchedulesView.vue'),
+          meta: { title: '船期监控' },
+        },
+        {
           path: 'statistics',
           name: 'statistics',
           component: () => import('@/views/statistics/StatisticsView.vue'),

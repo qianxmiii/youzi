@@ -416,7 +416,7 @@ function renderLastMileBadge(row: Shipment) {
     { trigger: 'hover' },
     {
       trigger: () => badgeBtn,
-      default: () => formatLastMileTooltip(row) ?? `转单号：${info.number}`,
+      default: () => formatLastMileTooltip(row) ?? info.number,
     },
   )
 }

@@ -1,5 +1,9 @@
 import { api } from '@/api/client'
 import type {
+  CarrierVesselSearchResponse,
+  ExternalSchedulePreview,
+  ExternalScheduleSyncResult,
+  MaritimeScheduleProvidersResponse,
   VesselVoyageDetail,
   VesselVoyageListResponse,
   VesselVoyagePayload,
@@ -69,4 +73,51 @@ export async function importVesselScheduleExcel(file: File): Promise<VoyageImpor
 export function vesselScheduleTemplateUrl(): string {
   const base = import.meta.env.VITE_API_BASE || ''
   return `${base}/api/v1/vessel-schedules/template`
+}
+
+export async function listMaritimeScheduleProviders(): Promise<MaritimeScheduleProvidersResponse> {
+  return api<MaritimeScheduleProvidersResponse>('/api/v1/vessel-schedules/providers')
+}
+
+export async function searchCarrierVessels(
+  shippingCompany: string,
+  prefix: string,
+  signal?: AbortSignal,
+): Promise<CarrierVesselSearchResponse> {
+  return api<CarrierVesselSearchResponse>('/api/v1/vessel-schedules/vessels/search', {
+    query: {
+      shippingCompany: shippingCompany.trim(),
+      prefix: prefix.trim(),
+    },
+    signal,
+  })
+}
+
+export async function previewExternalVesselSchedule(
+  shippingCompany: string,
+  vesselCode: string,
+  period = 28,
+): Promise<ExternalSchedulePreview> {
+  return api<ExternalSchedulePreview>('/api/v1/vessel-schedules/fetch/preview', {
+    query: {
+      shippingCompany: shippingCompany.trim(),
+      vesselCode: vesselCode.trim().toUpperCase(),
+      period,
+    },
+  })
+}
+
+export async function syncExternalVesselSchedule(
+  shippingCompany: string,
+  vesselCode: string,
+  period = 28,
+): Promise<ExternalScheduleSyncResult> {
+  return api<ExternalScheduleSyncResult>('/api/v1/vessel-schedules/fetch/sync', {
+    method: 'POST',
+    body: {
+      shippingCompany: shippingCompany.trim(),
+      vesselCode: vesselCode.trim().toUpperCase(),
+      period,
+    },
+  })
 }

@@ -1,6 +1,18 @@
 {
   "sheet_preference": ["船期", "Sheet1"],
   "columns": {
+    "船名": "vessel_name",
+    "vessel_name": "vessel_name",
+    "Vessel Name": "vessel_name",
+    "航次": "voyage_no",
+    "voyage_no": "voyage_no",
+    "Voyage": "voyage_no",
+    "船舶代码": "vessel_code",
+    "vessel_code": "vessel_code",
+    "Vessel Code": "vessel_code",
+    "船公司": "shipping_company",
+    "shipping_company": "shipping_company",
+    "Shipping Company": "shipping_company",
     "船名航次": "vessel_voyage",
     "vessel_voyage": "vessel_voyage",
     "Vessel Voyage": "vessel_voyage",

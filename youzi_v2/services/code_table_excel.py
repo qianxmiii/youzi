@@ -78,7 +78,7 @@ def parse_excel_rows(
             header_index[col_map[key]] = idx
 
     if "code" not in header_index:
-        return [], [{"row": 1, "message": "缺少「编码」列（或 code）"}]
+        return [], [{"row": 1, "message": "缺少「编码」列（或 code / 港口代码）"}]
 
     parsed: list[tuple[int, dict[str, Any]]] = []
     errors: list[dict[str, Any]] = []
@@ -150,10 +150,10 @@ def build_template_bytes(table: str) -> bytes:
     validate_table(table)
     headers = ["编码", "中文名", "英文名", "排序", "启用"]
     if table == "port_codes":
-        headers.insert(3, "港口类型")
+        headers = ["港口代码", "港口中文名", "港口英文名", "港口类型", "排序", "启用"]
     sample = ["SAMPLE01", "示例中文", "Sample EN", 10, "是"]
     if table == "port_codes":
-        sample.insert(3, "both")
+        sample = ["NYC", "纽约", "NEWYORK", "both", 10, "是"]
 
     wb = Workbook()
     ws = wb.active

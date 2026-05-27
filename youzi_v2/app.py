@@ -48,7 +48,17 @@ from .schemas.shipments import (
 from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
 from .schemas.maritime_alerts import MaritimeAlertsOverview
-from .schemas.vessel_schedules import VesselVoyageIn, VesselVoyageUpdateIn, VoyageImportResult
+from .schemas.vessel_schedules import (
+    VesselScheduleFetchIn,
+    VesselVoyageIn,
+    VesselVoyageUpdateIn,
+    VoyageImportResult,
+)
+from .services.maritime_schedule import (
+    fetch_vessel_schedule,
+    list_schedule_providers,
+    search_carrier_vessels,
+)
 from .schemas.statistics import ShipmentStatisticsOverview
 from .schemas.tracking_freshness import TrackingFreshnessStats
 from .schemas.scheduled_tasks import (
@@ -613,6 +623,72 @@ def download_vessel_schedule_template():
     )
 
 
+@app.get("/api/v1/vessel-schedules/providers")
+def list_vessel_schedule_providers():
+    """已接入的船期拉取 Provider（按船公司路由）。"""
+    return {"items": list_schedule_providers()}
+
+
+@app.get("/api/v1/vessel-schedules/vessels/search")
+def search_carrier_vessel_names(
+    shipping_company: str = Query(..., alias="shippingCompany", min_length=1),
+    prefix: str = Query(..., min_length=3),
+):
+    """按船公司检索船舶（如 COSCO 船名前缀 → vesselCode）。"""
+    try:
+        items = search_carrier_vessels(shipping_company, prefix)
+        return {"items": items}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.get("/api/v1/vessel-schedules/fetch/preview")
+def preview_external_vessel_schedule(
+    shipping_company: str = Query(..., alias="shippingCompany", min_length=1),
+    vessel_code: str = Query(..., alias="vesselCode", min_length=1),
+    period: int = Query(28, ge=7, le=90),
+):
+    """按船公司 + 船舶代码预览挂靠（不落库）。"""
+    try:
+        return fetch_vessel_schedule(
+            shipping_company,
+            vessel_code,
+            period=period,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/v1/vessel-schedules/fetch/sync")
+def sync_external_vessel_schedule(body: VesselScheduleFetchIn):
+    """从船公司接口拉取船期并 upsert 到航次主数据。"""
+    try:
+        parsed = fetch_vessel_schedule(
+            body.shipping_company,
+            body.vessel_code,
+            period=body.period,
+        )
+        notes = (body.notes or "").strip() or str(parsed.get("notes") or "")
+        detail, created = vessel_schedules_repo.upsert_from_import(
+            vessel_voyage=str(parsed["vesselVoyage"]),
+            port_calls=parsed.get("portCalls") or [],
+            notes=notes,
+            vessel_name=parsed.get("vesselName"),
+            voyage_no=parsed.get("voyageNo"),
+            vessel_code=parsed.get("vesselCode") or body.vessel_code.strip().upper(),
+            shipping_company=parsed.get("shippingCompany"),
+            match_by_carrier=True,
+        )
+        return {
+            "voyage": detail,
+            "created": created,
+            "source": parsed.get("source"),
+            "portCount": len(detail.get("portCalls") or []),
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @app.get("/api/v1/vessel-schedules/{voyage_id}")
 def get_vessel_schedule(voyage_id: str):
     row = vessel_schedules_repo.get_detail(voyage_id)
@@ -633,6 +709,8 @@ def list_vessel_schedule_shipments(
         raise HTTPException(status_code=404, detail="航次不存在")
     return vessel_schedules_repo.list_shipments_for_voyage(
         row["vesselVoyage"],
+        vessel_name=row.get("vesselName"),
+        voyage_no=row.get("voyageNo"),
         maritime_status=maritime_status,
         limit=limit,
         offset=offset,
@@ -642,7 +720,9 @@ def list_vessel_schedule_shipments(
 @app.post("/api/v1/vessel-schedules", status_code=201)
 def create_vessel_schedule(body: VesselVoyageIn):
     try:
-        return vessel_schedules_repo.create(body.model_dump(by_alias=False))
+        return vessel_schedules_repo.create(
+            body.model_dump(by_alias=False, exclude_none=True)
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -652,7 +732,7 @@ def update_vessel_schedule(voyage_id: str, body: VesselVoyageUpdateIn):
     try:
         return vessel_schedules_repo.update(
             voyage_id,
-            body.model_dump(by_alias=False, exclude_unset=True),
+            body.model_dump(by_alias=False, exclude_unset=True, exclude_none=True),
         )
     except ValueError as exc:
         status = 404 if "不存在" in str(exc) else 400

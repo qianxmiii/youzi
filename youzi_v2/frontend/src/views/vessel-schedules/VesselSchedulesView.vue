@@ -3,6 +3,7 @@ import {
   NButton,
   NDataTable,
   NInput,
+  NInputNumber,
   NPopconfirm,
   NSelect,
   NSpace,
@@ -12,6 +13,7 @@ import {
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import CarrierVesselSelect from '@/components/vessel-schedules/CarrierVesselSelect.vue'
 import VoyageFormModal from '@/components/vessel-schedules/VoyageFormModal.vue'
 import VoyageTimeline from '@/components/vessel-schedules/VoyageTimeline.vue'
 import {
@@ -19,12 +21,15 @@ import {
   deleteVesselSchedule,
   getVesselSchedule,
   importVesselScheduleExcel,
+  listMaritimeScheduleProviders,
   listVesselSchedules,
   listVoyageShipments,
+  syncExternalVesselSchedule,
   updateVesselSchedule,
   vesselScheduleTemplateUrl,
 } from '@/api/vesselSchedules'
 import type {
+  MaritimeScheduleProviderInfo,
   MaritimeStatus,
   VesselVoyageDetail,
   VesselVoyagePayload,
@@ -32,6 +37,8 @@ import type {
   VoyageShipment,
 } from '@/types/vesselSchedule'
 import { MARITIME_STATUS_OPTIONS, maritimeStatusTagType } from '@/types/vesselSchedule'
+import { apiErrorMessage } from '@/utils/apiError'
+import { resolveVesselName, resolveVoyageNo } from '@/utils/vesselVoyageDisplay'
 
 const message = useMessage()
 const route = useRoute()
@@ -39,6 +46,7 @@ const loading = ref(false)
 const detailLoading = ref(false)
 const importing = ref(false)
 const voyages = ref<VesselVoyageSummary[]>([])
+const selectedVesselName = ref<string | null>(null)
 const selectedId = ref<string | null>(null)
 const detail = ref<VesselVoyageDetail | null>(null)
 const search = ref('')
@@ -49,13 +57,50 @@ const shipmentTotal = ref(0)
 const modalShow = ref(false)
 const modalMode = ref<'create' | 'edit'>('create')
 const fileInputRef = ref<HTMLInputElement | null>(null)
+const scheduleProviders = ref<MaritimeScheduleProviderInfo[]>([])
+const syncCompany = ref('')
+const syncVesselCode = ref('')
+const syncVesselName = ref('')
+const syncPeriod = ref(90)
+const scheduleSyncing = ref(false)
 
-const voyageOptions = computed(() =>
-  voyages.value.map((v) => ({
-    label: `${v.vesselVoyage}（${v.shipmentCount ?? 0} 票）`,
-    value: v.id,
+const providerOptions = computed(() =>
+  scheduleProviders.value.map((p) => ({
+    label: p.label,
+    value: p.shippingCompany,
   })),
 )
+
+const syncProvider = computed(() =>
+  scheduleProviders.value.find((p) => p.shippingCompany === syncCompany.value),
+)
+
+const syncVesselSearchEnabled = computed(() => Boolean(syncProvider.value?.features?.vesselSearch))
+
+const vesselNameOptions = computed(() => {
+  const names = new Set<string>()
+  for (const v of voyages.value) {
+    const name = resolveVesselName(v)
+    if (name) names.add(name)
+  }
+  return [...names].sort().map((name) => ({ label: name, value: name }))
+})
+
+const voyageNoOptions = computed(() => {
+  if (!selectedVesselName.value) return []
+  return voyages.value
+    .filter((v) => resolveVesselName(v) === selectedVesselName.value)
+    .map((v) => ({
+      label: `${resolveVoyageNo(v)}（${v.portCount ?? 0} 港 · ${v.shipmentCount ?? 0} 票）`,
+      value: v.id,
+    }))
+})
+
+function syncVesselNameFromSelectedId() {
+  if (!selectedId.value) return
+  const v = voyages.value.find((x) => x.id === selectedId.value)
+  if (v) selectedVesselName.value = resolveVesselName(v)
+}
 
 const summary = computed(() => detail.value?.shipmentSummary)
 
@@ -64,10 +109,22 @@ async function loadVoyages() {
   try {
     const res = await listVesselSchedules({ search: search.value.trim() || undefined, limit: 200 })
     voyages.value = res.items
-    if (!selectedId.value && res.items.length) {
+    if (selectedId.value && !res.items.some((v) => v.id === selectedId.value)) {
+      selectedId.value = null
+      selectedVesselName.value = null
+    }
+    if (selectedId.value) {
+      syncVesselNameFromSelectedId()
+    } else if (selectedVesselName.value) {
+      const under = res.items.filter((v) => resolveVesselName(v) === selectedVesselName.value)
+      if (under.length === 1) {
+        selectedId.value = under[0].id
+      } else if (!under.some((v) => v.id === selectedId.value)) {
+        selectedId.value = null
+      }
+    } else if (res.items.length) {
+      selectedVesselName.value = resolveVesselName(res.items[0])
       selectedId.value = res.items[0].id
-    } else if (selectedId.value && !res.items.some((v) => v.id === selectedId.value)) {
-      selectedId.value = res.items[0]?.id ?? null
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : '加载航次列表失败')
@@ -109,6 +166,15 @@ async function loadShipments() {
 }
 
 onMounted(async () => {
+  try {
+    const res = await listMaritimeScheduleProviders()
+    scheduleProviders.value = res.items
+    if (!syncCompany.value && res.items.length) {
+      syncCompany.value = res.items[0].shippingCompany
+    }
+  } catch {
+    /* ignore */
+  }
   const qStatus = route.query.maritimeStatus
   if (typeof qStatus === 'string' && qStatus) {
     statusFilter.value = qStatus as MaritimeStatus
@@ -121,7 +187,24 @@ onMounted(async () => {
   await loadDetail()
 })
 
+watch(selectedVesselName, (name, prev) => {
+  if (name === prev) return
+  if (!name) {
+    selectedId.value = null
+    return
+  }
+  const current = voyages.value.find((v) => v.id === selectedId.value)
+  if (current && resolveVesselName(current) !== name) {
+    selectedId.value = null
+  }
+  const under = voyages.value.filter((v) => resolveVesselName(v) === name)
+  if (under.length === 1) {
+    selectedId.value = under[0].id
+  }
+})
+
 watch(selectedId, () => {
+  syncVesselNameFromSelectedId()
   loadDetail()
 })
 
@@ -143,18 +226,20 @@ function openEdit() {
 async function handleFormSubmit(payload: VesselVoyagePayload) {
   try {
     if (modalMode.value === 'create') {
-      const created = await createVesselSchedule(payload)
-      message.success('航次已创建')
-      selectedId.value = created.id
+      const saved = await createVesselSchedule(payload)
+      message.success('航次已保存')
+      selectedId.value = saved.id
+      selectedVesselName.value = resolveVesselName(saved)
     } else if (selectedId.value) {
-      await updateVesselSchedule(selectedId.value, payload)
-      message.success('航次已更新')
+      const saved = await updateVesselSchedule(selectedId.value, payload)
+      message.success('航次已保存')
+      selectedVesselName.value = resolveVesselName(saved)
     }
     modalShow.value = false
     await loadVoyages()
     await loadDetail()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '保存失败')
+    message.error(apiErrorMessage(e, '保存失败'))
   }
 }
 
@@ -164,6 +249,7 @@ async function handleDelete() {
     await deleteVesselSchedule(selectedId.value)
     message.success('已删除航次')
     selectedId.value = null
+    selectedVesselName.value = null
     detail.value = null
     await loadVoyages()
     await loadDetail()
@@ -174,6 +260,61 @@ async function handleDelete() {
 
 function triggerImport() {
   fileInputRef.value?.click()
+}
+
+async function refreshDetailFromCarrier() {
+  const d = detail.value
+  if (!d?.vesselCode || !d?.shippingCompany) {
+    message.warning('当前航次缺少船舶代码或船公司，请编辑后填写再拉取')
+    return
+  }
+  scheduleSyncing.value = true
+  try {
+    const res = await syncExternalVesselSchedule(
+      d.shippingCompany,
+      d.vesselCode,
+      syncPeriod.value,
+    )
+    selectedId.value = res.voyage.id
+    selectedVesselName.value = resolveVesselName(res.voyage)
+    const n = res.voyage.portCalls?.length ?? 0
+    message.success(`已更新 ${n} 个挂靠港`)
+    await loadVoyages()
+    await loadDetail()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '船期更新失败')
+  } finally {
+    scheduleSyncing.value = false
+  }
+}
+
+async function handleScheduleSync() {
+  const company = syncCompany.value.trim()
+  const code = syncVesselCode.value.trim().toUpperCase()
+  if (!company) {
+    message.warning('请选择船公司')
+    return
+  }
+  if (!code) {
+    message.warning('请输入船舶代码')
+    return
+  }
+  scheduleSyncing.value = true
+  try {
+    const res = await syncExternalVesselSchedule(company, code, syncPeriod.value)
+    const label =
+      scheduleProviders.value.find((p) => p.shippingCompany === company)?.label || company
+    message.success(res.created ? `已从 ${label} 新建航次` : `已从 ${label} 更新航次`)
+    selectedId.value = res.voyage.id
+    selectedVesselName.value = resolveVesselName(res.voyage)
+    syncVesselCode.value = ''
+    await loadVoyages()
+    await loadDetail()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '船期同步失败')
+  } finally {
+    scheduleSyncing.value = false
+  }
 }
 
 async function onImportFile(ev: Event) {
@@ -249,7 +390,9 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
 </script>
 
 <template>
-  <div class="mx-auto max-w-7xl space-y-6 p-6">
+  <div
+    class="scrollbar-subtle mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-6 overflow-y-auto"
+  >
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>
         <h1 class="page-h1">船期监控</h1>
@@ -261,6 +404,36 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
         <NButton tag="a" :href="vesselScheduleTemplateUrl()" target="_blank" rel="noopener">
           下载模板
         </NButton>
+        <NSelect
+          v-model:value="syncCompany"
+          :options="providerOptions"
+          placeholder="船公司"
+          class="w-44"
+          size="small"
+          filterable
+        />
+        <CarrierVesselSelect
+          v-if="syncVesselSearchEnabled"
+          v-model:vessel-code="syncVesselCode"
+          v-model:vessel-name="syncVesselName"
+          :shipping-company="syncCompany"
+          :enabled="syncVesselSearchEnabled"
+          class="w-56"
+          size="small"
+          placeholder="输入船名检索"
+        />
+        <NInput
+          v-else
+          v-model:value="syncVesselCode"
+          placeholder="船舶代码"
+          class="w-28"
+          size="small"
+          @keyup.enter="handleScheduleSync"
+        />
+        <NInputNumber v-model:value="syncPeriod" class="w-20" size="small" :min="7" :max="90" />
+        <NButton size="small" :loading="scheduleSyncing" @click="handleScheduleSync">
+          同步船期
+        </NButton>
         <NButton :loading="importing" @click="triggerImport">导入 Excel</NButton>
         <NButton type="primary" @click="openCreate">新建航次</NButton>
       </NSpace>
@@ -268,19 +441,36 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
     </div>
 
     <div class="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-      <div class="min-w-[280px] flex-1">
-        <div class="mb-1 text-xs text-zinc-500">选择航次</div>
+      <div class="min-w-[200px] flex-1">
+        <div class="mb-1 text-xs text-zinc-500">船名</div>
+        <NSelect
+          v-model:value="selectedVesselName"
+          :options="vesselNameOptions"
+          filterable
+          clearable
+          placeholder="选择船名"
+          :loading="loading"
+        />
+      </div>
+      <div class="min-w-[200px] flex-1">
+        <div class="mb-1 text-xs text-zinc-500">航次</div>
         <NSelect
           v-model:value="selectedId"
-          :options="voyageOptions"
+          :options="voyageNoOptions"
           filterable
-          placeholder="选择船名航次"
+          clearable
+          placeholder="选择航次"
+          :disabled="!selectedVesselName"
           :loading="loading"
         />
       </div>
       <div class="min-w-[200px] flex-1">
         <div class="mb-1 text-xs text-zinc-500">搜索航次</div>
-        <NInput v-model:value="search" placeholder="船名航次 / 备注" @keyup.enter="loadVoyages" />
+        <NInput
+          v-model:value="search"
+          placeholder="船名 / 航次 / 船名航次 / 船舶代码 / 船公司"
+          @keyup.enter="loadVoyages"
+        />
       </div>
       <NButton :loading="loading" @click="loadVoyages">刷新列表</NButton>
       <NButton v-if="detail" :disabled="detailLoading" @click="openEdit">编辑</NButton>
@@ -295,7 +485,24 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
     <div v-if="detailLoading" class="py-12 text-center text-zinc-500">加载中…</div>
 
     <template v-else-if="detail">
-      <VoyageTimeline :vessel-voyage="detail.vesselVoyage" :port-calls="detail.portCalls" />
+      <div class="flex flex-wrap items-center justify-end gap-2">
+        <NButton
+          v-if="detail.vesselCode && detail.shippingCompany"
+          size="small"
+          :loading="scheduleSyncing"
+          @click="refreshDetailFromCarrier"
+        >
+          从船公司更新挂靠（{{ detail.vesselCode }}）
+        </NButton>
+      </div>
+      <VoyageTimeline
+        :vessel-voyage="detail.vesselVoyage"
+        :vessel-name="detail.vesselName"
+        :voyage-no="detail.voyageNo"
+        :vessel-code="detail.vesselCode"
+        :shipping-company="detail.shippingCompany"
+        :port-calls="detail.portCalls"
+      />
 
       <div v-if="summary" class="flex flex-wrap gap-2">
         <NTag v-if="summary.arrivingSoon" type="warning" :bordered="false">
@@ -330,7 +537,9 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
           size="small"
           :scroll-x="900"
         />
-        <p class="mt-2 text-xs text-zinc-500">共 {{ shipmentTotal }} 票（按运单 vessel_voyage 精确匹配）</p>
+        <p class="mt-2 text-xs text-zinc-500">
+          共 {{ shipmentTotal }} 票（匹配运单船名航次 / 船名 / 船名+航次）
+        </p>
       </div>
     </template>
 

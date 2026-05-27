@@ -1,6 +1,6 @@
 /** 尾程/转单号识别与承运商官网查询链接 */
 
-export type LastMileCarrier = 'fedex' | 'ups' | 'usps' | 'dhl' | 'conwest' | 'unknown'
+export type LastMileCarrier = 'fedex' | 'ups' | 'usps' | 'dhl' | 'conwest' | 'dpd' | 'unknown'
 export type TrackQueryLang = 'zh' | 'en'
 
 export interface LastMileTrackingInfo {
@@ -20,6 +20,7 @@ const CARRIER_LABELS: Record<LastMileCarrier, string> = {
   usps: 'USPS',
   dhl: 'DHL',
   conwest: 'Conwest',
+  dpd: 'DPD UK',
   unknown: '尾程',
 }
 
@@ -30,8 +31,37 @@ const CONWEST_17TRACK_MAX = 40
 const CONWEST_17TRACK_FC = '100467'
 
 const PREFIX_WITH_SEP =
-  /^(UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE)\s*[-#:：]?\s*(.+)$/i
-const PREFIX_COMPACT = /^(UPS|FEDEX|FDX|USPS|DHL|CWE)(.+)$/i
+  /^(UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)\s*[-#:：]?\s*(.+)$/i
+const PREFIX_COMPACT = /^(UPS|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)(.+)$/i
+
+/** DPD UK 单号规范：15502802948687*21128（parcel*postcode） */
+export function normalizeDpdUkParcelRef(raw: string | null | undefined): string {
+  const text = (raw || '').trim()
+  if (!text) return ''
+  return text.replace(/\s*\*\s*/g, '*').replace(/\s+/g, '')
+}
+
+/** 组装 DPD UK 查询用 parcel 引用；无 * 且提供邮编时自动拼接 */
+export function buildDpdUkParcelRef(
+  trackingNumber: string,
+  postcode?: string | null,
+): string | null {
+  const base = normalizeDpdUkParcelRef(normalizeLastMileTrackingNumber(trackingNumber))
+  if (!base) return null
+  if (base.includes('*')) return base
+  const pc = (postcode || '').trim().replace(/\s+/g, '').toUpperCase()
+  return pc ? `${base}*${pc}` : base
+}
+
+/** https://track.dpd.co.uk/parcels/15502802948687*21128#results */
+export function buildDpdUkTrackUrl(
+  trackingNumber: string,
+  postcode?: string | null,
+): string | null {
+  const ref = buildDpdUkParcelRef(trackingNumber, postcode)
+  if (!ref) return null
+  return `https://track.dpd.co.uk/parcels/${encodeURIComponent(ref)}#results`
+}
 
 /** 剥离「UPS 1Z…」类前缀，返回纯单号（展示/提交与库内一致） */
 export function normalizeLastMileTrackingNumber(raw: string | null | undefined): string {
@@ -52,9 +82,21 @@ export function detectLastMileCarrier(
   trackingNumber: string,
   carrierCode?: string | null,
   hintText?: string | null,
+  rawTrackingNumber?: string | null,
 ): LastMileCarrier {
   const tn = trackingNumber.trim().toUpperCase().replace(/\s+/g, '')
+  const raw = (rawTrackingNumber || trackingNumber).trim().toUpperCase().replace(/\s+/g, '')
   const blob = `${carrierCode || ''} ${hintText || ''}`.toUpperCase()
+
+  const code = (carrierCode || '').trim().toUpperCase()
+  if (
+    /^DPD(UK)?/.test(raw) ||
+    code === 'DPD' ||
+    code === 'DPDUK' ||
+    /\bDPDUK\b/.test(blob)
+  ) {
+    return 'dpd'
+  }
 
   if (/^1Z[0-9A-Z]{16}$/.test(tn) || blob.includes('UPS')) {
     return 'ups'
@@ -168,6 +210,8 @@ export function buildLastMileTrackUrl(
         : `https://www.dhl.com/cn-zh/home/tracking/tracking-express.html?submit=1&tracking-id=${enc}`
     case 'conwest':
       return buildConwest17TrackUrl([n])
+    case 'dpd':
+      return buildDpdUkTrackUrl(n)
     default:
       return null
   }
@@ -178,6 +222,7 @@ export function resolveLastMileTracking(shipment: {
   carrierId?: string | null
   carrierCode?: string | null
   latestCarrierDesc?: string | null
+  zipcode?: string | null
   ctns?: number | null
   trackingNumbers?: string[] | null
   customerLang?: string | null
@@ -193,9 +238,13 @@ export function resolveLastMileTracking(shipment: {
     number,
     shipment.carrierCode,
     shipment.latestCarrierDesc,
+    shipment.trackingNumber,
   )
   let conwestNumbers: string[] | undefined
-  let url = buildLastMileTrackUrl(number, carrier, lang)
+  let url =
+    carrier === 'dpd'
+      ? buildDpdUkTrackUrl(number, shipment.zipcode)
+      : buildLastMileTrackUrl(number, carrier, lang)
   if (carrier === 'conwest') {
     const fromDb = (shipment.trackingNumbers || []).filter(Boolean)
     const expanded =

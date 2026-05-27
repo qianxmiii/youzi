@@ -20,6 +20,7 @@ from ..last_mile_tracking import (
     normalize_tracking_field_value,
     resolve_conwest_writeback,
 )
+from ..services.vessel_voyage_fields import shipment_voyage_match_sql
 from ..tracking_sync_eligibility import (
     carrier_tracking_sync_eligible_sql,
     internal_tracking_sync_eligible_sql,
@@ -260,6 +261,9 @@ class ShipmentsRepository:
         channel_name_zh: str | None = None,
         channel_category: str | None = None,
         vessel_voyage: str | None = None,
+        vessel_name: str | None = None,
+        voyage_no: str | None = None,
+        vessel_voyage_flexible: bool = False,
         internal_freshness: str | None = None,
         carrier_freshness: str | None = None,
         carrier_ahead_of_internal: bool | None = None,
@@ -349,7 +353,16 @@ class ShipmentsRepository:
         if channel_category and channel_category.strip():
             conditions.append("cc.category = ?")
             params.append(channel_category.strip())
-        if vessel_voyage and vessel_voyage.strip():
+        if vessel_voyage_flexible and vessel_voyage and vessel_voyage.strip():
+            match_sql, match_params = shipment_voyage_match_sql(
+                vessel_voyage,
+                vessel_name,
+                voyage_no,
+                table_alias="s",
+            )
+            conditions.append(match_sql)
+            params.extend(match_params)
+        elif vessel_voyage and vessel_voyage.strip():
             conditions.append("s.vessel_voyage = ? COLLATE NOCASE")
             params.append(vessel_voyage.strip())
         if internal_freshness:

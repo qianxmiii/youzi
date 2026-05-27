@@ -205,7 +205,7 @@ function toggleExpanded() {
           </span>
           <span v-else class="text-[11px] text-[var(--color-muted)]">点击胶囊筛选 · 自然日</span>
         </div>
-        <p v-if="activeFilterHint" class="mt-0.5 text-[10px] text-violet-500">
+        <p v-if="activeFilterHint" class="mt-0.5 text-[11px] font-medium text-[var(--color-fg-secondary)]">
           已选 {{ activeFilterHint }}
         </p>
         <p

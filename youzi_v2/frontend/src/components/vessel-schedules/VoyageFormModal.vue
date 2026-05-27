@@ -5,12 +5,23 @@ import {
   NForm,
   NFormItem,
   NInput,
+  NInputNumber,
   NModal,
+  NSelect,
   NSpace,
   useMessage,
 } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
-import type { VesselVoyageDetail, VesselVoyagePayload } from '@/types/vesselSchedule'
+import { computed, onMounted, ref, watch } from 'vue'
+import {
+  listMaritimeScheduleProviders,
+  previewExternalVesselSchedule,
+} from '@/api/vesselSchedules'
+import CarrierVesselSelect from '@/components/vessel-schedules/CarrierVesselSelect.vue'
+import type {
+  MaritimeScheduleProviderInfo,
+  VesselVoyageDetail,
+  VesselVoyagePayload,
+} from '@/types/vesselSchedule'
 
 const props = defineProps<{
   show: boolean
@@ -34,9 +45,40 @@ interface PortCallDraft {
   atd: number | null
 }
 
+const vesselName = ref('')
+const voyageNo = ref('')
+const vesselCode = ref('')
+const shippingCompany = ref('')
 const vesselVoyage = ref('')
 const notes = ref('')
 const portCalls = ref<PortCallDraft[]>([])
+const scheduleProviders = ref<MaritimeScheduleProviderInfo[]>([])
+const fetchLoading = ref(false)
+const fetchPeriod = ref(90)
+
+const providerOptions = computed(() =>
+  scheduleProviders.value.map((p) => ({
+    label: p.label,
+    value: p.shippingCompany,
+  })),
+)
+
+const activeProvider = computed(() =>
+  scheduleProviders.value.find((p) => p.shippingCompany === shippingCompany.value),
+)
+
+const carrierVesselSearchEnabled = computed(
+  () => Boolean(activeProvider.value?.features?.vesselSearch),
+)
+
+onMounted(async () => {
+  try {
+    const res = await listMaritimeScheduleProviders()
+    scheduleProviders.value = res.items
+  } catch {
+    /* 列表失败不阻塞手工录入 */
+  }
+})
 
 function parseTs(raw: string | null | undefined): number | null {
   if (!raw) return null
@@ -53,6 +95,10 @@ function formatTs(ts: number | null): string | null {
 
 function resetForm() {
   if (props.mode === 'edit' && props.initial) {
+    vesselName.value = props.initial.vesselName || ''
+    voyageNo.value = props.initial.voyageNo || ''
+    vesselCode.value = props.initial.vesselCode || ''
+    shippingCompany.value = props.initial.shippingCompany || ''
     vesselVoyage.value = props.initial.vesselVoyage
     notes.value = props.initial.notes || ''
     portCalls.value = (props.initial.portCalls || []).map((pc) => ({
@@ -64,6 +110,10 @@ function resetForm() {
       atd: parseTs(pc.atd),
     }))
   } else {
+    vesselName.value = ''
+    voyageNo.value = ''
+    vesselCode.value = ''
+    shippingCompany.value = ''
     vesselVoyage.value = ''
     notes.value = ''
     portCalls.value = [{ portName: '', sequence: 1, eta: null, ata: null, etd: null, atd: null }]
@@ -109,10 +159,56 @@ function movePortCall(index: number, delta: number) {
   portCalls.value = copy
 }
 
+async function pullFromCarrier() {
+  const company = shippingCompany.value.trim()
+  const code = vesselCode.value.trim().toUpperCase()
+  if (!company) {
+    message.warning('请选择或填写船公司')
+    return
+  }
+  if (!code) {
+    message.warning('请先填写船舶代码')
+    return
+  }
+  fetchLoading.value = true
+  try {
+    const data = await previewExternalVesselSchedule(company, code, fetchPeriod.value)
+    vesselName.value = data.vesselName || ''
+    voyageNo.value = data.voyageNo || ''
+    vesselCode.value = data.vesselCode || code
+    shippingCompany.value = data.shippingCompany || company
+    vesselVoyage.value = data.vesselVoyage
+    notes.value = data.notes || ''
+    portCalls.value = (data.portCalls || []).map((pc) => ({
+      portName: pc.portName,
+      sequence: pc.sequence,
+      eta: parseTs(pc.eta),
+      ata: parseTs(pc.ata),
+      etd: parseTs(pc.etd),
+      atd: parseTs(pc.atd),
+    }))
+    if (!portCalls.value.length) {
+      portCalls.value = [
+        { portName: '', sequence: 1, eta: null, ata: null, etd: null, atd: null },
+      ]
+    }
+    const label =
+      scheduleProviders.value.find((p) => p.shippingCompany === data.shippingCompany)?.label ||
+      data.shippingCompany
+    message.success(`已从 ${label} 拉取 ${data.portCalls?.length ?? 0} 个挂靠港`)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '船期拉取失败')
+  } finally {
+    fetchLoading.value = false
+  }
+}
+
 function handleSubmit() {
+  const name = vesselName.value.trim()
+  const voy = voyageNo.value.trim()
   const vv = vesselVoyage.value.trim()
-  if (!vv) {
-    message.warning('请填写船名航次')
+  if (!vv && !name && !voy) {
+    message.warning('请填写船名与航次，或填写船名航次')
     return
   }
   const cleaned = portCalls.value
@@ -130,7 +226,11 @@ function handleSubmit() {
     return
   }
   emit('submit', {
-    vesselVoyage: vv,
+    vesselVoyage: vv || null,
+    vesselName: name || null,
+    voyageNo: voy || null,
+    vesselCode: vesselCode.value.trim() || null,
+    shippingCompany: shippingCompany.value.trim() || null,
     notes: notes.value.trim(),
     portCalls: cleaned,
   })
@@ -147,10 +247,61 @@ function handleSubmit() {
   >
     <NForm label-placement="top">
       <div class="grid gap-4 sm:grid-cols-2">
-        <NFormItem label="船名航次" required>
-          <NInput v-model:value="vesselVoyage" placeholder="如 CSCL BOHAI SEA/076E" />
+        <NFormItem label="船公司" class="sm:col-span-2">
+          <NSelect
+            v-model:value="shippingCompany"
+            :options="providerOptions"
+            filterable
+            tag
+            placeholder="选择已接入船公司"
+          />
         </NFormItem>
-        <NFormItem label="备注">
+        <NFormItem label="船名">
+          <CarrierVesselSelect
+            v-if="carrierVesselSearchEnabled"
+            v-model:vessel-code="vesselCode"
+            v-model:vessel-name="vesselName"
+            :shipping-company="shippingCompany"
+            :enabled="carrierVesselSearchEnabled"
+          />
+          <NInput v-else v-model:value="vesselName" placeholder="如 CSCL BOHAI SEA" />
+        </NFormItem>
+        <NFormItem label="航次">
+          <NInput
+            v-model:value="voyageNo"
+            :placeholder="carrierVesselSearchEnabled ? '拉取船期后自动填充' : '如 076E'"
+          />
+        </NFormItem>
+        <NFormItem v-if="!carrierVesselSearchEnabled" label="船舶代码">
+          <NInput v-model:value="vesselCode" placeholder="船公司船舶代码" />
+        </NFormItem>
+        <NFormItem v-else label="船舶代码">
+          <NInput v-model:value="vesselCode" readonly placeholder="选择船名后自动填入" />
+        </NFormItem>
+        <NFormItem label="拉取船期" class="sm:col-span-2">
+          <div class="flex w-full flex-wrap items-center gap-2">
+            <NInputNumber
+              v-model:value="fetchPeriod"
+              class="w-28"
+              :min="7"
+              :max="90"
+              placeholder="查询天数"
+            />
+            <NButton :loading="fetchLoading" :disabled="!vesselCode" @click="pullFromCarrier">
+              拉取挂靠港
+            </NButton>
+            <span v-if="carrierVesselSearchEnabled" class="text-xs text-[var(--color-muted)]">
+              先选船名，再拉取挂靠；航次由船公司接口返回
+            </span>
+          </div>
+        </NFormItem>
+        <NFormItem label="船名航次" class="sm:col-span-2">
+          <NInput
+            v-model:value="vesselVoyage"
+            placeholder="可选；留空时由船名/航次自动组合，如 CSCL BOHAI SEA/076E"
+          />
+        </NFormItem>
+        <NFormItem label="备注" class="sm:col-span-2">
           <NInput v-model:value="notes" placeholder="可选" />
         </NFormItem>
       </div>
@@ -193,7 +344,10 @@ function handleSubmit() {
           </div>
           <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <NFormItem label="港口" class="sm:col-span-2 lg:col-span-1">
-              <NInput v-model:value="pc.portName" placeholder="Yantian" />
+              <NInput
+                v-model:value="pc.portName"
+                placeholder="船公司返回名称，如 Yantian"
+              />
             </NFormItem>
             <NFormItem label="ETA">
               <NDatePicker v-model:value="pc.eta" type="datetime" clearable class="w-full" />

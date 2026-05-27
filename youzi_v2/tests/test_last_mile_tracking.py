@@ -35,6 +35,18 @@ def test_cwe_prefix_strip():
     assert hint == "conwest"
 
 
+def test_dpd_prefix_strip():
+    n, hint = normalize_last_mile_tracking_number("DPD 12345678901234")
+    assert n == "12345678901234"
+    assert hint == "dpd"
+
+
+def test_dpduk_compact_prefix():
+    n, hint = normalize_last_mile_tracking_number("DPDUK98765432109876")
+    assert n == "98765432109876"
+    assert hint == "dpd"
+
+
 def test_conwest_number_hint():
     from youzi_v2.last_mile_tracking import infer_last_mile_carrier_hint
 

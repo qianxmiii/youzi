@@ -1448,10 +1448,12 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
     <div
       v-if="selectedCount > 0"
-      class="shrink-0 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-violet-500/30 bg-violet-500/10 px-3 py-2"
+      class="shipments-selection-bar shrink-0 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
     >
-      <span class="text-sm text-zinc-300">
-        已选 <strong class="text-white">{{ selectedCount }}</strong> 条（本页）
+      <span class="shipments-selection-bar__label text-sm">
+        已选
+        <strong class="shipments-selection-bar__count">{{ selectedCount }}</strong>
+        条（本页）
       </span>
       <NSpace size="small">
         <NButton size="small" quaternary @click="clearSelection">取消选择</NButton>
@@ -1726,6 +1728,25 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   background: transparent;
   font: inherit;
   line-height: 0;
+}
+
+.shipments-selection-bar {
+  border: 1px solid color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+  background: color-mix(in srgb, var(--color-accent) 14%, var(--color-elevated));
+  color: var(--color-fg);
+  box-shadow: var(--panel-inset-shadow);
+}
+
+.shipments-selection-bar__label {
+  color: var(--color-fg);
+  font-weight: 500;
+}
+
+.shipments-selection-bar__count {
+  margin: 0 0.15em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-emphasis);
 }
 
 .shipments-table-panel {

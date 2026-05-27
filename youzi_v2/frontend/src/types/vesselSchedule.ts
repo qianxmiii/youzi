@@ -10,7 +10,12 @@ export type MaritimeStatus =
 export interface VoyagePortCall {
   id?: string
   voyageId?: string
+  /** 船公司/接口原始港口名，入库字段 */
   portName: string
+  /** 以下由 port_codes 码表解析，仅展示 */
+  portCode?: string | null
+  portCnname?: string | null
+  portNameEn?: string | null
   sequence: number
   eta: string | null
   ata: string | null
@@ -25,6 +30,10 @@ export interface VoyagePortCall {
 export interface VesselVoyageSummary {
   id: string
   vesselVoyage: string
+  vesselName: string | null
+  voyageNo: string | null
+  vesselCode: string | null
+  shippingCompany: string | null
   notes: string
   portCount?: number
   shipmentCount?: number
@@ -54,7 +63,11 @@ export interface VesselVoyageListResponse {
 }
 
 export interface VesselVoyagePayload {
-  vesselVoyage: string
+  vesselVoyage?: string | null
+  vesselName?: string | null
+  voyageNo?: string | null
+  vesselCode?: string | null
+  shippingCompany?: string | null
   notes?: string
   portCalls: Array<{
     id?: string
@@ -72,6 +85,60 @@ export interface VoyageImportResult {
   updated: number
   failed: number
   errors: Array<{ row: number; message: string }>
+}
+
+export interface MaritimeScheduleProviderInfo {
+  id: string
+  shippingCompany: string
+  label: string
+  aliases: string[]
+  features?: {
+    vesselSearch?: boolean
+  }
+}
+
+export interface CarrierVesselOption {
+  vesselCode: string
+  vesselName: string
+  label: string
+}
+
+export interface CarrierVesselSearchResponse {
+  items: CarrierVesselOption[]
+}
+
+export interface MaritimeScheduleProvidersResponse {
+  items: MaritimeScheduleProviderInfo[]
+}
+
+export interface ExternalSchedulePreview {
+  vesselVoyage: string
+  vesselName: string | null
+  voyageNo: string | null
+  vesselCode: string | null
+  shippingCompany: string
+  notes: string
+  portCalls: Array<{
+    portName: string
+    sequence: number
+    eta: string | null
+    ata: string | null
+    etd: string | null
+    atd: string | null
+  }>
+  source?: {
+    provider: string
+    shippingCompany: string
+    vesselCode: string
+    period: number
+    rowCount: number
+  }
+}
+
+export interface ExternalScheduleSyncResult {
+  voyage: VesselVoyageDetail
+  created: boolean
+  source?: ExternalSchedulePreview['source']
 }
 
 export interface VoyageShipment extends Record<string, unknown> {

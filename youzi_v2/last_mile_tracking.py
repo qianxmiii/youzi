@@ -5,16 +5,16 @@ from __future__ import annotations
 import re
 from typing import Literal
 
-LastMileCarrierHint = Literal["ups", "fedex", "usps", "dhl", "conwest"]
+LastMileCarrierHint = Literal["ups", "fedex", "usps", "dhl", "conwest", "dpd"]
 
 # 「UPS 1Z…」「CWE C03IK…」等
 _PREFIX_WITH_SEP = re.compile(
-    r"^(?P<prefix>UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE)\s*[-#:：]?\s*(?P<number>.+)$",
+    r"^(?P<prefix>UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)\s*[-#:：]?\s*(?P<number>.+)$",
     re.IGNORECASE,
 )
 # 「UPS1Z…」无空格（单号足够长才剥离，避免误伤）
 _PREFIX_COMPACT = re.compile(
-    r"^(?P<prefix>UPS|FEDEX|FDX|USPS|DHL|CWE)(?P<number>.+)$",
+    r"^(?P<prefix>UPS|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)(?P<number>.+)$",
     re.IGNORECASE,
 )
 
@@ -38,6 +38,8 @@ def _prefix_to_hint(prefix: str) -> LastMileCarrierHint | None:
         return "fedex"
     if key == "CWE":
         return "conwest"
+    if key.startswith("DPD"):
+        return "dpd"
     return _PREFIX_TO_HINT.get(key)
 
 
@@ -106,6 +108,8 @@ def infer_last_mile_carrier_hint(number: str) -> LastMileCarrierHint | None:
         return "ups"
     if _CONWEST_TRACKING_RE.match(tn):
         return "conwest"
+    if re.match(r"^DPD(UK)?", tn):
+        return "dpd"
     if re.match(r"^00\d{8,}$", tn):
         return "dhl"
     return None

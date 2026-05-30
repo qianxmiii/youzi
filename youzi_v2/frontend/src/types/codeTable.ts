@@ -2,6 +2,7 @@ export interface CodeTableMeta {
   table: string
   label: string
   hasPortType: boolean
+  hasChannelFields?: boolean
 }
 
 export interface CodeTableRow {
@@ -11,6 +12,9 @@ export interface CodeTableRow {
   sortOrder: number
   isActive: boolean
   portType?: string
+  country?: string
+  category?: string
+  note?: string
   createdTime: string
   updatedTime: string
 }
@@ -31,6 +35,9 @@ export interface CodeTablePayload {
   sortOrder: number
   isActive: boolean
   portType?: string
+  country?: string
+  category?: string
+  note?: string
 }
 
 export interface CodeTableImportResult {

@@ -37,10 +37,10 @@ withDefaults(
   font-size: 0.625rem;
   line-height: 1;
   letter-spacing: 0.02em;
-  color: rgb(103 232 249);
-  background: rgb(8 145 178 / 0.2);
-  border: 1px solid rgb(34 211 238 / 0.35);
-  box-shadow: 0 0 6px rgb(34 211 238 / 0.12);
+  color: var(--last-mile-label);
+  background: var(--last-mile-bg);
+  border: 1px solid var(--last-mile-border);
+  box-shadow: none;
 }
 
 .last-mile-badge--md {
@@ -54,9 +54,8 @@ withDefaults(
 }
 
 .last-mile-badge--interactive:hover {
-  color: rgb(165 243 252);
-  border-color: rgb(34 211 238 / 0.55);
-  background: rgb(8 145 178 / 0.32);
-  box-shadow: 0 0 8px rgb(34 211 238 / 0.2);
+  color: var(--last-mile-code);
+  border-color: color-mix(in srgb, var(--last-mile-border) 70%, var(--last-mile-label));
+  background: color-mix(in srgb, var(--last-mile-bg) 75%, var(--last-mile-label) 12%);
 }
 </style>

@@ -89,19 +89,17 @@ const shortLabel = computed(() => {
   height: 1.25rem;
 }
 
-/* 查验：深红 */
 .exception-badge--inspection {
-  color: rgb(248 113 113);
-  border-color: rgb(185 28 28 / 0.55);
-  background: rgb(127 29 29 / 0.45);
-  box-shadow: 0 0 0 1px rgb(69 10 10 / 0.25);
+  color: var(--badge-exception-inspection-fg);
+  border-color: var(--badge-exception-inspection-border);
+  background: var(--badge-exception-inspection-bg);
+  box-shadow: none;
 }
 
-/* 其他异常：浅红 */
 .exception-badge--soft {
-  color: rgb(252 165 165);
-  border-color: rgb(248 113 113 / 0.28);
-  background: rgb(239 68 68 / 0.1);
+  color: var(--badge-exception-soft-fg);
+  border-color: var(--badge-exception-soft-border);
+  background: var(--badge-exception-soft-bg);
 }
 
 .exception-badge__icon {

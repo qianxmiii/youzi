@@ -21,7 +21,13 @@
     "isActive": "is_active",
     "港口类型": "port_type",
     "port_type": "port_type",
-    "portType": "port_type"
+    "portType": "port_type",
+    "国家": "country",
+    "country": "country",
+    "大类": "category",
+    "category": "category",
+    "备注": "note",
+    "note": "note"
   },
   "is_active_true": ["1", "true", "yes", "y", "是", "启用", "TRUE", "Yes"]
 }

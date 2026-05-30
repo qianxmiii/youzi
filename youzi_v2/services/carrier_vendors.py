@@ -144,7 +144,7 @@ def _extract_carrier_id(data: dict[str, Any]) -> str:
 
 
 def _extract_outer_tracking_number(data: dict[str, Any]) -> str:
-    """NextSLS outer_carrier_tracking_number 等（UPS/FedEx 尾程单号）。"""
+    """NextSLS outer_carrier_tracking_number、华威尔外层 zycode 等（UPS/FedEx 尾程单号）。"""
     if not isinstance(data, dict):
         return ""
     for key in (
@@ -155,11 +155,61 @@ def _extract_outer_tracking_number(data: dict[str, Any]) -> str:
         "expressNo",
         "expressMainNo",
         "last_mile_tracking_number",
+        "zycode",
     ):
         v = normalize_tracking_field_value(data.get(key))
         if v:
             return v
     return ""
+
+
+def _common_pack_sub_zycodes(
+    data: dict[str, Any],
+    *,
+    outer: str | None = None,
+) -> list[str]:
+    """华威尔/common_pack：details[].zycode 为子单号（与外层 zycode 区分）。"""
+    outer_norm = (outer or "").strip()
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in data.get("details") or []:
+        if not isinstance(item, dict):
+            continue
+        z = normalize_tracking_field_value(item.get("zycode"))
+        if not z or z == outer_norm or z in seen:
+            continue
+        seen.add(z)
+        out.append(z)
+    return out
+
+
+def _common_pack_tracking_bundle(
+    data: dict[str, Any],
+    *,
+    result: dict[str, Any] | None = None,
+) -> tuple[str | None, str | None, list[str] | None]:
+    """华威尔/common_pack：orderno→carrier_id；外层 zycode→tracking_number；内层 zycode→子单号。"""
+    cid = (str(data.get("orderno") or "")).strip() or None
+    outer = _extract_outer_tracking_number(data)
+    if not outer and isinstance(result, dict):
+        outer = _extract_outer_tracking_number(result) or None
+    subs = _common_pack_sub_zycodes(data, outer=outer)
+    numbers: list[str] = []
+    if outer:
+        numbers.append(outer)
+    for sub in subs:
+        if sub not in numbers:
+            numbers.append(sub)
+    all_tns = numbers or None
+    return cid, outer or None, all_tns
+
+
+def _common_pack_ids_from_data(
+    data: dict[str, Any],
+    *,
+    result: dict[str, Any] | None = None,
+) -> tuple[str | None, str | None, list[str] | None]:
+    return _common_pack_tracking_bundle(data, result=result)
 
 
 _TOPDA_NODE_LABELS: dict[str, str] = {
@@ -1774,7 +1824,8 @@ def _fetch_huawell_cms_batch(
             continue
         logs = sort_logs_desc(_normalize_details(item.get("details") or []))
         cid = _extract_carrier_id(item)
-        tn = _extract_outer_tracking_number(item)
+        outer_tn = _extract_outer_tracking_number(item) or None
+        all_tns = _common_pack_tracking_bundle(item)[2]
         keys: set[str] = set()
         pn = _huawell_cms_packno(item)
         if pn:
@@ -1785,15 +1836,8 @@ def _fetch_huawell_cms_batch(
                 keys.add(v)
         for key in keys:
             if key in out:
-                out[key] = (logs, None, cid or None, tn or None, None)
+                out[key] = (logs, None, cid or None, outer_tn, all_tns)
     return out
-
-
-def _common_pack_ids_from_data(data: dict[str, Any]) -> tuple[str | None, str | None]:
-    """XKP common_pack：orderno → carrier_id，zycode → 尾程 tracking_number。"""
-    cid = (str(data.get("orderno") or "")).strip() or None
-    tn = (str(data.get("zycode") or "")).strip() or None
-    return cid, tn
 
 
 def _fetch_common_pack(
@@ -1819,11 +1863,15 @@ def _fetch_common_pack(
     if not data or "details" not in data:
         msg = _maybe_repair_text(result.get("msg") if isinstance(result, dict) else "") or "响应格式异常"
         return _carrier_fail(msg)
-    carrier_id, outer_tn = _common_pack_ids_from_data(data)
+    carrier_id, outer_tn, all_tns = _common_pack_ids_from_data(
+        data,
+        result=result if isinstance(result, dict) else None,
+    )
     return _carrier_ok(
         _normalize_details(data.get("details") or []),
         carrier_id,
         outer_tn,
+        all_tns,
     )
 
 def _fetch_topda_batch(

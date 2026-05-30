@@ -120,8 +120,8 @@ function formatTime(raw: string | null | undefined) {
   <section class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-2">
       <div>
-        <h3 class="text-sm font-medium text-zinc-200">海运预警</h3>
-        <p v-if="data" class="mt-0.5 text-xs text-zinc-500">
+        <h3 class="text-sm font-medium text-[var(--color-fg-emphasis)]">海运预警</h3>
+        <p v-if="data" class="mt-0.5 text-xs text-[var(--color-muted)]">
           扫描 {{ data.totalScanned }} 票含船期字段运单 · 更新于 {{ data.generatedAt?.slice(0, 16) }}
         </p>
       </div>
@@ -139,15 +139,15 @@ function formatTime(raw: string | null | undefined) {
             v-for="card in alertCards"
             :key="card.key"
             type="button"
-            class="panel p-3 text-left transition hover:border-zinc-600 hover:bg-zinc-800/50"
+            class="panel p-3 text-left transition hover:border-[var(--color-border)] hover:bg-[var(--color-nav-hover)]"
             :class="card.count > 0 ? 'border-amber-500/30' : ''"
             @click="goVesselSchedules(card.query as Record<string, string>)"
           >
-            <p class="text-[10px] uppercase tracking-wide text-zinc-500">{{ card.sub }}</p>
-            <p class="mt-0.5 text-xs text-zinc-400">{{ card.label }}</p>
+            <p class="text-[10px] uppercase tracking-wide text-[var(--color-muted)]">{{ card.sub }}</p>
+            <p class="mt-0.5 text-xs text-[var(--color-fg-secondary)]">{{ card.label }}</p>
             <p
               class="mt-1 text-2xl font-semibold tabular-nums"
-              :class="card.count > 0 ? 'text-amber-200' : 'text-zinc-600'"
+              :class="card.count > 0 ? 'text-[var(--tracking-ahead-fg)]' : 'text-[var(--color-fg-secondary)]'"
             >
               {{ card.count }}
             </p>
@@ -156,7 +156,7 @@ function formatTime(raw: string | null | undefined) {
 
         <div
           v-if="!hasAlerts"
-          class="panel border-dashed px-4 py-6 text-center text-sm text-zinc-500"
+          class="panel border-dashed px-4 py-6 text-center text-sm text-[var(--color-muted)]"
         >
           当前无三天内到/离港或在途预警。可在
           <button type="button" class="text-violet-400 hover:underline" @click="goVesselSchedules()">
@@ -167,22 +167,22 @@ function formatTime(raw: string | null | undefined) {
 
         <div v-else class="grid gap-4 lg:grid-cols-2">
           <article v-if="data.urgentShipments.length" class="panel p-4">
-            <h4 class="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+            <h4 class="mb-3 text-xs font-medium uppercase tracking-wider text-[var(--color-muted)]">
               关注运单
             </h4>
             <ul class="space-y-2">
               <li
                 v-for="s in data.urgentShipments"
                 :key="s.shipmentNo"
-                class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-800/40 px-3 py-2"
+                class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--color-btn-ghost-bg)] px-3 py-2"
               >
                 <div class="min-w-0">
-                  <p class="truncate text-sm font-medium text-white">{{ s.shipmentNo }}</p>
-                  <p class="truncate text-xs text-zinc-500">
+                  <p class="truncate text-sm font-medium text-[var(--color-fg-emphasis)]">{{ s.shipmentNo }}</p>
+                  <p class="truncate text-xs text-[var(--color-muted)]">
                     {{ s.vesselVoyage || '未填船名航次' }}
                     <span v-if="s.destinationPortCode"> · {{ s.destinationPortCode }}</span>
                   </p>
-                  <p class="text-[11px] text-zinc-600">
+                  <p class="text-[11px] text-[var(--color-fg-secondary)]">
                     ETA {{ formatTime(s.eta) }} · ETD {{ formatTime(s.etd) }}
                   </p>
                 </div>
@@ -198,20 +198,20 @@ function formatTime(raw: string | null | undefined) {
           </article>
 
           <article v-if="data.urgentPortCalls.length" class="panel p-4">
-            <h4 class="mb-3 text-xs font-medium uppercase tracking-wider text-zinc-500">
+            <h4 class="mb-3 text-xs font-medium uppercase tracking-wider text-[var(--color-muted)]">
               挂靠预警
             </h4>
             <ul class="space-y-2">
               <li
                 v-for="p in data.urgentPortCalls"
                 :key="`${p.voyageId}-${p.sequence}`"
-                class="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-lg bg-zinc-800/40 px-3 py-2 transition hover:bg-zinc-800/70"
+                class="flex cursor-pointer flex-wrap items-center justify-between gap-2 rounded-lg bg-[var(--color-btn-ghost-bg)] px-3 py-2 transition hover:bg-[var(--color-nav-hover)]"
                 @click="goVoyage(p.voyageId)"
               >
                 <div class="min-w-0">
-                  <p class="truncate text-sm font-medium text-white">{{ p.portName }}</p>
-                  <p class="truncate text-xs text-zinc-500">{{ p.vesselVoyage }}</p>
-                  <p class="text-[11px] text-zinc-600">
+                  <p class="truncate text-sm font-medium text-[var(--color-fg-emphasis)]">{{ p.portName }}</p>
+                  <p class="truncate text-xs text-[var(--color-muted)]">{{ p.vesselVoyage }}</p>
+                  <p class="text-[11px] text-[var(--color-fg-secondary)]">
                     ETA {{ formatTime(p.eta) }} · ETD {{ formatTime(p.etd) }}
                   </p>
                 </div>
@@ -227,12 +227,12 @@ function formatTime(raw: string | null | undefined) {
           v-if="data.unconfiguredVesselVoyages.length"
           class="panel border-amber-500/20 bg-amber-500/5 px-4 py-3"
         >
-          <p class="text-xs font-medium text-amber-200/90">运单有船名航次但未配置航次主数据</p>
+          <p class="text-xs font-medium text-[var(--tracking-ahead-desc)]">运单有船名航次但未配置航次主数据</p>
           <ul class="mt-2 flex flex-wrap gap-2">
             <li
               v-for="u in data.unconfiguredVesselVoyages"
               :key="u.vesselVoyage"
-              class="rounded-md bg-zinc-800/60 px-2 py-1 text-xs text-zinc-300"
+              class="rounded-md bg-[var(--color-btn-ghost-bg)] px-2 py-1 text-xs text-[var(--color-fg-secondary)]"
             >
               {{ u.vesselVoyage }}（{{ u.shipmentCount }} 票）
             </li>

@@ -49,7 +49,7 @@ onMounted(load)
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="page-h2">统计管理</h2>
-        <p class="mt-1 text-xs text-zinc-500">
+        <p class="mt-1 text-xs text-[var(--color-muted)]">
           基于当前库内全部运单聚合；状态分类互斥（异常 → 无轨迹 → 转运中 → 其它）。
         </p>
       </div>
@@ -63,31 +63,31 @@ onMounted(load)
           class="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-5"
         >
           <article class="panel p-4">
-            <p class="text-xs text-zinc-500">运单总数</p>
-            <p class="mt-1 text-2xl font-semibold tabular-nums text-white">{{ data.total }}</p>
+            <p class="text-xs text-[var(--color-muted)]">运单总数</p>
+            <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-fg-emphasis)]">{{ data.total }}</p>
           </article>
           <article
             v-for="item in data.statusDistribution"
             :key="item.key"
             class="panel p-4"
           >
-            <p class="text-xs text-zinc-500">{{ item.label }}</p>
-            <p class="mt-1 text-2xl font-semibold tabular-nums text-white">
+            <p class="text-xs text-[var(--color-muted)]">{{ item.label }}</p>
+            <p class="mt-1 text-2xl font-semibold tabular-nums text-[var(--color-fg-emphasis)]">
               {{ (item.ratio * 100).toFixed(1) }}%
             </p>
-            <p class="mt-0.5 text-xs text-zinc-600">{{ item.count }} 单</p>
+            <p class="mt-0.5 text-xs text-[var(--color-fg-secondary)]">{{ item.count }} 单</p>
           </article>
         </div>
 
         <article class="panel p-4">
-          <p class="text-xs text-zinc-500">时效基准线（预览）</p>
-          <p class="mt-1 text-sm text-zinc-200">{{ baselineSummary }}</p>
-          <p class="mt-1 text-[10px] text-zinc-600">{{ data.transitBaseline.description }}</p>
+          <p class="text-xs text-[var(--color-muted)]">时效基准线（预览）</p>
+          <p class="mt-1 text-sm text-[var(--color-fg)]">{{ baselineSummary }}</p>
+          <p class="mt-1 text-[10px] text-[var(--color-fg-secondary)]">{{ data.transitBaseline.description }}</p>
         </article>
 
         <div class="grid min-h-0 flex-1 gap-4 xl:grid-cols-2">
         <section class="panel p-4">
-          <h3 class="mb-3 text-sm font-medium text-white">运单状态分布</h3>
+          <h3 class="mb-3 text-sm font-medium text-[var(--color-fg-emphasis)]">运单状态分布</h3>
           <div class="mb-4 flex flex-wrap gap-2">
             <NTag
               v-for="item in data.statusDistribution"
@@ -104,8 +104,8 @@ onMounted(load)
 
         <section class="grid gap-4">
           <article class="panel p-4">
-            <h3 class="mb-1 text-sm font-medium text-white">海运渠道占比</h3>
-            <p class="mb-3 text-[10px] text-zinc-600">
+            <h3 class="mb-1 text-sm font-medium text-[var(--color-fg-emphasis)]">海运渠道占比</h3>
+            <p class="mb-3 text-[10px] text-[var(--color-fg-secondary)]">
               渠道名含 Sea / Truck 的运单，共 {{ data.seaChannelTotal }} 单
             </p>
             <DistributionBars
@@ -115,8 +115,8 @@ onMounted(load)
             />
           </article>
           <article class="panel p-4">
-            <h3 class="mb-1 text-sm font-medium text-white">承运商占比</h3>
-            <p class="mb-3 text-[10px] text-zinc-600">按运单 carrier_code 聚合</p>
+            <h3 class="mb-1 text-sm font-medium text-[var(--color-fg-emphasis)]">承运商占比</h3>
+            <p class="mb-3 text-[10px] text-[var(--color-fg-secondary)]">按运单 carrier_code 聚合</p>
             <DistributionBars
               :items="data.carrierDistribution"
               :total="data.total"
@@ -127,8 +127,8 @@ onMounted(load)
         </div>
 
         <section class="panel p-4">
-          <h3 class="mb-1 text-sm font-medium text-white">全部渠道占比</h3>
-          <p class="mb-3 text-[10px] text-zinc-600">含空运、快递等所有 channel_code</p>
+          <h3 class="mb-1 text-sm font-medium text-[var(--color-fg-emphasis)]">全部渠道占比</h3>
+          <p class="mb-3 text-[10px] text-[var(--color-fg-secondary)]">含空运、快递等所有 channel_code</p>
           <DistributionBars
             :items="data.channelDistribution"
             :total="data.total"
@@ -137,8 +137,8 @@ onMounted(load)
         </section>
 
         <section class="panel border-dashed p-4">
-          <h3 class="text-sm font-medium text-zinc-300">规划中</h3>
-          <ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-zinc-500">
+          <h3 class="text-sm font-medium text-[var(--color-fg-secondary)]">规划中</h3>
+          <ul class="mt-2 list-disc space-y-1 pl-5 text-xs text-[var(--color-muted)]">
             <li>按时间段、客户、国家筛选统计</li>
             <li>时效基准线分渠道/承运商拆分与趋势图</li>
             <li>异常类型、停滞天数分布</li>

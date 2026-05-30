@@ -391,7 +391,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
 
 <template>
   <div
-    class="scrollbar-subtle mx-auto flex h-full min-h-0 w-full max-w-7xl flex-col gap-6 overflow-y-auto"
+    class="scrollbar-subtle flex h-full min-h-0 w-full flex-col gap-6 overflow-y-auto"
   >
     <div class="flex flex-wrap items-start justify-between gap-4">
       <div>

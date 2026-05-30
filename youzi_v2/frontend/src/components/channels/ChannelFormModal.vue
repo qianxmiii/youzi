@@ -113,7 +113,7 @@ function handleSubmit() {
             v-model:value="category"
             :options="categoryOptions"
             clearable
-            placeholder="空运 / 海运 / …"
+            placeholder="快船 / 普船 / …"
           />
         </NFormItem>
       </div>

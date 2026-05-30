@@ -32,6 +32,7 @@ class Database:
 
     def _bootstrap(self) -> None:
         from . import addresses_table
+        from . import addresses_warehouse_table
         from . import app_settings_table
         from . import code_tables
         from . import dict_table
@@ -51,6 +52,7 @@ class Database:
             dict_table.ensure_schema(self._conn)
             quote_history_table.ensure_schema(self._conn)
             addresses_table.ensure_schema(self._conn)
+            addresses_warehouse_table.ensure_schema(self._conn)
             shipments_table.ensure_schema(self._conn)
             shipment_exception_events_table.ensure_schema(self._conn)
             internal_tracking_logs_table.ensure_schema(self._conn)
@@ -64,6 +66,7 @@ class Database:
         code_tables.seed_if_empty(self._conn)
         dict_table.seed_if_empty(self._conn)
         addresses_table.seed_if_empty(self._conn)
+        addresses_warehouse_table.seed_if_empty(self._conn)
         self._conn.commit()
 
     @property

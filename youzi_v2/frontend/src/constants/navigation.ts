@@ -28,7 +28,7 @@ export const navGroups: NavGroup[] = [
     label: '资料',
     items: [
       { name: '资料库', to: '/library', icon: 'book', badge: '待迁' },
-      { name: '地址簿', to: '/addresses', icon: 'pin', badge: '待迁' },
+      { name: '地址簿', to: '/addresses', icon: 'pin' },
     ],
   },
   {

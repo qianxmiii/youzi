@@ -1,8 +1,6 @@
 """
-常用地址簿：每个业务含义独立一列（客户代码、品名、国家、地址行等），便于查询、导出和与 index 页对齐。
-
-说明：不用「一个大字符串」塞全部信息，是因为国家/邮编/门牌或仓库代码在业务上字段语义不同，
-拆列才能按条件筛选、统计和生成模板；需要一整段展示时由 API 或前端按需拼接即可。
+第三方海外仓 / 商私地址（Legacy）：客户、产品、国家、地址行、商业/住宅、偏远等。
+平台仓库地址（AMZ/WFS）见 addresses_warehouse 表。
 """
 
 from __future__ import annotations
@@ -36,6 +34,18 @@ CREATE TABLE {TABLE_NAME} (
 )
 """
 
+# 历史迁移列（旧版曾把仓库字段写入 addresses，数据已迁至 addresses_warehouse）
+_LEGACY_EXTRA_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("warehouse_code", "TEXT NOT NULL DEFAULT ''"),
+    ("address_type", "TEXT NOT NULL DEFAULT ''"),
+    ("country_code", "TEXT NOT NULL DEFAULT ''"),
+    ("state", "TEXT NOT NULL DEFAULT ''"),
+    ("city", "TEXT NOT NULL DEFAULT ''"),
+    ("address_line1", "TEXT NOT NULL DEFAULT ''"),
+    ("address_line2", "TEXT NOT NULL DEFAULT ''"),
+    ("address_line3", "TEXT NOT NULL DEFAULT ''"),
+)
+
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     cur = conn.execute(
@@ -44,67 +54,30 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     )
     if cur.fetchone() is None:
         conn.execute(_CREATE_SQL)
-        return
 
     cols = {r[1] for r in conn.execute(f"PRAGMA table_info({TABLE_NAME})").fetchall()}
-    if "customer" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN customer TEXT NOT NULL DEFAULT '00'"
-        )
-        if "label" in cols:
-            conn.execute(
-                f"""
-                UPDATE {TABLE_NAME}
-                SET customer = CASE
-                    WHEN TRIM(COALESCE(label, '')) = '' THEN '00'
-                    ELSE label
-                END
-                """
-            )
-    if "product_name" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN product_name TEXT NOT NULL DEFAULT '00'"
-        )
-    if "country" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN country TEXT NOT NULL DEFAULT ''"
-        )
-    if "address_line" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN address_line TEXT NOT NULL DEFAULT ''"
-        )
-    if "postcode" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN postcode TEXT NOT NULL DEFAULT ''"
-        )
-    if "company" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN company TEXT NOT NULL DEFAULT ''"
-        )
-    if "contact" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN contact TEXT NOT NULL DEFAULT ''"
-        )
-    if "phone" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN phone TEXT NOT NULL DEFAULT ''"
-        )
-    if "is_commercial" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN is_commercial INTEGER NOT NULL DEFAULT 1"
-        )
-    if "is_remote" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN is_remote INTEGER NOT NULL DEFAULT 0"
-        )
-    if "sort_order" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
-        )
-    if "is_default" not in cols:
-        conn.execute(
-            f"ALTER TABLE {TABLE_NAME} ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0"
-        )
+    legacy_migrations = (
+        ("customer", "ALTER TABLE addresses ADD COLUMN customer TEXT NOT NULL DEFAULT '00'"),
+        ("product_name", "ALTER TABLE addresses ADD COLUMN product_name TEXT NOT NULL DEFAULT '00'"),
+        ("country", "ALTER TABLE addresses ADD COLUMN country TEXT NOT NULL DEFAULT ''"),
+        ("address_line", "ALTER TABLE addresses ADD COLUMN address_line TEXT NOT NULL DEFAULT ''"),
+        ("postcode", "ALTER TABLE addresses ADD COLUMN postcode TEXT NOT NULL DEFAULT ''"),
+        ("company", "ALTER TABLE addresses ADD COLUMN company TEXT NOT NULL DEFAULT ''"),
+        ("contact", "ALTER TABLE addresses ADD COLUMN contact TEXT NOT NULL DEFAULT ''"),
+        ("phone", "ALTER TABLE addresses ADD COLUMN phone TEXT NOT NULL DEFAULT ''"),
+        ("is_commercial", "ALTER TABLE addresses ADD COLUMN is_commercial INTEGER NOT NULL DEFAULT 1"),
+        ("is_remote", "ALTER TABLE addresses ADD COLUMN is_remote INTEGER NOT NULL DEFAULT 0"),
+        ("sort_order", "ALTER TABLE addresses ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"),
+        ("is_default", "ALTER TABLE addresses ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0"),
+    )
+    for col, ddl in legacy_migrations:
+        if col not in cols:
+            conn.execute(ddl)
+            cols.add(col)
+
+    for col_name, col_def in _LEGACY_EXTRA_COLUMNS:
+        if col_name not in cols:
+            conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN {col_name} {col_def}")
 
 
 def seed_if_empty(conn: sqlite3.Connection) -> None:
@@ -124,12 +97,12 @@ def seed_if_empty(conn: sqlite3.Connection) -> None:
             str(uuid.uuid4()),
             "00",
             "00",
-            "美国",
-            "EXAMPLE WAREHOUSE CODE",
-            "00000",
-            "",
-            "",
-            "",
+            "US",
+            "123 Main Street, New York",
+            "10001",
+            "Example Corp",
+            "John Doe",
+            "+1-555-0100",
             1,
             0,
             0,
@@ -148,6 +121,7 @@ def _row_to_api_dict(row: sqlite3.Row) -> dict[str, Any]:
         "country": row["country"],
         "address": row["address_line"],
         "postalCode": row["postcode"],
+        "postcode": row["postcode"],
         "company": row["company"],
         "contact": row["contact"],
         "phone": row["phone"],
@@ -162,8 +136,35 @@ def _bool_int(v: Any) -> int:
     return 1 if v else 0
 
 
+def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "customer": (data.get("customer") or "00").strip()[:200] or "00",
+        "product_name": (
+            data.get("product_name") or data.get("productName") or "00"
+        ).strip()[:200]
+        or "00",
+        "country": (data.get("country") or "").strip()[:50],
+        "address_line": (
+            data.get("address_line") or data.get("address") or ""
+        ).strip()[:500],
+        "postcode": (
+            data.get("postcode")
+            or data.get("postalCode")
+            or data.get("postal_code")
+            or ""
+        ).strip()[:50],
+        "company": (data.get("company") or "").strip()[:200],
+        "contact": (data.get("contact") or "").strip()[:200],
+        "phone": (data.get("phone") or "").strip()[:80],
+        "is_commercial": _bool_int(
+            data.get("is_commercial", data.get("isCommercial", True))
+        ),
+        "is_remote": _bool_int(data.get("is_remote", data.get("isRemote", False))),
+    }
+
+
 class AddressesRepository:
-    """addresses 表：读写在同一模块，便于单独拷贝迁移。"""
+    """addresses 表 CRUD（第三方海外仓 / 商私地址）。"""
 
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -172,30 +173,56 @@ class AddressesRepository:
     def _conn(self) -> sqlite3.Connection:
         return self._database.conn
 
-    def list_rows(self) -> list[dict[str, Any]]:
-        with self._database.lock:
-            rows = self._conn.execute(
-                f"SELECT * FROM {TABLE_NAME} ORDER BY sort_order ASC, datetime(updated_at) DESC"
-            ).fetchall()
-            return [_row_to_api_dict(r) for r in rows]
-
-    def insert_row(
+    def list_rows(
         self,
-        customer: str,
-        product_name: str,
-        country: str,
-        address_line: str,
-        postcode: str,
-        company: str,
-        contact: str,
-        phone: str,
-        is_commercial: bool,
-        is_remote: bool,
+        *,
+        search: str | None = None,
+        limit: int | None = None,
+        offset: int = 0,
     ) -> dict[str, Any]:
+        conditions: list[str] = []
+        params: list[Any] = []
+        if search and search.strip():
+            q = f"%{search.strip()}%"
+            conditions.append(
+                """(
+                    customer LIKE ? OR product_name LIKE ? OR company LIKE ? OR contact LIKE ?
+                    OR country LIKE ? OR address_line LIKE ? OR postcode LIKE ? OR phone LIKE ?
+                )"""
+            )
+            params.extend([q] * 8)
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+
+        query_limit: int | None = None
+        query_offset = 0
+        if limit is not None:
+            query_limit = max(1, min(limit, 500))
+            query_offset = max(0, offset)
+
+        with self._database.lock:
+            total = self._conn.execute(
+                f"SELECT COUNT(*) AS c FROM {TABLE_NAME} {where}",
+                params,
+            ).fetchone()["c"]
+            sql = f"""
+                SELECT * FROM {TABLE_NAME}
+                {where}
+                ORDER BY sort_order ASC, datetime(updated_at) DESC
+            """
+            query_params = list(params)
+            if query_limit is not None:
+                sql += " LIMIT ? OFFSET ?"
+                query_params.extend([query_limit, query_offset])
+            rows = self._conn.execute(sql, query_params).fetchall()
+            return {
+                "items": [_row_to_api_dict(r) for r in rows],
+                "total": total,
+            }
+
+    def insert_row(self, data: dict[str, Any]) -> dict[str, Any]:
+        payload = _normalize_payload(data)
         now = datetime.now().isoformat(timespec="seconds")
         rid = str(uuid.uuid4())
-        cc = (customer or "").strip()[:200] or "00"
-        pn = (product_name or "").strip()[:200] or "00"
         with self._database.lock:
             self._conn.execute(
                 f"""
@@ -207,16 +234,16 @@ class AddressesRepository:
                 """,
                 (
                     rid,
-                    cc,
-                    pn,
-                    (country or "").strip()[:200],
-                    (address_line or "").strip()[:500],
-                    (postcode or "").strip()[:50],
-                    (company or "").strip()[:200],
-                    (contact or "").strip()[:200],
-                    (phone or "").strip()[:80],
-                    _bool_int(is_commercial),
-                    _bool_int(is_remote),
+                    payload["customer"],
+                    payload["product_name"],
+                    payload["country"],
+                    payload["address_line"],
+                    payload["postcode"],
+                    payload["company"],
+                    payload["contact"],
+                    payload["phone"],
+                    payload["is_commercial"],
+                    payload["is_remote"],
                     now,
                     now,
                 ),
@@ -225,23 +252,9 @@ class AddressesRepository:
         row = self._conn.execute(f"SELECT * FROM {TABLE_NAME} WHERE id = ?", (rid,)).fetchone()
         return _row_to_api_dict(row) if row else {}
 
-    def update_row(
-        self,
-        item_id: str,
-        customer: str,
-        product_name: str,
-        country: str,
-        address_line: str,
-        postcode: str,
-        company: str,
-        contact: str,
-        phone: str,
-        is_commercial: bool,
-        is_remote: bool,
-    ) -> dict[str, Any]:
+    def update_row(self, item_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        payload = _normalize_payload(data)
         now = datetime.now().isoformat(timespec="seconds")
-        cc = (customer or "").strip()[:200] or "00"
-        pn = (product_name or "").strip()[:200] or "00"
         with self._database.lock:
             row = self._conn.execute(
                 f"SELECT id FROM {TABLE_NAME} WHERE id = ?", (item_id,)
@@ -257,16 +270,16 @@ class AddressesRepository:
                 WHERE id = ?
                 """,
                 (
-                    cc,
-                    pn,
-                    (country or "").strip()[:200],
-                    (address_line or "").strip()[:500],
-                    (postcode or "").strip()[:50],
-                    (company or "").strip()[:200],
-                    (contact or "").strip()[:200],
-                    (phone or "").strip()[:80],
-                    _bool_int(is_commercial),
-                    _bool_int(is_remote),
+                    payload["customer"],
+                    payload["product_name"],
+                    payload["country"],
+                    payload["address_line"],
+                    payload["postcode"],
+                    payload["company"],
+                    payload["contact"],
+                    payload["phone"],
+                    payload["is_commercial"],
+                    payload["is_remote"],
                     now,
                     item_id,
                 ),

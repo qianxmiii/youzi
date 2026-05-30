@@ -23,6 +23,7 @@ from fastapi.templating import Jinja2Templates
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field
 
 from .db.addresses_table import AddressesRepository
+from .db.addresses_warehouse_table import AddressesWarehouseRepository
 from .db.code_tables_repository import CodeTablesRepository
 from .db.connection import get_database
 from .db.dict_repository import DictRepository
@@ -81,6 +82,11 @@ from .services.scheduled_tasks_info import (
 from .services.scheduled_sync_settings import (
     get_scheduled_sync_settings,
     save_scheduled_sync_settings,
+)
+from .services.address_excel import (
+    build_export_excel_bytes as build_address_export_bytes,
+    build_template_bytes as build_address_template_bytes,
+    import_excel_file as import_address_excel,
 )
 from .services.code_table_excel import build_template_bytes, import_excel_file as import_code_table_excel
 from .services.shipment_excel import build_export_excel_bytes, import_excel_file
@@ -157,7 +163,7 @@ class QuoteRecordIn(BaseModel):
     extra: dict[str, Any] = Field(default_factory=dict)
 
 
-class AddressRecordIn(BaseModel):
+class LegacyAddressRecordIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     customer: str = Field(default="00")
@@ -165,19 +171,18 @@ class AddressRecordIn(BaseModel):
         default="00",
         validation_alias=AliasChoices("productName", "product_name"),
     )
-    country: str = ""
-    address: str = Field(
+    country: str = Field(default="")
+    address_line: str = Field(
         default="",
         validation_alias=AliasChoices("address", "address_line"),
-        description="地址或仓库代码",
     )
     postal_code: str = Field(
         default="",
-        validation_alias=AliasChoices("postalCode", "postcode"),
+        validation_alias=AliasChoices("postalCode", "postcode", "postal_code"),
     )
-    company: str = ""
-    contact: str = ""
-    phone: str = ""
+    company: str = Field(default="")
+    contact: str = Field(default="")
+    phone: str = Field(default="")
     is_commercial: bool = Field(
         default=True,
         validation_alias=AliasChoices("isCommercial", "is_commercial"),
@@ -188,9 +193,52 @@ class AddressRecordIn(BaseModel):
     )
 
 
+class WarehouseAddressRecordIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    warehouse_code: str = Field(
+        default="",
+        validation_alias=AliasChoices("warehouseCode", "warehouse_code"),
+        description="仓库代码",
+    )
+    address_type: str = Field(
+        default="",
+        validation_alias=AliasChoices("addressType", "address_type"),
+        description="AMZ / WFS",
+    )
+    company: str = Field(default="", description="收件人公司名")
+    contact: str = Field(default="", description="收件人")
+    country_code: str = Field(
+        default="",
+        validation_alias=AliasChoices("countryCode", "country_code"),
+    )
+    postal_code: str = Field(
+        default="",
+        validation_alias=AliasChoices("postalCode", "postcode", "postal_code"),
+    )
+    state: str = Field(default="", description="州/省")
+    city: str = Field(default="", description="城市")
+    address_line1: str = Field(
+        default="",
+        validation_alias=AliasChoices("addressLine1", "address_line1"),
+    )
+    address_line2: str = Field(
+        default="",
+        validation_alias=AliasChoices("addressLine2", "address_line2"),
+    )
+    address_line3: str = Field(
+        default="",
+        validation_alias=AliasChoices("addressLine3", "address_line3"),
+    )
+    phone: str = Field(default="", description="电话")
+    note1: str = Field(default="", description="备注一")
+    note2: str = Field(default="", description="备注二")
+
+
 _database = get_database(DATA_DIR / "youzi_v2.db")
 quote_history_repo = QuoteHistoryRepository(_database)
 addresses_repo = AddressesRepository(_database)
+addresses_warehouse_repo = AddressesWarehouseRepository(_database)
 shipments_repo = ShipmentsRepository(_database)
 shipment_exceptions_repo = ShipmentExceptionEventsRepository(_database)
 internal_tracking_repo = TrackingLogsRepository(_database)
@@ -1182,43 +1230,27 @@ async def import_shipments_excel(file: UploadFile = File(...)):
 
 
 @app.get("/api/addresses")
-def get_addresses():
-    """常用地址簿（与 addresses 表字段一一对应；国家/地址/客户/品名为独立列）。"""
-    return addresses_repo.list_rows()
+def get_addresses(
+    search: str | None = None,
+    limit: int | None = None,
+    offset: int = 0,
+):
+    """第三方海外仓 / 商私地址（Legacy）。未传 limit 时返回数组。"""
+    result = addresses_repo.list_rows(search=search, limit=limit, offset=offset)
+    if limit is None:
+        return result["items"]
+    return result
 
 
 @app.post("/api/addresses")
-def create_address(payload: AddressRecordIn):
-    return addresses_repo.insert_row(
-        payload.customer,
-        payload.product_name,
-        payload.country,
-        payload.address,
-        payload.postal_code,
-        payload.company,
-        payload.contact,
-        payload.phone,
-        payload.is_commercial,
-        payload.is_remote,
-    )
+def create_address(payload: LegacyAddressRecordIn):
+    return addresses_repo.insert_row(payload.model_dump(by_alias=False))
 
 
 @app.put("/api/addresses/{item_id}")
-def update_address(item_id: str, payload: AddressRecordIn):
+def update_address(item_id: str, payload: LegacyAddressRecordIn):
     try:
-        return addresses_repo.update_row(
-            item_id,
-            payload.customer,
-            payload.product_name,
-            payload.country,
-            payload.address,
-            payload.postal_code,
-            payload.company,
-            payload.contact,
-            payload.phone,
-            payload.is_commercial,
-            payload.is_remote,
-        )
+        return addresses_repo.update_row(item_id, payload.model_dump(by_alias=False))
     except KeyError:
         raise HTTPException(status_code=404, detail="记录不存在")
 
@@ -1227,6 +1259,121 @@ def update_address(item_id: str, payload: AddressRecordIn):
 def delete_address(item_id: str):
     deleted = addresses_repo.delete_row(item_id)
     return {"deleted": deleted}
+
+
+@app.get("/api/addresses-warehouse/filter-options")
+def get_warehouse_address_filter_options():
+    """平台仓库地址筛选项。"""
+    return addresses_warehouse_repo.list_filter_options()
+
+
+@app.get("/api/addresses-warehouse")
+def get_warehouse_addresses(
+    search: str | None = None,
+    address_type: str | None = Query(None, alias="addressType"),
+    country_code: str | None = Query(None, alias="countryCode"),
+    limit: int | None = None,
+    offset: int = 0,
+):
+    """平台仓库地址簿（AMZ / WFS）。"""
+    return addresses_warehouse_repo.list_rows(
+        search=search,
+        address_type=address_type,
+        country_code=country_code,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@app.post("/api/addresses-warehouse")
+def create_warehouse_address(payload: WarehouseAddressRecordIn):
+    try:
+        return addresses_warehouse_repo.insert_row(payload.model_dump(by_alias=False))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.put("/api/addresses-warehouse/{item_id}")
+def update_warehouse_address(item_id: str, payload: WarehouseAddressRecordIn):
+    try:
+        return addresses_warehouse_repo.update_row(item_id, payload.model_dump(by_alias=False))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="记录不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/addresses-warehouse/{item_id}")
+def delete_warehouse_address(item_id: str):
+    deleted = addresses_warehouse_repo.delete_row(item_id)
+    return {"deleted": deleted}
+
+
+@app.get("/api/addresses-warehouse/template")
+def download_warehouse_address_template():
+    data = build_address_template_bytes()
+    return StreamingResponse(
+        iter([data]),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": 'attachment; filename="address_warehouse_template.xlsx"'},
+    )
+
+
+_ADDRESS_EXPORT_MAX = 10_000
+
+
+@app.get("/api/addresses-warehouse/export")
+def export_warehouse_addresses_excel(
+    search: str | None = None,
+    address_type: str | None = Query(None, alias="addressType"),
+    country_code: str | None = Query(None, alias="countryCode"),
+    limit: int = Query(_ADDRESS_EXPORT_MAX, le=_ADDRESS_EXPORT_MAX),
+    offset: int = 0,
+):
+    """导出平台仓库地址（Excel，表头与导入模板一致）。"""
+    result = addresses_warehouse_repo.list_rows(
+        search=search,
+        address_type=address_type,
+        country_code=country_code,
+        limit=limit,
+        offset=offset,
+    )
+    total = int(result.get("total") or 0)
+    if total > _ADDRESS_EXPORT_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"当前筛选共 {total} 条，超过导出上限 {_ADDRESS_EXPORT_MAX}，请缩小筛选范围"
+            ),
+        )
+    data = build_address_export_bytes(result.get("items") or [])
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"仓库地址导出_{ts}.xlsx"
+    encoded = quote(filename)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+@app.post("/api/addresses-warehouse/import")
+async def import_warehouse_addresses_excel(file: UploadFile = File(...)):
+    filename = (file.filename or "").lower()
+    if not filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="请上传 .xlsx 或 .xls 文件")
+    task_id = str(uuid.uuid4())
+    extension = Path(filename).suffix if Path(filename).suffix else ".xlsx"
+    upload_path = UPLOAD_DIR / f"address_warehouse_{task_id}{extension}"
+    with upload_path.open("wb") as f:
+        shutil.copyfileobj(file.file, f)
+    try:
+        return import_address_excel(addresses_warehouse_repo, upload_path)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    finally:
+        if upload_path.exists():
+            upload_path.unlink(missing_ok=True)
 
 
 @app.get("/api/quote-history")

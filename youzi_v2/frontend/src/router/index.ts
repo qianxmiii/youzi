@@ -47,8 +47,8 @@ const router = createRouter({
         {
           path: 'addresses',
           name: 'addresses',
-          component: () => import('@/views/PlaceholderView.vue'),
-          meta: { title: '地址簿', migration: '/api/addresses' },
+          component: () => import('@/views/addresses/AddressesView.vue'),
+          meta: { title: '地址簿' },
         },
         {
           path: 'shipments',

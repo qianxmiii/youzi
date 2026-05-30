@@ -25,7 +25,7 @@ def _event_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "closedTime": closed,
         "note": row["note"],
         "durationSeconds": secs,
-        "durationLabel": format_duration(secs),
+        "durationLabel": format_duration(secs, opened_time=opened, closed_time=closed),
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
     }

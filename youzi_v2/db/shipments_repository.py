@@ -90,9 +90,10 @@ def _exception_duration_seconds(row: sqlite3.Row) -> int | None:
 
 def _exception_duration_label(row: sqlite3.Row) -> str | None:
     secs = _exception_duration_seconds(row)
+    opened = (row["exception_opened_time"] or "").strip()
     if secs is None:
         return None
-    return format_duration(secs)
+    return format_duration(secs, opened_time=opened or None)
 
 
 def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:

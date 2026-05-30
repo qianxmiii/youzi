@@ -25,6 +25,8 @@ export interface VoyagePortCall {
   statusLabel?: string
   createdTime?: string
   updatedTime?: string
+  /** 最近一次变更的时间字段：eta / ata / etd / atd */
+  timeFieldsUpdated?: string[]
 }
 
 export interface VesselVoyageSummary {

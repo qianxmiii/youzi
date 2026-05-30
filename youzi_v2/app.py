@@ -200,11 +200,6 @@ code_tables_repo = CodeTablesRepository(_database)
 dict_repo = DictRepository(_database)
 customers_repo = CustomersRepository(_database)
 channels_repo = ChannelsRepository(_database)
-try:
-    channels_repo.migrate_legacy_categories()
-    channels_repo.seed_defaults()
-except Exception:
-    pass
 shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 vessel_schedules_repo = VesselSchedulesRepository(_database)
 # 兼容旧名

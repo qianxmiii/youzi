@@ -34,34 +34,6 @@ def test_seed_defaults_inserts_26(repo: ChannelsRepository) -> None:
     assert fast["category"] == "快船"
 
 
-def test_migrate_legacy_categories(repo: ChannelsRepository) -> None:
-    now = "2026-01-01 00:00:00"
-    conn = repo._conn  # noqa: SLF001 — 模拟存量旧数据
-    conn.execute(
-        """
-        INSERT INTO channel_codes (
-            code, name_zh, name_en, country, category, note,
-            sort_order, is_active, created_time, updated_time
-        ) VALUES (?, ?, ?, '', ?, '', 0, 1, ?, ?)
-        """,
-        ("Legacy Sea", "旧海运", "Legacy Sea", "海运", now, now),
-    )
-    conn.execute(
-        """
-        INSERT INTO channel_codes (
-            code, name_zh, name_en, country, category, note,
-            sort_order, is_active, created_time, updated_time
-        ) VALUES (?, ?, ?, '', ?, '', 0, 1, ?, ?)
-        """,
-        ("Legacy Fast", "旧快船", "Legacy Fast", "海运", now, now),
-    )
-    conn.commit()
-    n = repo.migrate_legacy_categories()
-    assert n >= 2
-    assert repo.get_row("Legacy Sea")["category"] == "普船"
-    assert repo.get_row("Legacy Fast")["category"] == "快船"
-
-
 def test_create_validates_category(repo: ChannelsRepository) -> None:
     with pytest.raises(ValueError, match="大类"):
         repo.create(

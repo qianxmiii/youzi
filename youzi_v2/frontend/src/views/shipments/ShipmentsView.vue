@@ -687,10 +687,12 @@ async function loadFilterOptions() {
 }
 
 onMounted(async () => {
-  await loadDictTypes('country_code')
-  await loadFilterOptions()
-  await loadCarrierDailyStats()
-  await loadFreshnessStats()
+  await Promise.all([
+    loadDictTypes('country_code'),
+    loadFilterOptions(),
+    loadCarrierDailyStats(),
+    loadFreshnessStats(),
+  ])
   await loadList()
 })
 

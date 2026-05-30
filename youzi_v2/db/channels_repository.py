@@ -5,7 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
-from .channel_seeds import CHANNEL_CATEGORIES, CHANNEL_SEEDS, LEGACY_CHANNEL_CATEGORY_MAP
+from .channel_seeds import CHANNEL_CATEGORIES, CHANNEL_SEEDS
 from .connection import Database
 from .datetime_util import now_str
 
@@ -172,31 +172,8 @@ class ChannelsRepository:
             self._conn.commit()
             return cur.rowcount > 0
 
-    def migrate_legacy_categories(self) -> int:
-        """将旧版「海运/快递」等大类迁移为快船/普船/卡航/铁路/空运。"""
-        changed = 0
-        with self._database.lock:
-            for old, new in LEGACY_CHANNEL_CATEGORY_MAP.items():
-                cur = self._conn.execute(
-                    f"UPDATE {TABLE_NAME} SET category = ? WHERE category = ?",
-                    (new, old),
-                )
-                changed += cur.rowcount
-            cur = self._conn.execute(
-                f"""
-                UPDATE {TABLE_NAME}
-                SET category = '快船'
-                WHERE category = '普船'
-                  AND (name_zh LIKE '%快船%' OR code LIKE '%Rapid%' OR code LIKE '%Fast%')
-                """
-            )
-            changed += cur.rowcount
-            self._conn.commit()
-        return changed
-
     def seed_defaults(self) -> dict[str, int]:
         """写入内置渠道列表（已存在的 code 仅更新扩展字段，不删用户数据）。"""
-        self.migrate_legacy_categories()
         now = now_str()
         inserted = 0
         updated = 0

@@ -55,6 +55,10 @@ _EXTRA_VOYAGE_COLUMNS: tuple[tuple[str, str], ...] = (
     ("shipping_company", "TEXT"),
 )
 
+_EXTRA_PORT_CALL_COLUMNS: tuple[tuple[str, str], ...] = (
+    ("time_fields_updated", "TEXT NOT NULL DEFAULT ''"),
+)
+
 
 def _backfill_voyage_split(conn: sqlite3.Connection) -> None:
     from youzi_v2.services.vessel_voyage_fields import parse_vessel_voyage
@@ -90,6 +94,10 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     for col_name, col_type in _EXTRA_VOYAGE_COLUMNS:
         if col_name not in cols:
             conn.execute(f"ALTER TABLE {VOYAGES_TABLE} ADD COLUMN {col_name} {col_type}")
+    pc_cols = {r[1] for r in conn.execute(f"PRAGMA table_info({PORT_CALLS_TABLE})").fetchall()}
+    for col_name, col_type in _EXTRA_PORT_CALL_COLUMNS:
+        if col_name not in pc_cols:
+            conn.execute(f"ALTER TABLE {PORT_CALLS_TABLE} ADD COLUMN {col_name} {col_type}")
     for sql in _INDEXES:
         conn.execute(sql)
     _backfill_voyage_split(conn)

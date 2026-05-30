@@ -5,12 +5,6 @@ from __future__ import annotations
 # 大类：快船 / 普船 / 卡航 / 铁路 / 空运
 CHANNEL_CATEGORIES: tuple[str, ...] = ("快船", "普船", "卡航", "铁路", "空运")
 
-# 旧版大类 → 新版（存量数据迁移）
-LEGACY_CHANNEL_CATEGORY_MAP: dict[str, str] = {
-    "海运": "普船",
-    "快递": "空运",
-}
-
 CHANNEL_SEEDS: list[tuple[str, str, str, str, str, int]] = [
     ("Sea Truck Standard Service - LAX", "美国普船", "美国", "普船", "", 10),
     ("Sea Truck Rapid Service - LAX", "美国快船", "美国", "快船", "", 20),

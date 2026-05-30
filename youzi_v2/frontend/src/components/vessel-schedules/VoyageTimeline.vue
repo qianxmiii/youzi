@@ -14,9 +14,27 @@ const props = defineProps<{
 
 const portCount = computed(() => props.portCalls.length)
 
+const hasUpdatedTimes = computed(() =>
+  props.portCalls.some((pc) => (pc.timeFieldsUpdated?.length ?? 0) > 0),
+)
+
+type TimeField = 'eta' | 'ata' | 'etd' | 'atd'
+
 function displayTime(value: string | null | undefined): string {
   if (value) return value.slice(0, 16)
   return '—'
+}
+
+function isTimeFieldUpdated(pc: VoyagePortCall, field: TimeField): boolean {
+  return (pc.timeFieldsUpdated ?? []).includes(field)
+}
+
+function timeCellClass(pc: VoyagePortCall, field: TimeField): string {
+  const base = 'px-1.5 py-0.5'
+  if (!isTimeFieldUpdated(pc, field)) {
+    return `${base} text-[var(--color-fg)]`
+  }
+  return `${base} rounded-md bg-amber-500/15 font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-200`
 }
 
 function statusClass(status?: string): string {
@@ -55,6 +73,12 @@ function statusClass(status?: string): string {
         </div>
         <span class="shrink-0 text-xs font-medium text-[var(--color-fg-secondary)]">
           共 {{ portCount }} 个挂靠港
+          <span
+            v-if="hasUpdatedTimes"
+            class="ml-2 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200"
+          >
+            琥珀色为最近更新的时间
+          </span>
         </span>
       </div>
     </div>
@@ -96,10 +120,18 @@ function statusClass(status?: string): string {
               <span class="font-medium">{{ formatPortDisplay(pc) }}</span>
               <span class="ml-2 text-xs text-[var(--color-muted)]">#{{ pc.sequence }}</span>
             </td>
-            <td class="px-4 py-3 text-[var(--color-fg)]">{{ displayTime(pc.eta) }}</td>
-            <td class="px-4 py-3 text-[var(--color-fg)]">{{ displayTime(pc.ata) }}</td>
-            <td class="px-4 py-3 text-[var(--color-fg)]">{{ displayTime(pc.etd) }}</td>
-            <td class="px-4 py-3 text-[var(--color-fg)]">{{ displayTime(pc.atd) }}</td>
+            <td class="px-4 py-3">
+              <span :class="timeCellClass(pc, 'eta')">{{ displayTime(pc.eta) }}</span>
+            </td>
+            <td class="px-4 py-3">
+              <span :class="timeCellClass(pc, 'ata')">{{ displayTime(pc.ata) }}</span>
+            </td>
+            <td class="px-4 py-3">
+              <span :class="timeCellClass(pc, 'etd')">{{ displayTime(pc.etd) }}</span>
+            </td>
+            <td class="px-4 py-3">
+              <span :class="timeCellClass(pc, 'atd')">{{ displayTime(pc.atd) }}</span>
+            </td>
             <td class="px-4 py-3">
               <span v-if="pc.statusLabel" :class="statusClass(pc.status)">
                 {{ pc.statusLabel }}

@@ -28,6 +28,38 @@ def _normalize_time(value: str | None) -> str | None:
     return text or None
 
 
+_TIME_FIELDS = ("eta", "ata", "etd", "atd")
+
+
+def _port_key(sequence: int, port_name: str) -> tuple[int, str]:
+    return (sequence, port_name.strip().lower())
+
+
+def _times_from_payload(pc: dict[str, Any]) -> dict[str, str | None]:
+    return {field: _normalize_time(pc.get(field)) for field in _TIME_FIELDS}
+
+
+def _changed_time_fields(old_row: sqlite3.Row | None, new_times: dict[str, str | None]) -> list[str]:
+    if old_row is None:
+        return []
+    changed: list[str] = []
+    for field in _TIME_FIELDS:
+        old_val = old_row[field]
+        new_val = new_times[field]
+        if (old_val or "") != (new_val or ""):
+            changed.append(field)
+    return changed
+
+
+def _parse_time_fields_updated(row: sqlite3.Row) -> list[str]:
+    if "time_fields_updated" not in row.keys():
+        return []
+    raw = (row["time_fields_updated"] or "").strip()
+    if not raw:
+        return []
+    return [part for part in raw.split(",") if part in _TIME_FIELDS]
+
+
 def _port_row_to_api(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -40,6 +72,7 @@ def _port_row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "atd": row["atd"],
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
+        "timeFieldsUpdated": _parse_time_fields_updated(row),
     }
 
 
@@ -427,6 +460,13 @@ class VesselSchedulesRepository:
         port_calls: list[dict[str, Any]],
         now: str,
     ) -> None:
+        existing_rows = self._conn.execute(
+            f"SELECT * FROM {PORT_CALLS_TABLE} WHERE voyage_id = ?",
+            (voyage_id,),
+        ).fetchall()
+        by_id = {str(r["id"]): r for r in existing_rows}
+        by_key = {_port_key(int(r["sequence"]), str(r["port_name"])): r for r in existing_rows}
+
         self._conn.execute(
             f"DELETE FROM {PORT_CALLS_TABLE} WHERE voyage_id = ?",
             (voyage_id,),
@@ -440,23 +480,44 @@ class VesselSchedulesRepository:
                 sequence = int(seq_raw) if seq_raw is not None else idx
             except (TypeError, ValueError):
                 sequence = idx
+            sequence = max(1, sequence)
+            pc_id = str(pc.get("id") or "").strip()
+            old = by_id.get(pc_id) if pc_id else None
+            if old is None:
+                old = by_key.get(_port_key(sequence, port_name))
+
+            new_times = _times_from_payload(pc)
+            changed = _changed_time_fields(old, new_times)
+            created = old["created_time"] if old is not None else now
+            if changed:
+                updated = now
+                time_fields_updated = ",".join(changed)
+            elif old is not None:
+                updated = old["updated_time"]
+                time_fields_updated = old["time_fields_updated"] if "time_fields_updated" in old.keys() else ""
+            else:
+                updated = now
+                time_fields_updated = ""
+            row_id = old["id"] if old is not None else (pc_id or str(uuid.uuid4()))
+
             self._conn.execute(
                 f"""
                 INSERT INTO {PORT_CALLS_TABLE} (
                     id, voyage_id, port_name, sequence,
-                    eta, ata, etd, atd, created_time, updated_time
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    eta, ata, etd, atd, created_time, updated_time, time_fields_updated
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    str(pc.get("id") or uuid.uuid4()),
+                    row_id,
                     voyage_id,
                     port_name,
-                    max(1, sequence),
-                    _normalize_time(pc.get("eta")),
-                    _normalize_time(pc.get("ata")),
-                    _normalize_time(pc.get("etd")),
-                    _normalize_time(pc.get("atd")),
-                    now,
-                    now,
+                    sequence,
+                    new_times["eta"],
+                    new_times["ata"],
+                    new_times["etd"],
+                    new_times["atd"],
+                    created,
+                    updated,
+                    time_fields_updated,
                 ),
             )

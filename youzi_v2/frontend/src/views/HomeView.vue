@@ -27,9 +27,9 @@ const quickLinks = [
 </script>
 
 <template>
-  <div class="mx-auto h-full max-w-5xl space-y-8 overflow-y-auto">
+  <div class="scrollbar-subtle flex h-full min-h-0 w-full flex-col gap-8 overflow-y-auto">
     <section class="space-y-2">
-      <p class="text-xs font-medium uppercase tracking-widest text-violet-400/90">Youzi v2</p>
+      <p class="text-xs font-medium uppercase tracking-widest text-violet-500">Youzi v2</p>
       <h2 class="page-h2-hero text-gradient">物流工作台</h2>
       <p class="max-w-xl text-sm text-[var(--color-muted)]">
         Linear × Vercel 风格新壳。功能从旧版

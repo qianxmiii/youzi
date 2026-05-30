@@ -255,6 +255,7 @@ class ShipmentsRepository:
         exception_code: str | None = None,
         has_exception: bool | None = None,
         customer: str | None = None,
+        vip_only: bool | None = None,
         carrier_code: str | None = None,
         country_code: str | None = None,
         channel_code: str | None = None,
@@ -332,6 +333,10 @@ class ShipmentsRepository:
         if customer and customer.strip():
             conditions.append("s.customer = ?")
             params.append(customer.strip())
+        if vip_only is True:
+            conditions.append("cu.is_vip = 1")
+        elif vip_only is False:
+            conditions.append("(cu.id IS NULL OR cu.is_vip = 0)")
         if carrier_code and carrier_code.strip():
             cc = carrier_code.strip()
             if cc == CARRIER_CODE_FILTER_EMPTY:

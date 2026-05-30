@@ -8,7 +8,6 @@ import {
   NPopconfirm,
   NSelect,
   NSpace,
-  NTag,
   NTooltip,
   useMessage,
   type DataTableColumns,
@@ -79,6 +78,7 @@ const searchTrackingContent = ref('')
 const DEFAULT_STATUS_FILTER = 'IN_TRANSIT'
 const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
 const filterCustomer = ref<string | null>(null)
+const filterVipOnly = ref(false)
 const filterCarrier = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannelNameZh = ref<string | null>(null)
@@ -144,7 +144,7 @@ const customerColWidth = computed(() => {
   for (const row of items.value) {
     maxLen = Math.max(maxLen, (row.customer || '').length)
   }
-  return Math.min(180, Math.max(108, Math.ceil(maxLen * 7) + 20))
+  return Math.min(220, Math.max(120, Math.ceil(maxLen * 7) + 28))
 })
 
 const selectedShipmentNos = computed(() =>
@@ -542,7 +542,6 @@ const advancedFiltersActiveCount = computed(() => {
   if (filterChannelCategory.value) n++
   if (filterHasException.value != null) n++
   if (filterException.value) n++
-  if (filterStaleDays.value != null && filterStaleDays.value !== '') n++
   if (filterNoTracking.value) n++
   if (filterInternalFreshness.value) n++
   if (filterCarrierFreshness.value) n++
@@ -616,6 +615,7 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
           ? false
           : undefined,
     customer: filterCustomer.value || undefined,
+    vipOnly: filterVipOnly.value ? true : undefined,
     carrierCode: filterCarrier.value || undefined,
     countryCode: filterCountry.value || undefined,
     channelNameZh: filterChannelNameZh.value || undefined,
@@ -850,6 +850,7 @@ function resetFilters() {
   filterException.value = null
   filterHasException.value = null
   filterCustomer.value = null
+  filterVipOnly.value = false
   filterCarrier.value = null
   filterCountry.value = null
   filterChannelNameZh.value = null
@@ -1076,17 +1077,29 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     render: (row) => {
       const code = row.statusCode || 'UNKNOWN'
       const label = statusLabel[code] || code
-      const type =
-        code === 'DELIVERED' ? 'success' : code === 'INSPECTION' ? 'warning' : 'default'
-      return h(NTag, { size: 'small', bordered: false, type }, () => label)
+      const tone =
+        code === 'DELIVERED'
+          ? 'shipment-status-badge--success'
+          : code === 'INSPECTION'
+            ? 'shipment-status-badge--warning'
+            : 'shipment-status-badge--default'
+      return h('span', { class: ['shipment-status-badge', tone] }, label)
     },
   },
   {
     title: '客户',
     key: 'customer',
     width: customerColWidth.value,
-    minWidth: 108,
+    minWidth: 120,
     ellipsis: { tooltip: true },
+    render: (row) => {
+      const name = displayField(row.customer) || '—'
+      if (!row.isVip) return name
+      return h('span', { class: 'inline-flex max-w-full items-center gap-1' }, [
+        h('span', { class: 'min-w-0 truncate' }, name),
+        h(VipStarBadge),
+      ])
+    },
   },
   { title: '件数', key: 'ctns', width: 64, align: 'center' },
   {
@@ -1178,15 +1191,13 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       if (d === null) {
         return h('span', { class: 'tracking-empty' }, '—')
       }
-      return h(
-        NTag,
-        {
-          size: 'small',
-          bordered: false,
-          type: d >= 14 ? 'error' : d >= 7 ? 'warning' : 'default',
-        },
-        () => `${d}天`,
-      )
+      const tone =
+        d >= 14
+          ? 'shipment-status-badge--error'
+          : d >= 7
+            ? 'shipment-status-badge--warning'
+            : 'shipment-status-badge--default'
+      return h('span', { class: ['shipment-status-badge', tone] }, `${d}天`)
     },
   },
   {
@@ -1287,7 +1298,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
     <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
       <div class="flex min-w-0 flex-col gap-2">
-        <div class="flex min-w-0 flex-wrap items-center gap-2">
+        <div class="shipments-filter-row flex min-w-0 flex-wrap items-center gap-2">
           <NInput
             v-model:value="searchShipmentNo"
             type="textarea"
@@ -1319,13 +1330,31 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             clearable
             filterable
             size="small"
-            class="shipments-filter-select"
+            class="shipments-filter-select shipments-filter-select--customer"
             @update:value="onFiltersChanged"
           />
+          <NCheckbox
+            v-model:checked="filterVipOnly"
+            size="small"
+            class="shrink-0 whitespace-nowrap"
+            @update:checked="onFiltersChanged"
+          >
+            仅 VIP
+          </NCheckbox>
           <NSelect
             v-model:value="filterStatus"
             :options="statusOptions"
             placeholder="状态"
+            clearable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="filterStaleDays"
+            :options="staleOptions"
+            :disabled="filterNoTracking"
+            placeholder="停滞"
             clearable
             size="small"
             class="shipments-filter-select"
@@ -1403,16 +1432,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             v-model:value="filterException"
             :options="exceptionFilterOptions"
             placeholder="异常类型"
-            clearable
-            size="small"
-            class="shipments-filter-select"
-            @update:value="onFiltersChanged"
-          />
-          <NSelect
-            v-model:value="filterStaleDays"
-            :options="staleOptions"
-            :disabled="filterNoTracking"
-            placeholder="停滞"
             clearable
             size="small"
             class="shipments-filter-select"
@@ -1562,11 +1581,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   border-radius: 0.5rem;
 }
 
+.shipments-filter-row > * {
+  flex: 0 0 auto;
+}
+
 .shipments-filters-bar .shipments-filter-shipment-no {
-  width: min(200px, 20vw);
-  min-width: 132px;
-  max-width: 220px;
-  flex: 1 1 132px;
+  width: 220px;
+  min-width: 180px;
+  max-width: 280px;
 }
 
 .shipments-filters-bar .shipments-filter-shipment-no :deep(.n-input__textarea-el) {
@@ -1575,15 +1597,13 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 }
 
 .shipments-filters-bar .shipments-filter-keyword {
-  width: min(152px, 16vw);
+  width: 140px;
   min-width: 120px;
-  flex: 0 1 152px;
 }
 
 .shipments-filters-bar .shipments-filter-tracking {
-  width: min(200px, 22vw);
-  min-width: 160px;
-  flex: 1 1 160px;
+  width: 240px;
+  min-width: 200px;
 }
 
 .shipments-filters-bar .shipments-filter-select {
@@ -1594,6 +1614,11 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 .shipments-filters-bar .shipments-filter-select--wide {
   width: 8.75rem;
   min-width: 7.5rem;
+}
+
+.shipments-filters-bar .shipments-filter-select--customer {
+  width: 12rem;
+  min-width: 10.5rem;
 }
 
 .shipments-filter-divider {
@@ -1728,6 +1753,39 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   background: transparent;
   font: inherit;
   line-height: 0;
+}
+
+.shipments-data-table :deep(.shipment-status-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.shipments-data-table :deep(.shipment-status-badge--default) {
+  color: var(--tag-default-fg);
+  background: var(--tag-default-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--warning) {
+  color: var(--tag-warning-fg);
+  background: var(--tag-warning-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--success) {
+  color: var(--tag-success-fg);
+  background: var(--tag-success-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--error) {
+  color: var(--tag-error-fg);
+  background: var(--tag-error-bg);
 }
 
 .shipments-selection-bar {

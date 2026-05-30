@@ -240,7 +240,7 @@ onMounted(load)
     <div class="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h2 class="page-h2">计划任务</h2>
-        <p class="mt-1 text-xs text-zinc-500">
+        <p class="mt-1 text-xs text-[var(--color-muted)]">
           内部轨迹与承运商轨迹分开配置、分开触发；保存后立即生效（后台每 60 秒检查是否到期）。
         </p>
       </div>
@@ -255,20 +255,20 @@ onMounted(load)
       <template v-else-if="overview">
         <div class="grid gap-3 sm:grid-cols-3">
           <article v-for="card in statusCards" :key="card.label" class="panel p-4">
-            <p class="text-xs text-zinc-500">{{ card.label }}</p>
-            <p class="mt-1 text-sm font-medium text-zinc-100">{{ card.value }}</p>
-            <p class="mt-1 text-[10px] leading-relaxed text-zinc-600">{{ card.hint }}</p>
+            <p class="text-xs text-[var(--color-muted)]">{{ card.label }}</p>
+            <p class="mt-1 text-sm font-medium text-[var(--color-fg-emphasis)]">{{ card.value }}</p>
+            <p class="mt-1 text-[10px] leading-relaxed text-[var(--color-fg-secondary)]">{{ card.hint }}</p>
           </article>
         </div>
 
         <section class="panel p-4">
-          <h3 class="mb-4 text-sm font-medium text-white">定时配置</h3>
+          <h3 class="mb-4 text-sm font-medium text-[var(--color-fg-emphasis)]">定时配置</h3>
           <NForm label-placement="left" label-width="120" size="small">
             <NFormItem label="内部轨迹">
               <NSpace align="center">
                 <NSwitch v-model:value="form.internalEnabled" />
-                <span class="text-xs text-zinc-500">启用定时</span>
-                <span class="text-xs text-zinc-600">间隔（小时）</span>
+                <span class="text-xs text-[var(--color-muted)]">启用定时</span>
+                <span class="text-xs text-[var(--color-fg-secondary)]">间隔（小时）</span>
                 <NInputNumber
                   v-model:value="form.internalIntervalHours"
                   :min="0.25"
@@ -285,8 +285,8 @@ onMounted(load)
             <NFormItem label="承运商轨迹">
               <NSpace align="center">
                 <NSwitch v-model:value="form.carrierEnabled" />
-                <span class="text-xs text-zinc-500">启用定时</span>
-                <span class="text-xs text-zinc-600">间隔（小时）</span>
+                <span class="text-xs text-[var(--color-muted)]">启用定时</span>
+                <span class="text-xs text-[var(--color-fg-secondary)]">间隔（小时）</span>
                 <NInputNumber
                   v-model:value="form.carrierIntervalHours"
                   :min="0.25"
@@ -309,30 +309,30 @@ onMounted(load)
                   :step="10"
                   class="w-28"
                 />
-                <span class="text-xs text-zinc-500">秒（仅后端进程启动后首次检查）</span>
+                <span class="text-xs text-[var(--color-muted)]">秒（仅后端进程启动后首次检查）</span>
               </NSpace>
             </NFormItem>
           </NForm>
         </section>
 
         <section class="panel p-4">
-          <h3 class="mb-3 text-sm font-medium text-white">任务说明</h3>
+          <h3 class="mb-3 text-sm font-medium text-[var(--color-fg-emphasis)]">任务说明</h3>
           <div class="space-y-3">
             <article
               v-for="task in overview.tasks"
               :key="task.id"
-              class="rounded-lg border border-[var(--color-border)] bg-zinc-900/40 px-4 py-3"
+              class="rounded-lg border border-[var(--color-border)] bg-[var(--color-btn-ghost-bg)] px-4 py-3"
             >
               <div class="flex flex-wrap items-center gap-2">
-                <span class="text-sm font-medium text-zinc-100">{{ task.name }}</span>
+                <span class="text-sm font-medium text-[var(--color-fg-emphasis)]">{{ task.name }}</span>
                 <NTag size="small" :bordered="false" type="info">{{ task.schedule }}</NTag>
               </div>
-              <p class="mt-2 text-xs leading-relaxed text-zinc-400">{{ task.description }}</p>
+              <p class="mt-2 text-xs leading-relaxed text-[var(--color-fg-secondary)]">{{ task.description }}</p>
             </article>
           </div>
           <p
             v-if="overview.config.scriptPath"
-            class="mt-3 font-mono text-[10px] text-zinc-600 break-all"
+            class="mt-3 font-mono text-[10px] text-[var(--color-fg-secondary)] break-all"
           >
             外部计划任务脚本：{{ overview.config.scriptPath }}
           </p>
@@ -340,7 +340,7 @@ onMounted(load)
 
         <section class="panel flex min-h-0 flex-col p-4">
           <div class="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <h3 class="text-sm font-medium text-white">执行记录</h3>
+            <h3 class="text-sm font-medium text-[var(--color-fg-emphasis)]">执行记录</h3>
             <NSelect
               v-model:value="jobSourceFilter"
               :options="jobSourceOptions"

@@ -189,7 +189,7 @@ def sync_carrier_tracking(
                             f"[承运商轨迹] {sn} Conwest 追踪号 {n} 条"
                             f"（{conwest_nums[0]}～{conwest_nums[-1]}）"
                         )
-                elif platform == "topda" and all_tns:
+                elif platform in ("topda", "common_pack", "huawell_cms") and all_tns:
                     main_tn = tn or (all_tns[0] if all_tns else "")
                     n = tracking_numbers_repo.replace_for_shipment(sn, main_tn, all_tns)
                     if n:

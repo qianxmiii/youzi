@@ -34,7 +34,7 @@ const filterCountry = ref<string | null>(null)
 const filterCategory = ref<string | null>(null)
 const page = ref(1)
 const pageSize = ref(50)
-const categories = ref<string[]>(['空运', '海运', '快递', '卡航', '铁路'])
+const categories = ref<string[]>(['快船', '普船', '卡航', '铁路', '空运'])
 const COMMON_COUNTRIES = ['美国', '加拿大', '英国', '欧洲', '澳大利亚', '墨西哥']
 
 const modalShow = ref(false)
@@ -48,9 +48,10 @@ const countryOptions = computed(() => {
 
 const categoryTagType = (cat: string): 'default' | 'info' | 'success' | 'warning' | 'error' => {
   if (cat === '空运') return 'info'
-  if (cat === '海运') return 'success'
+  if (cat === '快船') return 'success'
+  if (cat === '普船') return 'default'
   if (cat === '卡航') return 'warning'
-  if (cat === '快递') return 'error'
+  if (cat === '铁路') return 'error'
   return 'default'
 }
 
@@ -232,7 +233,7 @@ onMounted(async () => {
       <div>
         <h1 class="page-h2">渠道管理</h1>
         <p class="mt-1 text-sm text-zinc-500">
-          配置渠道中英文、国家/地区、大类（空运/海运/快递/卡航/铁路）与备注；运单
+          配置渠道中英文、国家/地区、大类（快船 / 普船 / 卡航 / 铁路 / 空运）与备注；运单
           <code class="text-zinc-400">channel_code</code> 与此处编码一致。
         </p>
       </div>

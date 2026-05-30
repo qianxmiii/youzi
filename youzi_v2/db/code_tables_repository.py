@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from .channel_seeds import CHANNEL_CATEGORIES
 from .code_tables import list_code_tables
 from .connection import Database
 from .datetime_util import now_str
@@ -41,6 +42,7 @@ def list_table_meta() -> list[dict[str, Any]]:
             "table": name,
             "label": _TABLE_LABELS[name],
             "hasPortType": name == "port_codes",
+            "hasChannelFields": name == "channel_codes",
         }
         for name in sorted(_ALLOWED_TABLES)
     ]
@@ -58,6 +60,10 @@ def _row_to_api(table: str, row: sqlite3.Row) -> dict[str, Any]:
     }
     if table == "port_codes":
         out["portType"] = row["port_type"]
+    if table == "channel_codes":
+        out["country"] = row["country"] if "country" in row.keys() else ""
+        out["category"] = row["category"] if "category" in row.keys() else ""
+        out["note"] = row["note"] if "note" in row.keys() else ""
     return out
 
 
@@ -144,6 +150,27 @@ class CodeTablesRepository:
                         now,
                     ),
                 )
+            elif t == "channel_codes":
+                self._conn.execute(
+                    f"""
+                    INSERT INTO {t} (
+                        code, name_zh, name_en, country, category, note,
+                        sort_order, is_active, created_time, updated_time
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        code,
+                        payload["name_zh"],
+                        payload["name_en"],
+                        payload["country"],
+                        payload["category"],
+                        payload["note"],
+                        payload["sort_order"],
+                        payload["is_active"],
+                        now,
+                        now,
+                    ),
+                )
             else:
                 self._conn.execute(
                     f"""
@@ -183,6 +210,9 @@ class CodeTablesRepository:
         if t == "port_codes":
             sets.insert(2, "port_type = ?")
             vals.insert(2, payload["port_type"])
+        if t == "channel_codes":
+            sets[1:1] = ["country = ?", "category = ?", "note = ?"]
+            vals[1:1] = [payload["country"], payload["category"], payload["note"]]
         vals.append(c)
         with self._database.lock:
             cur = self._conn.execute(
@@ -246,4 +276,13 @@ class CodeTablesRepository:
             if port_type not in _PORT_TYPES:
                 raise ValueError("port_type 须为 origin / destination / both")
             out["port_type"] = port_type
+        if table == "channel_codes":
+            country = (data.get("country") or "").strip()
+            category = (data.get("category") or "").strip()
+            note = (data.get("note") or "").strip()
+            if category and category not in CHANNEL_CATEGORIES:
+                raise ValueError(f"大类须为: {' / '.join(CHANNEL_CATEGORIES)}")
+            out["country"] = country
+            out["category"] = category
+            out["note"] = note
         return out

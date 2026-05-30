@@ -17,6 +17,7 @@ const props = defineProps<{
   show: boolean
   mode: 'create' | 'edit'
   hasPortType: boolean
+  hasChannelFields?: boolean
   initial: CodeTableRow | null
 }>()
 
@@ -31,6 +32,11 @@ const portTypeOptions = [
   { label: '到达港', value: 'destination' },
 ]
 
+const categoryOptions = ['快船', '普船', '卡航', '铁路', '空运'].map((c) => ({
+  label: c,
+  value: c,
+}))
+
 const form = reactive<CodeTablePayload>({
   code: '',
   nameZh: '',
@@ -38,6 +44,9 @@ const form = reactive<CodeTablePayload>({
   sortOrder: 0,
   isActive: true,
   portType: 'both',
+  country: '',
+  category: '',
+  note: '',
 })
 
 const title = computed(() => (props.mode === 'create' ? '新增码表项' : '修改码表项'))
@@ -53,6 +62,9 @@ watch(
       form.sortOrder = props.initial.sortOrder
       form.isActive = props.initial.isActive
       form.portType = props.initial.portType || 'both'
+      form.country = props.initial.country || ''
+      form.category = props.initial.category || ''
+      form.note = props.initial.note || ''
     } else {
       form.code = ''
       form.nameZh = ''
@@ -60,6 +72,9 @@ watch(
       form.sortOrder = 0
       form.isActive = true
       form.portType = 'both'
+      form.country = ''
+      form.category = ''
+      form.note = ''
     }
   },
   { immediate: true },
@@ -90,6 +105,20 @@ function handleSubmit() {
       </NFormItem>
       <NFormItem v-if="hasPortType" label="港口类型">
         <NSelect v-model:value="form.portType" :options="portTypeOptions" />
+      </NFormItem>
+      <NFormItem v-if="hasChannelFields" label="国家/地区">
+        <NInput v-model:value="form.country" placeholder="如 美国" />
+      </NFormItem>
+      <NFormItem v-if="hasChannelFields" label="大类">
+        <NSelect
+          v-model:value="form.category"
+          :options="categoryOptions"
+          clearable
+          placeholder="快船 / 普船 / …"
+        />
+      </NFormItem>
+      <NFormItem v-if="hasChannelFields" label="备注">
+        <NInput v-model:value="form.note" type="textarea" :rows="2" />
       </NFormItem>
       <NFormItem label="排序">
         <NInputNumber v-model:value="form.sortOrder" :min="0" class="w-full" />

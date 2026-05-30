@@ -46,6 +46,20 @@
   --last-mile-bg: rgb(8 51 68 / 0.3);
   --last-mile-label: rgb(165 243 252 / 0.9);
   --last-mile-code: rgb(207 250 254 / 0.95);
+  --badge-exception-inspection-fg: rgb(248 113 113);
+  --badge-exception-inspection-border: rgb(185 28 28 / 0.55);
+  --badge-exception-inspection-bg: rgb(127 29 29 / 0.45);
+  --badge-exception-soft-fg: rgb(252 165 165);
+  --badge-exception-soft-border: rgb(248 113 113 / 0.28);
+  --badge-exception-soft-bg: rgb(239 68 68 / 0.1);
+  --tag-default-bg: rgb(39 39 42 / 0.55);
+  --tag-default-fg: #e4e4e7;
+  --tag-warning-bg: rgb(180 83 9 / 0.22);
+  --tag-warning-fg: #fcd34d;
+  --tag-success-bg: rgb(22 163 74 / 0.2);
+  --tag-success-fg: #86efac;
+  --tag-error-bg: rgb(127 29 29 / 0.35);
+  --tag-error-fg: #fca5a5;
 }
 
 [data-theme='light'] {
@@ -83,10 +97,24 @@
   --tracking-ahead-badge-fg: #92400e;
   --tracking-ahead-badge-border: rgb(217 119 6 / 0.45);
   --tracking-ahead-badge-bg: rgb(245 158 11 / 0.12);
-  --last-mile-border: rgb(8 145 178 / 0.25);
-  --last-mile-bg: rgb(236 254 255 / 0.9);
+  --last-mile-border: rgb(8 145 178 / 0.35);
+  --last-mile-bg: rgb(224 242 254);
   --last-mile-label: #0e7490;
   --last-mile-code: #155e75;
+  --badge-exception-inspection-fg: #b91c1c;
+  --badge-exception-inspection-border: rgb(252 165 165 / 0.85);
+  --badge-exception-inspection-bg: rgb(254 226 226);
+  --badge-exception-soft-fg: #dc2626;
+  --badge-exception-soft-border: rgb(254 202 202);
+  --badge-exception-soft-bg: rgb(254 242 242);
+  --tag-default-bg: #f4f4f5;
+  --tag-default-fg: #3f3f46;
+  --tag-warning-bg: rgb(254 243 199);
+  --tag-warning-fg: #b45309;
+  --tag-success-bg: rgb(220 252 231);
+  --tag-success-fg: #15803d;
+  --tag-error-bg: rgb(254 226 226);
+  --tag-error-fg: #b91c1c;
 }
 
 @layer base {

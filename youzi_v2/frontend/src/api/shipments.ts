@@ -41,6 +41,8 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.hasException === true) q.hasException = 'true'
   if (params.hasException === false) q.hasException = 'false'
   if (params.customer?.trim()) q.customer = params.customer.trim()
+  if (params.vipOnly === true) q.vipOnly = 'true'
+  if (params.vipOnly === false) q.vipOnly = 'false'
   if (params.carrierCode?.trim()) q.carrierCode = params.carrierCode.trim()
   if (params.countryCode?.trim()) q.countryCode = params.countryCode.trim()
   if (params.channelCode?.trim()) q.channelCode = params.channelCode.trim()
@@ -68,6 +70,7 @@ export interface ListShipmentsParams {
   exceptionCode?: string
   hasException?: boolean
   customer?: string
+  vipOnly?: boolean
   carrierCode?: string
   countryCode?: string
   channelCode?: string

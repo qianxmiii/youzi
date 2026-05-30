@@ -200,6 +200,11 @@ code_tables_repo = CodeTablesRepository(_database)
 dict_repo = DictRepository(_database)
 customers_repo = CustomersRepository(_database)
 channels_repo = ChannelsRepository(_database)
+try:
+    channels_repo.migrate_legacy_categories()
+    channels_repo.seed_defaults()
+except Exception:
+    pass
 shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 vessel_schedules_repo = VesselSchedulesRepository(_database)
 # 兼容旧名
@@ -429,6 +434,7 @@ def list_shipments(
     exception_code: str | None = Query(None, alias="exceptionCode"),
     has_exception: bool | None = Query(None, alias="hasException"),
     customer: str | None = None,
+    vip_only: bool | None = Query(None, alias="vipOnly"),
     carrier_code: str | None = Query(None, alias="carrierCode"),
     country_code: str | None = Query(None, alias="countryCode"),
     channel_code: str | None = Query(None, alias="channelCode"),
@@ -457,6 +463,7 @@ def list_shipments(
             exception_code=exception_code,
             has_exception=has_exception,
             customer=customer,
+            vip_only=vip_only,
             carrier_code=carrier_code,
             country_code=country_code,
             channel_code=channel_code,
@@ -781,6 +788,7 @@ def export_shipments_excel(
     exception_code: str | None = Query(None, alias="exceptionCode"),
     has_exception: bool | None = Query(None, alias="hasException"),
     customer: str | None = None,
+    vip_only: bool | None = Query(None, alias="vipOnly"),
     carrier_code: str | None = Query(None, alias="carrierCode"),
     country_code: str | None = Query(None, alias="countryCode"),
     channel_code: str | None = Query(None, alias="channelCode"),
@@ -809,6 +817,7 @@ def export_shipments_excel(
             exception_code=exception_code,
             has_exception=has_exception,
             customer=customer,
+            vip_only=vip_only,
             carrier_code=carrier_code,
             country_code=country_code,
             channel_code=channel_code,

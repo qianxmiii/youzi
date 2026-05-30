@@ -13,17 +13,17 @@ function pct(ratio: number) {
 </script>
 
 <template>
-  <div v-if="!items.length" class="text-xs text-zinc-500">{{ emptyText || '暂无数据' }}</div>
+  <div v-if="!items.length" class="text-xs text-[var(--color-muted)]">{{ emptyText || '暂无数据' }}</div>
   <ul v-else class="space-y-2.5">
     <li v-for="item in items" :key="item.key" class="min-w-0">
       <div class="mb-1 flex items-baseline justify-between gap-2 text-xs">
-        <span class="truncate text-zinc-200" :title="item.label">{{ item.label }}</span>
-        <span class="shrink-0 tabular-nums text-zinc-500">
+        <span class="truncate text-[var(--color-fg)]" :title="item.label">{{ item.label }}</span>
+        <span class="shrink-0 tabular-nums text-[var(--color-muted)]">
           {{ item.count }}
-          <span class="text-zinc-600">· {{ pct(item.ratio) }}</span>
+          <span class="text-[var(--color-fg-secondary)]">· {{ pct(item.ratio) }}</span>
         </span>
       </div>
-      <div class="h-2 overflow-hidden rounded-full bg-zinc-800/80">
+      <div class="h-2 overflow-hidden rounded-full bg-[var(--color-border-subtle)]">
         <div
           class="h-full rounded-full bg-violet-500/80 transition-all duration-300"
           :style="{ width: `${Math.max(item.ratio * 100, item.count > 0 ? 2 : 0)}%` }"

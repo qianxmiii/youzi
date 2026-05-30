@@ -149,10 +149,21 @@ def import_excel_file(
 def build_template_bytes(table: str) -> bytes:
     validate_table(table)
     headers = ["编码", "中文名", "英文名", "排序", "启用"]
-    if table == "port_codes":
-        headers = ["港口代码", "港口中文名", "港口英文名", "港口类型", "排序", "启用"]
     sample = ["SAMPLE01", "示例中文", "Sample EN", 10, "是"]
-    if table == "port_codes":
+    if table == "channel_codes":
+        headers = ["编码", "中文名", "英文名", "国家", "大类", "备注", "排序", "启用"]
+        sample = [
+            "Sea Truck Standard Service - LAX",
+            "美国普船",
+            "Sea Truck Standard Service - LAX",
+            "美国",
+            "普船",
+            "",
+            10,
+            "是",
+        ]
+    elif table == "port_codes":
+        headers = ["港口代码", "港口中文名", "港口英文名", "港口类型", "排序", "启用"]
         sample = ["NYC", "纽约", "NEWYORK", "both", 10, "是"]
 
     wb = Workbook()

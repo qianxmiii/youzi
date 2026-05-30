@@ -43,6 +43,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const activeMeta = computed(() => tables.value.find((t) => t.table === activeTable.value))
 const hasPortType = computed(() => activeMeta.value?.hasPortType ?? false)
+const hasChannelFields = computed(() => activeMeta.value?.hasChannelFields ?? false)
 
 async function loadTables() {
   const res = await listCodeTableTypes()
@@ -165,7 +166,8 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       key: 'code',
       width: 140,
       fixed: 'left',
-      render: (row) => h('span', { class: 'font-medium text-zinc-100' }, row.code),
+      render: (row) =>
+        h('span', { class: 'code-table-code font-mono font-semibold tabular-nums' }, row.code),
     },
     { title: '中文名', key: 'nameZh', width: 160, ellipsis: { tooltip: true } },
     { title: '英文名', key: 'nameEn', width: 160, ellipsis: { tooltip: true } },
@@ -177,6 +179,27 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       width: 100,
       render: (row) => row.portType || '—',
     })
+  }
+  if (hasChannelFields.value) {
+    cols.push(
+      { title: '国家', key: 'country', width: 88, render: (row) => row.country || '—' },
+      {
+        title: '大类',
+        key: 'category',
+        width: 72,
+        render: (row) =>
+          row.category
+            ? h(NTag, { size: 'small', bordered: false }, () => row.category)
+            : h('span', { class: 'text-zinc-500' }, '—'),
+      },
+      {
+        title: '备注',
+        key: 'note',
+        minWidth: 100,
+        ellipsis: { tooltip: true },
+        render: (row) => row.note || '—',
+      },
+    )
   }
   cols.push(
     { title: '排序', key: 'sortOrder', width: 72, align: 'center' },
@@ -269,10 +292,10 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
         :columns="columns"
         :data="items"
         :loading="loading"
-        :scroll-x="hasPortType ? 980 : 880"
+        :scroll-x="hasPortType ? 980 : hasChannelFields ? 1080 : 880"
         size="small"
         flex-height
-        class="h-full"
+        class="code-tables-data-table h-full"
         :bordered="false"
       />
     </div>
@@ -292,9 +315,25 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       :show="modalShow"
       :mode="modalMode"
       :has-port-type="hasPortType"
+      :has-channel-fields="hasChannelFields"
       :initial="editingRow"
       @close="modalShow = false"
       @submit="handleFormSubmit"
     />
   </div>
 </template>
+
+<style scoped>
+.code-tables-data-table :deep(.code-table-code) {
+  color: var(--color-fg-emphasis);
+}
+
+.code-tables-data-table :deep(th.n-data-table-th--fixed-left),
+.code-tables-data-table :deep(td.n-data-table-td--fixed-left) {
+  background-color: var(--n-th-color, var(--color-elevated)) !important;
+}
+
+.code-tables-data-table :deep(td.n-data-table-td--fixed-left) {
+  background-color: var(--n-td-color, var(--color-elevated)) !important;
+}
+</style>

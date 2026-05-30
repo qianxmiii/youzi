@@ -143,7 +143,7 @@ export function emptyShipmentForm(): ShipmentPayload {
     originPortCode: null,
     destinationPortCode: null,
     deliveredTime: null,
-    statusCode: 'UNKNOWN',
+    statusCode: 'IN_TRANSIT',
   }
 }
 

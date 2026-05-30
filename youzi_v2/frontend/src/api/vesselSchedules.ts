@@ -121,3 +121,15 @@ export async function syncExternalVesselSchedule(
     },
   })
 }
+
+export async function subscribePortCall(portCallId: string): Promise<{ subscribed: boolean }> {
+  return api(`/api/v1/vessel-schedules/port-calls/${encodeURIComponent(portCallId)}/subscribe`, {
+    method: 'POST',
+  })
+}
+
+export async function unsubscribePortCall(portCallId: string): Promise<{ subscribed: boolean }> {
+  return api(`/api/v1/vessel-schedules/port-calls/${encodeURIComponent(portCallId)}/subscribe`, {
+    method: 'DELETE',
+  })
+}

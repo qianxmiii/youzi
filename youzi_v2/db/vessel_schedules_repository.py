@@ -8,7 +8,7 @@ from typing import Any
 
 from .connection import Database
 from .datetime_util import normalize_tracking_time, now_str
-from .shipments_repository import ShipmentsRepository
+from .port_subscriptions_table import PortSubscriptionsRepository
 from .vessel_voyages_table import PORT_CALLS_TABLE, VOYAGES_TABLE
 from ..services.port_code_resolve import PortCodeResolver
 from ..services.vessel_voyage_fields import resolve_voyage_identity, shipment_voyage_match_sql
@@ -156,6 +156,7 @@ class VesselSchedulesRepository:
         return _voyage_row_to_api(row) if row else None
 
     def _fetch_port_calls(self, voyage_id: str) -> list[dict[str, Any]]:
+        subscribed = PortSubscriptionsRepository(self._database).subscribed_port_call_ids()
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
@@ -167,7 +168,10 @@ class VesselSchedulesRepository:
             ).fetchall()
             resolver = PortCodeResolver(self._conn)
             return [
-                resolver.enrich_port_call(enrich_port_call(_port_row_to_api(r)))
+                {
+                    **resolver.enrich_port_call(enrich_port_call(_port_row_to_api(r))),
+                    "subscribed": r["id"] in subscribed,
+                }
                 for r in rows
             ]
 
@@ -500,6 +504,12 @@ class VesselSchedulesRepository:
                 time_fields_updated = ""
             row_id = old["id"] if old is not None else (pc_id or str(uuid.uuid4()))
 
+            voyage_row = self._conn.execute(
+                f"SELECT vessel_voyage FROM {VOYAGES_TABLE} WHERE id = ?",
+                (voyage_id,),
+            ).fetchone()
+            vessel_voyage = voyage_row["vessel_voyage"] if voyage_row else ""
+
             self._conn.execute(
                 f"""
                 INSERT INTO {PORT_CALLS_TABLE} (
@@ -520,4 +530,14 @@ class VesselSchedulesRepository:
                     updated,
                     time_fields_updated,
                 ),
+            )
+            old_ata = old["ata"] if old is not None else None
+            PortSubscriptionsRepository(self._database).maybe_notify_arrival(
+                port_call_id=row_id,
+                voyage_id=voyage_id,
+                port_name=port_name,
+                vessel_voyage=vessel_voyage,
+                old_ata=old_ata,
+                new_ata=new_times["ata"],
+                commit=False,
             )

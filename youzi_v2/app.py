@@ -36,6 +36,7 @@ from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .db.customers_repository import CustomersRepository
 from .db.channels_repository import ChannelsRepository
 from .db.shipment_statistics_repository import ShipmentStatisticsRepository
+from .db.port_subscriptions_table import PortSubscriptionsRepository
 from .db.vessel_schedules_repository import VesselSchedulesRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
@@ -250,6 +251,7 @@ customers_repo = CustomersRepository(_database)
 channels_repo = ChannelsRepository(_database)
 shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 vessel_schedules_repo = VesselSchedulesRepository(_database)
+port_subscriptions_repo = PortSubscriptionsRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
@@ -650,8 +652,31 @@ def delete_channel(code: str):
 
 @app.get("/api/v1/maritime-alerts/overview", response_model=MaritimeAlertsOverview)
 def get_maritime_alerts_overview():
-    """首页海运预警：运单海运动态 + 航次挂靠三天内到/离港。"""
+    """首页海运预警：运单海运动态 + 航次挂靠三天内到/离港 + 港口订阅到港通知。"""
     return MaritimeAlertsOverview(**build_maritime_alerts_overview(_database))
+
+
+@app.post("/api/v1/maritime-alerts/port-arrivals/{notification_id}/read")
+def mark_port_arrival_notification_read(notification_id: str):
+    if not port_subscriptions_repo.mark_notification_read(notification_id):
+        raise HTTPException(status_code=404, detail="通知不存在或已读")
+    return {"read": True}
+
+
+@app.post("/api/v1/vessel-schedules/port-calls/{port_call_id}/subscribe")
+def subscribe_port_call(port_call_id: str):
+    try:
+        return port_subscriptions_repo.subscribe(port_call_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="挂靠港不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/vessel-schedules/port-calls/{port_call_id}/subscribe")
+def unsubscribe_port_call(port_call_id: str):
+    port_subscriptions_repo.unsubscribe(port_call_id)
+    return {"subscribed": False}
 
 
 @app.get("/api/v1/vessel-schedules")

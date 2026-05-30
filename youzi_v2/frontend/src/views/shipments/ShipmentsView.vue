@@ -25,6 +25,7 @@ import {
   batchDeleteShipments,
   batchUpdateShipments,
   closeShipmentExceptions,
+  createShipment,
   deleteShipment,
   exportShipmentsExcel,
   getShipment,
@@ -111,7 +112,7 @@ const trackingDrawerShipment = ref<Shipment | null>(null)
 const trackingDrawerTab = ref<'internal' | 'carrier'>('internal')
 
 const modalShow = ref(false)
-const modalMode = ref<'edit'>('edit')
+const modalMode = ref<'create' | 'edit'>('edit')
 const editingRow = ref<Shipment | null>(null)
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
@@ -696,6 +697,12 @@ onMounted(async () => {
   await loadList()
 })
 
+function openCreate() {
+  modalMode.value = 'create'
+  editingRow.value = null
+  modalShow.value = true
+}
+
 function openEdit(row: Shipment) {
   modalMode.value = 'edit'
   editingRow.value = row
@@ -704,6 +711,15 @@ function openEdit(row: Shipment) {
 
 async function handleFormSubmit(payload: ShipmentPayload) {
   try {
+    if (modalMode.value === 'create') {
+      await createShipment(payload)
+      message.success('运单已创建')
+      modalShow.value = false
+      searchShipmentNo.value = payload.shipmentNo
+      page.value = 1
+      await loadList()
+      return
+    }
     if (!editingRow.value) return
     const editId = editingRow.value.id
     await updateShipment(editId, payload)
@@ -1250,7 +1266,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       <div>
         <h2 class="page-h2">运单管理</h2>
         <p class="page-subtitle">
-          共 {{ total }} 条 · 支持导入/导出运单 Excel
+          共 {{ total }} 条 · 支持手动新增、导入/导出运单 Excel
           <span v-if="batchShipmentSearchActive" class="text-violet-400">
             · 批量运单号 {{ shipmentNoTokens.length }} 个
           </span>
@@ -1273,6 +1289,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         >
           更新全部承运商轨迹
         </NButton>
+        <NButton type="primary" size="small" @click="openCreate">新增运单</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
         <NButton size="small" :loading="exporting" @click="handleExport">导出运单</NButton>
       </NSpace>

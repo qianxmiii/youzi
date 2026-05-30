@@ -40,6 +40,20 @@ class MaritimeAlertPortCall(BaseModel):
     etd: str | None = None
 
 
+class PortArrivalNotification(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    id: str
+    subscription_id: str = Field(validation_alias="subscriptionId")
+    port_call_id: str = Field(validation_alias="portCallId")
+    voyage_id: str = Field(validation_alias="voyageId")
+    port_name: str = Field(validation_alias="portName")
+    vessel_voyage: str = Field(validation_alias="vesselVoyage")
+    ata: str
+    created_at: str = Field(validation_alias="createdAt")
+    read_at: str | None = Field(None, validation_alias="readAt")
+
+
 class MaritimeAlertsOverview(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -58,3 +72,6 @@ class MaritimeAlertsOverview(BaseModel):
         default_factory=list, validation_alias="unconfiguredVesselVoyages"
     )
     total_scanned: int = Field(0, validation_alias="totalScanned")
+    port_arrival_notifications: list[PortArrivalNotification] = Field(
+        default_factory=list, validation_alias="portArrivalNotifications"
+    )

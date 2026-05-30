@@ -54,8 +54,27 @@ export interface MaritimeAlertsOverview {
   voyagesWithAlerts: VoyageAlertBrief[]
   unconfiguredVesselVoyages: UnconfiguredVesselVoyage[]
   totalScanned: number
+  portArrivalNotifications: PortArrivalNotification[]
+}
+
+export interface PortArrivalNotification {
+  id: string
+  subscriptionId: string
+  portCallId: string
+  voyageId: string
+  portName: string
+  vesselVoyage: string
+  ata: string
+  createdAt: string
+  readAt: string | null
 }
 
 export async function getMaritimeAlertsOverview(): Promise<MaritimeAlertsOverview> {
   return api<MaritimeAlertsOverview>('/api/v1/maritime-alerts/overview')
+}
+
+export async function markPortArrivalNotificationRead(notificationId: string): Promise<void> {
+  await api(`/api/v1/maritime-alerts/port-arrivals/${encodeURIComponent(notificationId)}/read`, {
+    method: 'POST',
+  })
 }

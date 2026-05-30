@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { NButton, useMessage } from 'naive-ui'
+import { computed, ref } from 'vue'
+import { subscribePortCall, unsubscribePortCall } from '@/api/vesselSchedules'
 import type { VoyagePortCall } from '@/types/vesselSchedule'
 import { formatPortDisplay } from '@/utils/portDisplay'
 
@@ -11,6 +13,13 @@ const props = defineProps<{
   shippingCompany?: string | null
   portCalls: VoyagePortCall[]
 }>()
+
+const emit = defineEmits<{
+  refresh: []
+}>()
+
+const message = useMessage()
+const togglingId = ref<string | null>(null)
 
 const portCount = computed(() => props.portCalls.length)
 
@@ -50,6 +59,29 @@ function statusClass(status?: string): string {
       return `${base} bg-sky-500/15 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200`
     default:
       return `${base} bg-zinc-500/10 text-[var(--color-fg-secondary)]`
+  }
+}
+
+async function toggleSubscribe(pc: VoyagePortCall) {
+  const id = pc.id
+  if (!id) {
+    message.warning('请先保存航次后再订阅')
+    return
+  }
+  togglingId.value = id
+  try {
+    if (pc.subscribed) {
+      await unsubscribePortCall(id)
+      message.success('已取消订阅')
+    } else {
+      await subscribePortCall(id)
+      message.success('已订阅到港通知')
+    }
+    emit('refresh')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  } finally {
+    togglingId.value = null
   }
 }
 </script>
@@ -93,6 +125,7 @@ function statusClass(status?: string): string {
             <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">预计离港</th>
             <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">实际离港</th>
             <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">状态</th>
+            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">到港通知</th>
           </tr>
         </thead>
         <tbody>
@@ -138,9 +171,21 @@ function statusClass(status?: string): string {
               </span>
               <span v-else class="text-[var(--color-muted)]">—</span>
             </td>
+            <td class="px-4 py-3">
+              <NButton
+                size="tiny"
+                :type="pc.subscribed ? 'primary' : 'default'"
+                :quaternary="!pc.subscribed"
+                :loading="togglingId === pc.id"
+                :disabled="!pc.id"
+                @click="toggleSubscribe(pc)"
+              >
+                {{ pc.subscribed ? '已订阅' : '订阅' }}
+              </NButton>
+            </td>
           </tr>
           <tr v-if="!portCalls.length">
-            <td colspan="6" class="px-4 py-8 text-center text-[var(--color-muted)]">
+            <td colspan="7" class="px-4 py-8 text-center text-[var(--color-muted)]">
               暂无挂靠港口，请编辑航次或从船公司同步船期
             </td>
           </tr>

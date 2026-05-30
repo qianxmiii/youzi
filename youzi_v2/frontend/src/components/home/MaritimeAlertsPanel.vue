@@ -1,15 +1,18 @@
 <script setup lang="ts">
-import { NButton, NSpin, NSpace, NTag } from 'naive-ui'
+import { NButton, NSpin, NSpace, NTag, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getMaritimeAlertsOverview,
+  markPortArrivalNotificationRead,
   type MaritimeAlertsOverview,
+  type PortArrivalNotification,
 } from '@/api/maritimeAlerts'
 import type { MaritimeStatus } from '@/types/vesselSchedule'
 import { maritimeStatusTagType } from '@/types/vesselSchedule'
 
 const router = useRouter()
+const message = useMessage()
 const loading = ref(false)
 const data = ref<MaritimeAlertsOverview | null>(null)
 const error = ref('')
@@ -92,6 +95,8 @@ const alertCards = computed(() => {
 
 const hasAlerts = computed(() => {
   const c = data.value?.counts
+  const portArrivals = data.value?.portArrivalNotifications?.length ?? 0
+  if (portArrivals > 0) return true
   if (!c) return false
   return (
     c.arrivingSoon +
@@ -102,6 +107,24 @@ const hasAlerts = computed(() => {
     0
   )
 })
+
+const portArrivalNotifications = computed(
+  () => data.value?.portArrivalNotifications ?? [],
+)
+
+async function dismissPortArrival(n: PortArrivalNotification) {
+  try {
+    await markPortArrivalNotificationRead(n.id)
+    if (data.value) {
+      data.value = {
+        ...data.value,
+        portArrivalNotifications: data.value.portArrivalNotifications.filter((x) => x.id !== n.id),
+      }
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
 
 function goVesselSchedules(query?: Record<string, string>) {
   router.push({ path: '/vessel-schedules', query })
@@ -134,6 +157,37 @@ function formatTime(raw: string | null | undefined) {
     <NSpin :show="loading">
       <div v-if="error" class="panel px-4 py-3 text-sm text-red-400">{{ error }}</div>
       <template v-else-if="data">
+        <article
+          v-if="portArrivalNotifications.length"
+          class="panel border-emerald-500/30 p-4"
+        >
+          <h4 class="mb-3 text-xs font-medium uppercase tracking-wider text-emerald-700 dark:text-emerald-300">
+            港口到港通知
+          </h4>
+          <ul class="space-y-2">
+            <li
+              v-for="n in portArrivalNotifications"
+              :key="n.id"
+              class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-emerald-500/10 px-3 py-2"
+            >
+              <button
+                type="button"
+                class="min-w-0 flex-1 text-left"
+                @click="goVoyage(n.voyageId)"
+              >
+                <p class="truncate text-sm font-medium text-[var(--color-fg-emphasis)]">
+                  {{ n.portName }} 已到港
+                </p>
+                <p class="truncate text-xs text-[var(--color-muted)]">{{ n.vesselVoyage }}</p>
+                <p class="text-[11px] text-[var(--color-fg-secondary)]">
+                  ATA {{ formatTime(n.ata) }} · {{ n.createdAt?.slice(0, 16) }}
+                </p>
+              </button>
+              <NButton size="tiny" quaternary @click="dismissPortArrival(n)">知道了</NButton>
+            </li>
+          </ul>
+        </article>
+
         <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <button
             v-for="card in alertCards"
@@ -162,7 +216,7 @@ function formatTime(raw: string | null | undefined) {
           <button type="button" class="text-violet-400 hover:underline" @click="goVesselSchedules()">
             船期监控
           </button>
-          维护航次，并为运单填写 vessel_voyage 与 ETA/ETD。
+          订阅挂靠港到港通知，并为运单填写 vessel_voyage 与 ETA/ETD。
         </div>
 
         <div v-else class="grid gap-4 lg:grid-cols-2">

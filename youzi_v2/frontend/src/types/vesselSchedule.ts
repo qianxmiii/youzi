@@ -27,6 +27,8 @@ export interface VoyagePortCall {
   updatedTime?: string
   /** 最近一次变更的时间字段：eta / ata / etd / atd */
   timeFieldsUpdated?: string[]
+  /** 是否已订阅到港通知 */
+  subscribed?: boolean
 }
 
 export interface VesselVoyageSummary {

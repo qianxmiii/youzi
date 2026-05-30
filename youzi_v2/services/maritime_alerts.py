@@ -7,6 +7,7 @@ from typing import Any
 
 from youzi_v2.db.connection import Database
 from youzi_v2.db.datetime_util import now_str
+from youzi_v2.db.port_subscriptions_table import PortSubscriptionsRepository
 from youzi_v2.db.vessel_voyages_table import PORT_CALLS_TABLE, VOYAGES_TABLE
 from youzi_v2.services.voyage_status import (
     enrich_port_call,
@@ -163,4 +164,7 @@ def build_maritime_alerts_overview(database: Database) -> dict[str, Any]:
             for k, v in sorted(orphan_vv.items(), key=lambda x: -x[1])[:5]
         ],
         "totalScanned": len(enriched_shipments),
+        "portArrivalNotifications": PortSubscriptionsRepository(
+            database
+        ).list_unread_notifications(limit=20),
     }

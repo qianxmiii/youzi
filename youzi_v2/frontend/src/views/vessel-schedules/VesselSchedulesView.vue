@@ -502,6 +502,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
         :vessel-code="detail.vesselCode"
         :shipping-company="detail.shippingCompany"
         :port-calls="detail.portCalls"
+        @refresh="loadDetail"
       />
 
       <div v-if="summary" class="flex flex-wrap gap-2">

@@ -48,6 +48,7 @@ def test_port_call_time_fields_updated_on_change(repo: VesselSchedulesRepository
     )
     changed = updated["portCalls"][0]
     assert changed["timeFieldsUpdated"] == ["eta"]
+    assert changed["timePreviousValues"] == {"eta": "2026-06-01 08:00:00"}
 
     unchanged = repo.update(
         detail["id"],
@@ -64,3 +65,74 @@ def test_port_call_time_fields_updated_on_change(repo: VesselSchedulesRepository
         },
     )
     assert unchanged["portCalls"][0]["timeFieldsUpdated"] == ["eta"]
+    assert unchanged["portCalls"][0]["timePreviousValues"] == {"eta": "2026-06-01 08:00:00"}
+
+
+def test_port_call_ata_previous_value_is_eta(repo: VesselSchedulesRepository) -> None:
+    detail = repo.create(
+        {
+            "vesselVoyage": "TEST V002",
+            "portCalls": [
+                {
+                    "portName": "Shanghai",
+                    "sequence": 1,
+                    "eta": "2026-06-01 08:00:00",
+                    "etd": "2026-06-02 08:00:00",
+                }
+            ],
+        }
+    )
+    pc = detail["portCalls"][0]
+    updated = repo.update(
+        detail["id"],
+        {
+            "portCalls": [
+                {
+                    "id": pc["id"],
+                    "portName": "Shanghai",
+                    "sequence": 1,
+                    "eta": "2026-06-01 08:00:00",
+                    "etd": "2026-06-02 08:00:00",
+                    "ata": "2026-06-01 09:00:00",
+                }
+            ]
+        },
+    )
+    changed = updated["portCalls"][0]
+    assert changed["timeFieldsUpdated"] == ["ata"]
+    assert changed["timePreviousValues"] == {"ata": "2026-06-01 08:00:00"}
+
+
+def test_port_call_atd_previous_value_is_etd(repo: VesselSchedulesRepository) -> None:
+    detail = repo.create(
+        {
+            "vesselVoyage": "TEST V003",
+            "portCalls": [
+                {
+                    "portName": "Shanghai",
+                    "sequence": 1,
+                    "eta": "2026-06-01 08:00:00",
+                    "etd": "2026-06-02 08:00:00",
+                }
+            ],
+        }
+    )
+    pc = detail["portCalls"][0]
+    updated = repo.update(
+        detail["id"],
+        {
+            "portCalls": [
+                {
+                    "id": pc["id"],
+                    "portName": "Shanghai",
+                    "sequence": 1,
+                    "eta": "2026-06-01 08:00:00",
+                    "etd": "2026-06-02 08:00:00",
+                    "atd": "2026-06-02 10:00:00",
+                }
+            ]
+        },
+    )
+    changed = updated["portCalls"][0]
+    assert changed["timeFieldsUpdated"] == ["atd"]
+    assert changed["timePreviousValues"] == {"atd": "2026-06-02 08:00:00"}

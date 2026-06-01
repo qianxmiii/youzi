@@ -11,6 +11,7 @@ from ..internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER, mask_internal_su
 from .datetime_util import now_str
 from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
 from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
+from .shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .shipments_table import TABLE_NAME
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
 from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
@@ -215,6 +216,19 @@ class ShipmentsRepository:
     def _conn(self) -> sqlite3.Connection:
         return self._database.conn
 
+    def _subscribed_shipment_ids(self) -> set[str]:
+        return ShipmentSubscriptionsRepository(self._database).subscribed_shipment_ids()
+
+    def _enrich_subscribed(self, item: dict[str, Any]) -> dict[str, Any]:
+        item["subscribed"] = item["id"] in self._subscribed_shipment_ids()
+        return item
+
+    def _enrich_subscribed_list(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        sub_ids = self._subscribed_shipment_ids()
+        for item in items:
+            item["subscribed"] = item["id"] in sub_ids
+        return items
+
     def _persist_conwest_tracking_numbers(
         self,
         shipment_no: str,
@@ -416,8 +430,9 @@ class ShipmentsRepository:
                 """,
                 [*params, limit, offset],
             ).fetchall()
+        items = [_row_to_api(r) for r in rows]
         return {
-            "items": [_row_to_api(r) for r in rows],
+            "items": self._enrich_subscribed_list(items),
             "total": total,
             "limit": limit,
             "offset": offset,
@@ -515,6 +530,16 @@ class ShipmentsRepository:
         delivered_time: str | None = None,
     ) -> None:
         sn = shipment_no.strip()
+        old_row: sqlite3.Row | None = None
+        with self._database.lock:
+            old_row = self._conn.execute(
+                f"""
+                SELECT id, shipment_no, vessel_voyage, destination_port_code,
+                       latest_tracking_time, latest_tracking_desc
+                FROM {TABLE_NAME} WHERE shipment_no = ?
+                """,
+                (sn,),
+            ).fetchone()
         count = log_count
         with self._database.lock:
             if count is None:
@@ -548,6 +573,18 @@ class ShipmentsRepository:
                 params,
             )
             self._conn.commit()
+        if old_row is not None:
+            ShipmentSubscriptionsRepository(self._database).maybe_notify_tracking(
+                shipment_id=str(old_row["id"]),
+                shipment_no=str(old_row["shipment_no"]),
+                vessel_voyage=old_row["vessel_voyage"] or "",
+                destination_port_code=old_row["destination_port_code"] or "",
+                source="internal",
+                old_time=old_row["latest_tracking_time"],
+                old_desc=old_row["latest_tracking_desc"],
+                new_time=latest_time,
+                new_desc=latest_desc,
+            )
 
     def update_tracking_summary(
         self,
@@ -635,6 +672,16 @@ class ShipmentsRepository:
         tracking_number: str | None = None,
     ) -> None:
         sn = shipment_no.strip()
+        old_row: sqlite3.Row | None = None
+        with self._database.lock:
+            old_row = self._conn.execute(
+                f"""
+                SELECT id, shipment_no, vessel_voyage, destination_port_code,
+                       latest_carrier_time, latest_carrier_desc
+                FROM {TABLE_NAME} WHERE shipment_no = ?
+                """,
+                (sn,),
+            ).fetchone()
         count = log_count
         with self._database.lock:
             if count is None:
@@ -675,6 +722,18 @@ class ShipmentsRepository:
                     (tn, sn),
                 )
             self._conn.commit()
+        if old_row is not None:
+            ShipmentSubscriptionsRepository(self._database).maybe_notify_tracking(
+                shipment_id=str(old_row["id"]),
+                shipment_no=str(old_row["shipment_no"]),
+                vessel_voyage=old_row["vessel_voyage"] or "",
+                destination_port_code=old_row["destination_port_code"] or "",
+                source="carrier",
+                old_time=old_row["latest_carrier_time"],
+                old_desc=old_row["latest_carrier_desc"],
+                new_time=latest_time,
+                new_desc=latest_desc,
+            )
 
     def list_for_carrier_sync(
         self,
@@ -738,7 +797,9 @@ class ShipmentsRepository:
                 """,
                 (item_id,),
             ).fetchone()
-        return _row_to_api(row) if row else None
+        if row is None:
+            return None
+        return self._enrich_subscribed(_row_to_api(row))
 
     def get_by_shipment_no(self, shipment_no: str) -> dict[str, Any] | None:
         with self._database.lock:
@@ -749,7 +810,9 @@ class ShipmentsRepository:
                 """,
                 (shipment_no.strip(),),
             ).fetchone()
-        return _row_to_api(row) if row else None
+        if row is None:
+            return None
+        return self._enrich_subscribed(_row_to_api(row))
 
     def get_by_shipment_or_customer_no(self, no: str) -> dict[str, Any] | None:
         """运单号精确匹配；否则按客户订单号匹配首条。"""
@@ -769,7 +832,9 @@ class ShipmentsRepository:
                 """,
                 (key,),
             ).fetchone()
-        return _row_to_api(found) if found else None
+        if found is None:
+            return None
+        return self._enrich_subscribed(_row_to_api(found))
 
     def list_for_tracking_sync(
         self,
@@ -910,4 +975,6 @@ class ShipmentsRepository:
                 (item_id,),
             )
             self._conn.commit()
-            return cur.rowcount > 0
+        if cur.rowcount > 0:
+            ShipmentSubscriptionsRepository(self._database).delete_for_shipment(item_id)
+        return cur.rowcount > 0

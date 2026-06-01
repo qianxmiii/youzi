@@ -212,6 +212,22 @@ class ShipmentBatchItemError(BaseModel):
     message: str = ""
 
 
+class ShipmentSubscribeBatchResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int = 0
+    subscribed: int = 0
+    failed: int = 0
+    errors: list[dict[str, str]] = Field(default_factory=list)
+
+
+class ShipmentUnsubscribeBatchResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int = 0
+    unsubscribed: int = 0
+
+
 class ShipmentBatchResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

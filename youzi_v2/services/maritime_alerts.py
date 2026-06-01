@@ -8,6 +8,7 @@ from typing import Any
 from youzi_v2.db.connection import Database
 from youzi_v2.db.datetime_util import now_str
 from youzi_v2.db.port_subscriptions_table import PortSubscriptionsRepository
+from youzi_v2.db.shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from youzi_v2.db.vessel_voyages_table import PORT_CALLS_TABLE, VOYAGES_TABLE
 from youzi_v2.services.voyage_status import (
     enrich_port_call,
@@ -138,6 +139,18 @@ def build_maritime_alerts_overview(database: Database) -> dict[str, Any]:
     urgent_shipments.sort(key=_sort_key_eta_etd)
     urgent_port_calls.sort(key=lambda x: _sort_key_eta_etd(x))
 
+    eta_arriving_soon_port_calls = [
+        pc
+        for pc in urgent_port_calls
+        if pc.get("status") == "arriving_soon"
+    ]
+    eta_arriving_soon_shipments = [
+        s
+        for s in enriched_shipments
+        if (s.get("maritimeStatus") or "") == "arriving_soon"
+    ]
+    eta_arriving_soon_shipments.sort(key=_sort_key_eta_etd)
+
     voyages_with_alerts = sorted(
         voyage_alert_map.values(),
         key=lambda v: -(v["arrivingSoonPorts"] + v["departingSoonPorts"]),
@@ -158,6 +171,8 @@ def build_maritime_alerts_overview(database: Database) -> dict[str, Any]:
         "counts": counts,
         "urgentShipments": urgent_shipments[:_URGENT_LIMIT],
         "urgentPortCalls": urgent_port_calls[:_URGENT_LIMIT],
+        "etaArrivingSoonPortCalls": eta_arriving_soon_port_calls[:20],
+        "etaArrivingSoonShipments": eta_arriving_soon_shipments[:20],
         "voyagesWithAlerts": voyages_with_alerts,
         "unconfiguredVesselVoyages": [
             {"vesselVoyage": k, "shipmentCount": v}
@@ -165,6 +180,9 @@ def build_maritime_alerts_overview(database: Database) -> dict[str, Any]:
         ],
         "totalScanned": len(enriched_shipments),
         "portArrivalNotifications": PortSubscriptionsRepository(
+            database
+        ).list_unread_notifications(limit=20),
+        "shipmentArrivalNotifications": ShipmentSubscriptionsRepository(
             database
         ).list_unread_notifications(limit=20),
     }

@@ -57,6 +57,7 @@ _EXTRA_VOYAGE_COLUMNS: tuple[tuple[str, str], ...] = (
 
 _EXTRA_PORT_CALL_COLUMNS: tuple[tuple[str, str], ...] = (
     ("time_fields_updated", "TEXT NOT NULL DEFAULT ''"),
+    ("time_previous_values", "TEXT NOT NULL DEFAULT ''"),
 )
 
 

@@ -244,3 +244,45 @@ export async function syncCarrierTracking(shipmentNos?: string[]): Promise<Track
 export async function syncAllTracking(): Promise<TrackingSyncResult> {
   return syncTracking()
 }
+
+export interface ShipmentSubscribeBatchResult {
+  total: number
+  subscribed: number
+  failed: number
+  errors: Array<{ shipmentId: string; message: string }>
+}
+
+export interface ShipmentUnsubscribeBatchResult {
+  total: number
+  unsubscribed: number
+}
+
+export async function subscribeShipment(shipmentId: string): Promise<{ subscribed: boolean }> {
+  return api(`/api/v1/shipments/${encodeURIComponent(shipmentId)}/subscribe`, {
+    method: 'POST',
+  })
+}
+
+export async function unsubscribeShipment(shipmentId: string): Promise<{ subscribed: boolean }> {
+  return api(`/api/v1/shipments/${encodeURIComponent(shipmentId)}/subscribe`, {
+    method: 'DELETE',
+  })
+}
+
+export async function batchSubscribeShipments(
+  ids: string[],
+): Promise<ShipmentSubscribeBatchResult> {
+  return api<ShipmentSubscribeBatchResult>('/api/v1/shipments/batch-subscribe', {
+    method: 'POST',
+    body: { ids },
+  })
+}
+
+export async function batchUnsubscribeShipments(
+  ids: string[],
+): Promise<ShipmentUnsubscribeBatchResult> {
+  return api<ShipmentUnsubscribeBatchResult>('/api/v1/shipments/batch-unsubscribe', {
+    method: 'POST',
+    body: { ids },
+  })
+}

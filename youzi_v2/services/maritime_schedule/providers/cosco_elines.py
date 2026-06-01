@@ -27,7 +27,7 @@ _HEADERS = {
 _INFO = ScheduleProviderInfo(
     id="cosco_elines",
     shipping_company="COSCO",
-    label="中远海运 COSCO（eLines）",
+    label="COSCO",
     aliases=(
         "COSCO",
         "COSCO SHIPPING",

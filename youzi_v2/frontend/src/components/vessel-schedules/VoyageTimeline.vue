@@ -24,23 +24,51 @@ const togglingId = ref<string | null>(null)
 const portCount = computed(() => props.portCalls.length)
 
 const hasUpdatedTimes = computed(() =>
-  props.portCalls.some((pc) => (pc.timeFieldsUpdated?.length ?? 0) > 0),
+  props.portCalls.some((pc) =>
+    (['eta', 'ata', 'etd', 'atd'] as TimeField[]).some((field) => shouldHighlightTimeField(pc, field)),
+  ),
 )
 
 type TimeField = 'eta' | 'ata' | 'etd' | 'atd'
 
-function displayTime(value: string | null | undefined): string {
-  if (value) return value.slice(0, 16)
-  return '—'
+function timeFieldValue(pc: VoyagePortCall, field: TimeField): string | null | undefined {
+  return pc[field]
 }
 
 function isTimeFieldUpdated(pc: VoyagePortCall, field: TimeField): boolean {
   return (pc.timeFieldsUpdated ?? []).includes(field)
 }
 
+function shouldHighlightTimeField(pc: VoyagePortCall, field: TimeField): boolean {
+  return isTimeFieldUpdated(pc, field) && !!timeFieldValue(pc, field)
+}
+
+function displayTime(value: string | null | undefined): string {
+  if (value) return value.slice(0, 16)
+  return '—'
+}
+
+function previousTimeText(pc: VoyagePortCall, field: TimeField): string | null {
+  if (!shouldHighlightTimeField(pc, field)) return null
+  let prev: string | null | undefined
+  if (field === 'ata') {
+    prev = pc.timePreviousValues?.ata ?? pc.eta
+  } else if (field === 'atd') {
+    prev = pc.timePreviousValues?.atd ?? pc.etd
+  } else {
+    prev = pc.timePreviousValues?.[field]
+  }
+  if (prev === undefined) return null
+  if (!prev) return null
+  return prev.slice(0, 16)
+}
+
 function timeCellClass(pc: VoyagePortCall, field: TimeField): string {
   const base = 'px-1.5 py-0.5'
-  if (!isTimeFieldUpdated(pc, field)) {
+  if (!timeFieldValue(pc, field)) {
+    return `${base} text-[var(--color-muted)]`
+  }
+  if (!shouldHighlightTimeField(pc, field)) {
     return `${base} text-[var(--color-fg)]`
   }
   return `${base} rounded-md bg-amber-500/15 font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-200`
@@ -109,7 +137,7 @@ async function toggleSubscribe(pc: VoyagePortCall) {
             v-if="hasUpdatedTimes"
             class="ml-2 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200"
           >
-            琥珀色为最近更新的时间
+            琥珀色为最近更新 · 灰字为原时间
           </span>
         </span>
       </div>
@@ -154,16 +182,28 @@ async function toggleSubscribe(pc: VoyagePortCall) {
               <span class="ml-2 text-xs text-[var(--color-muted)]">#{{ pc.sequence }}</span>
             </td>
             <td class="px-4 py-3">
-              <span :class="timeCellClass(pc, 'eta')">{{ displayTime(pc.eta) }}</span>
+              <div :class="timeCellClass(pc, 'eta')">{{ displayTime(pc.eta) }}</div>
+              <p v-if="previousTimeText(pc, 'eta')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
+                原 {{ previousTimeText(pc, 'eta') }}
+              </p>
             </td>
             <td class="px-4 py-3">
-              <span :class="timeCellClass(pc, 'ata')">{{ displayTime(pc.ata) }}</span>
+              <div :class="timeCellClass(pc, 'ata')">{{ displayTime(pc.ata) }}</div>
+              <p v-if="previousTimeText(pc, 'ata')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
+                原 {{ previousTimeText(pc, 'ata') }}
+              </p>
             </td>
             <td class="px-4 py-3">
-              <span :class="timeCellClass(pc, 'etd')">{{ displayTime(pc.etd) }}</span>
+              <div :class="timeCellClass(pc, 'etd')">{{ displayTime(pc.etd) }}</div>
+              <p v-if="previousTimeText(pc, 'etd')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
+                原 {{ previousTimeText(pc, 'etd') }}
+              </p>
             </td>
             <td class="px-4 py-3">
-              <span :class="timeCellClass(pc, 'atd')">{{ displayTime(pc.atd) }}</span>
+              <div :class="timeCellClass(pc, 'atd')">{{ displayTime(pc.atd) }}</div>
+              <p v-if="previousTimeText(pc, 'atd')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
+                原 {{ previousTimeText(pc, 'atd') }}
+              </p>
             </td>
             <td class="px-4 py-3">
               <span v-if="pc.statusLabel" :class="statusClass(pc.status)">

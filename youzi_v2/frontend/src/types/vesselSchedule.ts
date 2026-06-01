@@ -27,6 +27,8 @@ export interface VoyagePortCall {
   updatedTime?: string
   /** 最近一次变更的时间字段：eta / ata / etd / atd */
   timeFieldsUpdated?: string[]
+  /** 变更前的原时间（键与 timeFieldsUpdated 对应） */
+  timePreviousValues?: Partial<Record<'eta' | 'ata' | 'etd' | 'atd', string>>
   /** 是否已订阅到港通知 */
   subscribed?: boolean
 }
@@ -143,6 +145,24 @@ export interface ExternalScheduleSyncResult {
   voyage: VesselVoyageDetail
   created: boolean
   source?: ExternalSchedulePreview['source']
+  portCount?: number
+}
+
+export interface VesselScheduleSyncAllResult {
+  total: number
+  synced: number
+  created: number
+  updated: number
+  failed: number
+  skippedUnsupported: number
+  skippedIncomplete: number
+  errors: Array<{
+    shippingCompany: string
+    vesselCode: string
+    vesselVoyage?: string
+    message: string
+  }>
+  log?: string[]
 }
 
 export interface VoyageShipment extends Record<string, unknown> {

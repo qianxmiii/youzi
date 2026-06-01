@@ -24,6 +24,7 @@ import {
   listMaritimeScheduleProviders,
   listVesselSchedules,
   listVoyageShipments,
+  syncAllExternalVesselSchedules,
   syncExternalVesselSchedule,
   updateVesselSchedule,
   vesselScheduleTemplateUrl,
@@ -63,6 +64,7 @@ const syncVesselCode = ref('')
 const syncVesselName = ref('')
 const syncPeriod = ref(90)
 const scheduleSyncing = ref(false)
+const syncAllLoading = ref(false)
 
 const providerOptions = computed(() =>
   scheduleProviders.value.map((p) => ({
@@ -288,6 +290,41 @@ async function refreshDetailFromCarrier() {
   }
 }
 
+async function handleScheduleSyncAll() {
+  syncAllLoading.value = true
+  try {
+    const res = await syncAllExternalVesselSchedules(syncPeriod.value)
+    const parts = [
+      `共 ${res.total} 条`,
+      `成功 ${res.synced}`,
+      res.created ? `新建 ${res.created}` : '',
+      res.updated ? `更新 ${res.updated}` : '',
+      res.failed ? `失败 ${res.failed}` : '',
+      res.skippedUnsupported ? `未接入 ${res.skippedUnsupported}` : '',
+      res.skippedIncomplete ? `缺代码 ${res.skippedIncomplete}` : '',
+    ].filter(Boolean)
+    if (res.failed && res.errors.length) {
+      message.warning(
+        `${parts.join('，')}；${res.errors
+          .slice(0, 2)
+          .map((e) => `${e.vesselCode}: ${e.message}`)
+          .join('；')}`,
+        { duration: 8000 },
+      )
+    } else if (res.synced === 0 && res.total === 0) {
+      message.info('库内暂无已配置船公司 + 船舶代码的航次')
+    } else {
+      message.success(parts.join('，'))
+    }
+    await loadVoyages()
+    await loadDetail()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '全库船期同步失败')
+  } finally {
+    syncAllLoading.value = false
+  }
+}
+
 async function handleScheduleSync() {
   const company = syncCompany.value.trim()
   const code = syncVesselCode.value.trim().toUpperCase()
@@ -434,6 +471,12 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
         <NButton size="small" :loading="scheduleSyncing" @click="handleScheduleSync">
           同步船期
         </NButton>
+        <NPopconfirm @positive-click="handleScheduleSyncAll">
+          <template #trigger>
+            <NButton size="small" :loading="syncAllLoading">更新全部挂靠</NButton>
+          </template>
+          按库内已配置的船公司 + 船舶代码，逐条从船公司接口拉取挂靠（已接入船公司才会成功）
+        </NPopconfirm>
         <NButton :loading="importing" @click="triggerImport">导入 Excel</NButton>
         <NButton type="primary" @click="openCreate">新建航次</NButton>
       </NSpace>

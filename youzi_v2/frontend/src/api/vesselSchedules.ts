@@ -4,6 +4,7 @@ import type {
   ExternalSchedulePreview,
   ExternalScheduleSyncResult,
   MaritimeScheduleProvidersResponse,
+  VesselScheduleSyncAllResult,
   VesselVoyageDetail,
   VesselVoyageListResponse,
   VesselVoyagePayload,
@@ -119,6 +120,15 @@ export async function syncExternalVesselSchedule(
       vesselCode: vesselCode.trim().toUpperCase(),
       period,
     },
+  })
+}
+
+export async function syncAllExternalVesselSchedules(
+  period = 28,
+): Promise<VesselScheduleSyncAllResult> {
+  return api<VesselScheduleSyncAllResult>('/api/v1/vessel-schedules/fetch/sync-all', {
+    method: 'POST',
+    body: { period },
   })
 }
 

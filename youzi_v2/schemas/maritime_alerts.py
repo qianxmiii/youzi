@@ -65,6 +65,12 @@ class MaritimeAlertsOverview(BaseModel):
     urgent_port_calls: list[MaritimeAlertPortCall] = Field(
         default_factory=list, validation_alias="urgentPortCalls"
     )
+    eta_arriving_soon_port_calls: list[MaritimeAlertPortCall] = Field(
+        default_factory=list, validation_alias="etaArrivingSoonPortCalls"
+    )
+    eta_arriving_soon_shipments: list[MaritimeAlertShipment] = Field(
+        default_factory=list, validation_alias="etaArrivingSoonShipments"
+    )
     voyages_with_alerts: list[dict] = Field(
         default_factory=list, validation_alias="voyagesWithAlerts"
     )

@@ -5,8 +5,10 @@ import { useRouter } from 'vue-router'
 import {
   getMaritimeAlertsOverview,
   markPortArrivalNotificationRead,
+  markShipmentArrivalNotificationRead,
   type MaritimeAlertsOverview,
   type PortArrivalNotification,
+  type ShipmentArrivalNotification,
 } from '@/api/maritimeAlerts'
 import type { MaritimeStatus } from '@/types/vesselSchedule'
 import { maritimeStatusTagType } from '@/types/vesselSchedule'
@@ -96,7 +98,11 @@ const alertCards = computed(() => {
 const hasAlerts = computed(() => {
   const c = data.value?.counts
   const portArrivals = data.value?.portArrivalNotifications?.length ?? 0
-  if (portArrivals > 0) return true
+  const shipmentArrivals = data.value?.shipmentArrivalNotifications?.length ?? 0
+  const etaArriving =
+    (data.value?.etaArrivingSoonPortCalls?.length ?? 0) +
+    (data.value?.etaArrivingSoonShipments?.length ?? 0)
+  if (portArrivals > 0 || shipmentArrivals > 0 || etaArriving > 0) return true
   if (!c) return false
   return (
     c.arrivingSoon +
@@ -110,6 +116,22 @@ const hasAlerts = computed(() => {
 
 const portArrivalNotifications = computed(
   () => data.value?.portArrivalNotifications ?? [],
+)
+
+const shipmentArrivalNotifications = computed(
+  () => data.value?.shipmentArrivalNotifications ?? [],
+)
+
+const etaArrivingSoonPortCalls = computed(
+  () => data.value?.etaArrivingSoonPortCalls ?? [],
+)
+
+const etaArrivingSoonShipments = computed(
+  () => data.value?.etaArrivingSoonShipments ?? [],
+)
+
+const hasEtaArrivingSoon = computed(
+  () => etaArrivingSoonPortCalls.value.length > 0 || etaArrivingSoonShipments.value.length > 0,
 )
 
 async function dismissPortArrival(n: PortArrivalNotification) {
@@ -126,12 +148,39 @@ async function dismissPortArrival(n: PortArrivalNotification) {
   }
 }
 
+async function dismissShipmentArrival(n: ShipmentArrivalNotification) {
+  try {
+    await markShipmentArrivalNotificationRead(n.id)
+    if (data.value) {
+      data.value = {
+        ...data.value,
+        shipmentArrivalNotifications: data.value.shipmentArrivalNotifications.filter(
+          (x) => x.id !== n.id,
+        ),
+      }
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
 function goVesselSchedules(query?: Record<string, string>) {
   router.push({ path: '/vessel-schedules', query })
 }
 
 function goVoyage(voyageId: string) {
   router.push({ path: '/vessel-schedules', query: { voyageId } })
+}
+
+function goShipment(shipmentNo: string) {
+  router.push({ path: '/shipments', query: { shipmentNo } })
+}
+
+function trackingSourceLabel(source: string): string {
+  if (source === 'internal') return '内部轨迹'
+  if (source === 'carrier') return '承运商轨迹'
+  if (source === 'arrival') return '到港'
+  return '轨迹'
 }
 
 function formatTime(raw: string | null | undefined) {
@@ -188,6 +237,95 @@ function formatTime(raw: string | null | undefined) {
           </ul>
         </article>
 
+        <article
+          v-if="shipmentArrivalNotifications.length"
+          class="panel border-sky-500/30 p-4"
+        >
+          <h4 class="mb-3 text-xs font-medium uppercase tracking-wider text-sky-700 dark:text-sky-300">
+            运单轨迹更新
+          </h4>
+          <ul class="space-y-2">
+            <li
+              v-for="n in shipmentArrivalNotifications"
+              :key="n.id"
+              class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-sky-500/10 px-3 py-2"
+            >
+              <button
+                type="button"
+                class="min-w-0 flex-1 text-left"
+                @click="goShipment(n.shipmentNo)"
+              >
+                <p class="truncate text-sm font-medium text-[var(--color-fg-emphasis)]">
+                  {{ n.shipmentNo }} · {{ trackingSourceLabel(n.trackingSource) }}
+                </p>
+                <p class="truncate text-xs text-[var(--color-muted)]">
+                  {{ n.latestDesc || '—' }}
+                </p>
+                <p class="text-[11px] text-[var(--color-fg-secondary)]">
+                  {{ formatTime(n.latestTime) }} · {{ n.createdAt?.slice(0, 16) }}
+                </p>
+              </button>
+              <NButton size="tiny" quaternary @click="dismissShipmentArrival(n)">知道了</NButton>
+            </li>
+          </ul>
+        </article>
+
+        <article
+          v-if="hasEtaArrivingSoon"
+          class="panel border-amber-500/30 p-4"
+        >
+          <h4 class="mb-3 text-xs font-medium uppercase tracking-wider text-amber-700 dark:text-amber-300">
+            三天内到港（ETA）
+          </h4>
+          <ul class="space-y-2">
+            <li
+              v-for="p in etaArrivingSoonPortCalls"
+              :key="`pc-${p.voyageId}-${p.sequence}`"
+              class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2"
+            >
+              <button
+                type="button"
+                class="min-w-0 flex-1 text-left"
+                @click="goVoyage(p.voyageId)"
+              >
+                <p class="truncate text-sm font-medium text-[var(--color-fg-emphasis)]">
+                  {{ p.portName }} · 挂靠
+                </p>
+                <p class="truncate text-xs text-[var(--color-muted)]">{{ p.vesselVoyage }}</p>
+                <p class="text-[11px] text-[var(--color-fg-secondary)]">
+                  ETA {{ formatTime(p.eta) }}
+                </p>
+              </button>
+              <NTag size="small" type="warning" :bordered="false">{{ p.statusLabel }}</NTag>
+            </li>
+            <li
+              v-for="s in etaArrivingSoonShipments"
+              :key="`sh-${s.shipmentNo}`"
+              class="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-amber-500/10 px-3 py-2"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="truncate text-sm font-medium text-[var(--color-fg-emphasis)]">
+                  {{ s.shipmentNo }} · 运单
+                </p>
+                <p class="truncate text-xs text-[var(--color-muted)]">
+                  {{ s.vesselVoyage || '未填船名航次' }}
+                  <span v-if="s.destinationPortCode"> · {{ s.destinationPortCode }}</span>
+                </p>
+                <p class="text-[11px] text-[var(--color-fg-secondary)]">
+                  ETA {{ formatTime(s.eta) }}
+                </p>
+              </div>
+              <NTag
+                size="small"
+                type="warning"
+                :bordered="false"
+              >
+                {{ s.maritimeStatusLabel }}
+              </NTag>
+            </li>
+          </ul>
+        </article>
+
         <div class="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
           <button
             v-for="card in alertCards"
@@ -216,7 +354,7 @@ function formatTime(raw: string | null | undefined) {
           <button type="button" class="text-violet-400 hover:underline" @click="goVesselSchedules()">
             船期监控
           </button>
-          订阅挂靠港到港通知，并为运单填写 vessel_voyage 与 ETA/ETD。
+          查看挂靠计划；在运单管理订阅轨迹后，内部/承运商轨迹更新时会在首页提醒。
         </div>
 
         <div v-else class="grid gap-4 lg:grid-cols-2">

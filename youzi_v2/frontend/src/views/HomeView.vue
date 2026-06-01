@@ -31,14 +31,6 @@ const quickLinks = [
     <section class="space-y-2">
       <p class="text-xs font-medium uppercase tracking-widest text-violet-500">Youzi v2</p>
       <h2 class="page-h2-hero text-gradient">物流工作台</h2>
-      <p class="max-w-xl text-sm text-[var(--color-muted)]">
-        Linear × Vercel 风格新壳。功能从旧版
-        <code
-          class="rounded px-1.5 py-0.5 text-[var(--color-fg-secondary)]"
-          style="background: var(--color-badge-bg)"
-        >index.html</code>
-        逐步迁入，API 沿用现有 FastAPI。
-      </p>
     </section>
 
     <MaritimeAlertsPanel />

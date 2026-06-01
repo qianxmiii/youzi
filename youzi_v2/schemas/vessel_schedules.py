@@ -100,3 +100,23 @@ class VesselScheduleFetchIn(BaseModel):
     )
     period: int = Field(default=28, ge=7, le=90)
     notes: str | None = None
+
+
+class VesselScheduleSyncAllIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    period: int = Field(default=28, ge=7, le=90)
+
+
+class VesselScheduleSyncAllResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int
+    synced: int
+    created: int
+    updated: int
+    failed: int
+    skipped_unsupported: int = Field(alias="skippedUnsupported")
+    skipped_incomplete: int = Field(alias="skippedIncomplete")
+    errors: list[dict[str, str]] = Field(default_factory=list)
+    log: list[str] = Field(default_factory=list)

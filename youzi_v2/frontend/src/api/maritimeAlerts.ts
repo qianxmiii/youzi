@@ -51,10 +51,15 @@ export interface MaritimeAlertsOverview {
   counts: MaritimeAlertCounts
   urgentShipments: MaritimeAlertShipment[]
   urgentPortCalls: MaritimeAlertPortCall[]
+  /** 挂靠港 ETA 三天内到港（无需订阅） */
+  etaArrivingSoonPortCalls: MaritimeAlertPortCall[]
+  /** 运单 ETA 三天内到港 */
+  etaArrivingSoonShipments: MaritimeAlertShipment[]
   voyagesWithAlerts: VoyageAlertBrief[]
   unconfiguredVesselVoyages: UnconfiguredVesselVoyage[]
   totalScanned: number
   portArrivalNotifications: PortArrivalNotification[]
+  shipmentArrivalNotifications: ShipmentArrivalNotification[]
 }
 
 export interface PortArrivalNotification {
@@ -69,6 +74,20 @@ export interface PortArrivalNotification {
   readAt: string | null
 }
 
+export interface ShipmentArrivalNotification {
+  id: string
+  subscriptionId: string
+  shipmentId: string
+  shipmentNo: string
+  vesselVoyage: string
+  destinationPortCode: string
+  trackingSource: 'internal' | 'carrier' | 'arrival' | string
+  latestTime: string
+  latestDesc: string
+  createdAt: string
+  readAt: string | null
+}
+
 export async function getMaritimeAlertsOverview(): Promise<MaritimeAlertsOverview> {
   return api<MaritimeAlertsOverview>('/api/v1/maritime-alerts/overview')
 }
@@ -77,4 +96,11 @@ export async function markPortArrivalNotificationRead(notificationId: string): P
   await api(`/api/v1/maritime-alerts/port-arrivals/${encodeURIComponent(notificationId)}/read`, {
     method: 'POST',
   })
+}
+
+export async function markShipmentArrivalNotificationRead(notificationId: string): Promise<void> {
+  await api(
+    `/api/v1/maritime-alerts/shipment-arrivals/${encodeURIComponent(notificationId)}/read`,
+    { method: 'POST' },
+  )
 }

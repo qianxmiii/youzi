@@ -47,6 +47,8 @@ export interface Shipment {
   carrierLogCount: number
   createdTime: string
   updatedTime: string
+  /** 是否已订阅轨迹更新（内部/承运商最新轨迹变更时提醒） */
+  subscribed?: boolean
 }
 
 export type ShipmentPayload = Partial<

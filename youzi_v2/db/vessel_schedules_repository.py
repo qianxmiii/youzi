@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from .connection import Database
 from .datetime_util import normalize_tracking_time, now_str
 from .port_subscriptions_table import PortSubscriptionsRepository
+from .shipments_repository import ShipmentsRepository
 from .vessel_voyages_table import PORT_CALLS_TABLE, VOYAGES_TABLE
 from ..services.port_code_resolve import PortCodeResolver
 from ..services.vessel_voyage_fields import resolve_voyage_identity, shipment_voyage_match_sql
@@ -60,6 +62,41 @@ def _parse_time_fields_updated(row: sqlite3.Row) -> list[str]:
     return [part for part in raw.split(",") if part in _TIME_FIELDS]
 
 
+def _previous_values_from_old(old_row: sqlite3.Row | None, changed: list[str]) -> dict[str, str]:
+    if not changed:
+        return {}
+    if old_row is None:
+        return {field: "" for field in changed}
+    result: dict[str, str] = {}
+    for field in changed:
+        if field == "ata":
+            result[field] = old_row["eta"] or ""
+        elif field == "atd":
+            result[field] = old_row["etd"] or ""
+        else:
+            result[field] = old_row[field] or ""
+    return result
+
+
+def _parse_time_previous_values(row: sqlite3.Row) -> dict[str, str]:
+    if "time_previous_values" not in row.keys():
+        return {}
+    raw = (row["time_previous_values"] or "").strip()
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    return {
+        str(key): str(value) if value is not None else ""
+        for key, value in data.items()
+        if key in _TIME_FIELDS
+    }
+
+
 def _port_row_to_api(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
@@ -73,6 +110,7 @@ def _port_row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
         "timeFieldsUpdated": _parse_time_fields_updated(row),
+        "timePreviousValues": _parse_time_previous_values(row),
     }
 
 
@@ -389,6 +427,52 @@ class VesselSchedulesRepository:
         if cur.rowcount == 0:
             raise ValueError("航次不存在")
 
+    def list_carrier_sync_targets(self) -> list[dict[str, Any]]:
+        """可外部同步的承运商目标（船公司 + 船舶代码去重，保留最近更新的代表航次）。"""
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT id, vessel_voyage, vessel_name, voyage_no,
+                       shipping_company, vessel_code, updated_time
+                FROM {VOYAGES_TABLE}
+                WHERE TRIM(COALESCE(shipping_company, '')) != ''
+                  AND TRIM(COALESCE(vessel_code, '')) != ''
+                ORDER BY datetime(updated_time) DESC
+                """
+            ).fetchall()
+        seen: set[tuple[str, str]] = set()
+        targets: list[dict[str, Any]] = []
+        for row in rows:
+            company = str(row["shipping_company"]).strip()
+            code = str(row["vessel_code"]).strip().upper()
+            key = (company.upper(), code)
+            if key in seen:
+                continue
+            seen.add(key)
+            targets.append(
+                {
+                    "id": row["id"],
+                    "vesselVoyage": row["vessel_voyage"],
+                    "vesselName": row["vessel_name"],
+                    "voyageNo": row["voyage_no"],
+                    "shippingCompany": company,
+                    "vesselCode": code,
+                    "updatedTime": row["updated_time"],
+                }
+            )
+        return targets
+
+    def count_voyages_missing_carrier(self) -> int:
+        with self._database.lock:
+            row = self._conn.execute(
+                f"""
+                SELECT COUNT(*) AS cnt FROM {VOYAGES_TABLE}
+                WHERE TRIM(COALESCE(shipping_company, '')) = ''
+                   OR TRIM(COALESCE(vessel_code, '')) = ''
+                """
+            ).fetchone()
+        return int(row["cnt"]) if row else 0
+
     def upsert_from_import(
         self,
         *,
@@ -496,12 +580,20 @@ class VesselSchedulesRepository:
             if changed:
                 updated = now
                 time_fields_updated = ",".join(changed)
+                time_previous_values = json.dumps(
+                    _previous_values_from_old(old, changed),
+                    ensure_ascii=False,
+                )
             elif old is not None:
                 updated = old["updated_time"]
                 time_fields_updated = old["time_fields_updated"] if "time_fields_updated" in old.keys() else ""
+                time_previous_values = (
+                    old["time_previous_values"] if "time_previous_values" in old.keys() else ""
+                )
             else:
                 updated = now
                 time_fields_updated = ""
+                time_previous_values = ""
             row_id = old["id"] if old is not None else (pc_id or str(uuid.uuid4()))
 
             voyage_row = self._conn.execute(
@@ -514,8 +606,9 @@ class VesselSchedulesRepository:
                 f"""
                 INSERT INTO {PORT_CALLS_TABLE} (
                     id, voyage_id, port_name, sequence,
-                    eta, ata, etd, atd, created_time, updated_time, time_fields_updated
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    eta, ata, etd, atd, created_time, updated_time,
+                    time_fields_updated, time_previous_values
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row_id,
@@ -529,6 +622,7 @@ class VesselSchedulesRepository:
                     created,
                     updated,
                     time_fields_updated,
+                    time_previous_values,
                 ),
             )
             old_ata = old["ata"] if old is not None else None

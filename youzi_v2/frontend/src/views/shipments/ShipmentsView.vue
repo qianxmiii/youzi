@@ -13,6 +13,7 @@ import {
   type DataTableColumns,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
@@ -35,8 +36,12 @@ import {
   importShipmentsExcel,
   listShipments,
   openShipmentExceptions,
+  batchSubscribeShipments,
+  batchUnsubscribeShipments,
+  subscribeShipment,
   syncCarrierTracking,
   syncTracking,
+  unsubscribeShipment,
   updateShipment,
 } from '@/api/shipments'
 import ShipmentFormModal from '@/components/shipments/ShipmentFormModal.vue'
@@ -58,6 +63,7 @@ import {
   type TrackingFreshnessStats,
 } from '@/utils/trackingFreshness'
 
+const route = useRoute()
 const message = useMessage()
 const { loadDictTypes, dictLabel } = useDictLabels()
 const countryLabel = (raw: string | null | undefined) => dictLabel('country_code', raw)
@@ -105,6 +111,7 @@ const exceptionCloseShow = ref(false)
 const exceptionSubmitting = ref(false)
 const batchEditShow = ref(false)
 const batchSubmitting = ref(false)
+const subscriptionTogglingId = ref<string | null>(null)
 const page = ref(1)
 const pageSize = ref(20)
 const trackingDrawerShow = ref(false)
@@ -688,6 +695,10 @@ async function loadFilterOptions() {
 }
 
 onMounted(async () => {
+  const qSn = route.query.shipmentNo
+  if (typeof qSn === 'string' && qSn.trim()) {
+    searchShipmentNo.value = qSn.trim()
+  }
   await Promise.all([
     loadDictTypes('country_code'),
     loadFilterOptions(),
@@ -764,6 +775,75 @@ async function handleExport() {
     message.error(e instanceof Error ? e.message : '导出失败')
   } finally {
     exporting.value = false
+  }
+}
+
+async function handleBatchSubscribe() {
+  const ids = selectedIds.value
+  if (!ids.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  batchSubmitting.value = true
+  try {
+    const res = await batchSubscribeShipments(ids)
+    let text = `已订阅 ${res.subscribed} / ${res.total} 条轨迹更新`
+    if (res.failed) text += `，失败 ${res.failed} 条`
+    if (res.failed && res.errors.length) {
+      message.warning(text, { duration: 6000 })
+    } else {
+      message.success(text)
+    }
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '批量订阅失败')
+  } finally {
+    batchSubmitting.value = false
+  }
+}
+
+async function handleBatchUnsubscribe() {
+  const ids = selectedIds.value
+  if (!ids.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  batchSubmitting.value = true
+  try {
+    const res = await batchUnsubscribeShipments(ids)
+    message.success(`已取消 ${res.unsubscribed} 条订阅`)
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '批量取消订阅失败')
+  } finally {
+    batchSubmitting.value = false
+  }
+}
+
+async function toggleShipmentSubscribe(row: Shipment) {
+  subscriptionTogglingId.value = row.id
+  try {
+    if (row.subscribed) {
+      await unsubscribeShipment(row.id)
+      message.success('已取消轨迹订阅')
+    } else {
+      await subscribeShipment(row.id)
+      message.success('已订阅轨迹更新')
+    }
+    const idx = items.value.findIndex((x) => x.id === row.id)
+    if (idx >= 0) {
+      items.value[idx] = { ...items.value[idx], subscribed: !row.subscribed }
+    }
+    if (trackingDrawerShipment.value?.id === row.id) {
+      trackingDrawerShipment.value = {
+        ...trackingDrawerShipment.value,
+        subscribed: !row.subscribed,
+      }
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  } finally {
+    subscriptionTogglingId.value = null
   }
 }
 
@@ -1226,6 +1306,25 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   },
   ...exceptionColumns,
   {
+    title: '轨迹订阅',
+    key: 'subscribe',
+    width: 76,
+    align: 'center',
+    fixed: 'right',
+    render: (row) =>
+      h(
+        NButton,
+        {
+          size: 'tiny',
+          type: row.subscribed ? 'primary' : 'default',
+          quaternary: !row.subscribed,
+          loading: subscriptionTogglingId.value === row.id,
+          onClick: () => toggleShipmentSubscribe(row),
+        },
+        () => (row.subscribed ? '已订阅' : '订阅'),
+      ),
+  },
+  {
     title: '操作',
     key: 'actions',
     width: 168,
@@ -1495,6 +1594,17 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       </span>
       <NSpace size="small">
         <NButton size="small" quaternary @click="clearSelection">取消选择</NButton>
+        <NButton
+          size="small"
+          type="primary"
+          :loading="batchSubmitting"
+          @click="handleBatchSubscribe"
+        >
+          批量订阅轨迹
+        </NButton>
+        <NButton size="small" :loading="batchSubmitting" @click="handleBatchUnsubscribe">
+          批量取消订阅
+        </NButton>
         <NButton size="small" @click="batchEditShow = true">批量修改</NButton>
         <NPopconfirm
           :positive-button-props="{ type: 'error' }"

@@ -37,6 +37,7 @@ from .db.customers_repository import CustomersRepository
 from .db.channels_repository import ChannelsRepository
 from .db.shipment_statistics_repository import ShipmentStatisticsRepository
 from .db.port_subscriptions_table import PortSubscriptionsRepository
+from .db.shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .db.vessel_schedules_repository import VesselSchedulesRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
@@ -45,13 +46,16 @@ from .schemas.shipments import (
     ShipmentBatchResult,
     ShipmentBatchUpdateIn,
     ShipmentRecordIn,
+    ShipmentSubscribeBatchResult,
+    ShipmentUnsubscribeBatchResult,
     ShipmentUpdateIn,
 )
 from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
-from .schemas.maritime_alerts import MaritimeAlertsOverview
 from .schemas.vessel_schedules import (
     VesselScheduleFetchIn,
+    VesselScheduleSyncAllIn,
+    VesselScheduleSyncAllResult,
     VesselVoyageIn,
     VesselVoyageUpdateIn,
     VoyageImportResult,
@@ -60,6 +64,10 @@ from .services.maritime_schedule import (
     fetch_vessel_schedule,
     list_schedule_providers,
     search_carrier_vessels,
+)
+from .services.vessel_schedule_sync import (
+    sync_all_vessel_schedules,
+    sync_one_vessel_schedule,
 )
 from .schemas.statistics import ShipmentStatisticsOverview
 from .schemas.tracking_freshness import TrackingFreshnessStats
@@ -252,6 +260,7 @@ channels_repo = ChannelsRepository(_database)
 shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 vessel_schedules_repo = VesselSchedulesRepository(_database)
 port_subscriptions_repo = PortSubscriptionsRepository(_database)
+shipment_subscriptions_repo = ShipmentSubscriptionsRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"
@@ -650,15 +659,23 @@ def delete_channel(code: str):
 # ---------- 船期监控 vessel-schedules ----------
 
 
-@app.get("/api/v1/maritime-alerts/overview", response_model=MaritimeAlertsOverview)
+@app.get("/api/v1/maritime-alerts/overview")
 def get_maritime_alerts_overview():
     """首页海运预警：运单海运动态 + 航次挂靠三天内到/离港 + 港口订阅到港通知。"""
-    return MaritimeAlertsOverview(**build_maritime_alerts_overview(_database))
+    # 直接返回 build 的 camelCase dict；经 response_model 会变成 snake_case，前端无法读取
+    return build_maritime_alerts_overview(_database)
 
 
 @app.post("/api/v1/maritime-alerts/port-arrivals/{notification_id}/read")
 def mark_port_arrival_notification_read(notification_id: str):
     if not port_subscriptions_repo.mark_notification_read(notification_id):
+        raise HTTPException(status_code=404, detail="通知不存在或已读")
+    return {"read": True}
+
+
+@app.post("/api/v1/maritime-alerts/shipment-arrivals/{notification_id}/read")
+def mark_shipment_arrival_notification_read(notification_id: str):
+    if not shipment_subscriptions_repo.mark_notification_read(notification_id):
         raise HTTPException(status_code=404, detail="通知不存在或已读")
     return {"read": True}
 
@@ -677,6 +694,40 @@ def subscribe_port_call(port_call_id: str):
 def unsubscribe_port_call(port_call_id: str):
     port_subscriptions_repo.unsubscribe(port_call_id)
     return {"subscribed": False}
+
+
+@app.post("/api/v1/shipments/{item_id}/subscribe")
+def subscribe_shipment(item_id: str):
+    try:
+        return shipment_subscriptions_repo.subscribe(item_id)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.delete("/api/v1/shipments/{item_id}/subscribe")
+def unsubscribe_shipment(item_id: str):
+    shipment_subscriptions_repo.unsubscribe(item_id)
+    return {"subscribed": False}
+
+
+@app.post(
+    "/api/v1/shipments/batch-subscribe",
+    response_model=ShipmentSubscribeBatchResult,
+)
+def batch_subscribe_shipments(body: ShipmentBatchIdsIn):
+    """批量订阅运单轨迹更新通知（内部/承运商最新轨迹变更时提醒）。"""
+    return shipment_subscriptions_repo.subscribe_many(body.ids)
+
+
+@app.post(
+    "/api/v1/shipments/batch-unsubscribe",
+    response_model=ShipmentUnsubscribeBatchResult,
+)
+def batch_unsubscribe_shipments(body: ShipmentBatchIdsIn):
+    """批量取消运单轨迹订阅。"""
+    return shipment_subscriptions_repo.unsubscribe_many(body.ids)
 
 
 @app.get("/api/v1/vessel-schedules")
@@ -738,30 +789,29 @@ def preview_external_vessel_schedule(
 def sync_external_vessel_schedule(body: VesselScheduleFetchIn):
     """从船公司接口拉取船期并 upsert 到航次主数据。"""
     try:
-        parsed = fetch_vessel_schedule(
+        return sync_one_vessel_schedule(
+            vessel_schedules_repo,
             body.shipping_company,
             body.vessel_code,
             period=body.period,
+            notes=body.notes,
         )
-        notes = (body.notes or "").strip() or str(parsed.get("notes") or "")
-        detail, created = vessel_schedules_repo.upsert_from_import(
-            vessel_voyage=str(parsed["vesselVoyage"]),
-            port_calls=parsed.get("portCalls") or [],
-            notes=notes,
-            vessel_name=parsed.get("vesselName"),
-            voyage_no=parsed.get("voyageNo"),
-            vessel_code=parsed.get("vesselCode") or body.vessel_code.strip().upper(),
-            shipping_company=parsed.get("shippingCompany"),
-            match_by_carrier=True,
-        )
-        return {
-            "voyage": detail,
-            "created": created,
-            "source": parsed.get("source"),
-            "portCount": len(detail.get("portCalls") or []),
-        }
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post(
+    "/api/v1/vessel-schedules/fetch/sync-all",
+    response_model=VesselScheduleSyncAllResult,
+)
+def sync_all_external_vessel_schedules(
+    body: VesselScheduleSyncAllIn = Body(default_factory=VesselScheduleSyncAllIn),
+):
+    """同步库内所有已配置船公司 + 船舶代码的航次挂靠。"""
+    return sync_all_vessel_schedules(
+        vessel_schedules_repo,
+        period=body.period,
+    )
 
 
 @app.get("/api/v1/vessel-schedules/{voyage_id}")

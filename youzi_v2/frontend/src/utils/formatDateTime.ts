@@ -51,6 +51,13 @@ function toDate(value: string | number | Date | null | undefined): Date | null {
   return parseDateTimeInput(value)
 }
 
+/** 日期展示：YYYY-MM-DD */
+export function formatDateYmd(value: string | number | Date | null | undefined): string {
+  const d = toDate(value)
+  if (!d) return '—'
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`
+}
+
 /** 精确到秒的绝对时间（用于 Tooltip） */
 export function formatAbsoluteDateTime(value: string | number | Date | null | undefined): string {
   const d = toDate(value)

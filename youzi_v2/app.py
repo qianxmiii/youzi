@@ -680,6 +680,18 @@ def mark_shipment_arrival_notification_read(notification_id: str):
     return {"read": True}
 
 
+@app.post("/api/v1/maritime-alerts/notifications/read-all")
+def mark_all_maritime_notifications_read():
+    """将港口到港、运单轨迹两类未读通知全部标为已读。"""
+    port_count = port_subscriptions_repo.mark_all_notifications_read()
+    shipment_count = shipment_subscriptions_repo.mark_all_notifications_read()
+    return {
+        "port": port_count,
+        "shipment": shipment_count,
+        "total": port_count + shipment_count,
+    }
+
+
 @app.post("/api/v1/vessel-schedules/port-calls/{port_call_id}/subscribe")
 def subscribe_port_call(port_call_id: str):
     try:
@@ -710,6 +722,22 @@ def subscribe_shipment(item_id: str):
 def unsubscribe_shipment(item_id: str):
     shipment_subscriptions_repo.unsubscribe(item_id)
     return {"subscribed": False}
+
+
+@app.get("/api/v1/shipment-subscriptions/notifications")
+def list_shipment_subscription_notifications(limit: int = 20):
+    """未读运单轨迹订阅通知（顶栏铃铛）。"""
+    lim = max(1, min(limit, 50))
+    return {
+        "items": shipment_subscriptions_repo.list_unread_notifications(limit=lim),
+        "unreadCount": shipment_subscriptions_repo.count_unread_notifications(),
+    }
+
+
+@app.post("/api/v1/shipment-subscriptions/notifications/read-all")
+def mark_all_shipment_subscription_notifications_read():
+    count = shipment_subscriptions_repo.mark_all_notifications_read()
+    return {"count": count}
 
 
 @app.post(

@@ -3,14 +3,17 @@ import {
   NButton,
   NCheckbox,
   NDataTable,
+  NDropdown,
   NInput,
   NPagination,
   NPopconfirm,
   NSelect,
   NSpace,
   NTooltip,
+  useDialog,
   useMessage,
   type DataTableColumns,
+  type DropdownOption,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
@@ -19,6 +22,8 @@ import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentException
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
 import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
+import BellIcon from '@/components/common/BellIcon.vue'
+import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import LastMileBadge from '@/components/common/LastMileBadge.vue'
 import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
@@ -53,6 +58,7 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
+import { formatShipmentDetailsCopyText } from '@/utils/shipmentCopyFormat'
 import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
   daysSinceLocalCalendar,
@@ -65,6 +71,7 @@ import {
 
 const route = useRoute()
 const message = useMessage()
+const dialog = useDialog()
 const { loadDictTypes, dictLabel } = useDictLabels()
 const countryLabel = (raw: string | null | undefined) => dictLabel('country_code', raw)
 const loading = ref(false)
@@ -125,7 +132,12 @@ const editingRow = ref<Shipment | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const checkedRowKeys = ref<string[]>([])
 
-const selectedCount = computed(() => checkedRowKeys.value.length)
+const selectedCount = computed(() => selectedRows.value.length)
+
+function syncSelectionWithItems() {
+  const visible = new Set(items.value.map((row) => row.id))
+  checkedRowKeys.value = checkedRowKeys.value.filter((id) => visible.has(id))
+}
 
 const shipmentNoTokens = computed(() => parseBatchSearchTokens(searchShipmentNo.value))
 const batchShipmentSearchActive = computed(() => shipmentNoTokens.value.length > 1)
@@ -443,6 +455,42 @@ function renderExceptionBadge(row: Shipment) {
   })
 }
 
+function renderActionWithTooltip(
+  kind: 'view' | 'edit' | 'delete' | 'subscribe',
+  tooltip: string,
+  options?: {
+    onClick?: () => void
+    active?: boolean
+    loading?: boolean
+  },
+) {
+  return h(
+    NTooltip,
+    { trigger: 'hover', showArrow: false, disabled: options?.loading },
+    {
+      trigger: () =>
+        h(TableActionIcon, {
+          kind,
+          title: tooltip,
+          active: options?.active,
+          loading: options?.loading,
+          onClick: options?.onClick,
+        }),
+      default: () => tooltip,
+    },
+  )
+}
+
+function renderSubscribeAction(row: Shipment) {
+  const subscribed = Boolean(row.subscribed)
+  const tooltip = subscribed ? '已订阅，点击取消' : '订阅轨迹更新'
+  return renderActionWithTooltip('subscribe', tooltip, {
+    active: subscribed,
+    loading: subscriptionTogglingId.value === row.id,
+    onClick: () => toggleShipmentSubscribe(row),
+  })
+}
+
 function renderShipmentNo(row: Shipment) {
   const noCell = h(
     'span',
@@ -651,6 +699,7 @@ async function loadList() {
     if (seq !== listRequestSeq) return
     items.value = res.items
     total.value = res.total
+    syncSelectionWithItems()
   } catch (e) {
     if (seq !== listRequestSeq) return
     message.error(e instanceof Error ? e.message : '加载失败')
@@ -1126,6 +1175,78 @@ async function copySelectedLatestTracking() {
   }
 }
 
+async function copySelectedShipmentDetails() {
+  const rows = selectedRows.value
+  if (!rows.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const text = formatShipmentDetailsCopyText(rows)
+  if (!text) {
+    message.warning('无可复制内容')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success(`已复制 ${rows.length} 条运单明细（含表头，可粘贴到 Excel）`)
+  } catch {
+    message.error('复制失败，请检查浏览器权限')
+  }
+}
+
+const copyDropdownOptions: DropdownOption[] = [
+  { label: '运单明细', key: 'details' },
+  { label: '最新轨迹', key: 'latestTracking' },
+]
+
+function handleCopyMenuSelect(key: string | number) {
+  if (key === 'details') void copySelectedShipmentDetails()
+  else if (key === 'latestTracking') void copySelectedLatestTracking()
+}
+
+const subscribeDropdownOptions: DropdownOption[] = [
+  { label: '批量取消订阅', key: 'unsubscribe' },
+]
+
+function handleSubscribeMenuSelect(key: string | number) {
+  if (key === 'unsubscribe') void handleBatchUnsubscribe()
+}
+
+const batchEditDropdownOptions: DropdownOption[] = [
+  { label: '批量删除', key: 'delete' },
+]
+
+function handleBatchEditMenuSelect(key: string | number) {
+  if (key === 'delete') promptBatchDelete()
+}
+
+function promptBatchDelete() {
+  const n = selectedCount.value
+  if (!n) {
+    message.warning('请先勾选运单')
+    return
+  }
+  dialog.warning({
+    title: '批量删除',
+    content: `确定删除所选 ${n} 条运单？关联轨迹将一并删除且不可恢复。`,
+    positiveText: '删除',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      void handleBatchDelete()
+    },
+  })
+}
+
+const exceptionDropdownOptions: DropdownOption[] = [
+  { label: '标记异常', key: 'open' },
+  { label: '解除异常', key: 'close' },
+]
+
+function handleExceptionMenuSelect(key: string | number) {
+  if (key === 'open') exceptionOpenShow.value = true
+  else if (key === 'close') exceptionCloseShow.value = true
+}
+
 async function onFileSelected(ev: Event) {
   const input = ev.target as HTMLInputElement
   const file = input.files?.[0]
@@ -1306,53 +1427,29 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   },
   ...exceptionColumns,
   {
-    title: '轨迹订阅',
-    key: 'subscribe',
-    width: 76,
+    title: '操作',
+    key: 'actions',
+    width: 132,
     align: 'center',
     fixed: 'right',
     render: (row) =>
       h(
-        NButton,
-        {
-          size: 'tiny',
-          type: row.subscribed ? 'primary' : 'default',
-          quaternary: !row.subscribed,
-          loading: subscriptionTogglingId.value === row.id,
-          onClick: () => toggleShipmentSubscribe(row),
-        },
-        () => (row.subscribed ? '已订阅' : '订阅'),
+        NSpace,
+        { size: 6, justify: 'center', wrap: false, itemStyle: 'display:flex' },
+        () => [
+          renderSubscribeAction(row),
+          renderActionWithTooltip('view', '轨迹', { onClick: () => openTrackingDrawer(row, 'internal') }),
+          renderActionWithTooltip('edit', '编辑', { onClick: () => openEdit(row) }),
+          h(
+            NPopconfirm,
+            { onPositiveClick: () => handleDelete(row) },
+            {
+              trigger: () => renderActionWithTooltip('delete', '删除'),
+              default: () => '确定删除该运单？',
+            },
+          ),
+        ],
       ),
-  },
-  {
-    title: '操作',
-    key: 'actions',
-    width: 168,
-    fixed: 'right',
-    render: (row) =>
-      h(NSpace, { size: 4 }, () => [
-        h(
-          NButton,
-          { size: 'tiny', quaternary: true, onClick: () => openTrackingDrawer(row, 'internal') },
-          () => '轨迹',
-        ),
-        h(
-          NButton,
-          { size: 'tiny', quaternary: true, type: 'primary', onClick: () => openEdit(row) },
-          () => '修改',
-        ),
-        h(
-          NPopconfirm,
-          {
-            onPositiveClick: () => handleDelete(row),
-          },
-          {
-            trigger: () =>
-              h(NButton, { size: 'tiny', quaternary: true, type: 'error' }, () => '删除'),
-            default: () => '确定删除该运单？',
-          },
-        ),
-      ]),
   },
 ])
 
@@ -1587,36 +1684,55 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-if="selectedCount > 0"
       class="shipments-selection-bar shrink-0 flex flex-wrap items-center justify-between gap-2 rounded-lg px-3 py-2"
     >
-      <span class="shipments-selection-bar__label text-sm">
-        已选
-        <strong class="shipments-selection-bar__count">{{ selectedCount }}</strong>
-        条（本页）
-      </span>
-      <NSpace size="small">
+      <div class="flex flex-wrap items-center gap-2">
+        <span class="shipments-selection-bar__label text-sm">
+          已选
+          <strong class="shipments-selection-bar__count">{{ selectedCount }}</strong>
+          条（本页）
+        </span>
         <NButton size="small" quaternary @click="clearSelection">取消选择</NButton>
-        <NButton
-          size="small"
-          type="primary"
-          :loading="batchSubmitting"
-          @click="handleBatchSubscribe"
+      </div>
+      <NSpace size="small">
+        <NDropdown trigger="hover" :options="copyDropdownOptions" @select="handleCopyMenuSelect">
+          <NButton size="small" title="复制选中运单号（换行）" @click="copySelectedShipmentNos">
+            复制
+          </NButton>
+        </NDropdown>
+        <NDropdown
+          trigger="hover"
+          :options="subscribeDropdownOptions"
+          @select="handleSubscribeMenuSelect"
         >
-          批量订阅轨迹
-        </NButton>
-        <NButton size="small" :loading="batchSubmitting" @click="handleBatchUnsubscribe">
-          批量取消订阅
-        </NButton>
-        <NButton size="small" @click="batchEditShow = true">批量修改</NButton>
-        <NPopconfirm
-          :positive-button-props="{ type: 'error' }"
-          @positive-click="handleBatchDelete"
+          <NTooltip trigger="hover" :show-arrow="false">
+            <template #trigger>
+              <NButton
+                size="small"
+                type="primary"
+                :loading="batchSubmitting"
+                aria-label="批量订阅轨迹更新"
+                @click="handleBatchSubscribe"
+              >
+                <template #icon>
+                  <BellIcon size="1rem" />
+                </template>
+              </NButton>
+            </template>
+            批量订阅轨迹更新
+          </NTooltip>
+        </NDropdown>
+        <NDropdown
+          trigger="hover"
+          :options="batchEditDropdownOptions"
+          @select="handleBatchEditMenuSelect"
         >
-          <template #trigger>
-            <NButton size="small" type="error" :loading="batchSubmitting">批量删除</NButton>
-          </template>
-          确定删除所选 {{ selectedCount }} 条运单？关联轨迹将一并删除且不可恢复。
-        </NPopconfirm>
-        <NButton size="small" @click="copySelectedShipmentNos">复制运单号</NButton>
-        <NButton size="small" @click="copySelectedLatestTracking">复制最新轨迹</NButton>
+          <NButton
+            size="small"
+            :loading="batchSubmitting"
+            @click="batchEditShow = true"
+          >
+            批量修改
+          </NButton>
+        </NDropdown>
         <NButton
           size="small"
           :loading="syncingTracking"
@@ -1634,21 +1750,13 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         >
           更新选中承运商轨迹
         </NButton>
-        <NButton
-          size="small"
-          type="warning"
-          :loading="exceptionSubmitting"
-          @click="exceptionOpenShow = true"
+        <NDropdown
+          trigger="hover"
+          :options="exceptionDropdownOptions"
+          @select="handleExceptionMenuSelect"
         >
-          标记异常
-        </NButton>
-        <NButton
-          size="small"
-          :loading="exceptionSubmitting"
-          @click="exceptionCloseShow = true"
-        >
-          解除异常
-        </NButton>
+          <NButton size="small" :loading="exceptionSubmitting">异常处理</NButton>
+        </NDropdown>
       </NSpace>
     </div>
 

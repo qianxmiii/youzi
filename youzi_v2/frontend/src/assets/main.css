@@ -266,17 +266,36 @@
       box-shadow 0.15s ease;
   }
 
-  button.freshness-ahead-btn:hover:not(:disabled) {
-    background: transparent;
+  button.freshness-ahead-btn:hover:not(:disabled):not(.freshness-ahead-btn--active) {
     border-color: var(--tracking-ahead-fg);
     color: var(--tracking-ahead-desc);
   }
 
-  button.freshness-ahead-btn--active {
-    background: transparent;
-    border-color: var(--tracking-ahead-fg);
-    color: var(--tracking-ahead-desc);
-    box-shadow: 0 0 0 1px var(--tracking-ahead-badge-border);
+  [data-theme='light'] button.freshness-ahead-btn:not(:disabled):not(.freshness-ahead-btn--active) {
+    background: var(--tracking-ahead-badge-bg);
+  }
+
+  [data-theme='light'] button.freshness-ahead-btn:hover:not(:disabled):not(.freshness-ahead-btn--active) {
+    background: rgb(245 158 11 / 0.18);
+  }
+
+  [data-theme='light'] button.freshness-ahead-btn--active {
+    border-color: rgb(245 158 11);
+    background: rgb(245 158 11);
+    color: #fff;
+    box-shadow: 0 1px 2px rgb(245 158 11 / 0.35);
+  }
+
+  [data-theme='dark'] button.freshness-ahead-btn--active {
+    border-color: rgb(251 191 36);
+    background: rgb(217 119 6);
+    color: #fff;
+    box-shadow: 0 0 0 1px rgb(245 158 11 / 0.35);
+  }
+
+  button.freshness-ahead-btn--active:hover:not(:disabled) {
+    color: #fff;
+    filter: brightness(0.94);
   }
 
   button.freshness-ahead-btn--disabled,

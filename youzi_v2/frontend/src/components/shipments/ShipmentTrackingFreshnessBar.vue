@@ -80,11 +80,7 @@ const carrierAheadTitle = computed(() => {
 const summaryLine = computed(() => {
   const s = props.stats
   if (!s) return '统计加载中…'
-  return [
-    `内部今日 ${s.internal.today}单`,
-    `承运今日 ${s.carrier.today}单`,
-    `承新于内 ${displayCarrierAheadCount.value}单`,
-  ].join(' · ')
+  return [`内部今日 ${s.internal.today}单`, `承运今日 ${s.carrier.today}单`].join(' · ')
 })
 
 const activeFilterHint = computed(() => {
@@ -123,43 +119,30 @@ function onCapsule(source: 'internal' | 'carrier', bucket: TrackingFreshnessBuck
   else emit('apply', source, bucket)
 }
 
+function capsuleVariant(meta: CapsuleMeta): string {
+  if (meta.danger) return 'none'
+  if (meta.warn) return 'older'
+  return meta.bucket
+}
+
 function badgeClass(
-  source: 'internal' | 'carrier',
+  _source: 'internal' | 'carrier',
   meta: CapsuleMeta,
 ): string {
-  const count = countFor(source, meta.bucket)
-  const active = isActive(source, meta.bucket)
+  const count = countFor(_source, meta.bucket)
+  const active = isActive(_source, meta.bucket)
   const base =
-    'group inline-flex min-w-[4.25rem] items-center justify-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium tabular-nums transition-all duration-150 ease-out select-none'
+    'freshness-capsule group inline-flex min-w-[4.25rem] items-center justify-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 ease-out select-none'
+  const variant = capsuleVariant(meta)
 
   if (count === 0) {
-    return `${base} cursor-not-allowed border-slate-800/80 bg-slate-900/30 text-zinc-600 opacity-40`
+    return `${base} freshness-capsule--disabled cursor-not-allowed`
   }
 
   const interactive =
-    'cursor-pointer hover:-translate-y-px active:scale-[0.98] active:translate-y-0 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-zinc-500/40'
+    'cursor-pointer hover:-translate-y-px active:scale-[0.98] active:translate-y-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-border)]'
 
-  if (meta.danger) {
-    if (active) {
-      return `${base} ${interactive} border-red-400/35 bg-red-500/15 text-red-300 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ring-1 ring-red-500/25`
-    }
-    return `${base} ${interactive} border-red-500/20 bg-red-500/10 text-red-400 hover:border-red-500/35 hover:bg-red-500/15 hover:text-red-300`
-  }
-
-  if (meta.warn) {
-    if (active) {
-      return `${base} ${interactive} border-amber-400/35 bg-amber-500/15 text-amber-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.04)] ring-1 ring-amber-500/25`
-    }
-    return `${base} ${interactive} border-amber-500/20 bg-amber-500/10 text-amber-400 hover:border-amber-500/35 hover:bg-amber-500/15 hover:text-amber-200`
-  }
-
-  if (active) {
-    return source === 'internal'
-      ? `${base} ${interactive} border-sky-500/30 bg-sky-500/12 text-sky-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-sky-500/25`
-      : `${base} ${interactive} border-violet-500/25 bg-violet-500/10 text-violet-200 shadow-[inset_0_1px_0_rgba(255,255,255,0.05)] ring-1 ring-violet-500/20`
-  }
-
-  return `${base} ${interactive} border-slate-800 bg-slate-900/50 text-zinc-400 hover:border-zinc-700 hover:bg-slate-800/70 hover:text-zinc-200`
+  return `${base} ${interactive} freshness-capsule--${variant}${active ? ' freshness-capsule--active' : ''}`
 }
 
 function toggleExpanded() {
@@ -201,13 +184,11 @@ function toggleExpanded() {
         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
           <span class="text-xs font-semibold tracking-tight text-[var(--color-fg-emphasis)]">轨迹新鲜度</span>
           <span v-if="!expanded" class="text-[11px] leading-relaxed text-[var(--color-muted)]">
-            {{ summaryLine }}
+            <template v-if="activeFilterHint">已选 {{ activeFilterHint }}</template>
+            <template v-else>{{ summaryLine }}</template>
           </span>
           <span v-else class="text-[11px] text-[var(--color-muted)]">点击胶囊筛选 · 自然日</span>
         </div>
-        <p v-if="activeFilterHint" class="mt-0.5 text-[11px] font-medium text-[var(--color-fg-secondary)]">
-          已选 {{ activeFilterHint }}
-        </p>
         <p
           v-if="carrierSyncHint && !expanded"
           class="mt-0.5 truncate text-[10px] text-[var(--color-muted)]"
@@ -225,6 +206,7 @@ function toggleExpanded() {
           'freshness-ahead-btn--disabled': displayCarrierAheadCount === 0 && !carrierAheadActive,
         }"
         :disabled="displayCarrierAheadCount === 0 && !carrierAheadActive"
+        :aria-pressed="carrierAheadActive"
         :title="carrierAheadTitle"
         @click.stop="emit('toggleCarrierAhead')"
       >
@@ -273,7 +255,7 @@ function toggleExpanded() {
               :disabled="countFor(row.source, cap.bucket) === 0"
               @click.stop="onCapsule(row.source, cap.bucket)"
             >
-              <span class="text-zinc-500 group-hover:text-inherit">{{ cap.label }}</span>
+              <span class="freshness-capsule__label">{{ cap.label }}</span>
               <span class="font-semibold">{{ countFor(row.source, cap.bucket) }}</span>
               <span
                 v-if="cap.icon && countFor(row.source, cap.bucket) > 0"
@@ -295,3 +277,148 @@ function toggleExpanded() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.freshness-capsule__label {
+  opacity: 0.9;
+}
+
+.freshness-capsule--active .freshness-capsule__label {
+  opacity: 1;
+  color: inherit;
+}
+
+.freshness-capsule--disabled {
+  border-color: var(--color-border);
+  background: var(--color-btn-ghost-bg);
+  color: var(--color-muted);
+  opacity: 0.45;
+}
+
+/* —— 未选中：浅色模式 —— */
+[data-theme='light'] .freshness-capsule--today:not(.freshness-capsule--active) {
+  border-color: rgb(16 185 129 / 0.35);
+  background: rgb(16 185 129 / 0.12);
+  color: rgb(21 128 61);
+}
+
+[data-theme='light'] .freshness-capsule--within3d:not(.freshness-capsule--active) {
+  border-color: rgb(59 130 246 / 0.35);
+  background: rgb(59 130 246 / 0.12);
+  color: rgb(29 78 216);
+}
+
+[data-theme='light'] .freshness-capsule--older:not(.freshness-capsule--active) {
+  border-color: rgb(245 158 11 / 0.35);
+  background: rgb(245 158 11 / 0.12);
+  color: rgb(180 83 9);
+}
+
+[data-theme='light'] .freshness-capsule--none:not(.freshness-capsule--active) {
+  border-color: rgb(239 68 68 / 0.3);
+  background: rgb(239 68 68 / 0.1);
+  color: rgb(220 38 38);
+}
+
+/* —— 选中：浅色模式 · 实心底 + 白字 —— */
+[data-theme='light'] .freshness-capsule--today.freshness-capsule--active {
+  border-color: rgb(16 185 129);
+  background: rgb(16 185 129);
+  color: #fff;
+  box-shadow: 0 1px 2px rgb(16 185 129 / 0.35);
+}
+
+[data-theme='light'] .freshness-capsule--within3d.freshness-capsule--active {
+  border-color: rgb(59 130 246);
+  background: rgb(59 130 246);
+  color: #fff;
+  box-shadow: 0 1px 2px rgb(59 130 246 / 0.35);
+}
+
+[data-theme='light'] .freshness-capsule--older.freshness-capsule--active {
+  border-color: rgb(245 158 11);
+  background: rgb(245 158 11);
+  color: #fff;
+  box-shadow: 0 1px 2px rgb(245 158 11 / 0.35);
+}
+
+[data-theme='light'] .freshness-capsule--none.freshness-capsule--active {
+  border-color: rgb(239 68 68);
+  background: rgb(239 68 68);
+  color: #fff;
+  box-shadow: 0 1px 2px rgb(239 68 68 / 0.35);
+}
+
+[data-theme='light'] .freshness-capsule--active:hover:not(:disabled) {
+  filter: brightness(0.94);
+  color: #fff;
+}
+
+/* —— 未选中：深色模式 —— */
+[data-theme='dark'] .freshness-capsule--today:not(.freshness-capsule--active) {
+  border-color: rgb(52 211 153 / 0.35);
+  background: rgb(16 185 129 / 0.15);
+  color: rgb(110 231 183);
+}
+
+[data-theme='dark'] .freshness-capsule--within3d:not(.freshness-capsule--active) {
+  border-color: rgb(96 165 250 / 0.35);
+  background: rgb(59 130 246 / 0.15);
+  color: rgb(147 197 253);
+}
+
+[data-theme='dark'] .freshness-capsule--older:not(.freshness-capsule--active) {
+  border-color: rgb(251 191 36 / 0.35);
+  background: rgb(245 158 11 / 0.12);
+  color: rgb(253 230 138);
+}
+
+[data-theme='dark'] .freshness-capsule--none:not(.freshness-capsule--active) {
+  border-color: rgb(248 113 113 / 0.35);
+  background: rgb(239 68 68 / 0.12);
+  color: rgb(252 165 165);
+}
+
+/* —— 选中：深色模式 · 略提亮实心 + 白字 —— */
+[data-theme='dark'] .freshness-capsule--today.freshness-capsule--active {
+  border-color: rgb(52 211 153);
+  background: rgb(5 150 105);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgb(16 185 129 / 0.4);
+}
+
+[data-theme='dark'] .freshness-capsule--within3d.freshness-capsule--active {
+  border-color: rgb(96 165 250);
+  background: rgb(37 99 235);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgb(59 130 246 / 0.4);
+}
+
+[data-theme='dark'] .freshness-capsule--older.freshness-capsule--active {
+  border-color: rgb(251 191 36);
+  background: rgb(217 119 6);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgb(245 158 11 / 0.4);
+}
+
+[data-theme='dark'] .freshness-capsule--none.freshness-capsule--active {
+  border-color: rgb(248 113 113);
+  background: rgb(220 38 38);
+  color: #fff;
+  box-shadow: 0 0 0 1px rgb(239 68 68 / 0.4);
+}
+
+[data-theme='dark'] .freshness-capsule--active:hover:not(:disabled) {
+  filter: brightness(1.08);
+  color: #fff;
+}
+
+/* 未选中 hover */
+[data-theme='light'] .freshness-capsule:not(.freshness-capsule--active):not(.freshness-capsule--disabled):hover {
+  filter: brightness(0.97);
+}
+
+[data-theme='dark'] .freshness-capsule:not(.freshness-capsule--active):not(.freshness-capsule--disabled):hover {
+  filter: brightness(1.12);
+}
+</style>

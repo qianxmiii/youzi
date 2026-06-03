@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchHealth, fetchLegacyHealth } from '@/api/client'
+import AppSubscriptionBell from '@/components/AppSubscriptionBell.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
 
@@ -64,6 +65,7 @@ onMounted(async () => {
     </div>
 
     <div class="flex items-center gap-3">
+      <AppSubscriptionBell />
       <span class="status-pill">
         <span
           class="h-1.5 w-1.5 rounded-full"

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { NConfigProvider, NMessageProvider, darkTheme, lightTheme } from 'naive-ui'
+import { NConfigProvider, NDialogProvider, NMessageProvider, darkTheme, lightTheme } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
 import { useTheme } from '@/composables/useTheme'
 
@@ -16,7 +16,7 @@ const themeOverrides = computed<GlobalThemeOverrides>(() =>
           primaryColorHover: '#a78bfa',
           primaryColorPressed: '#7c3aed',
           borderRadius: '8px',
-          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          fontFamily: '"Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
           bodyColor: '#09090b',
           cardColor: '#18181b',
           modalColor: '#18181b',
@@ -30,7 +30,7 @@ const themeOverrides = computed<GlobalThemeOverrides>(() =>
           primaryColorHover: '#7c3aed',
           primaryColorPressed: '#6d28d9',
           borderRadius: '8px',
-          fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif',
+          fontFamily: '"Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
           bodyColor: '#f4f4f5',
           cardColor: '#ffffff',
           modalColor: '#ffffff',
@@ -51,7 +51,9 @@ const themeOverrides = computed<GlobalThemeOverrides>(() =>
 <template>
   <NConfigProvider :theme="naiveTheme" :theme-overrides="themeOverrides">
     <NMessageProvider>
-      <RouterView />
+      <NDialogProvider>
+        <RouterView />
+      </NDialogProvider>
     </NMessageProvider>
   </NConfigProvider>
 </template>

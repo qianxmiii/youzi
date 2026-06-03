@@ -1,7 +1,7 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-sans: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --color-accent: #8b5cf6;
   --color-accent-hover: #a78bfa;
 }
@@ -14,6 +14,8 @@
   --color-elevated: #18181b;
   --color-border: #27272a;
   --color-border-subtle: #1f1f23;
+  --color-list-divider: #3f3f46;
+  --color-accent-text: rgb(70 72 212);
   --color-muted: #71717a;
   --color-fg: #fafafa;
   --color-fg-secondary: #d4d4d8;
@@ -69,6 +71,8 @@
   --color-elevated: #ffffff;
   --color-border: #e4e4e7;
   --color-border-subtle: #f4f4f5;
+  --color-list-divider: #d4d4d8;
+  --color-accent-text: rgb(70 72 212);
   --color-muted: #71717a;
   --color-fg: #18181b;
   --color-fg-secondary: #3f3f46;
@@ -326,5 +330,30 @@
 
   .scrollbar-subtle:hover::-webkit-scrollbar-thumb {
     background: var(--scrollbar-thumb);
+  }
+
+  /* 滚动条常显（列表区等需要明确可滚动的区域） */
+  .scrollbar-visible {
+    scrollbar-width: thin;
+    scrollbar-color: var(--scrollbar-thumb) transparent;
+  }
+
+  .scrollbar-visible::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .scrollbar-visible::-webkit-scrollbar-track {
+    background: rgb(24 24 27 / 0.04);
+    border-radius: 9999px;
+  }
+
+  .scrollbar-visible::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background: var(--scrollbar-thumb);
+  }
+
+  .scrollbar-visible::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
   }
 }

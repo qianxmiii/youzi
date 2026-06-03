@@ -95,11 +95,15 @@ def _notification_to_api(row: sqlite3.Row) -> dict[str, Any]:
         source = "arrival"
         latest_time = (row["ata"] or "").strip()
         latest_desc = "实际到港"
+    customer = ""
+    if "shipment_customer" in row.keys():
+        customer = (row["shipment_customer"] or "").strip()
     return {
         "id": row["id"],
         "subscriptionId": row["subscription_id"],
         "shipmentId": row["shipment_id"],
         "shipmentNo": row["shipment_no"],
+        "customer": customer,
         "vesselVoyage": row["vessel_voyage"],
         "destinationPortCode": row["destination_port_code"],
         "trackingSource": source,
@@ -335,14 +339,26 @@ class ShipmentSubscriptionsRepository:
             ),
         )
 
+    def count_unread_notifications(self) -> int:
+        with self._database.lock:
+            row = self._conn.execute(
+                f"""
+                SELECT COUNT(*) AS c FROM {NOTIFICATIONS_TABLE}
+                WHERE TRIM(COALESCE(read_at, '')) = ''
+                """
+            ).fetchone()
+        return int(row["c"]) if row else 0
+
     def list_unread_notifications(self, *, limit: int = 20) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 100))
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
-                SELECT * FROM {NOTIFICATIONS_TABLE}
-                WHERE TRIM(COALESCE(read_at, '')) = ''
-                ORDER BY datetime(created_at) DESC
+                SELECT n.*, s.customer AS shipment_customer
+                FROM {NOTIFICATIONS_TABLE} n
+                LEFT JOIN {SHIPMENTS_TABLE} s ON s.id = n.shipment_id
+                WHERE TRIM(COALESCE(n.read_at, '')) = ''
+                ORDER BY datetime(n.created_at) DESC
                 LIMIT ?
                 """,
                 (limit,),
@@ -363,3 +379,17 @@ class ShipmentSubscriptionsRepository:
             )
             self._conn.commit()
             return cur.rowcount > 0
+
+    def mark_all_notifications_read(self) -> int:
+        now = now_str()
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {NOTIFICATIONS_TABLE}
+                SET read_at = ?
+                WHERE TRIM(COALESCE(read_at, '')) = ''
+                """,
+                (now,),
+            )
+            self._conn.commit()
+            return cur.rowcount

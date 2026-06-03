@@ -1,0 +1,43 @@
+---
+description: youzi_v2 代码变更必须同步更新文档
+alwaysApply: true
+---
+
+# youzi_v2 文档同步规则
+
+所有开发、重构、Bug 修复均在 `youzi_v2/` 完成；**每次修改、新增、删除代码后，必须同步检查并更新相关文档**，任务结束前完成文档检查。
+
+## 文档位置
+
+| 类型 | 路径 |
+|------|------|
+| 项目总览 | `youzi_v2/README.md` |
+| 变更记录 | `youzi_v2/CHANGELOG.md` |
+| 详细文档 | `youzi_v2/docs/`（见 `docs/README.md` 索引） |
+| 模块说明 | 各重要目录 `README.md`（`frontend/`、`db/`、`services/` 等） |
+
+## 触发条件与必更新项
+
+| 变更类型 | 必更新 |
+|----------|--------|
+| 新增功能 | 模块 README、根 README 功能列表、`CHANGELOG.md`；复杂功能加 `docs/*.md` |
+| 修改功能 | 模块 README、业务流程说明、`CHANGELOG.md` |
+| 修改数据库 | `docs/database.md`、表结构/ER 说明、模块 README、`CHANGELOG.md` |
+| 新增/变更 API | `docs/api.md`、模块 README、调用示例、`CHANGELOG.md` |
+| 重构 | 模块 README、`CHANGELOG.md`；架构变动更新 `docs/architecture.md` |
+| Bug 修复 | `CHANGELOG.md`；若涉及行为变更，同步模块 README |
+
+## 质量要求
+
+- Markdown 格式，含目录与示例（代码片段 / curl）
+- **与代码保持一致**，不允许过期内容；发现不一致时**优先修正文档**
+- 数据库、API、业务流程变更时，**禁止只改代码不改** `docs/database.md`、`docs/api.md` 及对应模块 README
+
+## 任务收尾检查清单
+
+1. 本次改动是否影响 API / 表结构 / 业务流程？
+2. 对应模块 README 与 `docs/` 是否已更新？
+3. `CHANGELOG.md` 是否已按日期记录（新增 / 修改 / 修复 / 重构）？
+4. 根 `README.md` 模块列表或入口链接是否需要更新？
+
+完整规范见 `youzi_v2/docs/README.md`。

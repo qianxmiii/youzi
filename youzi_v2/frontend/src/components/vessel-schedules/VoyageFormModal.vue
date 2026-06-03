@@ -349,17 +349,17 @@ function handleSubmit() {
                 placeholder="船公司返回名称，如 Yantian"
               />
             </NFormItem>
-            <NFormItem label="ETA">
-              <NDatePicker v-model:value="pc.eta" type="datetime" clearable class="w-full" />
-            </NFormItem>
-            <NFormItem label="ATA">
-              <NDatePicker v-model:value="pc.ata" type="datetime" clearable class="w-full" />
-            </NFormItem>
             <NFormItem label="ETD">
               <NDatePicker v-model:value="pc.etd" type="datetime" clearable class="w-full" />
             </NFormItem>
             <NFormItem label="ATD">
               <NDatePicker v-model:value="pc.atd" type="datetime" clearable class="w-full" />
+            </NFormItem>
+            <NFormItem label="ETA">
+              <NDatePicker v-model:value="pc.eta" type="datetime" clearable class="w-full" />
+            </NFormItem>
+            <NFormItem label="ATA">
+              <NDatePicker v-model:value="pc.ata" type="datetime" clearable class="w-full" />
             </NFormItem>
           </div>
         </div>

@@ -79,6 +79,7 @@ export interface ShipmentArrivalNotification {
   subscriptionId: string
   shipmentId: string
   shipmentNo: string
+  customer: string | null
   vesselVoyage: string
   destinationPortCode: string
   trackingSource: 'internal' | 'carrier' | 'arrival' | string
@@ -101,6 +102,19 @@ export async function markPortArrivalNotificationRead(notificationId: string): P
 export async function markShipmentArrivalNotificationRead(notificationId: string): Promise<void> {
   await api(
     `/api/v1/maritime-alerts/shipment-arrivals/${encodeURIComponent(notificationId)}/read`,
+    { method: 'POST' },
+  )
+}
+
+export interface MarkAllMaritimeNotificationsReadResult {
+  port: number
+  shipment: number
+  total: number
+}
+
+export async function markAllMaritimeNotificationsRead(): Promise<MarkAllMaritimeNotificationsReadResult> {
+  return api<MarkAllMaritimeNotificationsReadResult>(
+    '/api/v1/maritime-alerts/notifications/read-all',
     { method: 'POST' },
   )
 }

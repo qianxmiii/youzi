@@ -1,19 +1,24 @@
 <script setup lang="ts">
 import {
   NButton,
+  NCollapse,
+  NCollapseItem,
   NDataTable,
+  NDropdown,
   NInput,
   NInputNumber,
-  NPopconfirm,
+  NModal,
   NSelect,
-  NSpace,
   NTag,
+  useDialog,
   useMessage,
   type DataTableColumns,
+  type DropdownOption,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import CarrierVesselSelect from '@/components/vessel-schedules/CarrierVesselSelect.vue'
+import VesselScheduleActiveBanner from '@/components/vessel-schedules/VesselScheduleActiveBanner.vue'
 import VoyageFormModal from '@/components/vessel-schedules/VoyageFormModal.vue'
 import VoyageTimeline from '@/components/vessel-schedules/VoyageTimeline.vue'
 import {
@@ -39,18 +44,23 @@ import type {
 } from '@/types/vesselSchedule'
 import { MARITIME_STATUS_OPTIONS, maritimeStatusTagType } from '@/types/vesselSchedule'
 import { apiErrorMessage } from '@/utils/apiError'
+import { formatPortDisplay } from '@/utils/portDisplay'
 import { resolveVesselName, resolveVoyageNo } from '@/utils/vesselVoyageDisplay'
 
 const message = useMessage()
+const dialog = useDialog()
 const route = useRoute()
+const syncModalShow = ref(false)
 const loading = ref(false)
 const detailLoading = ref(false)
 const importing = ref(false)
+const exporting = ref(false)
 const voyages = ref<VesselVoyageSummary[]>([])
 const selectedVesselName = ref<string | null>(null)
 const selectedId = ref<string | null>(null)
 const detail = ref<VesselVoyageDetail | null>(null)
 const search = ref('')
+const tableFilter = ref('')
 const statusFilter = ref<MaritimeStatus | ''>('')
 const shipments = ref<VoyageShipment[]>([])
 const shipmentTotal = ref(0)
@@ -93,10 +103,27 @@ const voyageNoOptions = computed(() => {
   return voyages.value
     .filter((v) => resolveVesselName(v) === selectedVesselName.value)
     .map((v) => ({
-      label: `${resolveVoyageNo(v)}（${v.portCount ?? 0} 港 · ${v.shipmentCount ?? 0} 票）`,
+      label: `${resolveVoyageNo(v)} (${v.portCount ?? 0} Ports)`,
       value: v.id,
     }))
 })
+
+const moreMenuOptions = computed<DropdownOption[]>(() => [
+  { label: '新建航次', key: 'create' },
+  { label: '编辑当前航次', key: 'edit', disabled: !detail.value },
+  { label: '导入 Excel', key: 'import' },
+  { label: '下载模板', key: 'template' },
+  { type: 'divider', key: 'd1' },
+  { label: '同步单船船期', key: 'sync-one' },
+  { label: '更新全部挂靠', key: 'sync-all' },
+  {
+    label: '从船公司更新挂靠',
+    key: 'refresh-carrier',
+    disabled: !detail.value?.vesselCode || !detail.value?.shippingCompany,
+  },
+  { type: 'divider', key: 'd2' },
+  { label: '删除当前航次', key: 'delete', disabled: !selectedId.value },
+])
 
 function syncVesselNameFromSelectedId() {
   if (!selectedId.value) return
@@ -165,6 +192,11 @@ async function loadShipments() {
   } catch (e) {
     message.error(e instanceof Error ? e.message : '加载关联运单失败')
   }
+}
+
+async function handleRefresh() {
+  await loadVoyages()
+  await loadDetail()
 }
 
 onMounted(async () => {
@@ -345,6 +377,7 @@ async function handleScheduleSync() {
     selectedId.value = res.voyage.id
     selectedVesselName.value = resolveVesselName(res.voyage)
     syncVesselCode.value = ''
+    syncModalShow.value = false
     await loadVoyages()
     await loadDetail()
   } catch (e) {
@@ -375,6 +408,91 @@ async function onImportFile(ev: Event) {
   }
 }
 
+function escapeCsvCell(value: string): string {
+  if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`
+  return value
+}
+
+function handleExport() {
+  if (!detail.value) {
+    message.warning('请先选择航次')
+    return
+  }
+  exporting.value = true
+  try {
+    const headers = ['Sequence', 'Port', 'ETD', 'ATD', 'ETA', 'ATA', 'Status']
+    const rows = [...detail.value.portCalls]
+      .sort((a, b) => a.sequence - b.sequence)
+      .map((pc) =>
+        [
+          String(pc.sequence),
+          formatPortDisplay(pc),
+          pc.etd ?? '',
+          pc.atd ?? '',
+          pc.eta ?? '',
+          pc.ata ?? '',
+          pc.statusLabel || pc.status || '',
+        ]
+          .map(escapeCsvCell)
+          .join(','),
+      )
+    const csv = [headers.join(','), ...rows].join('\n')
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `port-schedule-${detail.value.vesselVoyage || 'voyage'}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+    message.success('已导出挂靠港 CSV')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '导出失败')
+  } finally {
+    exporting.value = false
+  }
+}
+
+function handleMoreMenu(key: string) {
+  switch (key) {
+    case 'create':
+      openCreate()
+      break
+    case 'edit':
+      openEdit()
+      break
+    case 'import':
+      triggerImport()
+      break
+    case 'template':
+      window.open(vesselScheduleTemplateUrl(), '_blank', 'noopener')
+      break
+    case 'sync-one':
+      syncModalShow.value = true
+      break
+    case 'sync-all':
+      handleScheduleSyncAll()
+      break
+    case 'refresh-carrier':
+      refreshDetailFromCarrier()
+      break
+    case 'delete':
+      if (!selectedId.value) return
+      dialog.warning({
+        title: '删除航次',
+        content: '确定删除该航次及全部挂靠记录？',
+        positiveText: '删除',
+        negativeText: '取消',
+        onPositiveClick: () => {
+          handleDelete()
+          return true
+        },
+      })
+      break
+    default:
+      break
+  }
+}
+
 const shipmentColumns: DataTableColumns<VoyageShipment> = [
   {
     title: '运单号',
@@ -399,6 +517,12 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
     key: 'destinationPortCode',
     width: 100,
     render: (row) => row.destinationPortCode || '—',
+  },
+  {
+    title: 'ETD',
+    key: 'etd',
+    width: 130,
+    render: (row) => (row.etd ? row.etd.slice(0, 16) : '—'),
   },
   {
     title: 'ETA',
@@ -427,168 +551,145 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
 </script>
 
 <template>
-  <div
-    class="scrollbar-subtle flex h-full min-h-0 w-full flex-col gap-6 overflow-y-auto"
-  >
-    <div class="flex flex-wrap items-start justify-between gap-4">
-      <div>
-        <h1 class="page-h1">船期监控</h1>
-        <p class="mt-1 text-sm text-zinc-500">
-          维护船名航次挂靠计划，按 vessel_voyage 关联运单并查看海运动态
-        </p>
+  <div class="vessel-schedules-page scrollbar-subtle h-full min-h-0 w-full overflow-y-auto">
+    <section class="vessel-schedules-filter panel">
+      <div class="vessel-schedules-filter__fields">
+        <label class="vessel-schedules-filter__field">
+          <span class="vessel-schedules-filter__label">Vessel Name</span>
+          <NSelect
+            v-model:value="selectedVesselName"
+            :options="vesselNameOptions"
+            filterable
+            clearable
+            placeholder="选择船名"
+            :loading="loading"
+          />
+        </label>
+        <label class="vessel-schedules-filter__field">
+          <span class="vessel-schedules-filter__label">Voyage</span>
+          <NSelect
+            v-model:value="selectedId"
+            :options="voyageNoOptions"
+            filterable
+            clearable
+            placeholder="选择航次"
+            :disabled="!selectedVesselName"
+            :loading="loading"
+          />
+        </label>
+        <label class="vessel-schedules-filter__field vessel-schedules-filter__field--grow">
+          <span class="vessel-schedules-filter__label">Global Filter</span>
+          <NInput
+            v-model:value="tableFilter"
+            placeholder="Port, carrier, or status..."
+            clearable
+          />
+        </label>
+        <label class="vessel-schedules-filter__field vessel-schedules-filter__field--grow">
+          <span class="vessel-schedules-filter__label">搜索航次库</span>
+          <NInput
+            v-model:value="search"
+            placeholder="船名 / 航次 / 船名航次 / 船舶代码"
+            clearable
+            @keyup.enter="loadVoyages"
+          />
+        </label>
       </div>
-      <NSpace>
-        <NButton tag="a" :href="vesselScheduleTemplateUrl()" target="_blank" rel="noopener">
-          下载模板
+      <div class="vessel-schedules-filter__actions">
+        <NButton
+          class="vessel-schedules-toolbar-btn"
+          :loading="loading || detailLoading"
+          @click="handleRefresh"
+        >
+          <svg viewBox="0 0 20 20" fill="none" class="vessel-schedules-toolbar-btn__icon" aria-hidden="true">
+            <path
+              d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6M16.5 4.5V10h-5.5"
+              stroke="currentColor"
+              stroke-width="1.35"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          Refresh
         </NButton>
-        <NSelect
-          v-model:value="syncCompany"
-          :options="providerOptions"
-          placeholder="船公司"
-          class="w-44"
-          size="small"
-          filterable
-        />
-        <CarrierVesselSelect
-          v-if="syncVesselSearchEnabled"
-          v-model:vessel-code="syncVesselCode"
-          v-model:vessel-name="syncVesselName"
-          :shipping-company="syncCompany"
-          :enabled="syncVesselSearchEnabled"
-          class="w-56"
-          size="small"
-          placeholder="输入船名检索"
-        />
-        <NInput
-          v-else
-          v-model:value="syncVesselCode"
-          placeholder="船舶代码"
-          class="w-28"
-          size="small"
-          @keyup.enter="handleScheduleSync"
-        />
-        <NInputNumber v-model:value="syncPeriod" class="w-20" size="small" :min="7" :max="90" />
-        <NButton size="small" :loading="scheduleSyncing" @click="handleScheduleSync">
-          同步船期
+        <NButton
+          class="vessel-schedules-toolbar-btn"
+          :loading="exporting"
+          :disabled="!detail"
+          @click="handleExport"
+        >
+          <svg viewBox="0 0 20 20" fill="none" class="vessel-schedules-toolbar-btn__icon" aria-hidden="true">
+            <path
+              d="M10 3.5v9M6.5 10 10 13.5 13.5 10M4.5 16.5h11"
+              stroke="currentColor"
+              stroke-width="1.35"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+          Export
         </NButton>
-        <NPopconfirm @positive-click="handleScheduleSyncAll">
-          <template #trigger>
-            <NButton size="small" :loading="syncAllLoading">更新全部挂靠</NButton>
-          </template>
-          按库内已配置的船公司 + 船舶代码，逐条从船公司接口拉取挂靠（已接入船公司才会成功）
-        </NPopconfirm>
-        <NButton :loading="importing" @click="triggerImport">导入 Excel</NButton>
-        <NButton type="primary" @click="openCreate">新建航次</NButton>
-      </NSpace>
+        <NDropdown trigger="click" :options="moreMenuOptions" @select="handleMoreMenu">
+          <NButton class="vessel-schedules-toolbar-btn">更多</NButton>
+        </NDropdown>
+      </div>
       <input ref="fileInputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="onImportFile" />
-    </div>
+    </section>
 
-    <div class="flex flex-wrap items-end gap-3 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-      <div class="min-w-[200px] flex-1">
-        <div class="mb-1 text-xs text-zinc-500">船名</div>
-        <NSelect
-          v-model:value="selectedVesselName"
-          :options="vesselNameOptions"
-          filterable
-          clearable
-          placeholder="选择船名"
-          :loading="loading"
-        />
-      </div>
-      <div class="min-w-[200px] flex-1">
-        <div class="mb-1 text-xs text-zinc-500">航次</div>
-        <NSelect
-          v-model:value="selectedId"
-          :options="voyageNoOptions"
-          filterable
-          clearable
-          placeholder="选择航次"
-          :disabled="!selectedVesselName"
-          :loading="loading"
-        />
-      </div>
-      <div class="min-w-[200px] flex-1">
-        <div class="mb-1 text-xs text-zinc-500">搜索航次</div>
-        <NInput
-          v-model:value="search"
-          placeholder="船名 / 航次 / 船名航次 / 船舶代码 / 船公司"
-          @keyup.enter="loadVoyages"
-        />
-      </div>
-      <NButton :loading="loading" @click="loadVoyages">刷新列表</NButton>
-      <NButton v-if="detail" :disabled="detailLoading" @click="openEdit">编辑</NButton>
-      <NPopconfirm v-if="selectedId" @positive-click="handleDelete">
-        <template #trigger>
-          <NButton type="error" quaternary>删除</NButton>
-        </template>
-        确定删除该航次及全部挂靠记录？
-      </NPopconfirm>
-    </div>
-
-    <div v-if="detailLoading" class="py-12 text-center text-zinc-500">加载中…</div>
+    <div v-if="detailLoading" class="vessel-schedules-loading">加载中…</div>
 
     <template v-else-if="detail">
-      <div class="flex flex-wrap items-center justify-end gap-2">
-        <NButton
-          v-if="detail.vesselCode && detail.shippingCompany"
-          size="small"
-          :loading="scheduleSyncing"
-          @click="refreshDetailFromCarrier"
-        >
-          从船公司更新挂靠（{{ detail.vesselCode }}）
-        </NButton>
-      </div>
-      <VoyageTimeline
-        :vessel-voyage="detail.vesselVoyage"
-        :vessel-name="detail.vesselName"
-        :voyage-no="detail.voyageNo"
-        :vessel-code="detail.vesselCode"
+      <VesselScheduleActiveBanner
+        :vessel-name="resolveVesselName(detail)"
+        :voyage-no="resolveVoyageNo(detail)"
         :shipping-company="detail.shippingCompany"
         :port-calls="detail.portCalls"
+      />
+
+      <VoyageTimeline
+        :vessel-voyage="detail.vesselVoyage"
+        :shipping-company="detail.shippingCompany"
+        :port-calls="detail.portCalls"
+        :table-filter="tableFilter"
         @refresh="loadDetail"
       />
 
-      <div v-if="summary" class="flex flex-wrap gap-2">
-        <NTag v-if="summary.arrivingSoon" type="warning" :bordered="false">
-          三天内到港 {{ summary.arrivingSoon }}
-        </NTag>
-        <NTag v-if="summary.departingSoon" type="warning" :bordered="false">
-          三天内离港 {{ summary.departingSoon }}
-        </NTag>
-        <NTag v-if="summary.arrived" type="success" :bordered="false">已到港 {{ summary.arrived }}</NTag>
-        <NTag v-if="summary.inTransit" type="info" :bordered="false">在途 {{ summary.inTransit }}</NTag>
-        <NTag v-if="summary.planned" :bordered="false">计划中 {{ summary.planned }}</NTag>
-        <NTag v-if="summary.unknown" type="error" :bordered="false">待更新 {{ summary.unknown }}</NTag>
-        <span class="self-center text-xs text-zinc-500">
-          关联运单 {{ detail.shipmentCount ?? 0 }} 票
-        </span>
-      </div>
-
-      <div class="rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] p-4">
-        <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h2 class="section-h2">关联运单</h2>
-          <NSelect
-            v-model:value="statusFilter"
-            :options="MARITIME_STATUS_OPTIONS"
-            class="w-40"
+      <NCollapse v-if="shipmentTotal > 0 || summary" class="vessel-schedules-collapse">
+        <NCollapseItem :title="`关联运单（${shipmentTotal} 票）`" name="shipments">
+          <div v-if="summary" class="mb-3 flex flex-wrap gap-2">
+            <NTag v-if="summary.arrivingSoon" type="warning" :bordered="false">
+              三天内到港 {{ summary.arrivingSoon }}
+            </NTag>
+            <NTag v-if="summary.departingSoon" type="warning" :bordered="false">
+              三天内离港 {{ summary.departingSoon }}
+            </NTag>
+            <NTag v-if="summary.arrived" type="success" :bordered="false">已到港 {{ summary.arrived }}</NTag>
+            <NTag v-if="summary.inTransit" type="info" :bordered="false">在途 {{ summary.inTransit }}</NTag>
+            <NTag v-if="summary.planned" :bordered="false">计划中 {{ summary.planned }}</NTag>
+            <NTag v-if="summary.unknown" type="error" :bordered="false">待更新 {{ summary.unknown }}</NTag>
+          </div>
+          <div class="mb-3 flex justify-end">
+            <NSelect
+              v-model:value="statusFilter"
+              :options="MARITIME_STATUS_OPTIONS"
+              class="w-40"
+              size="small"
+            />
+          </div>
+          <NDataTable
+            :columns="shipmentColumns"
+            :data="shipments"
+            :bordered="false"
             size="small"
+            :scroll-x="900"
           />
-        </div>
-        <NDataTable
-          :columns="shipmentColumns"
-          :data="shipments"
-          :bordered="false"
-          size="small"
-          :scroll-x="900"
-        />
-        <p class="mt-2 text-xs text-zinc-500">
-          共 {{ shipmentTotal }} 票（匹配运单船名航次 / 船名 / 船名+航次）
-        </p>
-      </div>
+        </NCollapseItem>
+      </NCollapse>
+
     </template>
 
-    <div v-else class="rounded-xl border border-dashed border-[var(--color-border)] py-16 text-center text-zinc-500">
-      暂无航次，请新建或导入 Excel
+    <div v-else class="vessel-schedules-empty panel">
+      暂无航次，请通过「更多」新建或导入 Excel
     </div>
 
     <VoyageFormModal
@@ -597,5 +698,118 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
       :initial="modalMode === 'edit' ? detail : null"
       @submit="handleFormSubmit"
     />
+
+    <NModal
+      v-model:show="syncModalShow"
+      preset="card"
+      title="同步船期"
+      class="max-w-lg"
+      :mask-closable="!scheduleSyncing"
+    >
+      <div class="flex flex-col gap-3">
+        <NSelect v-model:value="syncCompany" :options="providerOptions" placeholder="船公司" filterable />
+        <CarrierVesselSelect
+          v-if="syncVesselSearchEnabled"
+          v-model:vessel-code="syncVesselCode"
+          v-model:vessel-name="syncVesselName"
+          :shipping-company="syncCompany"
+          :enabled="syncVesselSearchEnabled"
+          placeholder="输入船名检索"
+        />
+        <NInput v-else v-model:value="syncVesselCode" placeholder="船舶代码" @keyup.enter="handleScheduleSync" />
+        <div class="flex items-center gap-2">
+          <span class="text-sm text-[var(--color-muted)]">查询天数</span>
+          <NInputNumber v-model:value="syncPeriod" class="w-24" :min="7" :max="90" />
+        </div>
+        <NButton type="primary" block :loading="scheduleSyncing" @click="handleScheduleSync">
+          开始同步
+        </NButton>
+      </div>
+    </NModal>
   </div>
 </template>
+
+<style scoped>
+.vessel-schedules-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  padding-bottom: 0.5rem;
+}
+
+.vessel-schedules-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1rem 1.25rem;
+  padding: 1rem 1.25rem;
+}
+
+.vessel-schedules-filter__fields {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 0.75rem 1rem;
+  min-width: min(100%, 20rem);
+}
+
+.vessel-schedules-filter__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  min-width: 10rem;
+}
+
+.vessel-schedules-filter__field--grow {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.vessel-schedules-filter__label {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.vessel-schedules-filter__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.vessel-schedules-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  background: rgb(70 72 212 / 0.06) !important;
+  border: 1px solid rgb(70 72 212 / 0.14) !important;
+  color: var(--color-fg-secondary) !important;
+}
+
+.vessel-schedules-toolbar-btn:hover {
+  background: rgb(70 72 212 / 0.1) !important;
+  color: var(--color-accent-text) !important;
+}
+
+.vessel-schedules-toolbar-btn__icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+.vessel-schedules-loading,
+.vessel-schedules-empty {
+  padding: 3rem 1rem;
+  text-align: center;
+  font-size: 0.875rem;
+  color: var(--color-muted);
+}
+
+.vessel-schedules-collapse :deep(.n-collapse-item__header) {
+  font-weight: 600;
+}
+
+</style>

@@ -1,17 +1,18 @@
 <script setup lang="ts">
-import { NButton, useMessage } from 'naive-ui'
+import { useMessage } from 'naive-ui'
 import { computed, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import { subscribePortCall, unsubscribePortCall } from '@/api/vesselSchedules'
-import type { VoyagePortCall } from '@/types/vesselSchedule'
+import type { MaritimeStatus, VoyagePortCall } from '@/types/vesselSchedule'
+import { formatDateYmd } from '@/utils/formatDateTime'
 import { formatPortDisplay } from '@/utils/portDisplay'
 
 const props = defineProps<{
   vesselVoyage: string
-  vesselName?: string | null
-  voyageNo?: string | null
-  vesselCode?: string | null
   shippingCompany?: string | null
   portCalls: VoyagePortCall[]
+  tableFilter?: string
 }>()
 
 const emit = defineEmits<{
@@ -19,17 +20,41 @@ const emit = defineEmits<{
 }>()
 
 const message = useMessage()
+const router = useRouter()
 const togglingId = ref<string | null>(null)
 
-const portCount = computed(() => props.portCalls.length)
-
-const hasUpdatedTimes = computed(() =>
-  props.portCalls.some((pc) =>
-    (['eta', 'ata', 'etd', 'atd'] as TimeField[]).some((field) => shouldHighlightTimeField(pc, field)),
-  ),
-)
-
 type TimeField = 'eta' | 'ata' | 'etd' | 'atd'
+
+const STATUS_EN: Partial<Record<MaritimeStatus, string>> = {
+  departed: 'Departed',
+  arrived: 'Arrived',
+  arriving_soon: 'Arriving soon',
+  departing_soon: 'Departing soon',
+  in_transit: 'In transit',
+  planned: 'Planned',
+  unknown: 'Pending',
+}
+
+const filteredPortCalls = computed(() => {
+  const q = (props.tableFilter ?? '').trim().toLowerCase()
+  const sorted = [...props.portCalls].sort((a, b) => a.sequence - b.sequence)
+  if (!q) return sorted
+  const carrier = (props.shippingCompany ?? '').trim().toLowerCase()
+  if (carrier && carrier.includes(q)) return sorted
+  return sorted.filter((pc) => {
+    const port = formatPortDisplay(pc).toLowerCase()
+    const status = (pc.statusLabel || pc.status || '').toLowerCase()
+    const code = (pc.portCode || '').toLowerCase()
+    return port.includes(q) || status.includes(q) || code.includes(q)
+  })
+})
+
+const totalPorts = computed(() => filteredPortCalls.value.length)
+
+const rangeLabel = computed(() => {
+  if (!totalPorts.value) return '共 0 个挂靠港'
+  return `共 ${totalPorts.value} 个挂靠港，可在列表内滚动查看`
+})
 
 function timeFieldValue(pc: VoyagePortCall, field: TimeField): string | null | undefined {
   return pc[field]
@@ -44,8 +69,7 @@ function shouldHighlightTimeField(pc: VoyagePortCall, field: TimeField): boolean
 }
 
 function displayTime(value: string | null | undefined): string {
-  if (value) return value.slice(0, 16)
-  return '—'
+  return formatDateYmd(value)
 }
 
 function previousTimeText(pc: VoyagePortCall, field: TimeField): string | null {
@@ -58,36 +82,44 @@ function previousTimeText(pc: VoyagePortCall, field: TimeField): string | null {
   } else {
     prev = pc.timePreviousValues?.[field]
   }
-  if (prev === undefined) return null
   if (!prev) return null
-  return prev.slice(0, 16)
+  return formatDateYmd(prev)
 }
 
-function timeCellClass(pc: VoyagePortCall, field: TimeField): string {
-  const base = 'px-1.5 py-0.5'
-  if (!timeFieldValue(pc, field)) {
-    return `${base} text-[var(--color-muted)]`
-  }
-  if (!shouldHighlightTimeField(pc, field)) {
-    return `${base} text-[var(--color-fg)]`
-  }
-  return `${base} rounded-md bg-amber-500/15 font-medium text-amber-800 dark:bg-amber-500/20 dark:text-amber-200`
+function statusLabel(pc: VoyagePortCall): string {
+  if (pc.status && STATUS_EN[pc.status]) return STATUS_EN[pc.status]!
+  return pc.statusLabel || '—'
 }
 
-function statusClass(status?: string): string {
-  const base = 'inline-flex rounded-md px-2 py-0.5 text-xs font-medium'
+function statusClass(status?: MaritimeStatus): string {
+  const base = 'voyage-status'
   switch (status) {
     case 'arriving_soon':
     case 'departing_soon':
-      return `${base} bg-amber-500/15 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200`
+      return `${base} voyage-status--warning`
     case 'arrived':
     case 'departed':
-      return `${base} bg-emerald-500/15 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-200`
+      return `${base} voyage-status--success`
     case 'planned':
-      return `${base} bg-sky-500/15 text-sky-800 dark:bg-sky-500/20 dark:text-sky-200`
+      return `${base} voyage-status--planned`
     default:
-      return `${base} bg-zinc-500/10 text-[var(--color-fg-secondary)]`
+      return `${base} voyage-status--muted`
   }
+}
+
+function isPortCompleted(pc: VoyagePortCall): boolean {
+  return pc.status === 'departed' || pc.status === 'arrived' || !!pc.atd || !!pc.ata
+}
+
+function portPrimaryName(pc: VoyagePortCall): string {
+  const en = (pc.portNameEn || '').trim()
+  const cn = (pc.portCnname || '').trim()
+  return en || cn || (pc.portName || '').trim() || '—'
+}
+
+function portMetaLine(pc: VoyagePortCall): string {
+  const code = (pc.portCode || '').trim()
+  return code ? `${code} · #${pc.sequence}` : `#${pc.sequence}`
 }
 
 async function toggleSubscribe(pc: VoyagePortCall) {
@@ -112,125 +144,475 @@ async function toggleSubscribe(pc: VoyagePortCall) {
     togglingId.value = null
   }
 }
+
+function openRelatedShipments() {
+  router.push({
+    path: '/shipments',
+    query: { shipmentNo: props.vesselVoyage },
+  })
+}
 </script>
 
 <template>
-  <div
-    class="shrink-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] shadow-sm"
-  >
-    <div
-      class="border-b border-[var(--color-border)] bg-[var(--color-elevated)] px-4 py-3"
-    >
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-[var(--color-fg)]">
-          <span class="font-semibold text-[var(--color-fg-emphasis)]">{{ vesselVoyage }}</span>
-          <span v-if="vesselName" class="text-[var(--color-fg-secondary)]">船名 {{ vesselName }}</span>
-          <span v-if="voyageNo" class="text-[var(--color-fg-secondary)]">航次 {{ voyageNo }}</span>
-          <span v-if="vesselCode" class="text-[var(--color-fg-secondary)]">代码 {{ vesselCode }}</span>
-          <span v-if="shippingCompany" class="text-[var(--color-fg-secondary)]">
-            船公司 {{ shippingCompany }}
-          </span>
-        </div>
-        <span class="shrink-0 text-xs font-medium text-[var(--color-fg-secondary)]">
-          共 {{ portCount }} 个挂靠港
-          <span
-            v-if="hasUpdatedTimes"
-            class="ml-2 rounded-md bg-amber-500/15 px-1.5 py-0.5 text-amber-800 dark:bg-amber-500/20 dark:text-amber-200"
-          >
-            琥珀色为最近更新 · 灰字为原时间
-          </span>
-        </span>
-      </div>
-    </div>
+  <article class="voyage-timeline panel">
+    <header class="voyage-timeline__head">
+      <h2 class="voyage-timeline__title">PORT SCHEDULE TIMELINE</h2>
+      <span class="voyage-timeline__legend">
+        <span class="voyage-timeline__legend-dot" aria-hidden="true" />
+        Delayed/Updated
+      </span>
+    </header>
 
-    <div class="overflow-x-auto">
-      <table class="min-w-full border-collapse text-sm">
+    <div class="voyage-timeline__table-wrap scrollbar-visible">
+      <table class="voyage-timeline__table">
         <thead>
-          <tr class="border-b border-[var(--color-border)] bg-[var(--color-surface)]">
-            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">挂港</th>
-            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">预计到港</th>
-            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">实际到港</th>
-            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">预计离港</th>
-            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">实际离港</th>
-            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">状态</th>
-            <th class="px-4 py-2.5 text-left font-medium text-[var(--color-fg-secondary)]">到港通知</th>
+          <tr>
+            <th>PORT <span class="voyage-timeline__th-sub">挂港</span></th>
+            <th>ETA <span class="voyage-timeline__th-sub">预计到港</span></th>
+            <th>ATA <span class="voyage-timeline__th-sub">实际到港</span></th>
+            <th>ETD <span class="voyage-timeline__th-sub">预计离港</span></th>
+            <th>ATD <span class="voyage-timeline__th-sub">实际离港</span></th>
+            <th>STATUS</th>
+            <th class="voyage-timeline__th-actions">ACTIONS</th>
           </tr>
         </thead>
         <tbody>
           <tr
-            v-for="(pc, idx) in portCalls"
+            v-for="pc in filteredPortCalls"
             :key="pc.id || `${pc.sequence}-${pc.portName}`"
-            class="border-b border-[var(--color-border-subtle)]"
-            :class="idx % 2 === 0 ? 'bg-[var(--color-panel)]' : 'bg-[var(--color-surface)]'"
+            class="voyage-timeline__row"
           >
-            <td class="relative px-4 py-3 pl-10 text-[var(--color-fg-emphasis)]">
-              <span
-                class="absolute left-4 top-0 bottom-0 w-px bg-[var(--color-border)]"
-                :class="idx === portCalls.length - 1 ? 'h-1/2' : ''"
-                aria-hidden="true"
-              />
-              <span
-                v-if="idx > 0"
-                class="absolute left-4 top-0 h-1/2 w-px bg-[var(--color-border)]"
-                aria-hidden="true"
-              />
-              <span
-                class="absolute left-[13px] top-1/2 z-10 h-2.5 w-2.5 -translate-y-1/2 rounded-full border-2 border-[var(--color-panel)] bg-[var(--color-accent)]"
-                aria-hidden="true"
-              />
-              <span class="font-medium">{{ formatPortDisplay(pc) }}</span>
-              <span class="ml-2 text-xs text-[var(--color-muted)]">#{{ pc.sequence }}</span>
+            <td class="voyage-timeline__port">
+              <div class="voyage-timeline__port-inner">
+                <div class="voyage-timeline__rail-col" aria-hidden="true">
+                  <span
+                    class="voyage-timeline__rail-dot"
+                    :class="{ 'voyage-timeline__rail-dot--done': isPortCompleted(pc) }"
+                  />
+                </div>
+                <div class="voyage-timeline__port-text">
+                  <p class="voyage-timeline__port-name">{{ portPrimaryName(pc) }}</p>
+                  <p class="voyage-timeline__port-meta">{{ portMetaLine(pc) }}</p>
+                </div>
+              </div>
             </td>
-            <td class="px-4 py-3">
-              <div :class="timeCellClass(pc, 'eta')">{{ displayTime(pc.eta) }}</div>
-              <p v-if="previousTimeText(pc, 'eta')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
-                原 {{ previousTimeText(pc, 'eta') }}
-              </p>
-            </td>
-            <td class="px-4 py-3">
-              <div :class="timeCellClass(pc, 'ata')">{{ displayTime(pc.ata) }}</div>
-              <p v-if="previousTimeText(pc, 'ata')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
-                原 {{ previousTimeText(pc, 'ata') }}
-              </p>
-            </td>
-            <td class="px-4 py-3">
-              <div :class="timeCellClass(pc, 'etd')">{{ displayTime(pc.etd) }}</div>
-              <p v-if="previousTimeText(pc, 'etd')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
-                原 {{ previousTimeText(pc, 'etd') }}
-              </p>
-            </td>
-            <td class="px-4 py-3">
-              <div :class="timeCellClass(pc, 'atd')">{{ displayTime(pc.atd) }}</div>
-              <p v-if="previousTimeText(pc, 'atd')" class="mt-0.5 text-[10px] text-[var(--color-muted)]">
-                原 {{ previousTimeText(pc, 'atd') }}
-              </p>
-            </td>
-            <td class="px-4 py-3">
-              <span v-if="pc.statusLabel" :class="statusClass(pc.status)">
-                {{ pc.statusLabel }}
-              </span>
-              <span v-else class="text-[var(--color-muted)]">—</span>
-            </td>
-            <td class="px-4 py-3">
-              <NButton
-                size="tiny"
-                :type="pc.subscribed ? 'primary' : 'default'"
-                :quaternary="!pc.subscribed"
-                :loading="togglingId === pc.id"
-                :disabled="!pc.id"
-                @click="toggleSubscribe(pc)"
+            <td>
+              <div
+                class="voyage-time"
+                :class="{ 'voyage-time--updated': shouldHighlightTimeField(pc, 'eta') }"
               >
-                {{ pc.subscribed ? '已订阅' : '订阅' }}
-              </NButton>
+                <span class="voyage-time__current">{{ displayTime(pc.eta) }}</span>
+                <span v-if="previousTimeText(pc, 'eta')" class="voyage-time__prev">
+                  {{ previousTimeText(pc, 'eta') }}
+                </span>
+              </div>
+            </td>
+            <td>
+              <div
+                class="voyage-time"
+                :class="{ 'voyage-time--updated': shouldHighlightTimeField(pc, 'ata') }"
+              >
+                <span class="voyage-time__current">{{ displayTime(pc.ata) }}</span>
+                <span v-if="previousTimeText(pc, 'ata')" class="voyage-time__prev">
+                  {{ previousTimeText(pc, 'ata') }}
+                </span>
+              </div>
+            </td>
+            <td>
+              <div
+                class="voyage-time"
+                :class="{ 'voyage-time--updated': shouldHighlightTimeField(pc, 'etd') }"
+              >
+                <span class="voyage-time__current">{{ displayTime(pc.etd) }}</span>
+                <span v-if="previousTimeText(pc, 'etd')" class="voyage-time__prev">
+                  {{ previousTimeText(pc, 'etd') }}
+                </span>
+              </div>
+            </td>
+            <td>
+              <div
+                class="voyage-time"
+                :class="{ 'voyage-time--updated': shouldHighlightTimeField(pc, 'atd') }"
+              >
+                <span class="voyage-time__current">{{ displayTime(pc.atd) }}</span>
+                <span v-if="previousTimeText(pc, 'atd')" class="voyage-time__prev">
+                  {{ previousTimeText(pc, 'atd') }}
+                </span>
+              </div>
+            </td>
+            <td>
+              <span v-if="pc.status || pc.statusLabel" :class="statusClass(pc.status)">
+                {{ statusLabel(pc) }}
+              </span>
+              <span v-else class="voyage-time__current text-[var(--color-muted)]">—</span>
+            </td>
+            <td>
+              <div class="voyage-timeline__actions">
+                <TableActionIcon
+                  kind="subscribe"
+                  :title="pc.subscribed ? '已订阅，点击取消' : '订阅到港通知'"
+                  :active="!!pc.subscribed"
+                  :loading="togglingId === pc.id"
+                  @click="toggleSubscribe(pc)"
+                />
+                <button
+                  type="button"
+                  class="voyage-timeline__link-btn"
+                  title="查看关联运单"
+                  @click="openRelatedShipments"
+                >
+                  <svg viewBox="0 0 20 20" fill="none" class="voyage-timeline__link-icon" aria-hidden="true">
+                    <path
+                      d="M7 11.5 12.5 6M12.5 6H8.8M12.5 6v3.7"
+                      stroke="currentColor"
+                      stroke-width="1.35"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    />
+                    <path
+                      d="M5.5 5.5h3.2v3.2H5.5V5.5ZM11.3 11.3h3.2v3.2h-3.2v-3.2Z"
+                      stroke="currentColor"
+                      stroke-width="1.35"
+                      stroke-linejoin="round"
+                    />
+                  </svg>
+                </button>
+              </div>
             </td>
           </tr>
-          <tr v-if="!portCalls.length">
-            <td colspan="7" class="px-4 py-8 text-center text-[var(--color-muted)]">
-              暂无挂靠港口，请编辑航次或从船公司同步船期
+          <tr v-if="!filteredPortCalls.length">
+            <td colspan="7" class="voyage-timeline__empty">
+              {{ portCalls.length ? '无匹配挂靠港' : '暂无挂靠港口，请编辑航次或从船公司同步船期' }}
             </td>
           </tr>
         </tbody>
       </table>
     </div>
-  </div>
+
+    <footer v-if="totalPorts > 0" class="voyage-timeline__foot">
+      <p class="voyage-timeline__range">{{ rangeLabel }}</p>
+    </footer>
+  </article>
 </template>
+
+<style scoped>
+.voyage-timeline {
+  padding: 0;
+  overflow: visible;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.voyage-timeline:hover {
+  border-color: var(--color-border);
+  box-shadow: 0 2px 12px rgb(24 24 27 / 0.06);
+}
+
+[data-theme='dark'] .voyage-timeline:hover {
+  box-shadow: 0 2px 14px rgb(0 0 0 / 0.22);
+}
+
+.voyage-timeline__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--color-list-divider);
+}
+
+.voyage-timeline__title {
+  margin: 0;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--color-fg-secondary);
+}
+
+.voyage-timeline__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  font-size: 0.75rem;
+  color: var(--color-muted);
+}
+
+.voyage-timeline__legend-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  background: rgb(251 146 60);
+}
+
+.voyage-timeline__table-wrap {
+  max-height: min(28rem, calc(100vh - 16rem));
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+
+.voyage-timeline__table {
+  width: 100%;
+  min-width: 56rem;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.voyage-timeline__table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: 0.625rem 1rem;
+  text-align: left;
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--color-muted);
+  background: var(--color-panel);
+  border-bottom: 1px solid var(--color-list-divider);
+  box-shadow: 0 1px 0 var(--color-list-divider);
+  white-space: nowrap;
+}
+
+.voyage-timeline__th-sub {
+  font-weight: 500;
+  letter-spacing: 0;
+  opacity: 0.85;
+}
+
+.voyage-timeline__th-actions {
+  text-align: right;
+}
+
+.voyage-timeline__row {
+  border-bottom: 1px solid var(--color-list-divider);
+}
+
+.voyage-timeline__row:last-child {
+  border-bottom: none;
+}
+
+.voyage-timeline__port {
+  padding: 0.875rem 1rem;
+  vertical-align: top;
+}
+
+.voyage-timeline__port-inner {
+  display: flex;
+  align-items: stretch;
+  gap: 0.75rem;
+  min-height: 3rem;
+}
+
+.voyage-timeline__rail-col {
+  position: relative;
+  width: 1.25rem;
+  flex-shrink: 0;
+  align-self: stretch;
+}
+
+/* 竖线贯穿整行，与上下行在单元格边界处衔接成连续时间轴 */
+.voyage-timeline__rail-col::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  transform: translateX(-50%);
+  background: var(--color-list-divider);
+}
+
+.voyage-timeline__row:first-child .voyage-timeline__rail-col::before {
+  top: 1rem;
+}
+
+.voyage-timeline__row:last-child .voyage-timeline__rail-col::before {
+  bottom: calc(100% - 1rem);
+}
+
+.voyage-timeline__row:not(:last-child) .voyage-timeline__rail-col::before {
+  bottom: -1px;
+}
+
+.voyage-timeline__row:only-child .voyage-timeline__rail-col::before {
+  display: none;
+}
+
+.voyage-timeline__rail-dot {
+  position: absolute;
+  left: 50%;
+  top: 1rem;
+  z-index: 1;
+  width: 0.625rem;
+  height: 0.625rem;
+  border-radius: 9999px;
+  border: 2px solid var(--color-panel);
+  background: var(--color-muted);
+  transform: translate(-50%, -50%);
+  flex-shrink: 0;
+}
+
+.voyage-timeline__port-text {
+  flex: 1;
+  min-width: 0;
+  padding-top: 0.375rem;
+  padding-bottom: 0.375rem;
+}
+
+.voyage-timeline__rail-dot--done {
+  background: var(--color-accent-text);
+  box-shadow: 0 0 0 2px rgb(70 72 212 / 0.2);
+}
+
+.voyage-timeline__port-name {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--color-fg-emphasis);
+}
+
+.voyage-timeline__port-meta {
+  margin: 0.125rem 0 0;
+  font-size: 0.6875rem;
+  color: var(--color-muted);
+}
+
+.voyage-timeline__table tbody td {
+  padding: 0.875rem 1rem;
+  vertical-align: top;
+  color: var(--color-fg);
+}
+
+.voyage-time__current {
+  display: block;
+  color: var(--color-fg);
+}
+
+.voyage-time--updated .voyage-time__current {
+  display: inline-block;
+  border-radius: 0.375rem;
+  background: rgb(251 146 60 / 0.14);
+  padding: 0.125rem 0.375rem;
+  font-weight: 600;
+  color: rgb(194 65 12);
+}
+
+.voyage-time__prev {
+  display: block;
+  margin-top: 0.125rem;
+  font-size: 0.625rem;
+  color: rgb(234 88 12 / 0.85);
+  text-decoration: line-through;
+}
+
+.voyage-time:not(.voyage-time--updated) .voyage-time__current:only-child {
+  color: var(--color-fg-secondary);
+}
+
+.voyage-status {
+  display: inline-flex;
+  border-radius: 9999px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.voyage-status--success {
+  background: rgb(16 185 129 / 0.12);
+  color: rgb(21 128 61);
+}
+
+.voyage-status--planned {
+  background: rgb(59 130 246 / 0.12);
+  color: rgb(29 78 216);
+}
+
+.voyage-status--warning {
+  background: rgb(251 146 60 / 0.14);
+  color: rgb(194 65 12);
+}
+
+.voyage-status--muted {
+  background: var(--color-btn-ghost-bg);
+  color: var(--color-fg-secondary);
+}
+
+.voyage-timeline__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+}
+
+.voyage-timeline__link-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.voyage-timeline__link-btn:hover {
+  background: var(--color-btn-ghost-hover);
+  color: var(--color-accent-text);
+}
+
+.voyage-timeline__link-icon {
+  width: 1.125rem;
+  height: 1.125rem;
+}
+
+.voyage-timeline :deep(.table-action-icon--subscribe-active) {
+  color: var(--color-accent-text);
+}
+
+.voyage-timeline :deep(.table-action-icon--subscribe-active:hover:not(:disabled)) {
+  background: rgb(70 72 212 / 0.1);
+  color: var(--color-accent-text);
+}
+
+.voyage-timeline__empty {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  color: var(--color-muted);
+}
+
+.voyage-timeline__foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.75rem 1.25rem;
+  background: rgb(70 72 212 / 0.04);
+  border-top: 1px solid var(--color-list-divider);
+}
+
+.voyage-timeline__range {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-fg-secondary);
+}
+
+[data-theme='dark'] .voyage-status--success {
+  color: rgb(110 231 183);
+}
+
+[data-theme='dark'] .voyage-status--planned {
+  color: rgb(147 197 253);
+}
+
+[data-theme='dark'] .voyage-time--updated .voyage-time__current {
+  color: rgb(253 186 116);
+}
+</style>

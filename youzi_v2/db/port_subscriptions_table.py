@@ -260,3 +260,17 @@ class PortSubscriptionsRepository:
             )
             self._conn.commit()
             return cur.rowcount > 0
+
+    def mark_all_notifications_read(self) -> int:
+        now = now_str()
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {NOTIFICATIONS_TABLE}
+                SET read_at = ?
+                WHERE TRIM(COALESCE(read_at, '')) = ''
+                """,
+                (now,),
+            )
+            self._conn.commit()
+            return cur.rowcount

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Moon, Settings, Sun } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { NTooltip } from 'naive-ui'
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
@@ -33,20 +35,12 @@ const chips = computed(() => {
 <template>
   <div
     v-if="visible"
-    class="world-clock-bar scrollbar-visible hidden min-w-0 items-center justify-center gap-1.5 md:flex"
+    class="world-clock-bar hidden min-w-0 items-center justify-center gap-1.5 md:flex"
   >
     <NTooltip trigger="hover">
       <template #trigger>
         <RouterLink to="/display-settings" class="world-clock-bar__gear" aria-label="世界时间设置">
-          <svg viewBox="0 0 16 16" fill="none" class="h-3.5 w-3.5" aria-hidden="true">
-            <circle cx="8" cy="8" r="2.25" stroke="currentColor" stroke-width="1.25" />
-            <path
-              d="M8 1.5v1.2M8 13.3v1.2M1.5 8h1.2M13.3 8h1.2M3.05 3.05l.85.85M12.1 12.1l.85.85M3.05 12.95l.85-.85M12.1 3.9l.85-.85"
-              stroke="currentColor"
-              stroke-width="1.1"
-              stroke-linecap="round"
-            />
-          </svg>
+          <Settings class="h-3.5 w-3.5" :stroke-width="ICON_STROKE" aria-hidden="true" />
         </RouterLink>
       </template>
       显示设置
@@ -63,33 +57,13 @@ const chips = computed(() => {
       <span class="world-clock-chip__label">{{ c.label }}</span>
       <span class="world-clock-chip__time">{{ c.time }}</span>
       <span class="world-clock-chip__icon" aria-hidden="true">
-        <!-- 太阳 -->
-        <svg
+        <Sun
           v-if="c.phase === 'day'"
           class="world-clock-chip__icon-svg"
-          viewBox="0 0 16 16"
+          :stroke-width="ICON_STROKE"
           fill="none"
-        >
-          <circle cx="8" cy="8" r="2.75" fill="currentColor" />
-          <path
-            d="M8 1.25v1.5M8 13.25v1.5M1.25 8h1.5M13.25 8h1.5M3.1 3.1l1.06 1.06M11.84 11.84l1.06 1.06M3.1 12.9l1.06-1.06M11.84 4.16l1.06-1.06"
-            stroke="currentColor"
-            stroke-width="1.1"
-            stroke-linecap="round"
-          />
-        </svg>
-        <!-- 月亮 -->
-        <svg
-          v-else
-          class="world-clock-chip__icon-svg"
-          viewBox="0 0 16 16"
-          fill="none"
-        >
-          <path
-            d="M10.6 2.1a5.5 5.5 0 1 0 3.3 9.95A4.75 4.75 0 1 1 10.6 2.1Z"
-            fill="currentColor"
-          />
-        </svg>
+        />
+        <Moon v-else class="world-clock-chip__icon-svg" :stroke-width="ICON_STROKE" fill="none" />
       </span>
     </span>
   </div>
@@ -99,8 +73,7 @@ const chips = computed(() => {
 .world-clock-bar {
   flex: 1;
   max-width: min(40rem, 55vw);
-  overflow-x: auto;
-  overflow-y: hidden;
+  overflow: hidden;
   padding: 0 0.25rem;
 }
 

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { Star } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
+
 withDefaults(
   defineProps<{
     size?: 'sm' | 'md'
@@ -13,11 +16,7 @@ withDefaults(
     :class="size === 'md' ? 'vip-star-badge--md' : ''"
     aria-label="VIP"
   >
-    <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
-      <path
-        d="M8 2.8 9.55 6.2l3.7.55-2.68 2.6.63 3.65L8 11.1l-3.2 1.9.63-3.65-2.68-2.6 3.7-.55L8 2.8Z"
-      />
-    </svg>
+    <Star class="vip-star-badge__icon" :stroke-width="ICON_STROKE" fill="currentColor" aria-hidden="true" />
   </span>
 </template>
 
@@ -27,12 +26,12 @@ withDefaults(
   filter: drop-shadow(0 0 4px rgb(245 158 11 / 0.35));
 }
 
-.vip-star-badge svg {
+.vip-star-badge__icon {
   width: 0.875rem;
   height: 0.875rem;
 }
 
-.vip-star-badge--md svg {
+.vip-star-badge--md .vip-star-badge__icon {
   width: 1rem;
   height: 1rem;
 }

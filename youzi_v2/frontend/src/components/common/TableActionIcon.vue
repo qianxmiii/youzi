@@ -1,5 +1,7 @@
 <script setup lang="ts">
-import BellIcon from '@/components/common/BellIcon.vue'
+import { BellDot, Route, SquarePen, Trash2 } from 'lucide-vue-next'
+import BellCheckIcon from '@/components/icons/BellCheckIcon.vue'
+import { ICON_STROKE } from '@/constants/icons'
 
 withDefaults(
   defineProps<{
@@ -29,56 +31,20 @@ defineEmits<{
     :disabled="loading"
     @click.stop="$emit('click')"
   >
-    <!-- 查看 -->
-    <svg
-      v-if="kind === 'view'"
-      viewBox="0 0 20 20"
-      fill="none"
+    <Route v-if="kind === 'view'" class="table-action-icon__svg" :stroke-width="ICON_STROKE" aria-hidden="true" />
+    <SquarePen v-else-if="kind === 'edit'" class="table-action-icon__svg" :stroke-width="ICON_STROKE" aria-hidden="true" />
+    <BellCheckIcon
+      v-else-if="kind === 'subscribe' && active"
       class="table-action-icon__svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M10 4.5c-3.2 0-5.9 2-7.2 5 1.3 3 4 5 7.2 5s5.9-2 7.2-5c-1.3-3-4-5-7.2-5Z"
-        stroke="currentColor"
-        stroke-width="1.35"
-        stroke-linejoin="round"
-      />
-      <circle cx="10" cy="9.5" r="2.25" stroke="currentColor" stroke-width="1.35" />
-    </svg>
-    <!-- 编辑 -->
-    <svg
-      v-else-if="kind === 'edit'"
-      viewBox="0 0 20 20"
-      fill="none"
+      :stroke-width="ICON_STROKE"
+    />
+    <BellDot
+      v-else-if="kind === 'subscribe'"
       class="table-action-icon__svg"
+      :stroke-width="ICON_STROKE"
       aria-hidden="true"
-    >
-      <path
-        d="M12.2 3.5 16.5 7.8 6.8 17.5H2.5v-4.3L12.2 3.5Z"
-        stroke="currentColor"
-        stroke-width="1.35"
-        stroke-linejoin="round"
-      />
-      <path d="M11 5.3 14.7 9" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
-    </svg>
-    <BellIcon v-else-if="kind === 'subscribe'" :filled="active" />
-    <!-- 删除 -->
-    <svg
-      v-else
-      viewBox="0 0 20 20"
-      fill="none"
-      class="table-action-icon__svg"
-      aria-hidden="true"
-    >
-      <path
-        d="M4.5 6h11M7.5 6V4.8c0-.7.6-1.3 1.3-1.3h2.4c.7 0 1.3.6 1.3 1.3V6m1.2 0v9.2c0 .7-.6 1.3-1.3 1.3H7.6c-.7 0-1.3-.6-1.3-1.3V6"
-        stroke="currentColor"
-        stroke-width="1.35"
-        stroke-linecap="round"
-        stroke-linejoin="round"
-      />
-      <path d="M8.2 8.5v5M11.8 8.5v5" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" />
-    </svg>
+    />
+    <Trash2 v-else class="table-action-icon__svg" :stroke-width="ICON_STROKE" aria-hidden="true" />
   </button>
 </template>
 

@@ -1,4 +1,16 @@
 <script setup lang="ts">
+import type { FunctionalComponent } from 'vue'
+import {
+  Anchor,
+  ArrowRight,
+  Calendar,
+  CheckCircle2,
+  Ship,
+  Truck,
+} from 'lucide-vue-next'
+import type { LucideProps } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
+
 export interface MaritimeStatCard {
   key: string
   label: string
@@ -33,6 +45,15 @@ const cardMeta: Record<
   port_departing: { theme: 'slate', spark: 'flat', icon: 'depart' },
   arrived: { theme: 'green', spark: 'up', icon: 'check' },
 }
+
+const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
+  calendar: Calendar,
+  ship: Ship,
+  truck: Truck,
+  anchor: Anchor,
+  depart: ArrowRight,
+  check: CheckCircle2,
+}
 </script>
 
 <template>
@@ -52,51 +73,11 @@ const cardMeta: Record<
       <div class="stat-card__head">
         <span class="stat-card__label">{{ card.label }}</span>
         <span class="stat-card__icon" aria-hidden="true">
-          <svg v-if="cardMeta[card.key]?.icon === 'calendar'" viewBox="0 0 20 20" fill="none">
-            <rect x="3.5" y="4.5" width="13" height="12" rx="1.5" stroke="currentColor" stroke-width="1.25" />
-            <path d="M3.5 8h13M7 3v3M13 3v3" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
-          </svg>
-          <svg v-else-if="cardMeta[card.key]?.icon === 'ship'" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M3 14h14l-1.5-6H4.5L3 14ZM6 8V5h8v3"
-              stroke="currentColor"
-              stroke-width="1.25"
-              stroke-linejoin="round"
-            />
-            <path d="M8 14v2M12 14v2" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
-          </svg>
-          <svg v-else-if="cardMeta[card.key]?.icon === 'truck'" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M3 13h1.5l1.5-5h7l1.5 3H16v2h-1M6 13h7"
-              stroke="currentColor"
-              stroke-width="1.25"
-              stroke-linejoin="round"
-            />
-            <circle cx="7" cy="14.5" r="1.25" stroke="currentColor" stroke-width="1.1" />
-            <circle cx="14" cy="14.5" r="1.25" stroke="currentColor" stroke-width="1.1" />
-          </svg>
-          <svg v-else-if="cardMeta[card.key]?.icon === 'anchor'" viewBox="0 0 20 20" fill="none">
-            <circle cx="10" cy="6" r="2.25" stroke="currentColor" stroke-width="1.25" />
-            <path
-              d="M10 8v8M6 12c1.5 2 7.5 2 8 0M14 12c-1.5 2-7.5 2-8 0"
-              stroke="currentColor"
-              stroke-width="1.25"
-              stroke-linecap="round"
-            />
-          </svg>
-          <svg v-else-if="cardMeta[card.key]?.icon === 'depart'" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M5 10h8M11 7l3 3-3 3M15 5v10"
-              stroke="currentColor"
-              stroke-width="1.25"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
-          <svg v-else viewBox="0 0 20 20" fill="none">
-            <circle cx="10" cy="10" r="6.5" stroke="currentColor" stroke-width="1.25" />
-            <path d="M7 10.2 9.2 12.5 13.5 8" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round" />
-          </svg>
+          <component
+            :is="statIcons[cardMeta[card.key]?.icon || 'check']"
+            class="h-full w-full"
+            :stroke-width="ICON_STROKE"
+          />
         </span>
       </div>
       <div class="stat-card__foot">

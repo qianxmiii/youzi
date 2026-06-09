@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { SquareArrowOutUpRight } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { useMessage } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -261,21 +263,11 @@ function openRelatedShipments() {
                   title="查看关联运单"
                   @click="openRelatedShipments"
                 >
-                  <svg viewBox="0 0 20 20" fill="none" class="voyage-timeline__link-icon" aria-hidden="true">
-                    <path
-                      d="M7 11.5 12.5 6M12.5 6H8.8M12.5 6v3.7"
-                      stroke="currentColor"
-                      stroke-width="1.35"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    />
-                    <path
-                      d="M5.5 5.5h3.2v3.2H5.5V5.5ZM11.3 11.3h3.2v3.2h-3.2v-3.2Z"
-                      stroke="currentColor"
-                      stroke-width="1.35"
-                      stroke-linejoin="round"
-                    />
-                  </svg>
+                  <SquareArrowOutUpRight
+                    class="voyage-timeline__link-icon"
+                    :stroke-width="ICON_STROKE"
+                    aria-hidden="true"
+                  />
                 </button>
               </div>
             </td>

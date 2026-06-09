@@ -15,7 +15,7 @@ Youzi v2 前端 — Vue 3 SPA
 | `src/main.ts` | 应用入口 |
 | `src/App.vue` | 根组件 |
 | `src/router/index.ts` | 路由定义 |
-| `src/constants/navigation.ts` | 导航菜单 |
+| `src/constants/navigation.ts` | 侧栏一二级导航（7 个中心分组） |
 | `src/api/` | API 客户端封装 |
 | `src/views/` | 页面级组件 |
 | `src/components/` | 可复用组件 |
@@ -46,6 +46,10 @@ npm install      # 或 Windows: npm.cmd install
 npm run dev      # http://localhost:5173
 npm run build    # 输出 dist/
 ```
+
+## 图标
+
+业务 UI 图标统一使用 [Lucide](https://lucide.dev/)（`lucide-vue-next`），按名从包内 tree-shake 引入。描边宽度见 `src/constants/icons.ts`（默认 `ICON_STROKE` 2.25，侧栏 `ICON_STROKE_NAV` 2.75）；`main.css` 对 `.lucide` 有全局兜底。侧栏导航经 `NavIcon.vue` 映射 `navigation.ts` 的 `icon` 字段；表格操作见 `TableActionIcon.vue`。Naive UI 组件内置图标（下拉箭头等）仍由组件库自带。
 
 ## 注意事项
 

@@ -5,6 +5,8 @@ import { fetchHealth, fetchLegacyHealth } from '@/api/client'
 import AppSubscriptionBell from '@/components/AppSubscriptionBell.vue'
 import WorldClockBar from '@/components/header/WorldClockBar.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import { ChevronLeft } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
 
 const route = useRoute()
@@ -39,21 +41,12 @@ onMounted(async () => {
         :title="collapsed ? '展开侧栏' : '收起侧栏'"
         @click="toggle"
       >
-        <svg
+        <ChevronLeft
           class="h-4 w-4 transition-transform duration-200"
           :class="collapsed ? 'rotate-180' : ''"
-          viewBox="0 0 16 16"
-          fill="none"
+          :stroke-width="ICON_STROKE"
           aria-hidden="true"
-        >
-          <path
-            d="M10 3 5 8l5 5"
-            stroke="currentColor"
-            stroke-width="1.25"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          />
-        </svg>
+        />
       </button>
       <div class="min-w-0">
         <h1 class="text-sm font-semibold tracking-tight text-[var(--color-fg-emphasis)]">

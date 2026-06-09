@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { TriangleAlert } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { NTooltip } from 'naive-ui'
 import { computed } from 'vue'
 
@@ -51,25 +53,7 @@ const shortLabel = computed(() => {
         ]"
         :aria-label="`异常：${tip}`"
       >
-        <svg
-          class="exception-badge__icon"
-          viewBox="0 0 16 16"
-          fill="none"
-          aria-hidden="true"
-        >
-          <path
-            d="M8 2.2 13.6 12.4H2.4L8 2.2Z"
-            stroke="currentColor"
-            stroke-width="1.35"
-            stroke-linejoin="round"
-          />
-          <path
-            d="M8 6.2v3.2M8 11.1h.01"
-            stroke="currentColor"
-            stroke-width="1.35"
-            stroke-linecap="round"
-          />
-        </svg>
+        <TriangleAlert class="exception-badge__icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
         <span v-if="showLabel" class="exception-badge__text">{{ shortLabel }}</span>
       </span>
     </template>

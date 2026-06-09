@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Ship } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { computed } from 'vue'
 import type { VoyagePortCall } from '@/types/vesselSchedule'
 import { formatDateYmd } from '@/utils/formatDateTime'
@@ -44,15 +46,7 @@ const nextEta = computed(() => nextPort.value?.eta ?? nextPort.value?.etd ?? nul
 <template>
   <section class="vessel-banner" aria-label="当前船舶">
     <div class="vessel-banner__ship-deco" aria-hidden="true">
-      <svg viewBox="0 0 120 48" fill="none" class="vessel-banner__ship-svg">
-        <path
-          d="M8 38h104M20 38V22l18-10 22 8 24-6 18 14v10"
-          stroke="currentColor"
-          stroke-width="2"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+      <Ship class="vessel-banner__ship-svg" :stroke-width="ICON_STROKE" aria-hidden="true" />
     </div>
     <div class="vessel-banner__grid">
       <div class="vessel-banner__cell">

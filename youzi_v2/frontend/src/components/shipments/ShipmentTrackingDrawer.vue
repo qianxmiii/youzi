@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ExternalLink } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { NDrawer } from 'naive-ui'
 import { computed } from 'vue'
 import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
@@ -97,15 +99,7 @@ function openTrackUrl() {
             @click="openTrackUrl"
           >
             {{ transferNumber.number }}
-            <svg viewBox="0 0 16 16" fill="none" class="link-icon" aria-hidden="true">
-              <path
-                d="M6.5 3.5H12.5V9.5M12.5 3.5 3.5 12.5"
-                stroke="currentColor"
-                stroke-width="1.25"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <ExternalLink class="link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
           </button>
           <span v-else class="transfer-value">{{ transferNumber.number }}</span>
         </div>
@@ -138,15 +132,7 @@ function openTrackUrl() {
                 @click="openTrackUrl"
               >
                 {{ transferNumber.number }}
-                <svg viewBox="0 0 16 16" fill="none" class="link-icon" aria-hidden="true">
-                  <path
-                    d="M6.5 3.5H12.5V9.5M12.5 3.5 3.5 12.5"
-                    stroke="currentColor"
-                    stroke-width="1.25"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  />
-                </svg>
+                <ExternalLink class="link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
               </button>
               <span v-else-if="transferNumber" class="meta-mono">{{ transferNumber.number }}</span>
               <span v-else class="meta-empty">—</span>

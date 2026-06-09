@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { ChevronRight, Hourglass, TriangleAlert } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { computed, ref, watch } from 'vue'
 import type { TrackingFreshnessBucket, TrackingFreshnessStats } from '@/utils/trackingFreshness'
 import { FRESHNESS_LABEL } from '@/utils/trackingFreshness'
@@ -27,7 +29,7 @@ type CapsuleMeta = {
   hint: string
   warn?: boolean
   danger?: boolean
-  icon?: string
+  icon?: 'hourglass' | 'alert'
 }
 
 const capsules: CapsuleMeta[] = [
@@ -38,14 +40,14 @@ const capsules: CapsuleMeta[] = [
     label: FRESHNESS_LABEL.older,
     hint: '最新节点早于三日内',
     warn: true,
-    icon: '⏳',
+    icon: 'hourglass',
   },
   {
     bucket: 'none',
     label: FRESHNESS_LABEL.none,
     hint: '无有效最新节点',
     danger: true,
-    icon: '🚨',
+    icon: 'alert',
   },
 ]
 
@@ -164,21 +166,12 @@ function toggleExpanded() {
       @keydown.enter.prevent="toggleExpanded"
       @keydown.space.prevent="toggleExpanded"
     >
-      <svg
+      <ChevronRight
         class="mt-0.5 h-4 w-4 shrink-0 text-[var(--color-muted)] transition-transform duration-200 ease-out"
         :class="expanded ? 'rotate-90' : ''"
-        viewBox="0 0 16 16"
-        fill="none"
+        :stroke-width="ICON_STROKE"
         aria-hidden="true"
-      >
-        <path
-          d="M6 4l4 4-4 4"
-          stroke="currentColor"
-          stroke-width="1.25"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        />
-      </svg>
+      />
 
       <div class="min-w-0 flex-1">
         <div class="flex flex-wrap items-center gap-x-2 gap-y-0.5">
@@ -257,11 +250,18 @@ function toggleExpanded() {
             >
               <span class="freshness-capsule__label">{{ cap.label }}</span>
               <span class="font-semibold">{{ countFor(row.source, cap.bucket) }}</span>
-              <span
-                v-if="cap.icon && countFor(row.source, cap.bucket) > 0"
-                class="text-[10px] leading-none opacity-90"
+              <Hourglass
+                v-if="cap.icon === 'hourglass' && countFor(row.source, cap.bucket) > 0"
+                class="h-3 w-3 opacity-90"
+                :stroke-width="ICON_STROKE"
                 aria-hidden="true"
-              >{{ cap.icon }}</span>
+              />
+              <TriangleAlert
+                v-else-if="cap.icon === 'alert' && countFor(row.source, cap.bucket) > 0"
+                class="h-3 w-3 opacity-90"
+                :stroke-width="ICON_STROKE"
+                aria-hidden="true"
+              />
             </button>
           </div>
         </div>

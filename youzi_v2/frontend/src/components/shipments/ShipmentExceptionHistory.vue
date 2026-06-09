@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { TriangleAlert } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { NSpin } from 'naive-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { getShipmentExceptionEvents } from '@/api/shipments'
@@ -57,15 +59,7 @@ watch(() => props.shipmentId, load)
       <div class="abnormal-card">
         <div class="flex gap-3">
           <div class="abnormal-icon shrink-0" aria-hidden="true">
-            <svg viewBox="0 0 20 20" fill="none" class="h-5 w-5">
-              <path
-                d="M10 3.5 17.5 16.5H2.5L10 3.5Z"
-                stroke="currentColor"
-                stroke-width="1.25"
-                stroke-linejoin="round"
-              />
-              <path d="M10 8v4M10 14.5v.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
-            </svg>
+            <TriangleAlert class="h-5 w-5" :stroke-width="ICON_STROKE" />
           </div>
           <div class="min-w-0 flex-1">
             <div class="abnormal-title">

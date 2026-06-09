@@ -3,6 +3,8 @@
 @theme {
   --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
   --font-button-weight: 700;
+  --icon-stroke: 2.25;
+  --icon-stroke-nav: 2.75;
   --color-accent: #8b5cf6;
   --color-accent-hover: #a78bfa;
 }
@@ -135,6 +137,10 @@
 
   body {
     @apply m-0 min-h-full bg-[var(--color-surface)] text-[15px] leading-relaxed text-[var(--color-fg)] antialiased;
+  }
+
+  svg.lucide {
+    stroke-width: var(--icon-stroke);
   }
 
   button,

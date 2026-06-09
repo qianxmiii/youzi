@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Download, RefreshCw } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import {
   NButton,
   NCollapse,
@@ -601,15 +603,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
           :loading="loading || detailLoading"
           @click="handleRefresh"
         >
-          <svg viewBox="0 0 20 20" fill="none" class="vessel-schedules-toolbar-btn__icon" aria-hidden="true">
-            <path
-              d="M16.5 10a6.5 6.5 0 1 1-1.9-4.6M16.5 4.5V10h-5.5"
-              stroke="currentColor"
-              stroke-width="1.35"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <RefreshCw class="vessel-schedules-toolbar-btn__icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
           Refresh
         </NButton>
         <NButton
@@ -618,15 +612,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
           :disabled="!detail"
           @click="handleExport"
         >
-          <svg viewBox="0 0 20 20" fill="none" class="vessel-schedules-toolbar-btn__icon" aria-hidden="true">
-            <path
-              d="M10 3.5v9M6.5 10 10 13.5 13.5 10M4.5 16.5h11"
-              stroke="currentColor"
-              stroke-width="1.35"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <Download class="vessel-schedules-toolbar-btn__icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
           Export
         </NButton>
         <NDropdown trigger="click" :options="moreMenuOptions" @select="handleMoreMenu">

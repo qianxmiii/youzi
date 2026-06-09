@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { Clock, RefreshCw } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { NButton, NSpin, NTag, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -190,15 +192,7 @@ function onFeedDismiss(item: AlertFeedItem) {
         </NButton>
         <NButton size="small" quaternary :loading="loading" aria-label="刷新" @click="load">
           <template #icon>
-            <svg viewBox="0 0 16 16" fill="none" class="h-4 w-4" aria-hidden="true">
-              <path
-                d="M13.5 2.5v3h-3M2.5 13.5v-3h3M13.1 5.1A5.5 5.5 0 0 0 4.2 3.7L2.5 5.5M2.9 10.9a5.5 5.5 0 0 0 8.9 1.4l1.7-1.8"
-                stroke="currentColor"
-                stroke-width="1.25"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-              />
-            </svg>
+            <RefreshCw class="h-4 w-4" :stroke-width="ICON_STROKE" aria-hidden="true" />
           </template>
         </NButton>
       </div>
@@ -267,10 +261,7 @@ function onFeedDismiss(item: AlertFeedItem) {
                 <button type="button" class="workbench-feed__body" @click="goVoyage(item.data.voyageId)">
                   <div class="workbench-feed__row">
                     <span class="workbench-feed__icon-clock" aria-hidden="true">
-                      <svg viewBox="0 0 16 16" fill="none" class="h-4 w-4">
-                        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.25" />
-                        <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
-                      </svg>
+                      <Clock class="h-4 w-4" :stroke-width="ICON_STROKE" />
                     </span>
                     <span class="workbench-feed__primary">{{ item.data.portName }}</span>
                     <NTag size="small" :bordered="false" type="success">已到港</NTag>
@@ -285,10 +276,7 @@ function onFeedDismiss(item: AlertFeedItem) {
                 <button type="button" class="workbench-feed__body" @click="goVoyage(item.data.voyageId)">
                   <div class="workbench-feed__row">
                     <span class="workbench-feed__icon-clock" aria-hidden="true">
-                      <svg viewBox="0 0 16 16" fill="none" class="h-4 w-4">
-                        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.25" />
-                        <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
-                      </svg>
+                      <Clock class="h-4 w-4" :stroke-width="ICON_STROKE" />
                     </span>
                     <span class="workbench-feed__primary">{{ item.data.portName }}</span>
                     <NTag size="small" :bordered="false" type="warning">三天内到港</NTag>
@@ -302,10 +290,7 @@ function onFeedDismiss(item: AlertFeedItem) {
                 <button type="button" class="workbench-feed__body" @click="goShipment(item.data.shipmentNo)">
                   <div class="workbench-feed__row">
                     <span class="workbench-feed__icon-clock" aria-hidden="true">
-                      <svg viewBox="0 0 16 16" fill="none" class="h-4 w-4">
-                        <circle cx="8" cy="8" r="6" stroke="currentColor" stroke-width="1.25" />
-                        <path d="M8 4.5V8l2.5 1.5" stroke="currentColor" stroke-width="1.25" stroke-linecap="round" />
-                      </svg>
+                      <Clock class="h-4 w-4" :stroke-width="ICON_STROKE" />
                     </span>
                     <span class="workbench-feed__primary">{{ item.data.shipmentNo }}</span>
                     <NTag size="small" :bordered="false" type="warning">{{ item.data.maritimeStatusLabel }}</NTag>

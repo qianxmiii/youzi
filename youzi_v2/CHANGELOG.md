@@ -35,5 +35,9 @@
 - 顶栏世界时间：中栏网格布局、md 起显示；API 失败时用默认四城时区；秒级刷新
 - 修复 Windows 保存世界时间 400：时区校验改用 ZoneInfo，并加入 `tzdata` 依赖
 - 全站字体栈改为系统字体：`-apple-system`、`Segoe UI`、`PingFang SC`、`Source Han Sans`（移除 Google Fonts 与微软雅黑；统一 `constants/fonts.ts`）
-- 顶栏世界时间：按当地 06:00–18:00 显示太阳/月亮图标与绿/红状态点
-- 全站字体改为 Noto Sans SC（Google Fonts）；所有按钮统一 Bold（font-weight 700）
+- 侧栏菜单 Lucide 图标加大（20px）并加粗描边（stroke-width 2.25），视觉更圆润
+- 表格操作列：轨迹 `Route`；订阅前 `BellDot`、订阅后 `BellCheck`
+- 全站 Lucide 图标描边统一加大（默认 2.25，侧栏 2.75），常量见 `constants/icons.ts`
+- 顶栏世界时间：去掉横向滚动条；太阳/月亮改为镂空描边图标
+- 侧栏导航改为一二级菜单：工作台、报价中心、资料中心、运单中心、客户中心、数据中心、系统管理
+

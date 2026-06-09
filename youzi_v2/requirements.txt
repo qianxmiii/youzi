@@ -1,5 +1,6 @@
 fastapi
 uvicorn
+tzdata
 python-multipart
 jinja2
 requests

@@ -7,6 +7,23 @@ from typing import Literal
 
 LastMileCarrierHint = Literal["ups", "fedex", "usps", "dhl", "conwest", "dpd"]
 
+# 运单 express_code 存库用大写：UPS / FEDEX / DPD / CWE（及 USPS / DHL）
+CANONICAL_EXPRESS_CODES: frozenset[str] = frozenset(
+    {"UPS", "FEDEX", "DPD", "CWE", "USPS", "DHL"}
+)
+
+_EXPRESS_CODE_TO_HINT: dict[str, LastMileCarrierHint] = {
+    "UPS": "ups",
+    "FEDEX": "fedex",
+    "FDX": "fedex",
+    "DPD": "dpd",
+    "DPDUK": "dpd",
+    "CWE": "conwest",
+    "CONWEST": "conwest",
+    "USPS": "usps",
+    "DHL": "dhl",
+}
+
 # 「UPS 1Z…」「CWE C03IK…」等
 _PREFIX_WITH_SEP = re.compile(
     r"^(?P<prefix>UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)\s*[-#:：]?\s*(?P<number>.+)$",
@@ -97,6 +114,29 @@ def build_conwest_17track_url(numbers: list[str]) -> str | None:
     batch = cleaned[:CONWEST_17TRACK_MAX]
     nums_param = ",".join(batch)
     return f"https://t.17track.net/en#nums={nums_param}&fc={CONWEST_17TRACK_FC}"
+
+
+def normalize_express_code(raw: str | None) -> str | None:
+    """入库/更新：规范为 UPS/FEDEX/DPD/CWE 等；空或无法识别则 None（走自动识别）。"""
+    text = (raw or "").strip().upper().replace(" ", "")
+    if not text:
+        return None
+    if text in ("AUTO", "自动", "自动识别"):
+        return None
+    if text.startswith("FED"):
+        return "FEDEX"
+    if text in ("CONWEST",):
+        return "CWE"
+    if text in CANONICAL_EXPRESS_CODES:
+        return text
+    return None
+
+
+def express_code_to_carrier_hint(express_code: str | None) -> LastMileCarrierHint | None:
+    key = (express_code or "").strip().upper().replace(" ", "")
+    if not key:
+        return None
+    return _EXPRESS_CODE_TO_HINT.get(key)
 
 
 def infer_last_mile_carrier_hint(number: str) -> LastMileCarrierHint | None:

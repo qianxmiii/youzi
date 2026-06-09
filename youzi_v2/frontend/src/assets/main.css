@@ -1,7 +1,8 @@
 @import 'tailwindcss';
 
 @theme {
-  --font-sans: "Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-sans: "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif;
+  --font-button-weight: 700;
   --color-accent: #8b5cf6;
   --color-accent-hover: #a78bfa;
 }
@@ -122,13 +123,33 @@
 }
 
 @layer base {
+  html,
+  body,
+  #app {
+    font-family: var(--font-sans);
+  }
+
   html {
     @apply h-full;
   }
 
   body {
-    @apply m-0 min-h-full bg-[var(--color-surface)] font-sans text-[15px] leading-relaxed text-[var(--color-fg)] antialiased;
-    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    @apply m-0 min-h-full bg-[var(--color-surface)] text-[15px] leading-relaxed text-[var(--color-fg)] antialiased;
+  }
+
+  button,
+  input[type='button'],
+  input[type='submit'],
+  input[type='reset'],
+  .n-button,
+  .header-ghost-btn,
+  .header-link-btn,
+  button.freshness-ahead-btn,
+  button.freshness-capsule,
+  button.table-action-icon,
+  button.voyage-timeline__link-btn {
+    font-family: var(--font-sans);
+    font-weight: var(--font-button-weight);
   }
 
   ::selection {
@@ -255,7 +276,7 @@
     padding: 0.25rem 0.625rem;
     font-family: inherit;
     font-size: 11px;
-    font-weight: 500;
+    font-weight: var(--font-button-weight);
     font-variant-numeric: tabular-nums;
     line-height: 1.2;
     color: var(--tracking-ahead-fg);

@@ -22,6 +22,8 @@ export interface Shipment {
   carrierCode: string | null
   carrierId: string | null
   trackingNumber: string | null
+  /** 尾程快递：UPS/FEDEX/DPD/CWE 等，优先于单号自动识别跳转 */
+  expressCode?: string | null
   customerShipmentId: string | null
   amazonRefId: string | null
   vesselName: string | null
@@ -133,6 +135,7 @@ export function emptyShipmentForm(): ShipmentPayload {
     carrierCode: null,
     carrierId: null,
     trackingNumber: null,
+    expressCode: null,
     customerShipmentId: null,
     amazonRefId: null,
     vesselName: null,
@@ -167,6 +170,7 @@ export function shipmentToForm(row: Shipment): ShipmentPayload {
     carrierCode: row.carrierCode,
     carrierId: row.carrierId,
     trackingNumber: row.trackingNumber,
+    expressCode: row.expressCode ?? null,
     customerShipmentId: row.customerShipmentId,
     amazonRefId: row.amazonRefId,
     vesselName: row.vesselName,

@@ -16,13 +16,12 @@ import {
   type DropdownOption,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
 import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
-import BellIcon from '@/components/common/BellIcon.vue'
 import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import LastMileBadge from '@/components/common/LastMileBadge.vue'
@@ -70,6 +69,7 @@ import {
 } from '@/utils/trackingFreshness'
 
 const route = useRoute()
+const router = useRouter()
 const message = useMessage()
 const dialog = useDialog()
 const { loadDictTypes, dictLabel } = useDictLabels()
@@ -743,11 +743,50 @@ async function loadFilterOptions() {
   }
 }
 
-onMounted(async () => {
-  const qSn = route.query.shipmentNo
-  if (typeof qSn === 'string' && qSn.trim()) {
-    searchShipmentNo.value = qSn.trim()
+/** 订阅消息等带 ?shipmentNo= 跳入时同步运单号搜索框 */
+function readRouteShipmentNo(): string {
+  const q = route.query.shipmentNo
+  if (typeof q === 'string') return q.trim()
+  if (Array.isArray(q)) {
+    const first = q[0]
+    return typeof first === 'string' ? first.trim() : ''
   }
+  return ''
+}
+
+function isRouteFromNotify(): boolean {
+  const f = route.query.fromNotify
+  if (f === '1' || f === 'true') return true
+  if (Array.isArray(f)) return f[0] === '1' || f[0] === 'true'
+  return false
+}
+
+function showNotifyJumpHint(sn: string) {
+  message.success(`已定位运单 ${sn}`)
+}
+
+function applyRouteShipmentNoToSearch() {
+  const sn = readRouteShipmentNo()
+  if (!sn) return
+  const fromNotify = isRouteFromNotify()
+  if (searchShipmentNo.value !== sn) {
+    searchShipmentNo.value = sn
+  }
+  if (fromNotify) {
+    showNotifyJumpHint(sn)
+    void router.replace({ path: '/shipments', query: { shipmentNo: sn } })
+  }
+}
+
+watch(
+  () => [readRouteShipmentNo(), route.query.fromNotify] as const,
+  () => {
+    applyRouteShipmentNoToSearch()
+  },
+)
+
+onMounted(async () => {
+  applyRouteShipmentNoToSearch()
   await Promise.all([
     loadDictTypes('country_code'),
     loadFilterOptions(),
@@ -1703,22 +1742,15 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
           :options="subscribeDropdownOptions"
           @select="handleSubscribeMenuSelect"
         >
-          <NTooltip trigger="hover" :show-arrow="false">
-            <template #trigger>
-              <NButton
-                size="small"
-                type="primary"
-                :loading="batchSubmitting"
-                aria-label="批量订阅轨迹更新"
-                @click="handleBatchSubscribe"
-              >
-                <template #icon>
-                  <BellIcon size="1rem" />
-                </template>
-              </NButton>
-            </template>
-            批量订阅轨迹更新
-          </NTooltip>
+          <NButton
+            size="small"
+            type="primary"
+            :loading="batchSubmitting"
+            title="批量订阅轨迹更新"
+            @click="handleBatchSubscribe"
+          >
+            订阅
+          </NButton>
         </NDropdown>
         <NDropdown
           trigger="hover"

@@ -57,6 +57,9 @@ class ShipmentRecordIn(BaseModel):
     tracking_number: str | None = Field(
         default=None, validation_alias=AliasChoices("trackingNumber", "tracking_number")
     )
+    express_code: str | None = Field(
+        default=None, validation_alias=AliasChoices("expressCode", "express_code")
+    )
     customer_shipment_id: str | None = Field(
         default=None,
         validation_alias=AliasChoices("customerShipmentId", "customer_shipment_id"),
@@ -138,6 +141,9 @@ class ShipmentUpdateIn(BaseModel):
     )
     tracking_number: str | None = Field(
         default=None, validation_alias=AliasChoices("trackingNumber", "tracking_number")
+    )
+    express_code: str | None = Field(
+        default=None, validation_alias=AliasChoices("expressCode", "express_code")
     )
     customer_shipment_id: str | None = Field(
         default=None,

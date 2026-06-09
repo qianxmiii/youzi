@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchHealth, fetchLegacyHealth } from '@/api/client'
 import AppSubscriptionBell from '@/components/AppSubscriptionBell.vue'
+import WorldClockBar from '@/components/header/WorldClockBar.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
 
@@ -29,8 +30,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <header class="glass-header flex h-14 shrink-0 items-center justify-between px-6">
-    <div class="flex min-w-0 items-center gap-3">
+  <header class="glass-header grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-6">
+    <div class="flex min-w-0 items-center gap-3 justify-self-start">
       <button
         type="button"
         class="header-ghost-btn"
@@ -64,7 +65,9 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="flex items-center gap-3">
+    <WorldClockBar class="justify-self-center" />
+
+    <div class="flex shrink-0 items-center gap-3 justify-self-end">
       <AppSubscriptionBell />
       <span class="status-pill">
         <span

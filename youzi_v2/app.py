@@ -92,6 +92,11 @@ from .services.scheduled_sync_settings import (
     get_scheduled_sync_settings,
     save_scheduled_sync_settings,
 )
+from .schemas.world_clocks import WorldClocksSettingsUpdate
+from .services.world_clocks_settings import (
+    get_world_clocks_settings,
+    save_world_clocks_settings,
+)
 from .services.address_excel import (
     build_export_excel_bytes as build_address_export_bytes,
     build_template_bytes as build_address_template_bytes,
@@ -1042,6 +1047,26 @@ def get_tracking_sync_daily_stats(source: str = Query("carrier")):
     if src not in ("internal", "carrier"):
         raise HTTPException(status_code=400, detail="source 须为 internal 或 carrier")
     return TrackingSyncDailyStats(**tracking_jobs_repo.today_stats(src))
+
+
+@app.get("/api/v1/settings/world-clocks")
+def get_world_clocks_settings_api():
+    """顶栏世界时间全局配置。"""
+    return get_world_clocks_settings(_database).to_api_dict()
+
+
+@app.put("/api/v1/settings/world-clocks")
+def update_world_clocks_settings_api(body: WorldClocksSettingsUpdate):
+    try:
+        saved = save_world_clocks_settings(
+            _database,
+            enabled=body.enabled,
+            use24h=body.use24h,
+            zones=[{"tz": z.tz, "label": z.label} for z in body.zones],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return saved.to_api_dict()
 
 
 @app.get("/api/v1/scheduled-tasks/overview", response_model=ScheduledTaskOverview)

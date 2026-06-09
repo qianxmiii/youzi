@@ -31,6 +31,7 @@ CREATE TABLE {TABLE_NAME} (
     carrier_code TEXT,
     carrier_id TEXT,
     tracking_number TEXT,
+    express_code TEXT,
     customer_shipment_id TEXT,
     amazon_ref_id TEXT,
     vessel_name TEXT,
@@ -118,6 +119,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN carrier_id TEXT")
     if "tracking_number" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN tracking_number TEXT")
+    if "express_code" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN express_code TEXT")
     if "exception_code" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN exception_code TEXT")
     if "exception_opened_time" not in cols:

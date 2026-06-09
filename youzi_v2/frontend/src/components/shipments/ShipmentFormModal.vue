@@ -16,6 +16,7 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
 import { dateOnlyToTimestamp, formatDateOnlyForApi } from '@/utils/formatDateTime'
+import { EXPRESS_CODE_OPTIONS } from '@/constants/expressCodes'
 import { normalizeLastMileTrackingNumber } from '@/utils/lastMileTracking'
 
 const { loadDictTypes, dictOptions } = useDictLabels()
@@ -93,6 +94,7 @@ watch(
         carrierCode: props.initial.carrierCode,
         carrierId: props.initial.carrierId,
         trackingNumber: props.initial.trackingNumber,
+        expressCode: props.initial.expressCode ?? null,
         customerShipmentId: props.initial.customerShipmentId,
         amazonRefId: props.initial.amazonRefId,
         vesselName: props.initial.vesselName,
@@ -128,11 +130,13 @@ function handleSubmit() {
   submitting.value = true
   const carrierId = normalizeLastMileTrackingNumber(form.value.carrierId) || null
   const trackingNumber = normalizeLastMileTrackingNumber(form.value.trackingNumber) || null
+  const expressCode = (form.value.expressCode || '').trim() || null
   emit('submit', {
     ...form.value,
     shipmentNo: no,
     carrierId,
     trackingNumber,
+    expressCode,
   })
   submitting.value = false
 }
@@ -193,6 +197,14 @@ function handleSubmit() {
             v-model:value="form.trackingNumber"
             placeholder="尾程 UPS/FedEx 等"
             clearable
+          />
+        </NFormItem>
+        <NFormItem label="尾程快递">
+          <NSelect
+            v-model:value="form.expressCode"
+            :options="EXPRESS_CODE_OPTIONS"
+            clearable
+            placeholder="自动识别"
           />
         </NFormItem>
         <NFormItem label="地址类型">

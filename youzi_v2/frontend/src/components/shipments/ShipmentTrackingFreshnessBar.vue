@@ -132,7 +132,7 @@ function badgeClass(
   const count = countFor(_source, meta.bucket)
   const active = isActive(_source, meta.bucket)
   const base =
-    'freshness-capsule group inline-flex min-w-[4.25rem] items-center justify-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-all duration-150 ease-out select-none'
+    'freshness-capsule group inline-flex min-w-[4.25rem] items-center justify-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-bold transition-all duration-150 ease-out select-none'
   const variant = capsuleVariant(meta)
 
   if (count === 0) {

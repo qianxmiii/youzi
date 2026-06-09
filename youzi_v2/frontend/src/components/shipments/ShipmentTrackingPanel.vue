@@ -19,7 +19,7 @@ const props = withDefaults(
   },
 )
 
-type LogRow = { id: string; trackingTime: string; trackingDesc: string; vendorName?: string }
+type LogRow = { id: string; trackingTime: string; trackingDesc: string }
 
 const activeTab = ref<'internal' | 'carrier'>(props.initialTab)
 const loading = ref(false)
@@ -60,7 +60,6 @@ async function load() {
         id: item.id,
         trackingTime: item.trackingTime,
         trackingDesc: item.trackingDesc,
-        vendorName: item.vendorName,
       }))
       total.value = res.total
     }
@@ -128,8 +127,8 @@ watch(activeTab, load)
             </svg>
           </div>
           <div class="tracking-timeline-body">
-            <div class="tracking-timeline-desc tracking-timeline-desc--emphasis">{{ expectedItem.desc }}</div>
             <div class="tracking-timeline-time">{{ expectedItem.time }}</div>
+            <div class="tracking-timeline-desc tracking-timeline-desc--emphasis">{{ expectedItem.desc }}</div>
           </div>
         </li>
 
@@ -148,19 +147,13 @@ watch(activeTab, load)
             aria-hidden="true"
           />
           <div class="tracking-timeline-body">
+            <div class="tracking-timeline-time">{{ log.trackingTime }}</div>
             <div
               class="tracking-timeline-desc"
               :class="{ 'tracking-timeline-desc--emphasis': index === 0 && !expectedItem }"
             >
               {{ log.trackingDesc || '—' }}
             </div>
-            <div
-              v-if="!isDrawer && activeTab === 'carrier' && log.vendorName"
-              class="tracking-timeline-vendor"
-            >
-              {{ log.vendorName }}
-            </div>
-            <div class="tracking-timeline-time">{{ log.trackingTime }}</div>
           </div>
         </li>
       </ol>
@@ -197,9 +190,6 @@ watch(activeTab, load)
           :class="activeTab === 'carrier' ? 'tracking-log-item--carrier' : 'tracking-log-item--internal'"
         >
           <div class="tracking-log-time font-mono">{{ log.trackingTime }}</div>
-          <div v-if="activeTab === 'carrier' && log.vendorName" class="tracking-log-vendor">
-            {{ log.vendorName }}
-          </div>
           <div class="tracking-log-desc mt-0.5">{{ log.trackingDesc || '—' }}</div>
         </li>
       </ul>
@@ -343,6 +333,7 @@ watch(activeTab, load)
   font-size: 0.875rem;
   line-height: 1.4;
   color: var(--color-fg);
+  margin-top: 0.25rem;
 }
 
 .tracking-timeline-desc--emphasis {
@@ -350,17 +341,11 @@ watch(activeTab, load)
   color: var(--color-fg-emphasis);
 }
 
-.tracking-timeline-vendor {
-  margin-top: 0.125rem;
-  font-size: 0.75rem;
-  color: var(--color-muted);
-}
-
 .tracking-timeline-time {
-  margin-top: 0.25rem;
   font-size: 0.75rem;
   font-family: ui-monospace, monospace;
   color: var(--color-muted);
+  line-height: 1.35;
 }
 
 .tracking-log-item--internal {
@@ -373,10 +358,6 @@ watch(activeTab, load)
 
 .tracking-log-time {
   color: var(--tracking-log-time);
-}
-
-.tracking-log-vendor {
-  color: var(--color-muted);
 }
 
 .tracking-log-desc {

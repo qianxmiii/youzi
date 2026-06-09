@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NButton, NSpin, useMessage } from 'naive-ui'
+import { NSpin } from 'naive-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { getShipmentExceptionEvents } from '@/api/shipments'
 import type { Shipment, ShipmentExceptionEvent } from '@/types/shipment'
@@ -13,8 +13,6 @@ const props = withDefaults(
   }>(),
   { mode: 'default' },
 )
-
-const message = useMessage()
 
 function codeLabel(code: string) {
   return props.labelByCode?.[code] || code
@@ -42,29 +40,6 @@ async function load() {
     items.value = res.items
   } finally {
     loading.value = false
-  }
-}
-
-function buildContactCopyText(): string {
-  const s = props.shipment
-  const ex = openException.value
-  if (!s) return ''
-  const lines: string[] = ['运单号：' + s.shipmentNo]
-  if (s.customer) lines.push('客户：' + s.customer)
-  if (s.customerNo) lines.push('客户订单号：' + s.customerNo)
-  if (ex) lines.push('异常：' + ex.label)
-  if (ex?.note) lines.push('备注：' + ex.note)
-  return lines.join('\n')
-}
-
-async function contactSender() {
-  const text = buildContactCopyText()
-  if (!text) return
-  try {
-    await navigator.clipboard.writeText(text)
-    message.success('已复制联系信息，可粘贴至邮件或 IM')
-  } catch {
-    message.error('复制失败')
   }
 }
 
@@ -99,20 +74,9 @@ watch(() => props.shipmentId, load)
             <p v-if="openException.note" class="abnormal-desc">
               {{ openException.note }}
             </p>
-            <p v-else class="abnormal-desc">
-              The shipment has an open exception. Please follow up with the sender.
-            </p>
+            <p v-else class="abnormal-desc">该运单存在未关闭异常，请及时跟进。</p>
           </div>
         </div>
-        <NButton quaternary class="abnormal-action mt-4 w-full" @click="contactSender">
-          <span class="inline-flex items-center justify-center gap-2">
-            <svg viewBox="0 0 16 16" fill="none" class="h-4 w-4" aria-hidden="true">
-              <rect x="2" y="3.5" width="12" height="9" rx="1" stroke="currentColor" stroke-width="1.25" />
-              <path d="M2.5 4.5 8 8.5l5.5-4" stroke="currentColor" stroke-width="1.25" stroke-linejoin="round" />
-            </svg>
-            Contact Sender
-          </span>
-        </NButton>
       </div>
     </NSpin>
   </div>
@@ -194,28 +158,6 @@ watch(() => props.shipmentId, load)
   font-size: 0.8125rem;
   line-height: 1.55;
   color: var(--color-fg-secondary);
-}
-
-.abnormal-action {
-  height: 2.5rem !important;
-  border: 1px solid rgb(147 197 253) !important;
-  border-radius: 0.5rem !important;
-  background: rgb(240 247 255) !important;
-  color: rgb(37 99 235) !important;
-}
-
-.abnormal-action:hover {
-  background: rgb(224 242 254) !important;
-}
-
-[data-theme='dark'] .abnormal-action {
-  border-color: rgb(59 130 246 / 0.45) !important;
-  background: rgb(30 58 138 / 0.35) !important;
-  color: rgb(147 197 253) !important;
-}
-
-[data-theme='dark'] .abnormal-action:hover {
-  background: rgb(30 58 138 / 0.5) !important;
 }
 
 .exception-open-badge {

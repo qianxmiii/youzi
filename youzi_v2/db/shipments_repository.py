@@ -18,6 +18,7 @@ from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
 from .exception_duration import duration_seconds, format_duration
 from ..last_mile_tracking import (
     is_conwest_tracking_number,
+    normalize_express_code,
     normalize_tracking_field_value,
     resolve_conwest_writeback,
 )
@@ -65,6 +66,7 @@ _UPDATABLE = (
     "carrier_code",
     "carrier_id",
     "tracking_number",
+    "express_code",
     "customer_shipment_id",
     "amazon_ref_id",
     "vessel_name",
@@ -131,6 +133,7 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "carrierCode": row["carrier_code"],
         "carrierId": row["carrier_id"],
         "trackingNumber": row["tracking_number"],
+        "expressCode": row["express_code"] if "express_code" in row.keys() else None,
         "customerLang": (
             "en"
             if (
@@ -184,6 +187,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "carrierCode": "carrier_code",
         "carrierId": "carrier_id",
         "trackingNumber": "tracking_number",
+        "expressCode": "express_code",
         "customerShipmentId": "customer_shipment_id",
         "amazonRefId": "amazon_ref_id",
         "vesselName": "vessel_name",
@@ -203,6 +207,8 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
                 out[col] = None
             elif col in ("carrier_id", "tracking_number") and isinstance(value, str):
                 out[col] = normalize_tracking_field_value(value)
+            elif col == "express_code":
+                out[col] = normalize_express_code(value) if value is not None else None
             else:
                 out[col] = value
     return out

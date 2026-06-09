@@ -92,6 +92,12 @@ const router = createRouter({
           component: () => import('@/views/scheduled/ScheduledTasksView.vue'),
           meta: { title: '计划任务' },
         },
+        {
+          path: 'display-settings',
+          name: 'display-settings',
+          component: () => import('@/views/settings/DisplaySettingsView.vue'),
+          meta: { title: '显示设置' },
+        },
       ],
     },
   ],

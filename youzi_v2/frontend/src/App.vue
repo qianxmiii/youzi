@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { NConfigProvider, NDialogProvider, NMessageProvider, darkTheme, lightTheme } from 'naive-ui'
 import type { GlobalThemeOverrides } from 'naive-ui'
 import { useTheme } from '@/composables/useTheme'
+import { FONT_BUTTON_WEIGHT, FONT_SANS } from '@/constants/fonts'
 
 const { theme } = useTheme()
 
@@ -16,12 +17,16 @@ const themeOverrides = computed<GlobalThemeOverrides>(() =>
           primaryColorHover: '#a78bfa',
           primaryColorPressed: '#7c3aed',
           borderRadius: '8px',
-          fontFamily: '"Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+          fontFamily: FONT_SANS,
+          fontWeightStrong: FONT_BUTTON_WEIGHT,
           bodyColor: '#09090b',
           cardColor: '#18181b',
           modalColor: '#18181b',
           popoverColor: '#18181b',
           tableColor: '#18181b',
+        },
+        Button: {
+          fontWeight: FONT_BUTTON_WEIGHT,
         },
       }
     : {
@@ -30,7 +35,8 @@ const themeOverrides = computed<GlobalThemeOverrides>(() =>
           primaryColorHover: '#7c3aed',
           primaryColorPressed: '#6d28d9',
           borderRadius: '8px',
-          fontFamily: '"Inter", "Noto Sans SC", "PingFang SC", "Microsoft YaHei", sans-serif',
+          fontFamily: FONT_SANS,
+          fontWeightStrong: FONT_BUTTON_WEIGHT,
           bodyColor: '#f4f4f5',
           cardColor: '#ffffff',
           modalColor: '#ffffff',
@@ -43,6 +49,9 @@ const themeOverrides = computed<GlobalThemeOverrides>(() =>
           dividerColor: '#e4e4e7',
           hoverColor: 'rgb(24 24 27 / 0.04)',
           pressedColor: 'rgb(24 24 27 / 0.08)',
+        },
+        Button: {
+          fontWeight: FONT_BUTTON_WEIGHT,
         },
       },
 )

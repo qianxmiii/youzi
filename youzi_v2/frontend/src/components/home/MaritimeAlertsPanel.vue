@@ -148,7 +148,9 @@ function goVoyage(voyageId: string) {
 }
 
 function goShipment(shipmentNo: string) {
-  router.push({ path: '/shipments', query: { shipmentNo } })
+  const sn = shipmentNo.trim()
+  if (!sn) return
+  router.push({ path: '/shipments', query: { shipmentNo: sn, fromNotify: '1' } })
 }
 
 function goShipmentsList() {

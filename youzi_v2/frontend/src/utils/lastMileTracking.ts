@@ -3,6 +3,25 @@
 export type LastMileCarrier = 'fedex' | 'ups' | 'usps' | 'dhl' | 'conwest' | 'dpd' | 'unknown'
 export type TrackQueryLang = 'zh' | 'en'
 
+const EXPRESS_CODE_TO_CARRIER: Record<string, LastMileCarrier> = {
+  UPS: 'ups',
+  FEDEX: 'fedex',
+  FDX: 'fedex',
+  DPD: 'dpd',
+  DPDUK: 'dpd',
+  CWE: 'conwest',
+  CONWEST: 'conwest',
+  USPS: 'usps',
+  DHL: 'dhl',
+}
+
+/** 运单 express_code（UPS/FEDEX/DPD/CWE 等）→ 尾程承运商；空则走自动识别 */
+export function expressCodeToCarrier(expressCode: string | null | undefined): LastMileCarrier | null {
+  const key = (expressCode || '').trim().toUpperCase().replace(/\s+/g, '')
+  if (!key || key === 'AUTO') return null
+  return EXPRESS_CODE_TO_CARRIER[key] ?? null
+}
+
 export interface LastMileTrackingInfo {
   number: string
   carrier: LastMileCarrier
@@ -83,7 +102,11 @@ export function detectLastMileCarrier(
   carrierCode?: string | null,
   hintText?: string | null,
   rawTrackingNumber?: string | null,
+  expressCode?: string | null,
 ): LastMileCarrier {
+  const fromExpress = expressCodeToCarrier(expressCode)
+  if (fromExpress) return fromExpress
+
   const tn = trackingNumber.trim().toUpperCase().replace(/\s+/g, '')
   const raw = (rawTrackingNumber || trackingNumber).trim().toUpperCase().replace(/\s+/g, '')
   const blob = `${carrierCode || ''} ${hintText || ''}`.toUpperCase()
@@ -219,6 +242,7 @@ export function buildLastMileTrackUrl(
 
 export function resolveLastMileTracking(shipment: {
   trackingNumber?: string | null
+  expressCode?: string | null
   carrierId?: string | null
   carrierCode?: string | null
   latestCarrierDesc?: string | null
@@ -239,6 +263,7 @@ export function resolveLastMileTracking(shipment: {
     shipment.carrierCode,
     shipment.latestCarrierDesc,
     shipment.trackingNumber,
+    shipment.expressCode,
   )
   let conwestNumbers: string[] | undefined
   let url =
@@ -269,6 +294,7 @@ export function resolveLastMileTracking(shipment: {
 
 export function formatLastMileTooltip(shipment: {
   trackingNumber?: string | null
+  expressCode?: string | null
   carrierId?: string | null
   carrierCode?: string | null
   latestCarrierDesc?: string | null
@@ -277,5 +303,9 @@ export function formatLastMileTooltip(shipment: {
 }): string | null {
   const info = resolveLastMileTracking(shipment)
   if (!info) return null
-  return info.number
+  const code = (shipment.expressCode || '').trim()
+  if (code) {
+    return `${info.number} · 指定 ${code} → ${info.carrierLabel}`
+  }
+  return `${info.number} · ${info.carrierLabel}`
 }

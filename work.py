@@ -91,7 +91,7 @@ class ToolTip:
         label = tk.Label(tw, text=self.text, justify="left",
                         background="#2a2a2a", foreground="#4CAF50",
                         relief="solid", borderwidth=1,
-                        font=("Microsoft YaHei UI", 9),
+                        font=("Source Han Sans", 9),
                         padx=8, pady=4)
         label.pack(ipadx=1)
     

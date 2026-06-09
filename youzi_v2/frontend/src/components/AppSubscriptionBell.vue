@@ -72,8 +72,10 @@ async function dismissAll() {
 }
 
 function goShipment(shipmentNo: string) {
+  const sn = shipmentNo.trim()
+  if (!sn) return
   popoverShow.value = false
-  router.push({ path: '/shipments', query: { shipmentNo } })
+  router.push({ path: '/shipments', query: { shipmentNo: sn, fromNotify: '1' } })
 }
 
 function onPopoverShowChange(show: boolean) {

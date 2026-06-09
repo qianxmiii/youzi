@@ -13,6 +13,7 @@
 ## 环境要求
 
 - Python 3.10+（推荐 3.11+）
+- `tzdata`（已写入 `requirements.txt`；Windows 上世界时间等功能依赖 IANA 时区库）
 - Node.js 18+（前端）
 - 仓库根目录可访问 `config/config.json`（承运商密钥，本地自行创建）
 

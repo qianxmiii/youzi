@@ -40,6 +40,7 @@ export const navGroups: NavGroup[] = [
       { name: '客户管理', to: '/customers', icon: 'users' },
       { name: '渠道管理', to: '/channels', icon: 'layers' },
       { name: '计划任务', to: '/scheduled-tasks', icon: 'clock' },
+      { name: '显示设置', to: '/display-settings', icon: 'globe' },
       { name: '后台管理', to: '/admin', icon: 'settings' },
     ],
   },

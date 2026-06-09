@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import json
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import Any, Callable
 from urllib.parse import urlencode
 
 import requests
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from requests.exceptions import SSLError as RequestsSSLError
 
 from ..carrier_tracking_entry import (
     CarrierTrackingLogEntry,
@@ -43,6 +46,43 @@ def _vendor_ssl_verify(vendor: dict[str, Any], *, default: bool = True) -> bool:
     if isinstance(raw, bool):
         return raw
     return str(raw).strip().lower() not in ("0", "false", "no", "off")
+
+
+def _vendor_http_retries(vendor: dict[str, Any], *, default: int = 3) -> int:
+    raw = vendor.get("httpRetries")
+    if raw is None:
+        return default
+    try:
+        return max(1, min(int(raw), 6))
+    except (TypeError, ValueError):
+        return default
+
+
+_HTTP_USER_AGENT = "Youzi/2.0 (carrier-tracking-sync)"
+
+
+def _http_get_with_retry(
+    url: str,
+    *,
+    timeout: int,
+    verify: bool,
+    retries: int = 3,
+) -> requests.Response:
+    """Topda 等站点偶发 SSL EOF，短暂重试可恢复。"""
+    headers = {"User-Agent": _HTTP_USER_AGENT, "Accept": "application/json, text/plain, */*"}
+    last_exc: Exception | None = None
+    for attempt in range(retries):
+        try:
+            return requests.get(url, timeout=timeout, verify=verify, headers=headers)
+        except (RequestsSSLError, RequestsConnectionError) as exc:
+            last_exc = exc
+            if attempt < retries - 1:
+                time.sleep(0.6 * (attempt + 1))
+                continue
+            raise
+    if last_exc is not None:
+        raise last_exc
+    raise RuntimeError("HTTP GET failed without exception")
 
 
 def _carrier_ok(
@@ -1900,12 +1940,24 @@ def _fetch_topda_batch(
     )
     url = f"{api_url}?{query}"
     out: dict[str, CarrierFetch] = {n: ([], None, None, None, None) for n in tracking_numbers}
+    verify_ssl = _vendor_ssl_verify(vendor, default=True)
+    retries = _vendor_http_retries(vendor)
     try:
-        resp = requests.get(url, timeout=timeout)
+        resp = _http_get_with_retry(
+            url,
+            timeout=timeout,
+            verify=verify_ssl,
+            retries=retries,
+        )
         resp.raise_for_status()
         payload = _response_json(resp)
     except Exception as exc:
         err = str(exc)
+        if "SSLError" in err or "SSL:" in err:
+            err += (
+                f"（已对 Topda 重试 {retries} 次；多为对方 TLS/链路瞬断，可稍后重试同步；"
+                "若持续失败可检查网络/代理，或在 config 该 vendor 设 \"sslVerify\": false 试一次）"
+            )
         return {n: ([], err, None, None, None) for n in tracking_numbers}
 
     if not isinstance(payload, list):

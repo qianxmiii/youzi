@@ -14,6 +14,7 @@ import {
 import { ref, watch } from 'vue'
 import { useDictLabels } from '@/composables/useDictLabels'
 import type { ShipmentPayload } from '@/types/shipment'
+import { EXPRESS_CODE_BATCH_OPTIONS } from '@/constants/expressCodes'
 import { formatDateOnlyForApi } from '@/utils/formatDateTime'
 
 const props = defineProps<{
@@ -40,6 +41,7 @@ const customerNo = ref('')
 const channelCode = ref<string | null>(null)
 const countryCode = ref<string | null>(null)
 const carrierCode = ref<string | null>(null)
+const expressCodePick = ref<string | null>('__UNCHANGED__')
 const addressType = ref<string | null>(null)
 const addressCode = ref('')
 const ctns = ref<number | null>(null)
@@ -64,6 +66,7 @@ watch(
     channelCode.value = null
     countryCode.value = null
     carrierCode.value = null
+    expressCodePick.value = '__UNCHANGED__'
     addressType.value = null
     addressCode.value = ''
     ctns.value = null
@@ -95,6 +98,9 @@ function buildUpdates(): Partial<ShipmentPayload> | null {
   if (channelCode.value) updates.channelCode = channelCode.value
   if (countryCode.value) updates.countryCode = countryCode.value
   if (carrierCode.value) updates.carrierCode = carrierCode.value
+  if (expressCodePick.value !== '__UNCHANGED__') {
+    updates.expressCode = expressCodePick.value
+  }
   if (addressType.value) updates.addressType = addressType.value
   if (addressCode.value.trim()) updates.addressCode = addressCode.value.trim()
   if (ctns.value != null && !Number.isNaN(ctns.value)) updates.ctns = ctns.value
@@ -178,6 +184,13 @@ function handleSubmit() {
             filterable
             tag
             clearable
+            placeholder="不修改"
+          />
+        </NFormItem>
+        <NFormItem label="尾程快递">
+          <NSelect
+            v-model:value="expressCodePick"
+            :options="EXPRESS_CODE_BATCH_OPTIONS"
             placeholder="不修改"
           />
         </NFormItem>

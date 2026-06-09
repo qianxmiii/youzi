@@ -101,6 +101,15 @@ defineProps<{ name: string }>()
         stroke-linejoin="round"
       />
     </template>
+    <template v-else-if="name === 'globe'">
+      <circle cx="8" cy="8" r="5.25" stroke="currentColor" stroke-width="1.25" />
+      <path
+        d="M2.75 8h10.5M8 2.75c1.5 1.75 2.25 3.5 2.25 5.25S9.5 10.5 8 12.25 5.75 10.5 5.75 8 6.5 4.5 8 2.75Z"
+        stroke="currentColor"
+        stroke-width="1.1"
+        stroke-linejoin="round"
+      />
+    </template>
     <template v-else-if="name === 'truck'">
       <path
         d="M2.5 11V6.5h6V11M8.5 6.5 11 4.5h2.5V11"

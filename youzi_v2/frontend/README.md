@@ -20,7 +20,7 @@ Youzi v2 前端 — Vue 3 SPA
 | `src/views/` | 页面级组件 |
 | `src/components/` | 可复用组件 |
 | `src/types/` | TypeScript 类型 |
-| `src/utils/` | 工具函数 |
+| `src/domain/costCalculation/` | 成本计算纯函数（DDU/DDP、货物识别） |
 | `vite.config.ts` | 构建与 `/api` 代理 |
 
 ## 路由一览
@@ -36,6 +36,7 @@ Youzi v2 前端 — Vue 3 SPA
 | `/channels` | 渠道管理 | ✅ |
 | `/scheduled-tasks` | 计划任务 | ✅ |
 | `/admin` | 码表管理 | ✅ |
+| `/cost` | 成本计算（自税/包税） | ✅ |
 | `/box`、`/quote` 等 | 占位（待迁移） | 待迁 |
 
 ## 开发命令

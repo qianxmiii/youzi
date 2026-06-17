@@ -21,7 +21,17 @@ def test_fedex_colon():
 def test_plain_number_unchanged():
     n, hint = normalize_last_mile_tracking_number("1ZA06B016813555890")
     assert n == "1ZA06B016813555890"
-    assert hint is None
+    assert hint == "ups"
+
+
+def test_tracking_prefix_carrier_hints():
+    from youzi_v2.last_mile_tracking import infer_last_mile_carrier_hint
+
+    assert infer_last_mile_carrier_hint("871877368540") == "fedex"
+    assert infer_last_mile_carrier_hint("1ZA06B016813555890") == "ups"
+    assert infer_last_mile_carrier_hint("15502802948687") == "dpd"
+    assert infer_last_mile_carrier_hint("C03IK469759415360001") == "conwest"
+    assert infer_last_mile_carrier_hint("00340434660911997839") == "dhl"
 
 
 def test_normalize_field_empty():

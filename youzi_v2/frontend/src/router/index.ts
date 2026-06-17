@@ -35,8 +35,8 @@ const router = createRouter({
         {
           path: 'cost',
           name: 'cost',
-          component: () => import('@/views/PlaceholderView.vue'),
-          meta: { title: '成本计算', migration: 'tab.js calculateCost*' },
+          component: () => import('@/views/cost/CostCalculationView.vue'),
+          meta: { title: '成本计算' },
         },
         {
           path: 'library',

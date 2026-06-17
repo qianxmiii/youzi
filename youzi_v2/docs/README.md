@@ -13,6 +13,7 @@
 | [shipment-flow.md](./shipment-flow.md) | 运单生命周期与轨迹同步 |
 | [warehouse-flow.md](./warehouse-flow.md) | 仓库地址簿业务流程 |
 | [SCHEMA.md](./SCHEMA.md) | 码表与字段详细说明（历史文档，与 database.md 互补） |
+| [cost-calculation.md](./cost-calculation.md) | 成本计算（DDU/DDP） |
 | [MIGRATION.md](./MIGRATION.md) | Legacy → v2 迁移指南 |
 
 ## 模块 README

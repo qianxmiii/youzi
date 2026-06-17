@@ -1,0 +1,96 @@
+from fastapi import APIRouter
+
+from ..context import *
+
+router = APIRouter()
+
+@router.get("/api/v1/settings/world-clocks")
+def get_world_clocks_settings_api():
+    """顶栏世界时间全局配置。"""
+    return get_world_clocks_settings(_database).to_api_dict()
+
+@router.put("/api/v1/settings/world-clocks")
+def update_world_clocks_settings_api(body: WorldClocksSettingsUpdate):
+    try:
+        saved = save_world_clocks_settings(
+            _database,
+            enabled=body.enabled,
+            use24h=body.use24h,
+            zones=[{"tz": z.tz, "label": z.label} for z in body.zones],
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return saved.to_api_dict()
+
+@router.get("/api/v1/scheduled-tasks/overview", response_model=ScheduledTaskOverview)
+def get_scheduled_tasks_overview():
+    settings = get_scheduled_sync_settings(_database)
+    return ScheduledTaskOverview(
+        config=ScheduledTaskConfig(**build_scheduled_task_config(_database)),
+        internalToday=tracking_jobs_repo.today_stats("internal"),
+        carrierToday=tracking_jobs_repo.today_stats("carrier"),
+        tasks=builtin_scheduled_tasks(settings),
+    )
+
+@router.put("/api/v1/scheduled-tasks/settings", response_model=ScheduledTaskConfig)
+def update_scheduled_tasks_settings(body: ScheduledSyncSettingsUpdate):
+    saved = save_scheduled_sync_settings(
+        _database,
+        internal_enabled=body.internal_enabled,
+        internal_interval_hours=body.internal_interval_hours,
+        carrier_enabled=body.carrier_enabled,
+        carrier_interval_hours=body.carrier_interval_hours,
+        initial_delay_sec=body.initial_delay_sec,
+    )
+    return ScheduledTaskConfig(
+        **saved.to_api_dict(),
+        scriptPath=str(REPO_ROOT / "youzi_v2" / "scripts" / "sync_all_tracking_scheduled.py"),
+        pollIntervalSec=60,
+    )
+
+@router.get("/api/v1/scheduled-tasks/jobs", response_model=TrackingSyncJobListResponse)
+def list_scheduled_task_jobs(
+    source: str | None = Query(None, description="carrier / internal，默认全部"),
+    limit: int = Query(30, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+):
+    src = source.strip().lower() if source else None
+    if src and src not in ("internal", "carrier"):
+        raise HTTPException(status_code=400, detail="source 须为 internal 或 carrier")
+    data = tracking_jobs_repo.list_jobs(source=src, limit=limit, offset=offset)
+    return TrackingSyncJobListResponse(**data)
+
+@router.post("/api/v1/scheduled-tasks/run-internal-sync", response_model=ScheduledSyncRunResult)
+def run_scheduled_tasks_internal_sync():
+    result = run_scheduled_internal_sync(
+        shipments_repo,
+        internal_tracking_repo,
+        tracking_jobs_repo,
+        LOGISTICS_CONFIG_PATH,
+        force=True,
+    )
+    return ScheduledSyncRunResult(**result)
+
+@router.post("/api/v1/scheduled-tasks/run-carrier-sync", response_model=ScheduledSyncRunResult)
+def run_scheduled_tasks_carrier_sync():
+    result = run_scheduled_carrier_sync(
+        shipments_repo,
+        carrier_tracking_repo,
+        tracking_jobs_repo,
+        LOGISTICS_CONFIG_PATH,
+        force=True,
+    )
+    return ScheduledSyncRunResult(**result)
+
+@router.post("/api/v1/scheduled-tasks/run-tracking-sync", response_model=ScheduledSyncRunResult)
+def run_scheduled_tasks_tracking_sync():
+    """立即执行内部 + 承运商（忽略间隔，仍受页面开关影响时可 force）。"""
+    result = run_scheduled_tracking_sync(
+        shipments_repo,
+        internal_tracking_repo,
+        carrier_tracking_repo,
+        tracking_jobs_repo,
+        LOGISTICS_CONFIG_PATH,
+        force=True,
+    )
+    return ScheduledSyncRunResult(**result)

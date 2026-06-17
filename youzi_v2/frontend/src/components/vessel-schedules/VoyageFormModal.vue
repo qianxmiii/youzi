@@ -128,6 +128,7 @@ watch(
 )
 
 const title = computed(() => (props.mode === 'create' ? '新建航次' : '编辑航次'))
+const portCallCount = computed(() => portCalls.value.length)
 
 function addPortCall() {
   portCalls.value.push({
@@ -242,10 +243,11 @@ function handleSubmit() {
     :show="show"
     preset="card"
     :title="title"
-    class="max-w-4xl"
+    class="voyage-form-modal"
+    style="width: min(56rem, 96vw)"
     @update:show="emit('update:show', $event)"
   >
-    <NForm label-placement="top">
+    <NForm label-placement="top" class="voyage-form-modal__form">
       <div class="grid gap-4 sm:grid-cols-2">
         <NFormItem label="船公司" class="sm:col-span-2">
           <NSelect
@@ -306,12 +308,17 @@ function handleSubmit() {
         </NFormItem>
       </div>
 
-      <div class="mb-2 flex items-center justify-between">
-        <div class="text-sm font-medium text-zinc-300">挂靠港口</div>
-        <NButton size="small" @click="addPortCall">添加港口</NButton>
+      <div class="mb-2 flex shrink-0 items-center justify-between gap-2">
+        <div class="min-w-0">
+          <div class="text-sm font-medium text-zinc-300">挂靠港口</div>
+          <div v-if="portCallCount > 0" class="text-xs text-[var(--color-muted)]">
+            共 {{ portCallCount }} 个，列表可滚动
+          </div>
+        </div>
+        <NButton size="small" class="shrink-0" @click="addPortCall">添加港口</NButton>
       </div>
 
-      <div class="space-y-3">
+      <div class="voyage-form-modal__ports space-y-3">
         <div
           v-for="(pc, index) in portCalls"
           :key="index"
@@ -374,3 +381,32 @@ function handleSubmit() {
     </template>
   </NModal>
 </template>
+
+<style scoped>
+.voyage-form-modal :deep(.n-card) {
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.voyage-form-modal :deep(.n-card__content) {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.voyage-form-modal__form {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: calc(90vh - 7.5rem);
+}
+
+.voyage-form-modal__ports {
+  flex: 1;
+  min-height: 8rem;
+  max-height: min(50vh, 28rem);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+</style>

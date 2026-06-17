@@ -1197,6 +1197,41 @@ function latestTrackingForCopy(row: Shipment): { desc: string; time: string } {
   return { desc: '—', time: '—' }
 }
 
+/** 复制格式：运单号 = FedEx 871877368540 */
+function formatTrackingNumberCopyLine(row: Shipment): string | null {
+  const info = resolveLastMileTracking(row)
+  if (!info) return null
+  const no = displayField(row.shipmentNo)
+  if (!no) return null
+  return `${no} = ${info.carrierLabel} ${info.number}`
+}
+
+async function copySelectedTrackingNumbers() {
+  const rows = selectedRows.value
+  if (!rows.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const lines = rows
+    .map((row) => formatTrackingNumberCopyLine(row))
+    .filter((line): line is string => Boolean(line))
+  if (!lines.length) {
+    message.warning('所选运单无转单号')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(lines.join('\n'))
+    const skipped = rows.length - lines.length
+    message.success(
+      skipped > 0
+        ? `已复制 ${lines.length} 条转单号（${skipped} 条无转单号已跳过）`
+        : `已复制 ${lines.length} 条转单号`,
+    )
+  } catch {
+    message.error('复制失败，请检查浏览器权限')
+  }
+}
+
 async function copySelectedLatestTracking() {
   const rows = selectedRows.value
   if (!rows.length) {
@@ -1236,11 +1271,13 @@ async function copySelectedShipmentDetails() {
 const copyDropdownOptions: DropdownOption[] = [
   { label: '运单明细', key: 'details' },
   { label: '最新轨迹', key: 'latestTracking' },
+  { label: '转单号', key: 'trackingNumbers' },
 ]
 
 function handleCopyMenuSelect(key: string | number) {
   if (key === 'details') void copySelectedShipmentDetails()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
+  else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
 }
 
 const subscribeDropdownOptions: DropdownOption[] = [

@@ -97,6 +97,20 @@ export function hasLastMileTracking(trackingNumber: string | null | undefined): 
   return Boolean(normalizeLastMileTrackingNumber(trackingNumber))
 }
 
+/** 转单号前缀 → 尾程承运商（业务规则：8=FedEx，1Z=UPS，15=DPD，C=CWE，0=DHL） */
+export function detectCarrierByTrackingPrefix(
+  trackingNumber: string,
+): LastMileCarrier | null {
+  const tn = trackingNumber.trim().toUpperCase().replace(/\s+/g, '')
+  if (!tn) return null
+  if (/^1Z/.test(tn)) return 'ups'
+  if (/^15/.test(tn)) return 'dpd'
+  if (/^C/.test(tn)) return 'conwest'
+  if (/^0/.test(tn)) return 'dhl'
+  if (/^8/.test(tn)) return 'fedex'
+  return null
+}
+
 export function detectLastMileCarrier(
   trackingNumber: string,
   carrierCode?: string | null,
@@ -111,6 +125,9 @@ export function detectLastMileCarrier(
   const raw = (rawTrackingNumber || trackingNumber).trim().toUpperCase().replace(/\s+/g, '')
   const blob = `${carrierCode || ''} ${hintText || ''}`.toUpperCase()
 
+  const fromPrefix = detectCarrierByTrackingPrefix(tn)
+  if (fromPrefix) return fromPrefix
+
   const code = (carrierCode || '').trim().toUpperCase()
   if (
     /^DPD(UK)?/.test(raw) ||
@@ -121,9 +138,6 @@ export function detectLastMileCarrier(
     return 'dpd'
   }
 
-  if (/^1Z[0-9A-Z]{16}$/.test(tn) || blob.includes('UPS')) {
-    return 'ups'
-  }
   if (blob.includes('FEDEX') || blob.includes('FDX')) {
     return 'fedex'
   }
@@ -133,6 +147,9 @@ export function detectLastMileCarrier(
   if (blob.includes('DHL')) {
     return 'dhl'
   }
+  if (blob.includes('UPS')) {
+    return 'ups'
+  }
   if (
     blob.includes('CWE') ||
     blob.includes('CONWEST') ||
@@ -140,19 +157,8 @@ export function detectLastMileCarrier(
   ) {
     return 'conwest'
   }
-  // DHL 常见：00 开头的 10 位及以上纯数字（如 00340434660911997839）
-  if (/^00\d{8,}$/.test(tn)) {
-    return 'dhl'
-  }
-  // FedEx 常见 12–15 位纯数字
-  if (/^\d{12,15}$/.test(tn)) {
-    return 'fedex'
-  }
   if (/^9\d{19,21}$/.test(tn)) {
     return 'usps'
-  }
-  if (/^\d{10,11}$/.test(tn) && blob.includes('DHL')) {
-    return 'dhl'
   }
   return 'unknown'
 }

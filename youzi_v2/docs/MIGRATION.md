@@ -17,7 +17,7 @@
 2. **箱规** `/box` — 从 `logistics.js` 抽 `calculate`、`parseDimensions`
 3. **单地址报价** `/quote` — 依赖箱规导入与 `updateQuote`
 4. **报价历史** — 嵌入 quote 页或 admin
-5. 批量报价、成本、资料库、运单监控
+5. 批量报价、资料库、运单监控（**成本计算** 已迁至 `/cost`）
 
 ## 单模块步骤模板
 

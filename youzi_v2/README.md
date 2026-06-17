@@ -115,7 +115,8 @@ SQLite 单文件，表在启动时自动初始化。核心表：`shipments`、`v
 | `/customers`、`/channels` | ✅ | — |
 | `/scheduled-tasks` | ✅ 计划任务 | — |
 | `/admin` | ✅ 码表 | `templates/admin.html` |
-| `/box`、`/quote`、`/cost`、`/library` | 待迁 | Legacy JS |
+| `/cost` | 成本计算（DDU/DDP） | ✅ |
+| `/box`、`/quote`、`/library` | 待迁 | Legacy JS |
 
 ## API 文档入口
 

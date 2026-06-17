@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { Clock } from 'lucide-vue-next'
+import { Check, Clock, Copy } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
-import { NSpin } from 'naive-ui'
+import { NSpin, useMessage } from 'naive-ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { getShipmentCarrierTrackingLogs, getShipmentTrackingLogs } from '@/api/shipments'
 import type { CarrierTrackingLog } from '@/types/tracking'
@@ -23,10 +23,13 @@ const props = withDefaults(
 
 type LogRow = { id: string; trackingTime: string; trackingDesc: string }
 
+const message = useMessage()
+
 const activeTab = ref<'internal' | 'carrier'>(props.initialTab)
 const loading = ref(false)
 const logs = ref<LogRow[]>([])
 const total = ref(0)
+const copiedLogId = ref<string | null>(null)
 
 const isDrawer = computed(() => props.mode === 'drawer')
 
@@ -92,6 +95,25 @@ watch(() => props.initialTab, (tab) => {
   load()
 })
 watch(activeTab, load)
+
+async function copyLog(log: LogRow) {
+  try {
+    await navigator.clipboard.writeText(`${log.trackingTime}\n${log.trackingDesc}`)
+    copiedLogId.value = log.id
+    message.success('已复制')
+    window.setTimeout(() => {
+      if (copiedLogId.value === log.id) copiedLogId.value = null
+    }, 1500)
+  } catch {
+    message.error('复制失败')
+  }
+}
+
+const expectedLog = computed<LogRow | null>(() => {
+  const item = expectedItem.value
+  if (!item) return null
+  return { id: item.id, trackingTime: item.time, trackingDesc: item.desc }
+})
 </script>
 
 <template>
@@ -121,13 +143,40 @@ watch(activeTab, load)
         暂无轨迹记录
       </div>
       <ol v-else class="tracking-timeline-list">
-        <li v-if="expectedItem" class="tracking-timeline-item tracking-timeline-item--expected">
+        <li v-if="expectedLog" class="tracking-timeline-item tracking-timeline-item--expected">
           <div class="tracking-timeline-marker tracking-timeline-marker--clock" aria-hidden="true">
             <Clock class="h-3.5 w-3.5" :stroke-width="ICON_STROKE" />
           </div>
-          <div class="tracking-timeline-body">
-            <div class="tracking-timeline-time">{{ expectedItem.time }}</div>
-            <div class="tracking-timeline-desc tracking-timeline-desc--emphasis">{{ expectedItem.desc }}</div>
+          <div
+            class="tracking-timeline-body tracking-timeline-body--copyable"
+            role="button"
+            tabindex="0"
+            title="点击复制时间与描述"
+            @click="copyLog(expectedLog)"
+            @keydown.enter.prevent="copyLog(expectedLog)"
+          >
+            <button
+              type="button"
+              class="tracking-copy-btn"
+              :class="{ 'tracking-copy-btn--copied': copiedLogId === expectedLog.id }"
+              :aria-label="copiedLogId === expectedLog.id ? '已复制' : '复制轨迹'"
+              @click.stop="copyLog(expectedLog)"
+            >
+              <Check
+                v-if="copiedLogId === expectedLog.id"
+                class="h-3.5 w-3.5"
+                :stroke-width="ICON_STROKE"
+                aria-hidden="true"
+              />
+              <Copy
+                v-else
+                class="h-3.5 w-3.5"
+                :stroke-width="ICON_STROKE"
+                aria-hidden="true"
+              />
+            </button>
+            <div class="timeline-time">{{ expectedLog.trackingTime }}</div>
+            <div class="timeline-content timeline-content--emphasis">{{ expectedLog.trackingDesc }}</div>
           </div>
         </li>
 
@@ -145,13 +194,40 @@ watch(activeTab, load)
             :class="index === 0 && !expectedItem ? 'tracking-timeline-marker--solid' : 'tracking-timeline-marker--dot'"
             aria-hidden="true"
           />
-          <div class="tracking-timeline-body">
-            <div class="tracking-timeline-time">{{ log.trackingTime }}</div>
-            <div
-              class="tracking-timeline-desc"
-              :class="{ 'tracking-timeline-desc--emphasis': index === 0 && !expectedItem }"
+          <div
+            class="tracking-timeline-body tracking-timeline-body--copyable"
+            role="button"
+            tabindex="0"
+            title="点击复制时间与描述"
+            @click="copyLog(log)"
+            @keydown.enter.prevent="copyLog(log)"
+          >
+            <button
+              type="button"
+              class="tracking-copy-btn"
+              :class="{ 'tracking-copy-btn--copied': copiedLogId === log.id }"
+              :aria-label="copiedLogId === log.id ? '已复制' : '复制轨迹'"
+              @click.stop="copyLog(log)"
             >
-              {{ log.trackingDesc || '—' }}
+              <Check
+                v-if="copiedLogId === log.id"
+                class="h-3.5 w-3.5"
+                :stroke-width="ICON_STROKE"
+                aria-hidden="true"
+              />
+              <Copy
+                v-else
+                class="h-3.5 w-3.5"
+                :stroke-width="ICON_STROKE"
+                aria-hidden="true"
+              />
+            </button>
+            <div class="timeline-time">{{ log.trackingTime }}</div>
+            <div
+              class="timeline-content"
+              :class="{ 'timeline-content--emphasis': index === 0 && !expectedItem }"
+            >
+              {{ log.trackingDesc }}
             </div>
           </div>
         </li>
@@ -185,11 +261,36 @@ watch(activeTab, load)
         <li
           v-for="log in logs"
           :key="log.id"
-          class="tracking-log-item border-l-2 pl-3 text-xs"
+          class="tracking-log-item tracking-log-item--copyable border-l-2 pl-3 text-xs"
           :class="activeTab === 'carrier' ? 'tracking-log-item--carrier' : 'tracking-log-item--internal'"
+          role="button"
+          tabindex="0"
+          title="点击复制时间与描述"
+          @click="copyLog(log)"
+          @keydown.enter.prevent="copyLog(log)"
         >
-          <div class="tracking-log-time font-mono">{{ log.trackingTime }}</div>
-          <div class="tracking-log-desc mt-0.5">{{ log.trackingDesc || '—' }}</div>
+          <button
+            type="button"
+            class="tracking-copy-btn tracking-copy-btn--compact"
+            :class="{ 'tracking-copy-btn--copied': copiedLogId === log.id }"
+            :aria-label="copiedLogId === log.id ? '已复制' : '复制轨迹'"
+            @click.stop="copyLog(log)"
+          >
+            <Check
+              v-if="copiedLogId === log.id"
+              class="h-3 w-3"
+              :stroke-width="ICON_STROKE"
+              aria-hidden="true"
+            />
+            <Copy
+              v-else
+              class="h-3 w-3"
+              :stroke-width="ICON_STROKE"
+              aria-hidden="true"
+            />
+          </button>
+            <div class="timeline-time">{{ log.trackingTime }}</div>
+          <div class="timeline-content mt-0.5">{{ log.trackingDesc }}</div>
         </li>
       </ul>
     </NSpin>
@@ -328,22 +429,78 @@ watch(activeTab, load)
   padding-top: 1px;
 }
 
-.tracking-timeline-desc {
-  font-size: 0.875rem;
+.tracking-timeline-body--copyable {
+  position: relative;
+  margin: -0.375rem -0.5rem;
+  padding: 0.375rem 2rem 0.375rem 0.5rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.tracking-timeline-body--copyable:hover {
+  background: var(--color-btn-ghost-bg);
+}
+
+.tracking-timeline-body--copyable:focus-visible {
+  outline: 2px solid rgb(59 130 246 / 0.45);
+  outline-offset: 1px;
+}
+
+.tracking-copy-btn {
+  position: absolute;
+  top: 0.375rem;
+  right: 0.375rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 1.625rem;
+  width: 1.625rem;
+  border-radius: 0.375rem;
+  color: var(--color-muted);
+  opacity: 0;
+  transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+}
+
+.tracking-timeline-body--copyable:hover .tracking-copy-btn,
+.tracking-timeline-body--copyable:focus-within .tracking-copy-btn,
+.tracking-copy-btn--copied {
+  opacity: 1;
+}
+
+.tracking-copy-btn:hover {
+  background: var(--color-panel);
+  color: rgb(37 99 235);
+}
+
+.tracking-copy-btn--copied {
+  color: rgb(22 163 74);
+}
+
+[data-theme='dark'] .tracking-copy-btn:hover {
+  color: rgb(96 165 250);
+}
+
+[data-theme='dark'] .tracking-copy-btn--copied {
+  color: rgb(74 222 128);
+}
+
+.timeline-content {
+  font-size: 15px;
+  font-weight: 500;
   line-height: 1.4;
   color: var(--color-fg);
   margin-top: 0.25rem;
 }
 
-.tracking-timeline-desc--emphasis {
+.timeline-content--emphasis {
   font-weight: 600;
   color: var(--color-fg-emphasis);
 }
 
-.tracking-timeline-time {
-  font-size: 0.75rem;
-  font-family: ui-monospace, monospace;
-  color: var(--color-muted);
+.timeline-time {
+  font-size: 13px;
+  color: #8c8c8c;
   line-height: 1.35;
 }
 
@@ -351,15 +508,38 @@ watch(activeTab, load)
   border-color: rgb(139 92 246 / 0.45);
 }
 
+.tracking-log-item--copyable {
+  position: relative;
+  margin-left: -0.25rem;
+  padding: 0.375rem 1.75rem 0.375rem 0.75rem;
+  border-radius: 0.375rem;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.tracking-log-item--copyable:hover {
+  background: var(--color-btn-ghost-bg);
+}
+
+.tracking-log-item--copyable:focus-visible {
+  outline: 2px solid rgb(59 130 246 / 0.45);
+  outline-offset: 1px;
+}
+
+.tracking-copy-btn--compact {
+  top: 0.25rem;
+  right: 0.125rem;
+  height: 1.375rem;
+  width: 1.375rem;
+}
+
+.tracking-log-item--copyable:hover .tracking-copy-btn,
+.tracking-log-item--copyable:focus-within .tracking-copy-btn,
+.tracking-log-item--copyable .tracking-copy-btn--copied {
+  opacity: 1;
+}
+
 .tracking-log-item--carrier {
   border-color: rgb(14 165 233 / 0.45);
-}
-
-.tracking-log-time {
-  color: var(--tracking-log-time);
-}
-
-.tracking-log-desc {
-  color: var(--tracking-log-desc);
 }
 </style>

@@ -140,18 +140,20 @@ def express_code_to_carrier_hint(express_code: str | None) -> LastMileCarrierHin
 
 
 def infer_last_mile_carrier_hint(number: str) -> LastMileCarrierHint | None:
-    """按单号形态推断承运商（入库/展示辅助）。"""
+    """按单号前缀推断承运商（8=FedEx，1Z=UPS，15=DPD，C=CWE，0=DHL）。"""
     tn = (number or "").strip().upper().replace(" ", "")
     if not tn:
         return None
-    if tn.startswith("1Z") and len(tn) >= 18:
+    if tn.startswith("1Z"):
         return "ups"
-    if _CONWEST_TRACKING_RE.match(tn):
-        return "conwest"
-    if re.match(r"^DPD(UK)?", tn):
+    if tn.startswith("15"):
         return "dpd"
-    if re.match(r"^00\d{8,}$", tn):
+    if tn.startswith("C"):
+        return "conwest"
+    if tn.startswith("0"):
         return "dhl"
+    if tn.startswith("8"):
+        return "fedex"
     return None
 
 

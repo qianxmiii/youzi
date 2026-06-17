@@ -25,7 +25,7 @@ export const navGroups: NavGroup[] = [
       { name: '箱规计算', to: '/box', icon: 'box', badge: '待迁' },
       { name: '单地址报价', to: '/quote', icon: 'quote', badge: '待迁' },
       { name: '批量报价', to: '/quote/batch', icon: 'layers', badge: '待迁' },
-      { name: '成本计算', to: '/cost', icon: 'calc', badge: '待迁' },
+      { name: '成本计算', to: '/cost', icon: 'calc' },
     ],
   },
   {

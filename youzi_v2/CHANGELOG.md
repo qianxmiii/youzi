@@ -2,6 +2,20 @@
 
 按日期倒序记录 youzi_v2 的代码与文档变更。
 
+## 2026-06-18
+
+### 新增
+
+- 成本计算页 `/cost`：迁移 Legacy `costCalTab`（货物识别、自税 DDU、包税 DDP 多行）
+
+### 修改
+
+- 成本计算：清空报价识别时同步重置箱数/实重/体积；DDU 表增加「派送费(RMB)」列
+
+- 转单号前缀自动识别：`8`→FedEx、`1Z`→UPS、`15`→DPD、`C`→CWE、`0`→DHL（前后端一致）
+- 全站字体栈：`Inter`、`PingFang SC`、`Microsoft YaHei`、`Noto Sans SC`；body 启用 `tabular-nums`
+- 轨迹抽屉时间轴：描述 `15px/500`（`.timeline-content`），时间 `13px/#8c8c8c`（`.timeline-time`）
+
 ## 2025-06-04
 
 ### 新增

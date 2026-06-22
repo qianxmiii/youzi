@@ -67,6 +67,10 @@ def list_shipments(
     carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
+    group_id: str | None = Query(None, alias="groupId"),
+    group_no: str | None = Query(None, alias="groupNo"),
+    group_type: str | None = Query(None, alias="groupType"),
+    has_group: bool | None = Query(None, alias="hasGroup"),
     limit: int = 100,
     offset: int = 0,
 ):
@@ -96,6 +100,10 @@ def list_shipments(
             carrier_ahead_of_internal=carrier_ahead_of_internal,
             min_stale_days=min_stale_days,
             no_tracking=no_tracking,
+            group_id=group_id,
+            group_no=group_no,
+            group_type=group_type,
+            has_group=has_group,
             limit=limit,
             offset=offset,
         )
@@ -168,6 +176,10 @@ def export_shipments_excel(
     carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
+    group_id: str | None = Query(None, alias="groupId"),
+    group_no: str | None = Query(None, alias="groupNo"),
+    group_type: str | None = Query(None, alias="groupType"),
+    has_group: bool | None = Query(None, alias="hasGroup"),
     limit: int = Query(_SHIPMENT_EXPORT_MAX, le=_SHIPMENT_EXPORT_MAX),
     offset: int = 0,
 ):
@@ -197,6 +209,10 @@ def export_shipments_excel(
             carrier_ahead_of_internal=carrier_ahead_of_internal,
             min_stale_days=min_stale_days,
             no_tracking=no_tracking,
+            group_id=group_id,
+            group_no=group_no,
+            group_type=group_type,
+            has_group=has_group,
             limit=limit,
             offset=offset,
         )
@@ -455,7 +471,7 @@ async def import_shipments_excel(file: UploadFile = File(...)):
         shutil.copyfileobj(file.file, f)
 
     try:
-        return import_excel_file(shipments_repo, upload_path)
+        return import_excel_file(shipments_repo, upload_path, shipment_groups_repo)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     finally:

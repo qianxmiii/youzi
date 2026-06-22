@@ -1,3 +1,5 @@
+import type { ShipmentGroupSummary } from '@/types/shipmentGroup'
+
 export interface Shipment {
   id: string
   shipmentNo: string
@@ -51,6 +53,8 @@ export interface Shipment {
   updatedTime: string
   /** 是否已订阅轨迹更新（内部/承运商最新轨迹变更时提醒） */
   subscribed?: boolean
+  /** 所属分组（只读，来自 shipment_group_members） */
+  groups?: ShipmentGroupSummary[]
 }
 
 export type ShipmentPayload = Partial<
@@ -115,6 +119,10 @@ export interface ShipmentImportResult {
   errors: { row?: number; message: string; shipmentNo?: string }[]
   /** Excel 表头中未配置映射、已忽略的列名 */
   skippedColumns?: string[]
+  groupsCreated?: number
+  groupsTouched?: number
+  membersAdded?: number
+  groupErrors?: { row?: number; message: string; shipmentNo?: string; groupNo?: string }[]
 }
 
 export function emptyShipmentForm(): ShipmentPayload {

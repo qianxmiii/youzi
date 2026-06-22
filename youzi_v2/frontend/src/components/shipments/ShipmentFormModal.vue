@@ -15,7 +15,12 @@ import { computed, ref, watch } from 'vue'
 import { useDictLabels } from '@/composables/useDictLabels'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
-import { dateOnlyToTimestamp, formatDateOnlyForApi } from '@/utils/formatDateTime'
+import {
+  dateOnlyToTimestamp,
+  formatDateOnlyForApi,
+  formatTimestampForApi,
+  parseDateTimeInput,
+} from '@/utils/formatDateTime'
 import { EXPRESS_CODE_OPTIONS } from '@/constants/expressCodes'
 import { normalizeLastMileTrackingNumber } from '@/utils/lastMileTracking'
 
@@ -39,6 +44,7 @@ const etd = ref<number | null>(null)
 const eta = ref<number | null>(null)
 const atd = ref<number | null>(null)
 const ata = ref<number | null>(null)
+const deliveredAt = ref<number | null>(null)
 
 function syncVoyageDatesFromForm() {
   etd.value = dateOnlyToTimestamp(form.value.etd)
@@ -52,6 +58,16 @@ function applyVoyageDatesToForm() {
   form.value.eta = eta.value != null ? formatDateOnlyForApi(eta.value) : null
   form.value.atd = atd.value != null ? formatDateOnlyForApi(atd.value) : null
   form.value.ata = ata.value != null ? formatDateOnlyForApi(ata.value) : null
+}
+
+function syncDeliveredTimeFromForm() {
+  const parsed = parseDateTimeInput(form.value.deliveredTime)
+  deliveredAt.value = parsed ? parsed.getTime() : null
+}
+
+function applyDeliveredTimeToForm() {
+  form.value.deliveredTime =
+    deliveredAt.value != null ? formatTimestampForApi(deliveredAt.value) : null
 }
 
 const title = computed(() => (props.mode === 'create' ? '新增运单' : '编辑运单'))
@@ -110,12 +126,14 @@ watch(
         statusCode: props.initial.statusCode || 'UNKNOWN',
       }
       syncVoyageDatesFromForm()
+      syncDeliveredTimeFromForm()
     } else {
       form.value = emptyShipmentForm()
       etd.value = null
       eta.value = null
       atd.value = null
       ata.value = null
+      deliveredAt.value = null
     }
   },
 )
@@ -127,6 +145,7 @@ function handleSubmit() {
     return
   }
   applyVoyageDatesToForm()
+  applyDeliveredTimeToForm()
   submitting.value = true
   const carrierId = normalizeLastMileTrackingNumber(form.value.carrierId) || null
   const trackingNumber = normalizeLastMileTrackingNumber(form.value.trackingNumber) || null
@@ -259,7 +278,13 @@ function handleSubmit() {
           <NInput v-model:value="form.destinationPortCode" />
         </NFormItem>
         <NFormItem label="签收时间">
-          <NInput v-model:value="form.deliveredTime" placeholder="YYYY-MM-DD HH:mm:ss" />
+          <NDatePicker
+            v-model:value="deliveredAt"
+            type="datetime"
+            clearable
+            class="w-full"
+            format="yyyy-MM-dd HH:mm:ss"
+          />
         </NFormItem>
       </div>
     </NForm>

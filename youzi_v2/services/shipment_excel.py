@@ -4,13 +4,16 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from io import BytesIO
 
 from openpyxl import Workbook, load_workbook
 
 from youzi_v2.db.shipments_repository import ShipmentsRepository
+
+if TYPE_CHECKING:
+    from youzi_v2.db.shipment_groups_repository import ShipmentGroupsRepository
 from youzi_v2.internal_tracking import mask_internal_summary
 
 _CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "shipment_excel_columns.json"
@@ -22,11 +25,29 @@ def _load_mapping() -> dict[str, Any]:
 
 
 def _import_column_map(mapping: dict[str, Any]) -> dict[str, str]:
-    """导入用：规范表头 + column_aliases（导出仍仅用 columns，避免重复列）。"""
+    """导入用：规范表头 + column_aliases + group_import_columns。"""
     col_map: dict[str, str] = dict(mapping["columns"])
     for label, field in mapping.get("column_aliases", {}).items():
         col_map[str(label).strip()] = field
+    for label, field in mapping.get("group_import_columns", {}).items():
+        col_map[str(label).strip()] = field
+    for label, field in mapping.get("group_column_aliases", {}).items():
+        col_map[str(label).strip()] = field
     return col_map
+
+
+def _group_import_fields(mapping: dict[str, Any]) -> set[str]:
+    fields: set[str] = set()
+    for field in mapping.get("group_import_columns", {}).values():
+        fields.add(str(field))
+    return fields
+
+
+def _parse_last_batch(raw: str | None) -> bool:
+    text = (raw or "").strip().upper()
+    if not text:
+        return False
+    return text in {"1", "Y", "YES", "TRUE", "是", "最后一批", "末批", "LAST_BATCH", "LAST"}
 
 
 def _cell_str(value: Any) -> str | None:
@@ -96,6 +117,7 @@ def parse_excel_rows(
     mapping = _load_mapping()
     col_map = _import_column_map(mapping)
     export_only: set[str] = set(mapping.get("export_only_fields", []))
+    group_fields = _group_import_fields(mapping)
     country_aliases: dict[str, str] = mapping.get("country_aliases", {})
     status_aliases: dict[str, str] = mapping.get("status_aliases", {})
     sheet_names: list[str] = mapping.get("sheet_preference", [])
@@ -253,27 +275,82 @@ def build_export_excel_bytes(items: list[dict[str, Any]]) -> bytes:
     return buf.getvalue()
 
 
+def _split_shipment_and_group_payload(
+    record: dict[str, Any],
+    group_fields: set[str],
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    shipment = {k: v for k, v in record.items() if k not in group_fields}
+    group_no = (record.get("group_no") or "").strip()
+    if not group_no:
+        return shipment, None
+    is_last = _parse_last_batch(str(record.get("is_last_batch") or ""))
+    return shipment, {
+        "group_no": group_no,
+        "group_name": (record.get("group_name") or "").strip(),
+        "batch_no": (record.get("batch_no") or "").strip(),
+        "role": "LAST_BATCH" if is_last else "NORMAL",
+        "customer": (record.get("customer") or "").strip() or None,
+        "customer_no": (record.get("customer_no") or "").strip() or None,
+    }
+
+
 def import_excel_file(
     repo: ShipmentsRepository,
     file_path: Path,
+    groups_repo: ShipmentGroupsRepository | None = None,
 ) -> dict[str, Any]:
+    mapping = _load_mapping()
+    group_fields = _group_import_fields(mapping)
     rows, parse_errors, skipped_columns = parse_excel_rows(file_path)
     created = 0
     updated = 0
+    groups_created = 0
+    groups_touched = 0
+    members_added = 0
+    group_errors: list[dict[str, Any]] = []
     errors = list(parse_errors)
-    for excel_row, payload in rows:
+    for excel_row, record in rows:
+        shipment_payload, group_meta = _split_shipment_and_group_payload(record, group_fields)
         try:
-            _, is_new = repo.upsert_by_shipment_no(payload)
+            row, is_new = repo.upsert_by_shipment_no(shipment_payload)
             if is_new:
                 created += 1
             else:
                 updated += 1
+            if groups_repo and group_meta:
+                try:
+                    group, is_new_group = groups_repo.get_or_create_for_import(
+                        group_meta["group_no"],
+                        group_name=group_meta.get("group_name") or "",
+                        customer=group_meta.get("customer"),
+                        customer_no=group_meta.get("customer_no"),
+                    )
+                    if is_new_group:
+                        groups_created += 1
+                    else:
+                        groups_touched += 1
+                    add_res = groups_repo.add_members(
+                        group["id"],
+                        [row["id"]],
+                        role=group_meta.get("role") or "NORMAL",
+                        batch_no=group_meta.get("batch_no") or "",
+                    )
+                    members_added += int(add_res.get("added") or 0)
+                except Exception as gexc:  # noqa: BLE001
+                    group_errors.append(
+                        {
+                            "row": excel_row,
+                            "message": str(gexc),
+                            "shipmentNo": shipment_payload.get("shipment_no"),
+                            "groupNo": group_meta.get("group_no"),
+                        }
+                    )
         except Exception as exc:  # noqa: BLE001 — 汇总行级错误
             errors.append(
                 {
                     "row": excel_row,
                     "message": str(exc),
-                    "shipmentNo": payload.get("shipment_no"),
+                    "shipmentNo": shipment_payload.get("shipment_no"),
                 }
             )
     return {
@@ -284,4 +361,8 @@ def import_excel_file(
         "failed": len(errors),
         "errors": errors[:50],
         "skippedColumns": skipped_columns,
+        "groupsCreated": groups_created,
+        "groupsTouched": groups_touched,
+        "membersAdded": members_added,
+        "groupErrors": group_errors[:50],
     }

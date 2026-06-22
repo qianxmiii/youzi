@@ -14,6 +14,7 @@
 | [warehouse-flow.md](./warehouse-flow.md) | 仓库地址簿业务流程 |
 | [SCHEMA.md](./SCHEMA.md) | 码表与字段详细说明（历史文档，与 database.md 互补） |
 | [cost-calculation.md](./cost-calculation.md) | 成本计算（DDU/DDP） |
+| [design/shipment-groups-design.md](./design/shipment-groups-design.md) | 运单分组与组提醒设计 |
 | [MIGRATION.md](./MIGRATION.md) | Legacy → v2 迁移指南 |
 
 ## 模块 README

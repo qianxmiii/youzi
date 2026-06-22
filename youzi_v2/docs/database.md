@@ -31,6 +31,8 @@ conn = db.conn  # sqlite3.Connection，row_factory=Row
 
 ```mermaid
 erDiagram
+    shipments ||--o{ shipment_group_members : "belongs to"
+    shipment_groups ||--|{ shipment_group_members : contains
     shipments ||--o{ internal_tracking_logs : has
     shipments ||--o{ carrier_tracking_logs : has
     shipments ||--o{ shipment_exception_events : has
@@ -113,6 +115,85 @@ erDiagram
 ### channels（渠道）
 
 通过 `db/channels_repository.py` 管理，含默认种子 `channel_seeds.py`。
+
+### shipment_groups / shipment_group_members（运单分组）
+
+定义：`db/shipment_groups_table.py`  
+设计说明：[design/shipment-groups-design.md](./design/shipment-groups-design.md)
+
+**shipment_groups** — 业务分组主表（客户批次、船次批次、手动分组等）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| group_no | TEXT UNIQUE | 分组编号，如 `G20260622001` |
+| group_name | TEXT | 分组展示名称 |
+| primary_type | TEXT | 主分组类型（列表图标/默认展示）；`MANUAL` / `CUSTOMER_BATCH` / … |
+| customer | TEXT | 组级客户名 |
+| customer_no | TEXT | 组级客户订单号 |
+| vessel_voyage | TEXT | 组级船名航次 |
+| destination_port_code | TEXT | 目的港 |
+| payment_status | TEXT | `UNPAID` / `PARTIAL` / `PAID` |
+| payment_due_rule | TEXT | 催款触发规则，首版 `LAST_ARRIVAL` |
+| note | TEXT | 备注 |
+| created_time, updated_time | TEXT | 审计字段 |
+
+**shipment_group_types** — 分组多类型关系（一批货可同时是到港批次 + 收款批次等）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| group_id | TEXT | → shipment_groups.id |
+| group_type | TEXT | 业务类型枚举值 |
+| created_time | TEXT | 创建时间 |
+
+唯一约束：`(group_id, group_type)`。规则启用与 `groupType` 筛选均基于本表**包含**关系，而非仅 `primary_type`。
+
+**shipment_group_members** — 分组成员（关系表；不在 `shipments` 表加 `group_id`）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| group_id | TEXT | → shipment_groups.id |
+| shipment_id | TEXT | → shipments.id |
+| shipment_no | TEXT | 运单号冗余 |
+| role | TEXT | `NORMAL` / `LAST_BATCH` / `KEY_BATCH` |
+| batch_no | TEXT | 批次号 |
+| created_time | TEXT | 加入时间 |
+
+唯一约束：`(group_id, shipment_id)`。
+
+**shipment_group_rules** — 组提醒规则（阈值与开关）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| group_id | TEXT | → shipment_groups.id |
+| rule_type | TEXT | `BATCH_DELIVERY_DEADLINE` / `LAST_BATCH_ARRIVED_PAYMENT` |
+| enabled | INTEGER | 1/0 |
+| threshold_days | INTEGER | 签收期限天数（默认 30） |
+| warning_days | INTEGER | 提前预警天数（默认 7） |
+| trigger_status | TEXT | 预留 |
+| config_json | TEXT | 扩展配置 JSON |
+| created_time, updated_time | TEXT | 审计字段 |
+
+唯一约束：`(group_id, rule_type)`。新建分组时自动写入默认规则。
+
+**shipment_group_notifications** — 规则扫描产生的提醒事件
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| group_id | TEXT | → shipment_groups.id |
+| rule_type | TEXT | 触发的规则类型 |
+| severity | TEXT | `info` / `warning` / `urgent` |
+| title, message | TEXT | 展示文案 |
+| shipment_no | TEXT | 关联运单号（可选） |
+| event_key | TEXT UNIQUE | 防重复键 |
+| triggered_at | TEXT | 触发时间 |
+| read_at, resolved_at | TEXT | 已读 / 已处理 |
+
+定义：`db/shipment_group_alerts_repository.py`；评估逻辑：`services/shipment_group_alerts.py`。
 
 ## 辅助与日志表
 

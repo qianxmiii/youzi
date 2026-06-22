@@ -6,9 +6,22 @@
 
 ### 新增
 
+- 运单分组推荐与 Excel 导入（阶段四）：`suggestions/preview|apply` API；Excel 可选列「分组编号/名称/批次号/是否最后一批」；运单列表「推荐分组」
+- 分组提醒通知中心（阶段三）：顶栏铃铛聚合轨迹订阅 + 分组提醒；首页「批次提醒」面板；`GET /api/v1/shipment-group-notifications`、标记已处理 API
+- 运单分组规则提醒（阶段二）：`BATCH_DELIVERY_DEADLINE`（签收 30 天期限预警/超期）、`LAST_BATCH_ARRIVED_PAYMENT`（最后一批到港催款）；表 `shipment_group_rules`、`shipment_group_notifications`；评估 API 与 `/shipment-groups` 管理页
+- 运单列表分组展示与筛选：列表 `groups` 字段、`groupId`/`groupNo`/`hasGroup` 查询参数；筛选项 `groups`；批量新建/加入/移出/标记最后一批（阶段一 · 步骤 4）
+- 运单分组成员 API：`POST/DELETE .../members`、`PATCH .../members/batch`（阶段一 · 步骤 3）
+- 运单分组 CRUD API：`GET/POST /api/v1/shipment-groups`、`GET/PUT/DELETE /api/v1/shipment-groups/{id}`（阶段一 · 步骤 2）
+- 运单分组表 `shipment_groups`、`shipment_group_members`（阶段一 · 步骤 1；设计见 `docs/design/shipment-groups-design.md`）
 - 成本计算页 `/cost`：迁移 Legacy `costCalTab`（货物识别、自税 DDU、包税 DDP 多行）
 
 ### 修改
+
+- 运单编辑「签收时间」改为日期时间控件（`NDatePicker type="datetime"`），与异常开始时间等字段一致
+
+- 运单分组多类型模型：`shipment_groups.primary_type` + `shipment_group_types` 关系表；规则启用与 `groupType` 筛选按类型**交集**判断；API/前端支持 `primaryType` + `groupTypes[]`（兼容 `groupType`）
+
+- 运单分组类型：扩展为 6 种（`PORT_BATCH` 到港批次、`PAYMENT_BATCH` 收款批次）；规则默认按类型启用（签收期限→客户/订单/手动；到港催款→船次/到港/收款/手动）；运单列表与分组管理页支持按类型筛选与编辑；`GET /api/v1/shipment-groups/meta`
 
 - 成本计算：清空报价识别时同步重置箱数/实重/体积；DDU 表增加「派送费(RMB)」列
 

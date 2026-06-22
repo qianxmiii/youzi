@@ -15,6 +15,7 @@ Youzi v2 数据层 — SQLite 仓储
 | `connection.py` | 单例 Database、WAL、bootstrap |
 | `*_table.py` | 建表 SQL、索引、轻量迁移 |
 | `*_repository.py` | 业务查询与 CRUD |
+| `shipment_groups_repository.py` | 运单分组 CRUD |
 | `datetime_util.py` | 时间字符串工具 |
 | `code_tables.py` | 通用码表 |
 | `tracking_freshness.py` | 轨迹新鲜度计算 |
@@ -26,6 +27,7 @@ Youzi v2 数据层 — SQLite 仓储
 核心表：
 
 - `shipments` — 运单
+- `shipment_groups` / `shipment_group_members` — 运单分组（见 `shipment_groups_table.py`）
 - `vessel_voyages` / `voyage_port_calls` — 船期
 - `internal_tracking_logs` / `carrier_tracking_logs` — 轨迹
 - `customers`、`channels` — 主数据

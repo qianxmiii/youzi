@@ -41,6 +41,7 @@ export const navGroups: NavGroup[] = [
     icon: 'group-shipment',
     items: [
       { name: '运单管理', to: '/shipments', icon: 'truck' },
+      { name: '运单分组', to: '/shipment-groups', icon: 'layers' },
       { name: '船期监控', to: '/vessel-schedules', icon: 'ship' },
     ],
   },

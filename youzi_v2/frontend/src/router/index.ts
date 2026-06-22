@@ -57,6 +57,12 @@ const router = createRouter({
           meta: { title: '运单管理' },
         },
         {
+          path: 'shipment-groups',
+          name: 'shipment-groups',
+          component: () => import('@/views/shipment-groups/ShipmentGroupsView.vue'),
+          meta: { title: '运单分组' },
+        },
+        {
           path: 'vessel-schedules',
           name: 'vessel-schedules',
           component: () => import('@/views/vessel-schedules/VesselSchedulesView.vue'),

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { Clock, RefreshCw } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
-import { NButton, NSpin, NTag, useMessage } from 'naive-ui'
+import { NButton, NSpin, NTag, NSpace, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
@@ -15,6 +15,13 @@ import {
   type PortArrivalNotification,
   type ShipmentArrivalNotification,
 } from '@/api/maritimeAlerts'
+import {
+  getShipmentGroupUnreadNotifications,
+  markAllShipmentGroupNotificationsRead,
+  markShipmentGroupNotificationRead,
+  resolveShipmentGroupNotification,
+} from '@/api/shipmentGroups'
+import type { ShipmentGroupNotification } from '@/types/shipmentGroup'
 import { maritimeStatusTagType } from '@/types/vesselSchedule'
 import MaritimeAlertStatCards from '@/components/home/MaritimeAlertStatCards.vue'
 import { hasDeliveredKeyword, splitDeliveredHighlight } from '@/utils/highlightDelivered'
@@ -23,16 +30,33 @@ const router = useRouter()
 const message = useMessage()
 const loading = ref(false)
 const markingAllRead = ref(false)
+const markingGroupRead = ref(false)
 const data = ref<MaritimeAlertsOverview | null>(null)
+const groupNotifications = ref<ShipmentGroupNotification[]>([])
+const groupUnreadCount = ref(0)
 const error = ref('')
+
+const severityTag: Record<string, 'default' | 'warning' | 'error'> = {
+  info: 'default',
+  warning: 'warning',
+  urgent: 'error',
+}
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    data.value = await getMaritimeAlertsOverview()
+    const [overview, groupRes] = await Promise.all([
+      getMaritimeAlertsOverview(),
+      getShipmentGroupUnreadNotifications(20),
+    ])
+    data.value = overview
+    groupNotifications.value = groupRes.items
+    groupUnreadCount.value = groupRes.unreadCount
   } catch (e) {
     data.value = null
+    groupNotifications.value = []
+    groupUnreadCount.value = 0
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
     loading.value = false
@@ -85,6 +109,55 @@ const alertFeedItems = computed<AlertFeedItem[]>(() => {
 const hasUnreadNotifications = computed(
   () => portArrivalNotifications.value.length > 0 || shipmentArrivalNotifications.value.length > 0,
 )
+
+const hasGroupNotifications = computed(() => groupNotifications.value.length > 0)
+
+function groupDisplayLabel(n: ShipmentGroupNotification): string {
+  const name = n.groupName?.trim()
+  if (name) return name
+  return n.groupNo || '分组'
+}
+
+async function dismissGroupNotification(n: ShipmentGroupNotification) {
+  try {
+    await markShipmentGroupNotificationRead(n.id)
+    groupNotifications.value = groupNotifications.value.filter((x) => x.id !== n.id)
+    groupUnreadCount.value = Math.max(0, groupUnreadCount.value - 1)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
+async function resolveGroupNotification(n: ShipmentGroupNotification) {
+  try {
+    await resolveShipmentGroupNotification(n.id)
+    groupNotifications.value = groupNotifications.value.filter((x) => x.id !== n.id)
+    groupUnreadCount.value = Math.max(0, groupUnreadCount.value - 1)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
+async function dismissAllGroupNotifications() {
+  if (!hasGroupNotifications.value) return
+  markingGroupRead.value = true
+  try {
+    const count = await markAllShipmentGroupNotificationsRead()
+    groupNotifications.value = []
+    groupUnreadCount.value = 0
+    if (count > 0) {
+      message.success('已标记 ' + String(count) + ' 条批次提醒为已读')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  } finally {
+    markingGroupRead.value = false
+  }
+}
+
+function goShipmentGroup(groupId: string) {
+  router.push({ path: '/shipment-groups', query: { groupId } })
+}
 
 const urgentShipments = computed(() => data.value?.urgentShipments ?? [])
 const urgentPortCalls = computed(() => data.value?.urgentPortCalls ?? [])
@@ -209,6 +282,43 @@ function onFeedDismiss(item: AlertFeedItem) {
 
       <template v-else-if="data">
         <div class="workbench-modules">
+        <article v-if="hasGroupNotifications" class="panel workbench-alerts workbench-alerts--batch">
+          <div class="workbench-panel-head">
+            <h2 class="workbench-panel-title">批次提醒</h2>
+            <button
+              type="button"
+              class="workbench-link-btn"
+              :disabled="markingGroupRead"
+              @click="dismissAllGroupNotifications"
+            >
+              全部已读
+            </button>
+          </div>
+          <ul class="workbench-feed">
+            <li
+              v-for="n in groupNotifications"
+              :key="n.id"
+              class="workbench-feed__item workbench-feed__item--batch"
+            >
+              <button type="button" class="workbench-feed__body" @click="goShipmentGroup(n.groupId)">
+                <div class="workbench-feed__row">
+                  <NTag size="small" :type="severityTag[n.severity] ?? 'warning'" :bordered="false">
+                    {{ n.title }}
+                  </NTag>
+                  <span class="workbench-feed__primary">{{ groupDisplayLabel(n) }}</span>
+                  <span class="workbench-feed__muted">{{ n.groupNo }}</span>
+                </div>
+                <p class="workbench-feed__desc line-clamp-2">{{ n.message }}</p>
+                <p class="workbench-feed__meta">{{ formatTime(n.triggeredAt) }}</p>
+              </button>
+              <NSpace size="small">
+                <NButton size="tiny" quaternary @click="dismissGroupNotification(n)">知道了</NButton>
+                <NButton size="tiny" quaternary @click="resolveGroupNotification(n)">已处理</NButton>
+              </NSpace>
+            </li>
+          </ul>
+        </article>
+
         <article class="panel workbench-alerts">
           <div class="workbench-panel-head">
             <h2 class="workbench-panel-title">海运预警 &amp; ETA 提醒</h2>
@@ -509,6 +619,18 @@ function onFeedDismiss(item: AlertFeedItem) {
 
 .workbench-feed__item:hover {
   background: var(--color-nav-hover);
+}
+
+.workbench-feed__item--batch {
+  background: rgb(245 158 11 / 0.06);
+}
+
+.workbench-feed__item--batch:hover {
+  background: rgb(245 158 11 / 0.12);
+}
+
+.workbench-alerts--batch {
+  border-color: rgb(245 158 11 / 0.2);
 }
 
 .workbench-feed__item--delivered {

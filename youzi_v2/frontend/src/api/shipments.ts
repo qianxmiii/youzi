@@ -18,6 +18,8 @@ import type {
   TrackingFreshnessStats,
 } from '@/utils/trackingFreshness'
 
+import type { ShipmentGroupFilterOption } from '@/types/shipmentGroup'
+
 export interface ShipmentFilterOptions {
   customers: string[]
   carrierCodes: string[]
@@ -28,6 +30,7 @@ export interface ShipmentFilterOptions {
   statusCodes: string[]
   exceptionCodes: string[]
   exceptionTypes: { code: string; nameZh: string }[]
+  groups: ShipmentGroupFilterOption[]
 }
 
 /** 仅发送有值的查询参数，避免 ofetch 序列化异常 */
@@ -55,6 +58,11 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
     q.minStaleDays = String(params.minStaleDays)
   }
   if (params.noTracking) q.noTracking = 'true'
+  if (params.groupId?.trim()) q.groupId = params.groupId.trim()
+  if (params.groupNo?.trim()) q.groupNo = params.groupNo.trim()
+  if (params.groupType?.trim()) q.groupType = params.groupType.trim()
+  if (params.hasGroup === true) q.hasGroup = 'true'
+  if (params.hasGroup === false) q.hasGroup = 'false'
   if (params.limit != null) q.limit = String(params.limit)
   if (params.offset != null) q.offset = String(params.offset)
   return q
@@ -81,6 +89,10 @@ export interface ListShipmentsParams {
   carrierAheadOfInternal?: boolean
   minStaleDays?: number
   noTracking?: boolean
+  groupId?: string
+  groupNo?: string
+  groupType?: string
+  hasGroup?: boolean
   limit?: number
   offset?: number
 }

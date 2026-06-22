@@ -38,6 +38,8 @@ from .db.channels_repository import ChannelsRepository
 from .db.shipment_statistics_repository import ShipmentStatisticsRepository
 from .db.port_subscriptions_table import PortSubscriptionsRepository
 from .db.shipment_subscriptions_table import ShipmentSubscriptionsRepository
+from .db.shipment_groups_repository import ShipmentGroupsRepository
+from .db.shipment_group_alerts_repository import ShipmentGroupAlertsRepository
 from .db.vessel_schedules_repository import VesselSchedulesRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
@@ -51,6 +53,23 @@ from .schemas.shipments import (
     ShipmentUpdateIn,
 )
 from .schemas.customers import CustomerIn, CustomerSyncResult, CustomerUpdateIn
+from .schemas.shipment_groups import (
+    ShipmentGroupIn,
+    ShipmentGroupMembersAddIn,
+    ShipmentGroupMembersAddResult,
+    ShipmentGroupMembersBatchPatchIn,
+    ShipmentGroupMembersBatchPatchResult,
+    ShipmentGroupMembersRemoveIn,
+    ShipmentGroupMembersRemoveResult,
+    ShipmentGroupUpdateIn,
+    ShipmentGroupEvaluateResult,
+    ShipmentGroupNotificationReadResult,
+    ShipmentGroupSuggestionsApplyIn,
+    ShipmentGroupSuggestionsApplyResult,
+    ShipmentGroupSuggestionsPreviewIn,
+    ShipmentGroupSuggestionsPreviewResult,
+    ShipmentGroupSuggestionItem,
+)
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
 from .schemas.vessel_schedules import (
     VesselScheduleFetchIn,
@@ -83,6 +102,8 @@ from .schemas.tracking import (
     TrackingSyncRequest,
     TrackingSyncResult,
 )
+from .services.shipment_group_alerts import evaluate_group_alerts
+from .services.shipment_group_suggestions import apply_group_suggestions, build_group_suggestions
 from .services.carrier_tracking_sync import sync_carrier_tracking
 from .services.scheduled_tasks_info import (
     build_scheduled_task_config,
@@ -246,6 +267,8 @@ shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 vessel_schedules_repo = VesselSchedulesRepository(_database)
 port_subscriptions_repo = PortSubscriptionsRepository(_database)
 shipment_subscriptions_repo = ShipmentSubscriptionsRepository(_database)
+shipment_groups_repo = ShipmentGroupsRepository(_database)
+shipment_group_alerts_repo = ShipmentGroupAlertsRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"

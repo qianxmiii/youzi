@@ -17,6 +17,8 @@ import {
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ShipmentGroupActionModal from '@/components/shipments/ShipmentGroupActionModal.vue'
+import ShipmentGroupSuggestionsModal from '@/components/shipments/ShipmentGroupSuggestionsModal.vue'
 import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
@@ -48,9 +50,23 @@ import {
   unsubscribeShipment,
   updateShipment,
 } from '@/api/shipments'
+import {
+  addShipmentGroupMembers,
+  createShipmentGroup,
+  patchShipmentGroupMembersBatch,
+  removeShipmentGroupMembers,
+} from '@/api/shipmentGroups'
 import ShipmentFormModal from '@/components/shipments/ShipmentFormModal.vue'
 import type { Shipment, ShipmentBatchResult, ShipmentPayload } from '@/types/shipment'
+import type { ShipmentGroupBatchMode, ShipmentGroupFilterOption } from '@/types/shipmentGroup'
 import type { ShipmentFilterOptions } from '@/api/shipments'
+import {
+  shipmentGroupTypeSelectOptions,
+  type ShipmentGroupType,
+} from '@/constants/shipmentGroupTypes'
+import {
+  renderShipmentGroupTypeSelectLabel,
+} from '@/utils/shipmentGroupTypeSelectRender'
 import type { TrackingSyncDailyStats, TrackingSyncResult } from '@/types/tracking'
 import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
 import { useDictLabels } from '@/composables/useDictLabels'
@@ -102,6 +118,9 @@ const filterStaleDays = ref<number | null>(null)
 const filterNoTracking = ref(false)
 const filterException = ref<string | null>(null)
 const filterHasException = ref<boolean | null>(null)
+const filterGroupId = ref<string | null>(null)
+const filterGroupType = ref<string | null>(null)
+const filterHasGroup = ref<boolean | null>(null)
 const filterOptions = ref<ShipmentFilterOptions>({
   customers: [],
   carrierCodes: [],
@@ -112,12 +131,17 @@ const filterOptions = ref<ShipmentFilterOptions>({
   statusCodes: [],
   exceptionCodes: [],
   exceptionTypes: [],
+  groups: [],
 })
 const exceptionOpenShow = ref(false)
 const exceptionCloseShow = ref(false)
 const exceptionSubmitting = ref(false)
 const batchEditShow = ref(false)
 const batchSubmitting = ref(false)
+const groupActionShow = ref(false)
+const groupSuggestionsShow = ref(false)
+const groupActionMode = ref<ShipmentGroupBatchMode>('create')
+const groupActionSubmitting = ref(false)
 const subscriptionTogglingId = ref<string | null>(null)
 const page = ref(1)
 const pageSize = ref(20)
@@ -176,6 +200,62 @@ const selectedRows = computed(() =>
 )
 
 const selectedIds = computed(() => selectedRows.value.map((row) => row.id))
+
+const selectedMemberGroupOptions = computed((): ShipmentGroupFilterOption[] => {
+  const map = new Map<string, ShipmentGroupFilterOption>()
+  for (const row of selectedRows.value) {
+    for (const g of row.groups ?? []) {
+      if (!map.has(g.groupId)) {
+        map.set(g.groupId, {
+          id: g.groupId,
+          groupNo: g.groupNo,
+          groupName: g.groupName,
+        })
+      }
+    }
+  }
+  return [...map.values()].sort((a, b) => a.groupNo.localeCompare(b.groupNo))
+})
+
+const groupFilterOptions = computed(() =>
+  filterOptions.value.groups.map((g) => ({
+    label: g.groupName?.trim() ? `${g.groupName}（${g.groupNo}）` : g.groupNo,
+    value: g.id,
+  })),
+)
+const groupTypeFilterOptions = shipmentGroupTypeSelectOptions()
+
+const hasGroupFilterOptions = [
+  { label: '有分组', value: 'yes' },
+  { label: '无分组', value: 'no' },
+]
+
+function groupCellLabel(g: NonNullable<Shipment['groups']>[number]): string {
+  const name = g.groupName?.trim()
+  return name || g.groupNo
+}
+
+function renderShipmentGroups(row: Shipment) {
+  const groups = row.groups ?? []
+  if (!groups.length) return h('span', { class: 'tracking-empty' }, '—')
+  const text = groups.map((g) => groupCellLabel(g)).join('、')
+  const tooltip = groups
+    .map((g) => {
+      const role =
+        g.role === 'LAST_BATCH' ? ' [末批]' : g.role === 'KEY_BATCH' ? ' [关键]' : ''
+      const batch = g.batchNo?.trim() ? ` #${g.batchNo}` : ''
+      return `${g.groupNo}${g.groupName?.trim() ? ` ${g.groupName}` : ''}${role}${batch}`
+    })
+    .join('\n')
+  return h(
+    NTooltip,
+    { placement: 'top' },
+    {
+      trigger: () => h('span', { class: 'cursor-default truncate block max-w-full' }, text),
+      default: () => h('span', { class: 'whitespace-pre-line' }, tooltip),
+    },
+  )
+}
 
 const channelCodeOptions = computed(() =>
   filterOptions.value.channelCodes.map((v) => ({ label: v, value: v })),
@@ -599,6 +679,9 @@ const advancedFiltersActiveCount = computed(() => {
   if (filterHasException.value != null) n++
   if (filterException.value) n++
   if (filterNoTracking.value) n++
+  if (filterGroupId.value) n++
+  if (filterGroupType.value) n++
+  if (filterHasGroup.value != null) n++
   if (filterInternalFreshness.value) n++
   if (filterCarrierFreshness.value) n++
   if (filterCarrierAheadOfInternal.value) n++
@@ -684,6 +767,14 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
         ? undefined
         : staleDays,
     noTracking: filterNoTracking.value || undefined,
+    groupId: filterGroupId.value || undefined,
+    groupType: filterGroupType.value || undefined,
+    hasGroup:
+      filterHasGroup.value === true
+        ? true
+        : filterHasGroup.value === false
+          ? false
+          : undefined,
     limit,
     offset,
   }
@@ -1047,6 +1138,9 @@ function resetFilters() {
   filtersExpanded.value = false
   filterStaleDays.value = null
   filterNoTracking.value = false
+  filterGroupId.value = null
+  filterGroupType.value = null
+  filterHasGroup.value = null
   searchShipmentNo.value = ''
   searchKeyword.value = ''
   searchTrackingContent.value = ''
@@ -1057,6 +1151,146 @@ function resetFilters() {
 function onHasExceptionFilterChange(val: string | null) {
   filterHasException.value = val === 'yes' ? true : val === 'no' ? false : null
   onFiltersChanged()
+}
+
+function onHasGroupFilterChange(val: string | null) {
+  filterHasGroup.value = val === 'yes' ? true : val === 'no' ? false : null
+  if (filterHasGroup.value != null) filterGroupId.value = null
+  onFiltersChanged()
+}
+
+function onGroupIdFilterChange(val: string | null) {
+  filterGroupId.value = val
+  if (val) filterHasGroup.value = null
+  onFiltersChanged()
+}
+
+function openGroupAction(mode: ShipmentGroupBatchMode) {
+  if (!selectedCount.value) {
+    message.warning('请先勾选运单')
+    return
+  }
+  if ((mode === 'remove' || mode === 'lastBatch') && !selectedMemberGroupOptions.value.length) {
+    message.warning('所选运单未加入任何分组')
+    return
+  }
+  if (mode === 'suggest') {
+    if (selectedCount.value < 2) {
+      message.warning('推荐分组至少需勾选 2 条运单')
+      return
+    }
+    groupSuggestionsShow.value = true
+    return
+  }
+  groupActionMode.value = mode
+  groupActionShow.value = true
+}
+
+async function handleGroupCreate(
+  groupName: string,
+  customer?: string,
+  types?: { primaryType: ShipmentGroupType; groupTypes: ShipmentGroupType[] },
+) {
+  const ids = selectedIds.value
+  if (!ids.length) return
+  groupActionSubmitting.value = true
+  try {
+    const group = await createShipmentGroup({
+      groupName,
+      primaryType: types?.primaryType ?? 'MANUAL',
+      groupTypes: types?.groupTypes ?? ['MANUAL'],
+      customer: customer ?? null,
+    })
+    const res = await addShipmentGroupMembers(group.id, ids)
+    let text = `已新建分组 ${group.groupNo}，加入 ${res.added} / ${res.total} 条`
+    if (res.skipped) text += `，跳过 ${res.skipped} 条`
+    if (res.failed) text += `，失败 ${res.failed} 条`
+    message.success(text)
+    groupActionShow.value = false
+    await loadFilterOptions()
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '新建分组失败')
+  } finally {
+    groupActionSubmitting.value = false
+  }
+}
+
+async function handleGroupAdd(groupId: string) {
+  const ids = selectedIds.value
+  if (!ids.length) return
+  groupActionSubmitting.value = true
+  try {
+    const res = await addShipmentGroupMembers(groupId, ids)
+    let text = `已加入 ${res.added} / ${res.total} 条`
+    if (res.skipped) text += `，跳过 ${res.skipped} 条`
+    if (res.failed) text += `，失败 ${res.failed} 条`
+    message.success(text)
+    groupActionShow.value = false
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加入分组失败')
+  } finally {
+    groupActionSubmitting.value = false
+  }
+}
+
+async function handleGroupRemove(groupId: string) {
+  const ids = selectedIds.value
+  if (!ids.length) return
+  groupActionSubmitting.value = true
+  try {
+    const res = await removeShipmentGroupMembers(groupId, ids)
+    let text = `已移出 ${res.removed} / ${res.total} 条`
+    if (res.notFound) text += `，未在组内 ${res.notFound} 条`
+    message.success(text)
+    groupActionShow.value = false
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '移出分组失败')
+  } finally {
+    groupActionSubmitting.value = false
+  }
+}
+
+async function handleGroupLastBatch(groupId: string, batchNo?: string) {
+  const ids = selectedIds.value
+  if (!ids.length) return
+  groupActionSubmitting.value = true
+  try {
+    const res = await patchShipmentGroupMembersBatch(
+      groupId,
+      ids.map((shipmentId) => ({
+        shipmentId,
+        role: 'LAST_BATCH',
+        batchNo: batchNo ?? '',
+      })),
+    )
+    let text = `已标记末批 ${res.updated} / ${res.total} 条`
+    if (res.notFound) text += `，未在组内 ${res.notFound} 条`
+    if (res.skipped) text += `，跳过 ${res.skipped} 条`
+    message.success(text)
+    groupActionShow.value = false
+    await loadList()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '标记最后一批失败')
+  } finally {
+    groupActionSubmitting.value = false
+  }
+}
+
+function onGroupActionConfirmCreate(
+  groupName: string,
+  customer?: string,
+  types?: { primaryType: ShipmentGroupType; groupTypes: ShipmentGroupType[] },
+) {
+  void handleGroupCreate(groupName, customer, types)
+}
+
+function onGroupActionConfirmGroupId(groupId: string, batchNo?: string) {
+  if (groupActionMode.value === 'add') void handleGroupAdd(groupId)
+  else if (groupActionMode.value === 'remove') void handleGroupRemove(groupId)
+  else if (groupActionMode.value === 'lastBatch') void handleGroupLastBatch(groupId, batchNo)
 }
 
 async function handleOpenException(
@@ -1313,6 +1547,22 @@ function promptBatchDelete() {
   })
 }
 
+const groupDropdownOptions: DropdownOption[] = [
+  { label: '推荐分组', key: 'suggest' },
+  { label: '新建分组', key: 'create' },
+  { label: '加入已有分组', key: 'add' },
+  { label: '移出分组', key: 'remove' },
+  { label: '标记最后一批', key: 'lastBatch' },
+]
+
+function handleGroupMenuSelect(key: string | number) {
+  if (key === 'suggest') openGroupAction('suggest')
+  else if (key === 'create') openGroupAction('create')
+  else if (key === 'add') openGroupAction('add')
+  else if (key === 'remove') openGroupAction('remove')
+  else if (key === 'lastBatch') openGroupAction('lastBatch')
+}
+
 const exceptionDropdownOptions: DropdownOption[] = [
   { label: '标记异常', key: 'open' },
   { label: '解除异常', key: 'close' },
@@ -1339,6 +1589,10 @@ async function onFileSelected(ev: Event) {
       const more =
         res.skippedColumns.length > 5 ? ` 等 ${res.skippedColumns.length} 列` : ''
       text += `；未映射列已忽略：${preview}${more}`
+    }
+    if (res.membersAdded) {
+      text += `；分组关联 ${res.membersAdded} 条`
+      if (res.groupsCreated) text += `（新建 ${res.groupsCreated} 组）`
     }
     message.success(text, { duration: 8000 })
     if (res.failed > 0 && res.errors.length) {
@@ -1397,6 +1651,13 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     },
   },
   { title: '件数', key: 'ctns', width: 64, align: 'center' },
+  {
+    title: '分组',
+    key: 'groups',
+    width: 120,
+    ellipsis: { tooltip: false },
+    render: (row) => renderShipmentGroups(row),
+  },
   {
     title: '渠道',
     key: 'channelCode',
@@ -1728,6 +1989,36 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             class="shipments-filter-select"
             @update:value="onFiltersChanged"
           />
+          <NSelect
+            v-model:value="filterGroupType"
+            :options="groupTypeFilterOptions"
+            :render-label="renderShipmentGroupTypeSelectLabel"
+            consistent-menu-width
+            placeholder="分组类型"
+            clearable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onGroupTypeFilterChange"
+          />
+          <NSelect
+            :value="filterHasGroup === true ? 'yes' : filterHasGroup === false ? 'no' : null"
+            :options="hasGroupFilterOptions"
+            placeholder="分组"
+            clearable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onHasGroupFilterChange"
+          />
+          <NSelect
+            :value="filterGroupId"
+            :options="groupFilterOptions"
+            placeholder="指定分组"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onGroupIdFilterChange"
+          />
           <NCheckbox
             v-model:checked="filterNoTracking"
             size="small"
@@ -1819,6 +2110,11 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         >
           更新选中承运商轨迹
         </NButton>
+        <NDropdown trigger="hover" :options="groupDropdownOptions" @select="handleGroupMenuSelect">
+          <NButton size="small" :loading="groupActionSubmitting" @click="openGroupAction('create')">
+            分组
+          </NButton>
+        </NDropdown>
         <NDropdown
           trigger="hover"
           :options="exceptionDropdownOptions"
@@ -1838,6 +2134,29 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :country-options="countryOptions"
       @close="batchEditShow = false"
       @submit="handleBatchEditSubmit"
+    />
+
+    <ShipmentGroupActionModal
+      :show="groupActionShow"
+      :mode="groupActionMode"
+      :count="selectedCount"
+      :member-group-options="selectedMemberGroupOptions"
+      :default-customer="selectedRows[0]?.customer ?? null"
+      @close="groupActionShow = false"
+      @confirm-create="onGroupActionConfirmCreate"
+      @confirm-group-id="onGroupActionConfirmGroupId"
+    />
+
+    <ShipmentGroupSuggestionsModal
+      :show="groupSuggestionsShow"
+      :shipment-ids="selectedIds"
+      @close="groupSuggestionsShow = false"
+      @applied="
+        async () => {
+          await loadFilterOptions()
+          await loadList()
+        }
+      "
     />
 
     <ShipmentExceptionOpenModal

@@ -30,7 +30,8 @@
 三种方式：
 
 1. **单条表单**：`POST /api/v1/shipments`（`ShipmentFormModal.vue`）
-2. **Excel 批量导入**：`POST /api/v1/shipments/import`（列映射见 `config/shipment_excel_columns.json`）
+2. **Excel 批量导入**：`POST /api/v1/shipments/import`（列映射见 `config/shipment_excel_columns.json`；可选分组列：分组编号、分组名称、批次号、是否最后一批，按 `group_no` 自动建组/加成员）
+3. **推荐分组**：勾选运单后「分组 → 推荐分组」，或 `POST /api/v1/shipment-groups/suggestions/preview` 预览、`/apply` 确认落库
 3. **批量编辑**：`PATCH /api/v1/shipments/batch-update`
 
 运单号 `shipment_no` 唯一；`vessel_voyage` 用于与船期模块逻辑关联（不区分大小写匹配）。

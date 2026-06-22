@@ -13,6 +13,7 @@ from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
 from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .shipments_table import TABLE_NAME
+from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, TYPES_TABLE
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
 from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
 from .exception_duration import duration_seconds, format_duration
@@ -291,6 +292,10 @@ class ShipmentsRepository:
         carrier_ahead_of_internal: bool | None = None,
         min_stale_days: int | None = None,
         no_tracking: bool | None = None,
+        group_id: str | None = None,
+        group_no: str | None = None,
+        group_type: str | None = None,
+        has_group: bool | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -421,6 +426,62 @@ class ShipmentsRepository:
                 """
             )
             params.append(f"-{int(min_stale_days)} days")
+        if group_id and group_id.strip():
+            conditions.append(
+                f"""
+                s.id IN (
+                  SELECT shipment_id FROM {MEMBERS_TABLE}
+                  WHERE group_id = ?
+                )
+                """
+            )
+            params.append(group_id.strip())
+        elif group_no and group_no.strip():
+            gn = group_no.strip()
+            conditions.append(
+                f"""
+                s.id IN (
+                  SELECT m.shipment_id FROM {MEMBERS_TABLE} m
+                  INNER JOIN {GROUPS_TABLE} g ON g.id = m.group_id
+                  WHERE g.group_no = ? COLLATE NOCASE
+                )
+                """
+            )
+            params.append(gn)
+        if group_type and group_type.strip():
+            gt = group_type.strip().upper()
+            from ..shipment_group_types import GROUP_TYPES
+
+            if gt not in GROUP_TYPES:
+                raise ValueError(f"groupType 无效：{group_type}")
+            conditions.append(
+                f"""
+                s.id IN (
+                  SELECT m.shipment_id FROM {MEMBERS_TABLE} m
+                  INNER JOIN {TYPES_TABLE} gt ON gt.group_id = m.group_id
+                  WHERE gt.group_type = ?
+                )
+                """
+            )
+            params.append(gt)
+        if has_group is True:
+            conditions.append(
+                f"""
+                EXISTS (
+                  SELECT 1 FROM {MEMBERS_TABLE} m
+                  WHERE m.shipment_id = s.id
+                )
+                """
+            )
+        elif has_group is False:
+            conditions.append(
+                f"""
+                NOT EXISTS (
+                  SELECT 1 FROM {MEMBERS_TABLE} m
+                  WHERE m.shipment_id = s.id
+                )
+                """
+            )
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         with self._database.lock:
             total = self._conn.execute(
@@ -438,11 +499,44 @@ class ShipmentsRepository:
             ).fetchall()
         items = [_row_to_api(r) for r in rows]
         return {
-            "items": self._enrich_subscribed_list(items),
+            "items": self._enrich_groups_list(self._enrich_subscribed_list(items)),
             "total": total,
             "limit": limit,
             "offset": offset,
         }
+
+    def _enrich_groups_list(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        if not items:
+            return items
+        ids = [it["id"] for it in items]
+        placeholders = ", ".join("?" * len(ids))
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT m.shipment_id, m.role, m.batch_no,
+                       g.id AS group_id, g.group_no, g.group_name
+                FROM {MEMBERS_TABLE} m
+                INNER JOIN {GROUPS_TABLE} g ON g.id = m.group_id
+                WHERE m.shipment_id IN ({placeholders})
+                ORDER BY g.group_no
+                """,
+                ids,
+            ).fetchall()
+        by_shipment: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            sid = row["shipment_id"]
+            by_shipment.setdefault(sid, []).append(
+                {
+                    "groupId": row["group_id"],
+                    "groupNo": row["group_no"],
+                    "groupName": row["group_name"] or "",
+                    "role": row["role"],
+                    "batchNo": row["batch_no"] or "",
+                }
+            )
+        for item in items:
+            item["groups"] = by_shipment.get(item["id"], [])
+        return items
 
     def tracking_freshness_stats(self) -> dict[str, Any]:
         sql, params = freshness_stats_sql()
@@ -510,6 +604,14 @@ class ShipmentsRepository:
                 ORDER BY cc.category
                 """
             ).fetchall()
+            group_rows = self._conn.execute(
+                f"""
+                SELECT id, group_no, group_name
+                FROM {GROUPS_TABLE}
+                ORDER BY group_no DESC
+                LIMIT 500
+                """
+            ).fetchall()
         return {
             "customers": out["customer"],
             "carrierCodes": out["carrier_code"],
@@ -522,6 +624,14 @@ class ShipmentsRepository:
             "exceptionTypes": [
                 {"code": str(r["code"]), "nameZh": str(r["name_zh"] or r["code"])}
                 for r in exception_defs
+            ],
+            "groups": [
+                {
+                    "id": str(r["id"]),
+                    "groupNo": str(r["group_no"]),
+                    "groupName": str(r["group_name"] or ""),
+                }
+                for r in group_rows
             ],
         }
 

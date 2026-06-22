@@ -26,6 +26,15 @@
     "收件人邮编": "zipcode"
   },
   "export_only_fields": ["latest_tracking_time", "latest_tracking_desc"],
+  "group_import_columns": {
+    "分组编号": "group_no",
+    "分组名称": "group_name",
+    "批次号": "batch_no",
+    "是否最后一批": "is_last_batch"
+  },
+  "group_column_aliases": {
+    "最后一批": "is_last_batch"
+  },
   "status_aliases": {
     "转运中": "IN_TRANSIT",
     "在途": "IN_TRANSIT",

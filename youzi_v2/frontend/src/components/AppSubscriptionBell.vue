@@ -1,7 +1,13 @@
 <script setup lang="ts">
-import { NButton, NPopover, NSpin, useMessage } from 'naive-ui'
+import { NButton, NPopover, NSpin, NTag, useMessage } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import {
+  getShipmentGroupUnreadNotifications,
+  markAllShipmentGroupNotificationsRead,
+  markShipmentGroupNotificationRead,
+  type ShipmentGroupNotification,
+} from '@/api/shipmentGroups'
 import {
   getShipmentTrackingNotifications,
   markAllShipmentTrackingNotificationsRead,
@@ -15,19 +21,35 @@ const router = useRouter()
 const message = useMessage()
 
 const loading = ref(false)
-const items = ref<ShipmentTrackingNotification[]>([])
-const unreadCount = ref(0)
+const trackingItems = ref<ShipmentTrackingNotification[]>([])
+const groupItems = ref<ShipmentGroupNotification[]>([])
+const trackingUnread = ref(0)
+const groupUnread = ref(0)
 const popoverShow = ref(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
+const unreadCount = computed(() => trackingUnread.value + groupUnread.value)
 const hasUnread = computed(() => unreadCount.value > 0)
+const hasAnyItems = computed(() => trackingItems.value.length > 0 || groupItems.value.length > 0)
+
+const severityTag: Record<string, 'default' | 'warning' | 'error'> = {
+  info: 'default',
+  warning: 'warning',
+  urgent: 'error',
+}
 
 function trackingSourceLabel(source: string): string {
   if (source === 'internal') return '内部轨迹'
   if (source === 'carrier') return '承运商轨迹'
   if (source === 'arrival') return '到港'
   return '轨迹'
+}
+
+function groupDisplayLabel(n: ShipmentGroupNotification): string {
+  const name = n.groupName?.trim()
+  if (name) return `${name}（${n.groupNo || ''}）`
+  return n.groupNo || '分组'
 }
 
 function formatTime(raw: string | null | undefined) {
@@ -37,9 +59,14 @@ function formatTime(raw: string | null | undefined) {
 async function load() {
   loading.value = true
   try {
-    const res = await getShipmentTrackingNotifications(20)
-    items.value = res.items
-    unreadCount.value = res.unreadCount
+    const [trackingRes, groupRes] = await Promise.all([
+      getShipmentTrackingNotifications(20),
+      getShipmentGroupUnreadNotifications(20),
+    ])
+    trackingItems.value = trackingRes.items
+    trackingUnread.value = trackingRes.unreadCount
+    groupItems.value = groupRes.items
+    groupUnread.value = groupRes.unreadCount
   } catch {
     /* 顶栏静默失败，避免打断操作 */
   } finally {
@@ -47,11 +74,21 @@ async function load() {
   }
 }
 
-async function dismissOne(n: ShipmentTrackingNotification) {
+async function dismissTracking(n: ShipmentTrackingNotification) {
   try {
     await markShipmentTrackingNotificationRead(n.id)
-    items.value = items.value.filter((x) => x.id !== n.id)
-    unreadCount.value = Math.max(0, unreadCount.value - 1)
+    trackingItems.value = trackingItems.value.filter((x) => x.id !== n.id)
+    trackingUnread.value = Math.max(0, trackingUnread.value - 1)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
+async function dismissGroup(n: ShipmentGroupNotification) {
+  try {
+    await markShipmentGroupNotificationRead(n.id)
+    groupItems.value = groupItems.value.filter((x) => x.id !== n.id)
+    groupUnread.value = Math.max(0, groupUnread.value - 1)
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
   }
@@ -60,11 +97,17 @@ async function dismissOne(n: ShipmentTrackingNotification) {
 async function dismissAll() {
   if (!hasUnread.value) return
   try {
-    const res = await markAllShipmentTrackingNotificationsRead()
-    items.value = []
-    unreadCount.value = 0
-    if (res.count > 0) {
-      message.success('已标记 ' + String(res.count) + ' 条为已读')
+    const [trackingRes, groupRes] = await Promise.all([
+      trackingUnread.value > 0 ? markAllShipmentTrackingNotificationsRead() : Promise.resolve({ count: 0 }),
+      groupUnread.value > 0 ? markAllShipmentGroupNotificationsRead() : Promise.resolve(0),
+    ])
+    trackingItems.value = []
+    groupItems.value = []
+    trackingUnread.value = 0
+    groupUnread.value = 0
+    const total = (trackingRes.count ?? 0) + (groupRes ?? 0)
+    if (total > 0) {
+      message.success('已标记 ' + String(total) + ' 条为已读')
     }
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
@@ -76,6 +119,12 @@ function goShipment(shipmentNo: string) {
   if (!sn) return
   popoverShow.value = false
   router.push({ path: '/shipments', query: { shipmentNo: sn, fromNotify: '1' } })
+}
+
+function goGroup(groupId: string) {
+  if (!groupId) return
+  popoverShow.value = false
+  router.push({ path: '/shipment-groups', query: { groupId } })
 }
 
 function onPopoverShowChange(show: boolean) {
@@ -100,7 +149,7 @@ onUnmounted(() => {
     trigger="click"
     placement="bottom-end"
     :show="popoverShow"
-    :width="360"
+    :width="380"
     :show-arrow="false"
     @update:show="onPopoverShowChange"
   >
@@ -109,8 +158,8 @@ onUnmounted(() => {
         type="button"
         class="subscription-bell-trigger"
         :class="{ 'subscription-bell-trigger--active': hasUnread }"
-        aria-label="订阅消息"
-        title="订阅消息"
+        aria-label="消息通知"
+        title="消息通知"
       >
         <BellIcon :filled="hasUnread" size="1.125rem" />
         <span v-if="hasUnread" class="subscription-bell-badge" aria-hidden="true" />
@@ -119,7 +168,7 @@ onUnmounted(() => {
 
     <div class="subscription-popover">
       <div class="subscription-popover__head">
-        <span class="subscription-popover__title">订阅消息</span>
+        <span class="subscription-popover__title">消息通知</span>
         <NButton
           v-if="hasUnread"
           size="tiny"
@@ -132,44 +181,72 @@ onUnmounted(() => {
       </div>
 
       <NSpin :show="loading" size="small">
-        <p v-if="!loading && items.length === 0" class="subscription-popover__empty">
-          暂无未读订阅消息
+        <p v-if="!loading && !hasAnyItems" class="subscription-popover__empty">
+          暂无未读消息
         </p>
-        <ul v-else class="subscription-popover__list">
-          <li
-            v-for="n in items"
-            :key="n.id"
-            class="subscription-popover__item"
-            :class="
-              hasDeliveredKeyword(n.latestDesc)
-                ? 'subscription-popover__item--delivered'
-                : ''
-            "
-          >
-            <button type="button" class="subscription-popover__body" @click="goShipment(n.shipmentNo)">
-              <p class="subscription-popover__shipment">
-                <span class="subscription-popover__shipment-no">{{ n.shipmentNo }}</span>
-                <span v-if="n.customer" class="text-[var(--color-muted)]">{{ n.customer }}</span>
-                <span class="text-[var(--color-muted)]">{{ trackingSourceLabel(n.trackingSource) }}</span>
-              </p>
-              <p class="subscription-popover__desc line-clamp-2">
-                <template
-                  v-for="(part, idx) in splitDeliveredHighlight(n.latestDesc)"
-                  :key="idx"
-                >
-                  <span v-if="part.highlight" class="subscription-popover__highlight">
-                    {{ part.text }}
-                  </span>
-                  <span v-else>{{ part.text }}</span>
-                </template>
-              </p>
-              <p class="subscription-popover__meta">
-                {{ formatTime(n.latestTime) }} · {{ formatTime(n.createdAt) }}
-              </p>
-            </button>
-            <NButton size="tiny" quaternary @click="dismissOne(n)">知道了</NButton>
-          </li>
-        </ul>
+        <div v-else class="subscription-popover__sections">
+          <section v-if="groupItems.length" class="subscription-popover__section">
+            <p class="subscription-popover__section-title">分组提醒</p>
+            <ul class="subscription-popover__list">
+              <li
+                v-for="n in groupItems"
+                :key="'g-' + n.id"
+                class="subscription-popover__item subscription-popover__item--group"
+              >
+                <button type="button" class="subscription-popover__body" @click="goGroup(n.groupId)">
+                  <p class="subscription-popover__shipment">
+                    <NTag size="small" :type="severityTag[n.severity] ?? 'warning'" :bordered="false">
+                      {{ n.title }}
+                    </NTag>
+                    <span class="subscription-popover__shipment-no">{{ groupDisplayLabel(n) }}</span>
+                  </p>
+                  <p class="subscription-popover__desc line-clamp-2">{{ n.message }}</p>
+                  <p class="subscription-popover__meta">{{ formatTime(n.triggeredAt) }}</p>
+                </button>
+                <NButton size="tiny" quaternary @click="dismissGroup(n)">知道了</NButton>
+              </li>
+            </ul>
+          </section>
+
+          <section v-if="trackingItems.length" class="subscription-popover__section">
+            <p class="subscription-popover__section-title">轨迹订阅</p>
+            <ul class="subscription-popover__list">
+              <li
+                v-for="n in trackingItems"
+                :key="'t-' + n.id"
+                class="subscription-popover__item"
+                :class="
+                  hasDeliveredKeyword(n.latestDesc)
+                    ? 'subscription-popover__item--delivered'
+                    : ''
+                "
+              >
+                <button type="button" class="subscription-popover__body" @click="goShipment(n.shipmentNo)">
+                  <p class="subscription-popover__shipment">
+                    <span class="subscription-popover__shipment-no">{{ n.shipmentNo }}</span>
+                    <span v-if="n.customer" class="text-[var(--color-muted)]">{{ n.customer }}</span>
+                    <span class="text-[var(--color-muted)]">{{ trackingSourceLabel(n.trackingSource) }}</span>
+                  </p>
+                  <p class="subscription-popover__desc line-clamp-2">
+                    <template
+                      v-for="(part, idx) in splitDeliveredHighlight(n.latestDesc)"
+                      :key="idx"
+                    >
+                      <span v-if="part.highlight" class="subscription-popover__highlight">
+                        {{ part.text }}
+                      </span>
+                      <span v-else>{{ part.text }}</span>
+                    </template>
+                  </p>
+                  <p class="subscription-popover__meta">
+                    {{ formatTime(n.latestTime) }} · {{ formatTime(n.createdAt) }}
+                  </p>
+                </button>
+                <NButton size="tiny" quaternary @click="dismissTracking(n)">知道了</NButton>
+              </li>
+            </ul>
+          </section>
+        </div>
       </NSpin>
     </div>
   </NPopover>
@@ -214,7 +291,7 @@ onUnmounted(() => {
 }
 
 .subscription-popover {
-  max-height: min(24rem, 70vh);
+  max-height: min(28rem, 75vh);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -243,12 +320,31 @@ onUnmounted(() => {
   color: var(--color-muted);
 }
 
+.subscription-popover__sections {
+  max-height: min(24rem, 65vh);
+  overflow-y: auto;
+}
+
+.subscription-popover__section + .subscription-popover__section {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.subscription-popover__section-title {
+  margin: 0 0 0.375rem;
+  padding: 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
 .subscription-popover__list {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: min(20rem, 60vh);
-  overflow-y: auto;
 }
 
 .subscription-popover__item {
@@ -258,6 +354,10 @@ onUnmounted(() => {
   padding: 0.5rem;
   border-radius: 0.5rem;
   background: rgb(14 165 233 / 0.08);
+}
+
+.subscription-popover__item--group {
+  background: rgb(245 158 11 / 0.08);
 }
 
 .subscription-popover__item + .subscription-popover__item {

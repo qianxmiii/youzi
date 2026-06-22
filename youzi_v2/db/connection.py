@@ -46,6 +46,7 @@ class Database:
         from . import shipment_tracking_numbers_table
         from . import port_subscriptions_table
         from . import shipment_subscriptions_table
+        from . import shipment_groups_table
         from . import vessel_voyages_table
 
         with self._lock:
@@ -65,6 +66,7 @@ class Database:
             vessel_voyages_table.ensure_schema(self._conn)
             port_subscriptions_table.ensure_schema(self._conn)
             shipment_subscriptions_table.ensure_schema(self._conn)
+            shipment_groups_table.ensure_schema(self._conn)
             self._conn.commit()
         app_settings_table.seed_if_empty(self._conn)
         code_tables.seed_if_empty(self._conn)

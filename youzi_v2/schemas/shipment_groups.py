@@ -1,9 +1,65 @@
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
-from ..shipment_group_types import GROUP_TYPES, normalize_group_types, normalize_types_payload
+from ..shipment_group_rules import RULE_TYPES, normalize_rule_type
+
 PAYMENT_STATUSES = frozenset({"UNPAID", "PARTIAL", "PAID"})
 PAYMENT_DUE_RULES = frozenset({"LAST_ARRIVAL"})
-MEMBER_ROLES = frozenset({"NORMAL", "LAST_BATCH", "KEY_BATCH"})
+
+
+class ShipmentGroupRuleIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    rule_type: str = Field(..., validation_alias=AliasChoices("ruleType", "rule_type"))
+    enabled: bool = True
+    threshold_days: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("thresholdDays", "threshold_days"),
+    )
+    warning_days: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("warningDays", "warning_days"),
+    )
+    trigger_status: str = Field(
+        default="",
+        validation_alias=AliasChoices("triggerStatus", "trigger_status"),
+    )
+    config_json: str = Field(
+        default="{}",
+        validation_alias=AliasChoices("configJson", "config_json"),
+    )
+
+    @field_validator("rule_type")
+    @classmethod
+    def _rule_type(cls, v: str) -> str:
+        return normalize_rule_type(v)
+
+
+class ShipmentGroupRulesReplaceIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    rules: list[ShipmentGroupRuleIn] = Field(default_factory=list)
+
+
+class ShipmentGroupRulePatchIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    enabled: bool | None = None
+    threshold_days: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("thresholdDays", "threshold_days"),
+    )
+    warning_days: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("warningDays", "warning_days"),
+    )
+    trigger_status: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("triggerStatus", "trigger_status"),
+    )
+    config_json: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("configJson", "config_json"),
+    )
 
 
 class ShipmentGroupMembersAddIn(BaseModel):
@@ -15,16 +71,6 @@ class ShipmentGroupMembersAddIn(BaseModel):
         max_length=200,
         validation_alias=AliasChoices("shipmentIds", "ids"),
     )
-    role: str = Field(default="NORMAL")
-    batch_no: str = Field(default="", validation_alias=AliasChoices("batchNo", "batch_no"))
-
-    @field_validator("role")
-    @classmethod
-    def _role(cls, v: str) -> str:
-        key = (v or "NORMAL").strip().upper()
-        if key not in MEMBER_ROLES:
-            raise ValueError(f"role 须为 {', '.join(sorted(MEMBER_ROLES))}")
-        return key
 
 
 class ShipmentGroupMembersRemoveIn(BaseModel):
@@ -45,21 +91,6 @@ class ShipmentGroupMemberPatchItem(BaseModel):
         ...,
         validation_alias=AliasChoices("shipmentId", "id"),
     )
-    role: str | None = None
-    batch_no: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("batchNo", "batch_no"),
-    )
-
-    @field_validator("role")
-    @classmethod
-    def _role(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        key = v.strip().upper()
-        if key not in MEMBER_ROLES:
-            raise ValueError(f"role 须为 {', '.join(sorted(MEMBER_ROLES))}")
-        return key
 
 
 class ShipmentGroupMembersBatchPatchIn(BaseModel):
@@ -111,23 +142,11 @@ class ShipmentGroupIn(BaseModel):
     group_no: str | None = Field(
         default=None,
         validation_alias=AliasChoices("groupNo", "group_no"),
-        description="分组编号；留空则自动生成 GYYYYMMDDnnn",
+        description="分组编号；留空则自动生成 GYYMMDDnnn",
     )
     group_name: str = Field(
         default="",
         validation_alias=AliasChoices("groupName", "group_name"),
-    )
-    group_type: str = Field(
-        default="MANUAL",
-        validation_alias=AliasChoices("groupType", "group_type"),
-    )
-    primary_type: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("primaryType", "primary_type"),
-    )
-    group_types: list[str] | None = Field(
-        default=None,
-        validation_alias=AliasChoices("groupTypes", "group_types"),
     )
     customer: str | None = None
     customer_no: str | None = Field(
@@ -151,42 +170,7 @@ class ShipmentGroupIn(BaseModel):
         validation_alias=AliasChoices("paymentDueRule", "payment_due_rule"),
     )
     note: str = ""
-
-    @field_validator("group_types")
-    @classmethod
-    def _group_types_in(cls, v: list[str] | None) -> list[str] | None:
-        if v is None:
-            return None
-        return normalize_group_types(v)
-
-    @field_validator("primary_type")
-    @classmethod
-    def _primary_type_in(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        key = v.strip().upper()
-        if key not in GROUP_TYPES:
-            raise ValueError(f"primaryType 须为 {', '.join(sorted(GROUP_TYPES))}")
-        return key
-
-    @field_validator("group_type")
-    @classmethod
-    def _group_type(cls, v: str) -> str:
-        key = (v or "MANUAL").strip().upper()
-        if key not in GROUP_TYPES:
-            raise ValueError(f"groupType 须为 {', '.join(sorted(GROUP_TYPES))}")
-        return key
-
-    def resolve_types(self) -> tuple[str, list[str]]:
-        return normalize_types_payload(
-            primary_type=self.primary_type,
-            group_types=self.group_types,
-            legacy_group_type=(
-                self.group_type
-                if self.group_types is None and self.primary_type is None
-                else None
-            ),
-        )
+    rules: list[ShipmentGroupRuleIn] = Field(default_factory=list)
 
     @field_validator("payment_status")
     @classmethod
@@ -203,6 +187,16 @@ class ShipmentGroupIn(BaseModel):
         if key not in PAYMENT_DUE_RULES:
             raise ValueError(f"paymentDueRule 须为 {', '.join(sorted(PAYMENT_DUE_RULES))}")
         return key
+
+    @field_validator("rules")
+    @classmethod
+    def _rules_unique(cls, v: list[ShipmentGroupRuleIn]) -> list[ShipmentGroupRuleIn]:
+        seen: set[str] = set()
+        for rule in v:
+            if rule.rule_type in seen:
+                raise ValueError(f"规则重复：{rule.rule_type}")
+            seen.add(rule.rule_type)
+        return v
 
 
 class ShipmentGroupEvaluateResult(BaseModel):
@@ -245,18 +239,6 @@ class ShipmentGroupSuggestionItem(BaseModel):
         default="",
         validation_alias=AliasChoices("ruleLabel", "rule_label"),
     )
-    group_type: str = Field(
-        default="MANUAL",
-        validation_alias=AliasChoices("groupType", "group_type"),
-    )
-    primary_type: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("primaryType", "primary_type"),
-    )
-    group_types: list[str] | None = Field(
-        default=None,
-        validation_alias=AliasChoices("groupTypes", "group_types"),
-    )
     proposed_group_name: str = Field(
         default="",
         validation_alias=AliasChoices("proposedGroupName", "proposed_group_name"),
@@ -291,6 +273,7 @@ class ShipmentGroupSuggestionItem(BaseModel):
         validation_alias=AliasChoices("shipmentNos", "shipment_nos"),
     )
     member_count: int = Field(default=0, alias="memberCount")
+    rules: list[ShipmentGroupRuleIn] = Field(default_factory=list)
 
 
 class ShipmentGroupSuggestionsPreviewResult(BaseModel):
@@ -326,18 +309,6 @@ class ShipmentGroupUpdateIn(BaseModel):
         default=None,
         validation_alias=AliasChoices("groupName", "group_name"),
     )
-    group_type: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("groupType", "group_type"),
-    )
-    primary_type: str | None = Field(
-        default=None,
-        validation_alias=AliasChoices("primaryType", "primary_type"),
-    )
-    group_types: list[str] | None = Field(
-        default=None,
-        validation_alias=AliasChoices("groupTypes", "group_types"),
-    )
     customer: str | None = None
     customer_no: str | None = Field(
         default=None,
@@ -360,33 +331,7 @@ class ShipmentGroupUpdateIn(BaseModel):
         validation_alias=AliasChoices("paymentDueRule", "payment_due_rule"),
     )
     note: str | None = None
-
-    @field_validator("group_types")
-    @classmethod
-    def _group_types_update(cls, v: list[str] | None) -> list[str] | None:
-        if v is None:
-            return None
-        return normalize_group_types(v)
-
-    @field_validator("primary_type")
-    @classmethod
-    def _primary_type_update(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        key = v.strip().upper()
-        if key not in GROUP_TYPES:
-            raise ValueError(f"primaryType 须为 {', '.join(sorted(GROUP_TYPES))}")
-        return key
-
-    @field_validator("group_type")
-    @classmethod
-    def _group_type(cls, v: str | None) -> str | None:
-        if v is None:
-            return None
-        key = v.strip().upper()
-        if key not in GROUP_TYPES:
-            raise ValueError(f"groupType 须为 {', '.join(sorted(GROUP_TYPES))}")
-        return key
+    rules: list[ShipmentGroupRuleIn] | None = None
 
     @field_validator("payment_status")
     @classmethod
@@ -407,3 +352,17 @@ class ShipmentGroupUpdateIn(BaseModel):
         if key not in PAYMENT_DUE_RULES:
             raise ValueError(f"paymentDueRule 须为 {', '.join(sorted(PAYMENT_DUE_RULES))}")
         return key
+
+    @field_validator("rules")
+    @classmethod
+    def _rules_unique(
+        cls, v: list[ShipmentGroupRuleIn] | None
+    ) -> list[ShipmentGroupRuleIn] | None:
+        if v is None:
+            return None
+        seen: set[str] = set()
+        for rule in v:
+            if rule.rule_type in seen:
+                raise ValueError(f"规则重复：{rule.rule_type}")
+            seen.add(rule.rule_type)
+        return v

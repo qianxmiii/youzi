@@ -6,7 +6,6 @@ from typing import Any
 
 from ..db.connection import Database
 from ..db.shipments_table import TABLE_NAME as SHIPMENTS_TABLE
-from ..shipment_group_types import normalize_types_payload
 
 _RULE_LABELS: dict[str, str] = {
     "CUSTOMER_ORDER": "同客户 + 客户订单号",
@@ -14,14 +13,6 @@ _RULE_LABELS: dict[str, str] = {
     "CUSTOMER_PORT_ETA": "同客户 + 目的港 + ETA",
     "AMAZON_REF": "同亚马逊预约号",
     "CUSTOMER_SHIPMENT": "同货件号",
-}
-
-_GROUP_TYPES: dict[str, str] = {
-    "CUSTOMER_ORDER": "ORDER_BATCH",
-    "CUSTOMER_VESSEL": "VESSEL_BATCH",
-    "CUSTOMER_PORT_ETA": "PORT_BATCH",
-    "AMAZON_REF": "ORDER_BATCH",
-    "CUSTOMER_SHIPMENT": "ORDER_BATCH",
 }
 
 
@@ -135,9 +126,6 @@ def build_group_suggestions(
                     "suggestionKey": suggestion_key,
                     "ruleType": rule_type,
                     "ruleLabel": _RULE_LABELS[rule_type],
-                    "primaryType": _GROUP_TYPES[rule_type],
-                    "groupTypes": [_GROUP_TYPES[rule_type]],
-                    "groupType": _GROUP_TYPES[rule_type],
                     "proposedGroupName": _proposed_group_name(rule_type, key, sample),
                     "customer": _norm(sample.get("customer")) or None,
                     "customerNo": _norm(sample.get("customerNo")) or None,
@@ -146,6 +134,7 @@ def build_group_suggestions(
                     "shipmentIds": [m["id"] for m in members],
                     "shipmentNos": [m["shipmentNo"] for m in members],
                     "memberCount": len(members),
+                    "rules": [],
                 }
             )
 
@@ -177,34 +166,33 @@ def apply_group_suggestions(
             continue
         try:
             group_no = (item.get("groupNo") or item.get("group_no") or "").strip()
-            group_name = (item.get("groupName") or item.get("group_name") or item.get("proposedGroupName") or "").strip()
-            primary, types = normalize_types_payload(
-                primary_type=item.get("primaryType") or item.get("primary_type"),
-                group_types=item.get("groupTypes") or item.get("group_types"),
-                legacy_group_type=item.get("groupType") or item.get("group_type"),
-            )
+            group_name = (
+                item.get("groupName")
+                or item.get("group_name")
+                or item.get("proposedGroupName")
+                or ""
+            ).strip()
+            rules = item.get("rules") or []
             if group_no:
                 group, is_new = groups_repo.get_or_create_for_import(
                     group_no,
                     group_name=group_name,
-                    primary_type=primary,
-                    group_types=types,
                     customer=item.get("customer"),
                     customer_no=item.get("customerNo") or item.get("customer_no"),
                     vessel_voyage=item.get("vesselVoyage") or item.get("vessel_voyage"),
                     destination_port_code=item.get("destinationPortCode")
                     or item.get("destination_port_code"),
+                    rules=rules,
                 )
             else:
                 group = groups_repo.create(
                     group_name=group_name,
-                    primary_type=primary,
-                    group_types=types,
                     customer=item.get("customer"),
                     customer_no=item.get("customerNo") or item.get("customer_no"),
                     vessel_voyage=item.get("vesselVoyage") or item.get("vessel_voyage"),
                     destination_port_code=item.get("destinationPortCode")
                     or item.get("destination_port_code"),
+                    rules=rules,
                 )
                 is_new = True
             if is_new:

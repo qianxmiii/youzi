@@ -9,6 +9,7 @@ import {
   NSelect,
   NSpace,
   NSwitch,
+  useDialog,
   useMessage,
   type DataTableColumns,
 } from 'naive-ui'
@@ -25,6 +26,7 @@ import {
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 
 const message = useMessage()
+const dialog = useDialog()
 const loading = ref(false)
 const syncing = ref(false)
 const submitting = ref(false)
@@ -37,6 +39,7 @@ const newCustomerLang = ref<CustomerLang>('zh')
 const newNote = ref('')
 const page = ref(1)
 const pageSize = ref(50)
+const nameDrafts = ref<Record<string, string>>({})
 
 const customerLangOptions = [
   { label: '中文', value: 'zh' as const },
@@ -108,6 +111,67 @@ function replaceRow(updated: Customer) {
   if (idx >= 0) items.value[idx] = updated
 }
 
+async function handleRename(row: Customer, newName: string, updateShipments: boolean) {
+  try {
+    const updated = await updateCustomer(row.id, {
+      customerName: newName,
+      updateShipments,
+    })
+    replaceRow(updated)
+    if (updateShipments && updated.shipmentsUpdated != null) {
+      message.success(`已改名，并同步更新 ${updated.shipmentsUpdated} 条运单`)
+    } else {
+      message.success('客户名已更新')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '改名失败')
+    await load()
+  }
+}
+
+function clearNameDraft(id: string) {
+  const next = { ...nameDrafts.value }
+  delete next[id]
+  nameDrafts.value = next
+}
+
+function customerNameValue(row: Customer) {
+  return nameDrafts.value[row.id] ?? row.customerName
+}
+
+function onCustomerNameInput(row: Customer, value: string) {
+  nameDrafts.value = { ...nameDrafts.value, [row.id]: value }
+}
+
+function onCustomerNameBlur(row: Customer) {
+  const draft = (nameDrafts.value[row.id] ?? row.customerName).trim()
+  if (!draft) {
+    clearNameDraft(row.id)
+    message.warning('客户名不能为空')
+    return
+  }
+  if (draft === row.customerName) {
+    clearNameDraft(row.id)
+    return
+  }
+
+  const count = row.shipmentCount
+  if (count <= 0) {
+    void handleRename(row, draft, false).finally(() => clearNameDraft(row.id))
+    return
+  }
+
+  dialog.warning({
+    title: '同步运单客户名',
+    content: `客户名将由「${row.customerName}」改为「${draft}」。是否同时更新该客户名下全部 ${count} 条运单？`,
+    positiveText: '是，更新全部运单',
+    negativeText: '否，仅改客户表',
+    onPositiveClick: () => handleRename(row, draft, true).finally(() => clearNameDraft(row.id)),
+    onNegativeClick: () => handleRename(row, draft, false).finally(() => clearNameDraft(row.id)),
+    onClose: () => clearNameDraft(row.id),
+  })
+}
+
 async function patchRow(row: Customer, patch: Parameters<typeof updateCustomer>[1]) {
   try {
     const updated = await updateCustomer(row.id, patch)
@@ -143,11 +207,17 @@ const columns: DataTableColumns<Customer> = [
   {
     title: '运单用户名',
     key: 'customerName',
-    minWidth: 120,
+    minWidth: 160,
     ellipsis: { tooltip: true },
     render: (row) =>
-      h('span', { class: 'inline-flex items-center gap-1.5' }, [
-        h('span', row.customerName),
+      h('span', { class: 'inline-flex min-w-0 items-center gap-1.5' }, [
+        h(NInput, {
+          size: 'small',
+          value: customerNameValue(row),
+          placeholder: '运单用户名',
+          onUpdateValue: (v: string) => onCustomerNameInput(row, v),
+          onBlur: () => onCustomerNameBlur(row),
+        }),
         row.isVip ? h(VipStarBadge) : null,
       ]),
   },
@@ -247,7 +317,7 @@ onMounted(async () => {
       <div>
         <h2 class="page-h2">客户管理</h2>
         <p class="text-xs text-zinc-500">
-          运单用户名为同步键。客户语言用于 UPS/FedEx 等官网跳转（中文/英文站）。
+          运单用户名为同步键；可直接修改客户名，有关联运单时会询问是否同步更新运单。客户语言用于 UPS/FedEx 等官网跳转。
         </p>
       </div>
       <NButton size="small" type="primary" :loading="syncing" @click="handleSync">

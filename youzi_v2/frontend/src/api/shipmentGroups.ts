@@ -6,22 +6,31 @@ import type {
   ShipmentGroupEvaluateResult,
   ShipmentGroupListResponse,
   ShipmentGroupMembersAddResult,
-  ShipmentGroupMembersBatchPatchResult,
   ShipmentGroupMembersRemoveResult,
   ShipmentGroupNotificationListResponse,
+  ShipmentGroupRule,
+  ShipmentGroupRuleInput,
+  ShipmentGroupRuleMeta,
   ShipmentGroupSuggestionsApplyResult,
   ShipmentGroupSuggestionsPreviewResult,
   ShipmentGroupSuggestion,
+  ShipmentGroupUnreadNotificationsResponse,
   ShipmentGroupUpdatePayload,
 } from '@/types/shipmentGroup'
 
 export interface ListShipmentGroupsParams {
   search?: string
-  groupType?: string
+  ruleType?: string
+  hasRule?: boolean
+  hasUnread?: boolean
   paymentStatus?: string
   customer?: string
   limit?: number
   offset?: number
+}
+
+export async function getShipmentGroupRulesMeta(): Promise<{ ruleTypes: ShipmentGroupRuleMeta[] }> {
+  return api('/api/v1/shipment-groups/meta')
 }
 
 export async function previewShipmentGroupSuggestions(
@@ -70,6 +79,35 @@ export async function updateShipmentGroup(
   })
 }
 
+export async function deleteShipmentGroup(groupId: string): Promise<void> {
+  await api(`/api/v1/shipment-groups/${groupId}`, { method: 'DELETE' })
+}
+
+export async function listShipmentGroupRules(groupId: string): Promise<{ items: ShipmentGroupRule[] }> {
+  return api(`/api/v1/shipment-groups/${groupId}/rules`)
+}
+
+export async function replaceShipmentGroupRules(
+  groupId: string,
+  rules: ShipmentGroupRuleInput[],
+): Promise<{ items: ShipmentGroupRule[] }> {
+  return api(`/api/v1/shipment-groups/${groupId}/rules`, {
+    method: 'PUT',
+    body: { rules },
+  })
+}
+
+export async function patchShipmentGroupRule(
+  groupId: string,
+  ruleType: string,
+  patch: Partial<ShipmentGroupRuleInput>,
+): Promise<ShipmentGroupRule> {
+  return api(`/api/v1/shipment-groups/${groupId}/rules/${ruleType}`, {
+    method: 'PATCH',
+    body: patch,
+  })
+}
+
 export async function listShipmentGroupNotifications(
   groupId: string,
   params?: { unreadOnly?: boolean; limit?: number; offset?: number },
@@ -106,7 +144,9 @@ export async function listShipmentGroups(
 ): Promise<ShipmentGroupListResponse> {
   const query: Record<string, string> = {}
   if (params?.search?.trim()) query.search = params.search.trim()
-  if (params?.groupType?.trim()) query.groupType = params.groupType.trim()
+  if (params?.ruleType?.trim()) query.ruleType = params.ruleType.trim()
+  if (params?.hasRule === true) query.hasRule = 'true'
+  if (params?.hasRule === false) query.hasRule = 'false'
   if (params?.paymentStatus?.trim()) query.paymentStatus = params.paymentStatus.trim()
   if (params?.customer?.trim()) query.customer = params.customer.trim()
   if (params?.limit != null) query.limit = String(params.limit)
@@ -123,15 +163,10 @@ export async function createShipmentGroup(
 export async function addShipmentGroupMembers(
   groupId: string,
   shipmentIds: string[],
-  options?: { role?: string; batchNo?: string },
 ): Promise<ShipmentGroupMembersAddResult> {
   return api<ShipmentGroupMembersAddResult>(`/api/v1/shipment-groups/${groupId}/members`, {
     method: 'POST',
-    body: {
-      shipmentIds,
-      role: options?.role ?? 'NORMAL',
-      batchNo: options?.batchNo ?? '',
-    },
+    body: { shipmentIds },
   })
 }
 
@@ -143,14 +178,4 @@ export async function removeShipmentGroupMembers(
     method: 'DELETE',
     body: { shipmentIds },
   })
-}
-
-export async function patchShipmentGroupMembersBatch(
-  groupId: string,
-  items: { shipmentId: string; role?: string; batchNo?: string }[],
-): Promise<ShipmentGroupMembersBatchPatchResult> {
-  return api<ShipmentGroupMembersBatchPatchResult>(
-    `/api/v1/shipment-groups/${groupId}/members/batch`,
-    { method: 'PATCH', body: { items } },
-  )
 }

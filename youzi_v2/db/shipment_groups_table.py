@@ -124,28 +124,21 @@ def _migrate_groups_primary_type(conn: sqlite3.Connection) -> None:
         )
 
 
-def _backfill_group_types(conn: sqlite3.Connection) -> None:
-    import uuid
-
-    rows = conn.execute(
-        f"SELECT id, primary_type, created_time FROM {GROUPS_TABLE}"
-    ).fetchall()
-    for row in rows:
-        gid = str(row["id"])
-        gtype = (row["primary_type"] or "MANUAL").strip().upper() or "MANUAL"
-        exists = conn.execute(
-            f"SELECT 1 FROM {TYPES_TABLE} WHERE group_id = ? LIMIT 1",
-            (gid,),
-        ).fetchone()
-        if exists:
-            continue
-        conn.execute(
-            f"""
-            INSERT INTO {TYPES_TABLE} (id, group_id, group_type, created_time)
-            VALUES (?, ?, ?, ?)
-            """,
-            (str(uuid.uuid4()), gid, gtype, row["created_time"]),
-        )
+def _migrate_rule_type_names(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        f"""
+        UPDATE {RULES_TABLE}
+        SET rule_type = 'GROUP_ARRIVED_PAYMENT'
+        WHERE rule_type = 'LAST_BATCH_ARRIVED_PAYMENT'
+        """
+    )
+    conn.execute(
+        f"""
+        UPDATE {NOTIFICATIONS_TABLE}
+        SET rule_type = 'GROUP_ARRIVED_PAYMENT'
+        WHERE rule_type = 'LAST_BATCH_ARRIVED_PAYMENT'
+        """
+    )
 
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
@@ -153,8 +146,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     _migrate_groups_primary_type(conn)
     conn.execute(_CREATE_MEMBERS_SQL)
     conn.execute(_CREATE_TYPES_SQL)
-    _backfill_group_types(conn)
     conn.execute(_CREATE_RULES_SQL)
     conn.execute(_CREATE_NOTIFICATIONS_SQL)
+    _migrate_rule_type_names(conn)
     for sql in _INDEXES:
         conn.execute(sql)

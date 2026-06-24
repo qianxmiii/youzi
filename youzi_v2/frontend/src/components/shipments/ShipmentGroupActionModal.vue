@@ -1,23 +1,26 @@
 <script setup lang="ts">
-import { NButton, NForm, NFormItem, NInput, NModal, NSelect } from 'naive-ui'
+import { NButton, NCheckbox, NForm, NFormItem, NInput, NInputNumber, NModal, NSelect } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import { listShipmentGroups } from '@/api/shipmentGroups'
-import type { ShipmentGroupBatchMode, ShipmentGroupFilterOption } from '@/types/shipmentGroup'
 import {
-  shipmentGroupTypeSelectOptions,
-  type ShipmentGroupType,
-} from '@/constants/shipmentGroupTypes'
-import {
-  renderShipmentGroupTypeSelectLabel,
-} from '@/utils/shipmentGroupTypeSelectRender'
+  SHIPMENT_GROUP_RULE_OPTIONS,
+  defaultRuleDraft,
+  shipmentGroupRuleHasDeadlineFields,
+  shipmentGroupRuleHasEtaWarningFields,
+  type ShipmentGroupRuleType,
+} from '@/constants/shipmentGroupRules'
+import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
+import type {
+  ShipmentGroupBatchMode,
+  ShipmentGroupFilterOption,
+  ShipmentGroupRuleInput,
+} from '@/types/shipmentGroup'
 
 const props = defineProps<{
   show: boolean
   mode: ShipmentGroupBatchMode
   count: number
-  /** 移出/标记末批时可选的分组（来自已选运单） */
   memberGroupOptions?: ShipmentGroupFilterOption[]
-  /** 新建分组时预填客户 */
   defaultCustomer?: string | null
 }>()
 
@@ -26,18 +29,16 @@ const emit = defineEmits<{
   confirmCreate: [
     groupName: string,
     customer: string | undefined,
-    types: { primaryType: ShipmentGroupType; groupTypes: ShipmentGroupType[] },
+    rules: ShipmentGroupRuleInput[],
   ]
-  confirmGroupId: [groupId: string, batchNo?: string]
+  confirmGroupId: [groupId: string]
 }>()
 
 const groupName = ref('')
 const customer = ref('')
-const groupTypes = ref<ShipmentGroupType[]>(['MANUAL'])
-const primaryType = ref<ShipmentGroupType>('MANUAL')
-const groupTypeOptions = shipmentGroupTypeSelectOptions()
+const enabledRuleTypes = ref<ShipmentGroupRuleType[]>([])
+const ruleDrafts = ref<Record<string, ShipmentGroupRuleInput>>({})
 const groupId = ref<string | null>(null)
-const batchNo = ref('')
 const loadingGroups = ref(false)
 const allGroupOptions = ref<{ label: string; value: string }[]>([])
 
@@ -49,8 +50,6 @@ const title = computed(() => {
       return '加入已有分组'
     case 'remove':
       return '移出分组'
-    case 'lastBatch':
-      return '标记最后一批'
     default:
       return '分组操作'
   }
@@ -64,15 +63,13 @@ const hint = computed(() => {
       return `将已选 ${props.count} 条运单加入所选分组。`
     case 'remove':
       return `将已选 ${props.count} 条运单从所选分组移出。`
-    case 'lastBatch':
-      return `将已选 ${props.count} 条运单在所选分组中标记为最后一批（LAST_BATCH）。`
     default:
       return ''
   }
 })
 
 const groupSelectOptions = computed(() => {
-  if (props.mode === 'remove' || props.mode === 'lastBatch') {
+  if (props.mode === 'remove') {
     return (props.memberGroupOptions ?? []).map((g) => ({
       label: formatGroupOptionLabel(g),
       value: g.id,
@@ -83,24 +80,23 @@ const groupSelectOptions = computed(() => {
 
 function formatGroupOptionLabel(g: ShipmentGroupFilterOption): string {
   const name = g.groupName?.trim()
-  if (name) return `${name}（${g.groupNo}）`
-  return g.groupNo
+  const no = formatGroupNoDisplay(g.groupNo)
+  if (name) return `${name}（${no}）`
+  return no
 }
 
-const primaryTypeOptions = computed(() =>
-  groupTypeOptions.filter((o) => groupTypes.value.includes(o.value as ShipmentGroupType)),
-)
-
-watch(groupTypes, (types) => {
-  if (!types.length) {
-    groupTypes.value = ['MANUAL']
-    primaryType.value = 'MANUAL'
-    return
+function toggleRule(ruleType: ShipmentGroupRuleType, checked: boolean) {
+  if (checked) {
+    if (!enabledRuleTypes.value.includes(ruleType)) {
+      enabledRuleTypes.value.push(ruleType)
+    }
+    if (!ruleDrafts.value[ruleType]) {
+      ruleDrafts.value[ruleType] = defaultRuleDraft(ruleType)
+    }
+  } else {
+    enabledRuleTypes.value = enabledRuleTypes.value.filter((t) => t !== ruleType)
   }
-  if (!types.includes(primaryType.value)) {
-    primaryType.value = types[0]
-  }
-})
+}
 
 async function loadAllGroups() {
   loadingGroups.value = true
@@ -127,36 +123,37 @@ watch(
     if (!visible) return
     groupName.value = ''
     customer.value = props.defaultCustomer?.trim() ?? ''
-    groupTypes.value = ['MANUAL']
-    primaryType.value = 'MANUAL'
+    enabledRuleTypes.value = []
+    ruleDrafts.value = {}
     groupId.value = null
-    batchNo.value = ''
     if (props.mode === 'add') void loadAllGroups()
-    else if (props.mode === 'remove' || props.mode === 'lastBatch') {
+    else if (props.mode === 'remove') {
       const opts = props.memberGroupOptions ?? []
       groupId.value = opts.length === 1 ? opts[0].id : null
     }
   },
 )
 
+function buildRules(): ShipmentGroupRuleInput[] {
+  return enabledRuleTypes.value.map((ruleType) => ({
+    ...defaultRuleDraft(ruleType),
+    ...ruleDrafts.value[ruleType],
+    ruleType,
+    enabled: true,
+  }))
+}
+
 function submit() {
   if (props.mode === 'create') {
-    emit('confirmCreate', groupName.value.trim(), customer.value.trim() || undefined, {
-      primaryType: primaryType.value,
-      groupTypes: [...groupTypes.value],
-    })
+    emit('confirmCreate', groupName.value.trim(), customer.value.trim() || undefined, buildRules())
     return
   }
   if (!groupId.value) return
-  if (props.mode === 'lastBatch') {
-    emit('confirmGroupId', groupId.value, batchNo.value.trim() || undefined)
-  } else {
-    emit('confirmGroupId', groupId.value)
-  }
+  emit('confirmGroupId', groupId.value)
 }
 
 const canSubmit = computed(() => {
-  if (props.mode === 'create') return groupTypes.value.length > 0 && !!primaryType.value
+  if (props.mode === 'create') return true
   return !!groupId.value
 })
 </script>
@@ -172,32 +169,60 @@ const canSubmit = computed(() => {
     <p class="mb-3 text-sm text-zinc-400">{{ hint }}</p>
     <NForm label-placement="left" label-width="88">
       <template v-if="mode === 'create'">
-        <NFormItem label="业务类型" required>
-          <NSelect
-            v-model:value="groupTypes"
-            :options="groupTypeOptions"
-            :render-label="renderShipmentGroupTypeSelectLabel"
-            consistent-menu-width
-            class="w-full"
-            multiple
-            placeholder="至少选择一项"
-          />
-        </NFormItem>
-        <NFormItem label="主类型" required>
-          <NSelect
-            v-model:value="primaryType"
-            :options="primaryTypeOptions"
-            :render-label="renderShipmentGroupTypeSelectLabel"
-            consistent-menu-width
-            class="w-full"
-            placeholder="用于列表图标与默认展示"
-          />
-        </NFormItem>
         <NFormItem label="分组名称">
           <NInput v-model:value="groupName" placeholder="可选，留空则仅显示组号" />
         </NFormItem>
         <NFormItem label="客户">
           <NInput v-model:value="customer" placeholder="可选" />
+        </NFormItem>
+        <NFormItem label="启用规则">
+          <div class="w-full space-y-3">
+            <div
+              v-for="opt in SHIPMENT_GROUP_RULE_OPTIONS"
+              :key="opt.value"
+              class="rounded-lg border border-[var(--color-border)] p-3"
+            >
+              <NCheckbox
+                :checked="enabledRuleTypes.includes(opt.value)"
+                @update:checked="(v: boolean) => toggleRule(opt.value, v)"
+              >
+                {{ opt.label }}
+              </NCheckbox>
+              <p class="mt-1 text-xs text-[var(--color-muted)]">{{ opt.description }}</p>
+              <div
+                v-if="enabledRuleTypes.includes(opt.value) && shipmentGroupRuleHasDeadlineFields(opt.value)"
+                class="mt-2 grid grid-cols-2 gap-2"
+              >
+                <NInputNumber
+                  v-model:value="ruleDrafts[opt.value].thresholdDays"
+                  :min="1"
+                  :show-button="false"
+                  size="small"
+                  placeholder="期限天数"
+                />
+                <NInputNumber
+                  v-model:value="ruleDrafts[opt.value].warningDays"
+                  :min="0"
+                  :show-button="false"
+                  size="small"
+                  placeholder="提前提醒"
+                />
+              </div>
+              <div
+                v-else-if="enabledRuleTypes.includes(opt.value) && shipmentGroupRuleHasEtaWarningFields(opt.value)"
+                class="mt-2"
+              >
+                <NInputNumber
+                  v-model:value="ruleDrafts[opt.value].warningDays"
+                  :min="1"
+                  :show-button="false"
+                  size="small"
+                  placeholder="到港前提醒天数"
+                  class="w-full"
+                />
+              </div>
+            </div>
+          </div>
         </NFormItem>
       </template>
       <template v-else>
@@ -210,9 +235,6 @@ const canSubmit = computed(() => {
             filterable
             clearable
           />
-        </NFormItem>
-        <NFormItem v-if="mode === 'lastBatch'" label="批次号">
-          <NInput v-model:value="batchNo" placeholder="可选" />
         </NFormItem>
       </template>
     </NForm>

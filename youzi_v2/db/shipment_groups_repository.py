@@ -9,13 +9,9 @@ from typing import Any
 
 from .connection import Database
 from .datetime_util import now_str
-from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, TYPES_TABLE
+from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, NOTIFICATIONS_TABLE, RULES_TABLE
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
-from ..shipment_group_types import (
-    GROUP_TYPES as _GROUP_TYPES,
-    normalize_types_payload,
-    sort_group_types,
-)
+from ..shipment_group_rules import validate_rule_payload
 _PAYMENT_STATUSES = frozenset({"UNPAID", "PARTIAL", "PAID"})
 _PAYMENT_DUE_RULES = frozenset({"LAST_ARRIVAL"})
 _MEMBER_ROLES = frozenset({"NORMAL", "LAST_BATCH", "KEY_BATCH"})
@@ -28,8 +24,20 @@ def _normalize_optional(value: str | None) -> str | None:
     return s if s else None
 
 
+import re
+
+_GROUP_NO_LEGACY = re.compile(r"^G20(\d{9})$")
+
+
+def format_group_no_display(group_no: str | None) -> str:
+    """旧自动编号 G20YYMMDDnnn → 展示 GYYMMDDnnn。"""
+    s = (group_no or "").strip()
+    m = _GROUP_NO_LEGACY.match(s)
+    return f"G{m.group(1)}" if m else s
+
+
 def _next_group_no(conn: sqlite3.Connection) -> str:
-    day = datetime.now().strftime("%Y%m%d")
+    day = datetime.now().strftime("%y%m%d")
     prefix = f"G{day}"
     row = conn.execute(
         f"""
@@ -50,30 +58,17 @@ def _next_group_no(conn: sqlite3.Connection) -> str:
     return f"{prefix}{seq:03d}"
 
 
-def _primary_from_row(row: sqlite3.Row) -> str:
-    keys = row.keys()
-    if "primary_type" in keys:
-        return (row["primary_type"] or "MANUAL").strip().upper() or "MANUAL"
-    if "group_type" in keys:
-        return (row["group_type"] or "MANUAL").strip().upper() or "MANUAL"
-    return "MANUAL"
-
-
 def _row_to_api(
     row: sqlite3.Row,
     *,
     member_count: int | None = None,
-    group_types: list[str] | None = None,
+    enabled_rules: list[str] | None = None,
+    unread_notification_count: int | None = None,
 ) -> dict[str, Any]:
-    primary = _primary_from_row(row)
-    types = sort_group_types(group_types or [primary])
     out: dict[str, Any] = {
         "id": row["id"],
         "groupNo": row["group_no"],
         "groupName": row["group_name"] or "",
-        "primaryType": primary,
-        "groupTypes": types,
-        "groupType": primary,
         "customer": row["customer"],
         "customerNo": row["customer_no"],
         "vesselVoyage": row["vessel_voyage"],
@@ -86,6 +81,10 @@ def _row_to_api(
     }
     if member_count is not None:
         out["memberCount"] = member_count
+    if enabled_rules is not None:
+        out["enabledRules"] = enabled_rules
+    if unread_notification_count is not None:
+        out["unreadNotificationCount"] = unread_notification_count
     return out
 
 
@@ -95,8 +94,6 @@ def _member_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "groupId": row["group_id"],
         "shipmentId": row["shipment_id"],
         "shipmentNo": row["shipment_no"],
-        "role": row["role"],
-        "batchNo": row["batch_no"] or "",
         "createdTime": row["created_time"],
     }
 
@@ -109,20 +106,7 @@ class ShipmentGroupsRepository:
     def _conn(self) -> sqlite3.Connection:
         return self._database.conn
 
-    def _load_types_for_group(self, group_id: str) -> list[str]:
-        gid = group_id.strip()
-        with self._database.lock:
-            rows = self._conn.execute(
-                f"""
-                SELECT group_type FROM {TYPES_TABLE}
-                WHERE group_id = ?
-                ORDER BY group_type
-                """,
-                (gid,),
-            ).fetchall()
-        return sort_group_types([str(r["group_type"]) for r in rows])
-
-    def _load_types_for_groups(self, group_ids: list[str]) -> dict[str, list[str]]:
+    def _load_enabled_rules_for_groups(self, group_ids: list[str]) -> dict[str, list[str]]:
         ids = [g.strip() for g in group_ids if g and g.strip()]
         if not ids:
             return {}
@@ -130,56 +114,63 @@ class ShipmentGroupsRepository:
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
-                SELECT group_id, group_type FROM {TYPES_TABLE}
-                WHERE group_id IN ({placeholders})
-                ORDER BY group_type
+                SELECT group_id, rule_type FROM {RULES_TABLE}
+                WHERE group_id IN ({placeholders}) AND enabled = 1
+                ORDER BY rule_type
                 """,
                 ids,
             ).fetchall()
         out: dict[str, list[str]] = {gid: [] for gid in ids}
         for row in rows:
-            out.setdefault(str(row["group_id"]), []).append(str(row["group_type"]))
-        return {gid: sort_group_types(types) for gid, types in out.items()}
+            out.setdefault(str(row["group_id"]), []).append(str(row["rule_type"]))
+        return out
 
-    def _replace_group_types(self, group_id: str, group_types: list[str]) -> None:
-        gid = group_id.strip()
-        types = sort_group_types(group_types)
-        if not types:
-            raise ValueError("groupTypes 至少包含一项")
-        now = now_str()
+    def _load_unread_counts_for_groups(self, group_ids: list[str]) -> dict[str, int]:
+        ids = [g.strip() for g in group_ids if g and g.strip()]
+        if not ids:
+            return {}
+        placeholders = ", ".join("?" * len(ids))
         with self._database.lock:
-            self._conn.execute(
-                f"DELETE FROM {TYPES_TABLE} WHERE group_id = ?",
-                (gid,),
-            )
-            for gtype in types:
-                self._conn.execute(
-                    f"""
-                    INSERT INTO {TYPES_TABLE} (id, group_id, group_type, created_time)
-                    VALUES (?, ?, ?, ?)
-                    """,
-                    (str(uuid.uuid4()), gid, gtype, now),
-                )
-            self._conn.commit()
+            rows = self._conn.execute(
+                f"""
+                SELECT group_id, COUNT(*) AS c
+                FROM {NOTIFICATIONS_TABLE}
+                WHERE group_id IN ({placeholders})
+                  AND (read_at IS NULL OR TRIM(read_at) = '')
+                  AND (resolved_at IS NULL OR TRIM(resolved_at) = '')
+                GROUP BY group_id
+                """,
+                ids,
+            ).fetchall()
+        return {str(r["group_id"]): int(r["c"] or 0) for r in rows}
 
     def _enrich_row_api(
         self,
         row: sqlite3.Row,
         *,
         member_count: int | None = None,
-        types_map: dict[str, list[str]] | None = None,
+        rules_map: dict[str, list[str]] | None = None,
+        unread_map: dict[str, int] | None = None,
     ) -> dict[str, Any]:
         gid = str(row["id"])
-        types = (types_map or {}).get(gid) or self._load_types_for_group(gid)
-        if not types:
-            types = [_primary_from_row(row)]
-        return _row_to_api(row, member_count=member_count, group_types=types)
+        enabled = (rules_map or {}).get(gid)
+        if enabled is None:
+            enabled = self._load_enabled_rules_for_groups([gid]).get(gid, [])
+        unread = (unread_map or {}).get(gid, 0) if unread_map is not None else None
+        return _row_to_api(
+            row,
+            member_count=member_count,
+            enabled_rules=enabled,
+            unread_notification_count=unread,
+        )
 
     def list_rows(
         self,
         *,
         search: str | None = None,
-        group_type: str | None = None,
+        rule_type: str | None = None,
+        has_rule: bool | None = None,
+        has_unread: bool | None = None,
         payment_status: str | None = None,
         customer: str | None = None,
         limit: int = 50,
@@ -196,19 +187,57 @@ class ShipmentGroupsRepository:
                 "(group_no LIKE ? OR group_name LIKE ? OR customer LIKE ? OR customer_no LIKE ?)"
             )
             params.extend([q, q, q, q])
-        if group_type and group_type.strip():
-            gt = group_type.strip().upper()
-            if gt not in _GROUP_TYPES:
-                raise ValueError(f"groupType 无效：{group_type}")
+        if rule_type and rule_type.strip():
+            from ..shipment_group_rules import normalize_rule_type
+
+            rt = normalize_rule_type(rule_type)
             conditions.append(
                 f"""
                 id IN (
-                  SELECT group_id FROM {TYPES_TABLE}
-                  WHERE group_type = ?
+                  SELECT group_id FROM {RULES_TABLE}
+                  WHERE rule_type = ? AND enabled = 1
                 )
                 """
             )
-            params.append(gt)
+            params.append(rt)
+        elif has_rule is True:
+            conditions.append(
+                f"""
+                id IN (
+                  SELECT DISTINCT group_id FROM {RULES_TABLE}
+                  WHERE enabled = 1
+                )
+                """
+            )
+        elif has_rule is False:
+            conditions.append(
+                f"""
+                id NOT IN (
+                  SELECT DISTINCT group_id FROM {RULES_TABLE}
+                  WHERE enabled = 1
+                )
+                """
+            )
+        if has_unread is True:
+            conditions.append(
+                f"""
+                id IN (
+                  SELECT DISTINCT group_id FROM {NOTIFICATIONS_TABLE}
+                  WHERE (read_at IS NULL OR TRIM(read_at) = '')
+                    AND (resolved_at IS NULL OR TRIM(resolved_at) = '')
+                )
+                """
+            )
+        elif has_unread is False:
+            conditions.append(
+                f"""
+                id NOT IN (
+                  SELECT DISTINCT group_id FROM {NOTIFICATIONS_TABLE}
+                  WHERE (read_at IS NULL OR TRIM(read_at) = '')
+                    AND (resolved_at IS NULL OR TRIM(resolved_at) = '')
+                )
+                """
+            )
         if payment_status and payment_status.strip():
             conditions.append("payment_status = ?")
             params.append(payment_status.strip().upper())
@@ -237,14 +266,16 @@ class ShipmentGroupsRepository:
                 [*params, limit, offset],
             ).fetchall()
 
-        types_map = self._load_types_for_groups([str(r["id"]) for r in rows])
+        rules_map = self._load_enabled_rules_for_groups([str(r["id"]) for r in rows])
+        unread_map = self._load_unread_counts_for_groups([str(r["id"]) for r in rows])
 
         return {
             "items": [
                 self._enrich_row_api(
                     r,
                     member_count=int(r["member_count"] or 0),
-                    types_map=types_map,
+                    rules_map=rules_map,
+                    unread_map=unread_map,
                 )
                 for r in rows
             ],
@@ -287,13 +318,11 @@ class ShipmentGroupsRepository:
         group_no: str,
         *,
         group_name: str = "",
-        primary_type: str = "MANUAL",
-        group_types: list[str] | None = None,
-        group_type: str | None = None,
         customer: str | None = None,
         customer_no: str | None = None,
         vessel_voyage: str | None = None,
         destination_port_code: str | None = None,
+        rules: list[dict[str, Any]] | None = None,
     ) -> tuple[dict[str, Any], bool]:
         gn = (group_no or "").strip()
         if not gn:
@@ -318,13 +347,11 @@ class ShipmentGroupsRepository:
         created = self.create(
             group_no=gn,
             group_name=group_name,
-            primary_type=primary_type,
-            group_types=group_types,
-            group_type=group_type,
             customer=customer,
             customer_no=customer_no,
             vessel_voyage=vessel_voyage,
             destination_port_code=destination_port_code,
+            rules=rules,
         )
         return created, True
 
@@ -424,9 +451,6 @@ class ShipmentGroupsRepository:
         *,
         group_no: str | None = None,
         group_name: str = "",
-        primary_type: str = "MANUAL",
-        group_types: list[str] | None = None,
-        group_type: str | None = None,
         customer: str | None = None,
         customer_no: str | None = None,
         vessel_voyage: str | None = None,
@@ -434,18 +458,28 @@ class ShipmentGroupsRepository:
         payment_status: str = "UNPAID",
         payment_due_rule: str = "LAST_ARRIVAL",
         note: str = "",
+        rules: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
-        primary, types = normalize_types_payload(
-            primary_type=primary_type,
-            group_types=group_types,
-            legacy_group_type=group_type,
-        )
         pstatus = (payment_status or "UNPAID").strip().upper()
         if pstatus not in _PAYMENT_STATUSES:
             raise ValueError(f"paymentStatus 无效：{payment_status}")
         prule = (payment_due_rule or "LAST_ARRIVAL").strip().upper()
         if prule not in _PAYMENT_DUE_RULES:
             raise ValueError(f"paymentDueRule 无效：{payment_due_rule}")
+
+        normalized_rules: list[dict[str, Any]] = []
+        if rules:
+            seen: set[str] = set()
+            for raw in rules:
+                validated = validate_rule_payload(
+                    str(raw.get("ruleType") or raw.get("rule_type") or ""),
+                    raw,
+                )
+                rt = validated["ruleType"]
+                if rt in seen:
+                    raise ValueError(f"规则重复：{rt}")
+                seen.add(rt)
+                normalized_rules.append(validated)
 
         rid = str(uuid.uuid4())
         now = now_str()
@@ -465,7 +499,7 @@ class ShipmentGroupsRepository:
                         rid,
                         no,
                         (group_name or "").strip(),
-                        primary,
+                        "",
                         _normalize_optional(customer),
                         _normalize_optional(customer_no),
                         _normalize_optional(vessel_voyage),
@@ -481,15 +515,13 @@ class ShipmentGroupsRepository:
             except sqlite3.IntegrityError as exc:
                 raise ValueError(f"分组编号已存在：{no}") from exc
 
-        self._replace_group_types(rid, types)
+        if normalized_rules:
+            from .shipment_group_alerts_repository import ShipmentGroupAlertsRepository
+
+            ShipmentGroupAlertsRepository(self._database).replace_rules(rid, normalized_rules)
         created = self.get_by_id(rid)
         if created is None:
             raise RuntimeError("创建分组后读取失败")
-        from .shipment_group_alerts_repository import ShipmentGroupAlertsRepository
-
-        ShipmentGroupAlertsRepository(self._database).ensure_default_rules(
-            rid, group_types=types
-        )
         return created
 
     def update(
@@ -497,9 +529,6 @@ class ShipmentGroupsRepository:
         item_id: str,
         *,
         group_name: str | None = None,
-        primary_type: str | None = None,
-        group_types: list[str] | None = None,
-        group_type: str | None = None,
         customer: str | None = None,
         customer_no: str | None = None,
         vessel_voyage: str | None = None,
@@ -507,30 +536,13 @@ class ShipmentGroupsRepository:
         payment_status: str | None = None,
         payment_due_rule: str | None = None,
         note: str | None = None,
+        rules: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any] | None:
         sets: list[str] = []
         params: list[Any] = []
-        types_changed = False
-        resolved_types: list[str] | None = None
-
         if group_name is not None:
             sets.append("group_name = ?")
             params.append(group_name.strip())
-        if primary_type is not None or group_types is not None or group_type is not None:
-            current = self.get_by_id(item_id.strip(), include_members=False)
-            if current is None:
-                return None
-            merged_primary = primary_type if primary_type is not None else current.get("primaryType")
-            merged_types = group_types if group_types is not None else current.get("groupTypes")
-            legacy = group_type if group_types is None and primary_type is None else None
-            primary, resolved_types = normalize_types_payload(
-                primary_type=merged_primary,
-                group_types=merged_types,
-                legacy_group_type=legacy,
-            )
-            sets.append("primary_type = ?")
-            params.append(primary)
-            types_changed = True
         if customer is not None:
             sets.append("customer = ?")
             params.append(_normalize_optional(customer))
@@ -559,31 +571,42 @@ class ShipmentGroupsRepository:
             sets.append("note = ?")
             params.append(note.strip())
 
-        if not sets:
+        if not sets and rules is None:
             return self.get_by_id(item_id)
 
-        sets.append("updated_time = ?")
-        params.append(now_str())
-        params.append(item_id.strip())
+        if sets:
+            sets.append("updated_time = ?")
+            params.append(now_str())
+            params.append(item_id.strip())
 
-        with self._database.lock:
-            cur = self._conn.execute(
-                f"UPDATE {GROUPS_TABLE} SET {', '.join(sets)} WHERE id = ?",
-                params,
-            )
-            if cur.rowcount == 0:
-                return None
-            self._conn.commit()
-        if types_changed and resolved_types is not None:
-            self._replace_group_types(item_id.strip(), resolved_types)
-        updated = self.get_by_id(item_id)
-        if updated and types_changed and resolved_types is not None:
+            with self._database.lock:
+                cur = self._conn.execute(
+                    f"UPDATE {GROUPS_TABLE} SET {', '.join(sets)} WHERE id = ?",
+                    params,
+                )
+                if cur.rowcount == 0:
+                    return None
+                self._conn.commit()
+
+        if rules is not None:
             from .shipment_group_alerts_repository import ShipmentGroupAlertsRepository
 
-            ShipmentGroupAlertsRepository(self._database).ensure_default_rules(
-                item_id.strip(), group_types=resolved_types
+            normalized: list[dict[str, Any]] = []
+            seen: set[str] = set()
+            for raw in rules:
+                validated = validate_rule_payload(
+                    str(raw.get("ruleType") or raw.get("rule_type") or ""),
+                    raw,
+                )
+                rt = validated["ruleType"]
+                if rt in seen:
+                    raise ValueError(f"规则重复：{rt}")
+                seen.add(rt)
+                normalized.append(validated)
+            ShipmentGroupAlertsRepository(self._database).replace_rules(
+                item_id.strip(), normalized
             )
-        return updated
+        return self.get_by_id(item_id)
 
     def delete(self, item_id: str) -> bool:
         gid = item_id.strip()
@@ -591,10 +614,6 @@ class ShipmentGroupsRepository:
 
         ShipmentGroupAlertsRepository(self._database).delete_for_group(gid)
         with self._database.lock:
-            self._conn.execute(
-                f"DELETE FROM {TYPES_TABLE} WHERE group_id = ?",
-                (gid,),
-            )
             self._conn.execute(
                 f"DELETE FROM {MEMBERS_TABLE} WHERE group_id = ?",
                 (gid,),
@@ -610,17 +629,12 @@ class ShipmentGroupsRepository:
         self,
         group_id: str,
         shipment_ids: list[str],
-        *,
-        role: str = "NORMAL",
-        batch_no: str = "",
     ) -> dict[str, Any]:
         gid = group_id.strip()
         if not self._group_exists(gid):
             raise KeyError("分组不存在")
-        member_role = (role or "NORMAL").strip().upper()
-        if member_role not in _MEMBER_ROLES:
-            raise ValueError(f"role 无效：{role}")
-        batch = (batch_no or "").strip()
+        member_role = "NORMAL"
+        batch = ""
         now = now_str()
 
         unique_ids = list(dict.fromkeys(s.strip() for s in shipment_ids if s and s.strip()))

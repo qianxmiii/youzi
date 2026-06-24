@@ -22,8 +22,10 @@ import {
   resolveShipmentGroupNotification,
 } from '@/api/shipmentGroups'
 import type { ShipmentGroupNotification } from '@/types/shipmentGroup'
+import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 import { maritimeStatusTagType } from '@/types/vesselSchedule'
 import MaritimeAlertStatCards from '@/components/home/MaritimeAlertStatCards.vue'
+import ShipmentGroupAlertCard from '@/components/shipments/ShipmentGroupAlertCard.vue'
 import { hasDeliveredKeyword, splitDeliveredHighlight } from '@/utils/highlightDelivered'
 
 const router = useRouter()
@@ -35,12 +37,6 @@ const data = ref<MaritimeAlertsOverview | null>(null)
 const groupNotifications = ref<ShipmentGroupNotification[]>([])
 const groupUnreadCount = ref(0)
 const error = ref('')
-
-const severityTag: Record<string, 'default' | 'warning' | 'error'> = {
-  info: 'default',
-  warning: 'warning',
-  urgent: 'error',
-}
 
 async function load() {
   loading.value = true
@@ -115,7 +111,7 @@ const hasGroupNotifications = computed(() => groupNotifications.value.length > 0
 function groupDisplayLabel(n: ShipmentGroupNotification): string {
   const name = n.groupName?.trim()
   if (name) return name
-  return n.groupNo || '分组'
+  return formatGroupNoDisplay(n.groupNo) || '分组'
 }
 
 async function dismissGroupNotification(n: ShipmentGroupNotification) {
@@ -294,27 +290,36 @@ function onFeedDismiss(item: AlertFeedItem) {
               全部已读
             </button>
           </div>
-          <ul class="workbench-feed">
-            <li
-              v-for="n in groupNotifications"
-              :key="n.id"
-              class="workbench-feed__item workbench-feed__item--batch"
-            >
-              <button type="button" class="workbench-feed__body" @click="goShipmentGroup(n.groupId)">
-                <div class="workbench-feed__row">
-                  <NTag size="small" :type="severityTag[n.severity] ?? 'warning'" :bordered="false">
-                    {{ n.title }}
-                  </NTag>
-                  <span class="workbench-feed__primary">{{ groupDisplayLabel(n) }}</span>
-                  <span class="workbench-feed__muted">{{ n.groupNo }}</span>
-                </div>
-                <p class="workbench-feed__desc line-clamp-2">{{ n.message }}</p>
-                <p class="workbench-feed__meta">{{ formatTime(n.triggeredAt) }}</p>
-              </button>
-              <NSpace size="small">
-                <NButton size="tiny" quaternary @click="dismissGroupNotification(n)">知道了</NButton>
-                <NButton size="tiny" quaternary @click="resolveGroupNotification(n)">已处理</NButton>
-              </NSpace>
+          <ul class="workbench-feed workbench-feed--alerts">
+            <li v-for="n in groupNotifications" :key="n.id">
+              <ShipmentGroupAlertCard
+                :title="n.title"
+                :subtitle="formatGroupNoDisplay(n.groupNo)"
+                :customer-name="n.customer || ''"
+                :rule-type="n.ruleType"
+                :message="n.message"
+                :triggered-at="n.triggeredAt"
+                :severity="n.severity"
+                clickable
+                @click="goShipmentGroup(n.groupId)"
+              >
+                <template #aside>
+                  <button
+                    type="button"
+                    class="group-alert-card__btn"
+                    @click.stop="dismissGroupNotification(n)"
+                  >
+                    知道了
+                  </button>
+                  <button
+                    type="button"
+                    class="group-alert-card__btn group-alert-card__btn--ghost"
+                    @click.stop="resolveGroupNotification(n)"
+                  >
+                    已处理
+                  </button>
+                </template>
+              </ShipmentGroupAlertCard>
             </li>
           </ul>
         </article>
@@ -621,16 +626,21 @@ function onFeedDismiss(item: AlertFeedItem) {
   background: var(--color-nav-hover);
 }
 
-.workbench-feed__item--batch {
-  background: rgb(245 158 11 / 0.06);
+.workbench-feed--alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
 }
 
-.workbench-feed__item--batch:hover {
-  background: rgb(245 158 11 / 0.12);
+.workbench-feed--alerts > li {
+  list-style: none;
 }
 
 .workbench-alerts--batch {
-  border-color: rgb(245 158 11 / 0.2);
+  border-color: var(--group-alert-warning-border);
 }
 
 .workbench-feed__item--delivered {

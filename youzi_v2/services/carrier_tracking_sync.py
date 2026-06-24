@@ -14,6 +14,7 @@ from .carrier_batch_schedule import (
     record_carrier_batch_finished,
     should_run_scheduled_carrier_batch,
 )
+from .shipment_group_alerts import evaluate_groups_after_tracking_sync
 from .sync_log import make_sync_logger
 from ..carrier_tracking_entry import latest_from_logs
 from ..last_mile_tracking import is_conwest_tracking_number, resolve_conwest_writeback
@@ -116,6 +117,7 @@ def sync_carrier_tracking(
     empty = 0
     not_found = 0
     log_count = 0
+    updated_shipment_nos: list[str] = []
     vendor_stats: dict[str, dict[str, int]] = {}
 
     out_log(
@@ -247,6 +249,7 @@ def sync_carrier_tracking(
                     tracking_number=tn or None,
                 )
                 updated += 1
+                updated_shipment_nos.append(sn)
                 v_stat["updated"] += 1
 
         vendor_stats[vendor_name] = v_stat
@@ -279,6 +282,12 @@ def sync_carrier_tracking(
     for err_line in errors[:20]:
         out_log(f"[承运商轨迹] 错误明细 {err_line}")
 
+    group_alerts = evaluate_groups_after_tracking_sync(
+        shipments_repo._database,
+        updated_shipment_nos,
+        out_log,
+    )
+
     return {
         "jobId": job_id,
         "total": total,
@@ -294,6 +303,7 @@ def sync_carrier_tracking(
         "excludedNotInTransit": excluded_not_in_transit,
         "vendorStats": vendor_stats,
         "logs": log_lines[-200:],
+        **group_alerts,
     }
 
 

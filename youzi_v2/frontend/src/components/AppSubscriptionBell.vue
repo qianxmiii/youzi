@@ -1,13 +1,13 @@
 <script setup lang="ts">
-import { NButton, NPopover, NSpin, NTag, useMessage } from 'naive-ui'
+import { NButton, NPopover, NSpin, useMessage } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   getShipmentGroupUnreadNotifications,
   markAllShipmentGroupNotificationsRead,
   markShipmentGroupNotificationRead,
-  type ShipmentGroupNotification,
 } from '@/api/shipmentGroups'
+import type { ShipmentGroupNotification } from '@/types/shipmentGroup'
 import {
   getShipmentTrackingNotifications,
   markAllShipmentTrackingNotificationsRead,
@@ -15,7 +15,8 @@ import {
   type ShipmentTrackingNotification,
 } from '@/api/shipmentSubscriptions'
 import BellIcon from '@/components/common/BellIcon.vue'
-import { hasDeliveredKeyword, splitDeliveredHighlight } from '@/utils/highlightDelivered'
+import ShipmentGroupAlertCard from '@/components/shipments/ShipmentGroupAlertCard.vue'
+import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 
 const router = useRouter()
 const message = useMessage()
@@ -33,12 +34,6 @@ const unreadCount = computed(() => trackingUnread.value + groupUnread.value)
 const hasUnread = computed(() => unreadCount.value > 0)
 const hasAnyItems = computed(() => trackingItems.value.length > 0 || groupItems.value.length > 0)
 
-const severityTag: Record<string, 'default' | 'warning' | 'error'> = {
-  info: 'default',
-  warning: 'warning',
-  urgent: 'error',
-}
-
 function trackingSourceLabel(source: string): string {
   if (source === 'internal') return '内部轨迹'
   if (source === 'carrier') return '承运商轨迹'
@@ -48,8 +43,9 @@ function trackingSourceLabel(source: string): string {
 
 function groupDisplayLabel(n: ShipmentGroupNotification): string {
   const name = n.groupName?.trim()
-  if (name) return `${name}（${n.groupNo || ''}）`
-  return n.groupNo || '分组'
+  const no = formatGroupNoDisplay(n.groupNo)
+  if (name) return `${name}（${no}）`
+  return no || '分组'
 }
 
 function formatTime(raw: string | null | undefined) {
@@ -187,23 +183,30 @@ onUnmounted(() => {
         <div v-else class="subscription-popover__sections">
           <section v-if="groupItems.length" class="subscription-popover__section">
             <p class="subscription-popover__section-title">分组提醒</p>
-            <ul class="subscription-popover__list">
-              <li
-                v-for="n in groupItems"
-                :key="'g-' + n.id"
-                class="subscription-popover__item subscription-popover__item--group"
-              >
-                <button type="button" class="subscription-popover__body" @click="goGroup(n.groupId)">
-                  <p class="subscription-popover__shipment">
-                    <NTag size="small" :type="severityTag[n.severity] ?? 'warning'" :bordered="false">
-                      {{ n.title }}
-                    </NTag>
-                    <span class="subscription-popover__shipment-no">{{ groupDisplayLabel(n) }}</span>
-                  </p>
-                  <p class="subscription-popover__desc line-clamp-2">{{ n.message }}</p>
-                  <p class="subscription-popover__meta">{{ formatTime(n.triggeredAt) }}</p>
-                </button>
-                <NButton size="tiny" quaternary @click="dismissGroup(n)">知道了</NButton>
+            <ul class="subscription-popover__list subscription-popover__list--alerts">
+              <li v-for="n in groupItems" :key="'g-' + n.id">
+                <ShipmentGroupAlertCard
+                  compact
+                  clickable
+                  :title="n.title"
+                  :subtitle="formatGroupNoDisplay(n.groupNo)"
+                  :customer-name="n.customer || ''"
+                  :rule-type="n.ruleType"
+                  :message="n.message"
+                  :triggered-at="n.triggeredAt"
+                  :severity="n.severity"
+                  @click="goGroup(n.groupId)"
+                >
+                  <template #aside>
+                    <button
+                      type="button"
+                      class="group-alert-card__btn"
+                      @click.stop="dismissGroup(n)"
+                    >
+                      知道了
+                    </button>
+                  </template>
+                </ShipmentGroupAlertCard>
               </li>
             </ul>
           </section>
@@ -345,6 +348,16 @@ onUnmounted(() => {
   list-style: none;
   margin: 0;
   padding: 0;
+}
+
+.subscription-popover__list--alerts {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+.subscription-popover__list--alerts > li {
+  list-style: none;
 }
 
 .subscription-popover__item {

@@ -3,22 +3,29 @@ export interface ShipmentGroupMember {
   groupId: string
   shipmentId: string
   shipmentNo: string
-  role: string
-  batchNo: string
   createdTime: string
 }
 
 export interface ShipmentGroupRule {
-  id: string
-  groupId: string
+  id?: string
+  groupId?: string
   ruleType: string
   enabled: boolean
   thresholdDays: number | null
   warningDays: number | null
   triggerStatus: string
   configJson: string
-  createdTime: string
-  updatedTime: string
+  createdTime?: string
+  updatedTime?: string
+}
+
+export interface ShipmentGroupRuleInput {
+  ruleType: string
+  enabled: boolean
+  thresholdDays?: number | null
+  warningDays?: number | null
+  triggerStatus?: string
+  configJson?: string
 }
 
 export interface ShipmentGroupNotification {
@@ -26,6 +33,7 @@ export interface ShipmentGroupNotification {
   groupId: string
   groupNo?: string
   groupName?: string
+  customer?: string | null
   ruleType: string
   severity: string
   title: string
@@ -66,10 +74,6 @@ export interface ShipmentGroupEvaluateResult {
 
 export interface ShipmentGroupUpdatePayload {
   groupName?: string
-  primaryType?: string
-  groupTypes?: string[]
-  /** @deprecated 使用 primaryType */
-  groupType?: string
   customer?: string | null
   customerNo?: string | null
   vesselVoyage?: string | null
@@ -77,14 +81,14 @@ export interface ShipmentGroupUpdatePayload {
   paymentStatus?: string
   paymentDueRule?: string
   note?: string
+  rules?: ShipmentGroupRuleInput[]
 }
 
 export interface ShipmentGroupSummary {
   groupId: string
   groupNo: string
   groupName: string
-  role?: string
-  batchNo?: string
+  enabledRules?: string[]
 }
 
 export interface ShipmentGroupFilterOption {
@@ -97,10 +101,6 @@ export interface ShipmentGroup {
   id: string
   groupNo: string
   groupName: string
-  primaryType: string
-  groupTypes: string[]
-  /** 与 primaryType 相同，兼容旧字段 */
-  groupType: string
   customer: string | null
   customerNo: string | null
   vesselVoyage: string | null
@@ -111,15 +111,13 @@ export interface ShipmentGroup {
   createdTime: string
   updatedTime: string
   memberCount?: number
+  enabledRules?: string[]
+  unreadNotificationCount?: number
 }
 
 export interface ShipmentGroupCreatePayload {
   groupNo?: string
   groupName?: string
-  primaryType?: string
-  groupTypes?: string[]
-  /** @deprecated 使用 primaryType + groupTypes */
-  groupType?: string
   customer?: string | null
   customerNo?: string | null
   vesselVoyage?: string | null
@@ -127,6 +125,7 @@ export interface ShipmentGroupCreatePayload {
   paymentStatus?: string
   paymentDueRule?: string
   note?: string
+  rules?: ShipmentGroupRuleInput[]
 }
 
 export interface ShipmentGroupListResponse {
@@ -157,24 +156,12 @@ export interface ShipmentGroupMembersRemoveResult {
   errors: ShipmentGroupMemberMutationError[]
 }
 
-export interface ShipmentGroupMembersBatchPatchResult {
-  total: number
-  updated: number
-  notFound: number
-  skipped: number
-  errors: ShipmentGroupMemberMutationError[]
-}
-
-export type ShipmentGroupBatchMode = 'create' | 'add' | 'remove' | 'lastBatch' | 'suggest'
+export type ShipmentGroupBatchMode = 'create' | 'add' | 'remove' | 'suggest'
 
 export interface ShipmentGroupSuggestion {
   suggestionKey: string
   ruleType: string
   ruleLabel: string
-  primaryType: string
-  groupTypes: string[]
-  /** 与 primaryType 相同 */
-  groupType: string
   proposedGroupName: string
   groupNo?: string | null
   groupName?: string | null
@@ -185,6 +172,7 @@ export interface ShipmentGroupSuggestion {
   shipmentIds: string[]
   shipmentNos: string[]
   memberCount: number
+  rules?: ShipmentGroupRuleInput[]
 }
 
 export interface ShipmentGroupSuggestionsPreviewResult {
@@ -198,4 +186,10 @@ export interface ShipmentGroupSuggestionsApplyResult {
   membersAdded: number
   skipped: number
   errors: { suggestionKey?: string; message: string }[]
+}
+
+export interface ShipmentGroupRuleMeta {
+  value: string
+  label: string
+  description: string
 }

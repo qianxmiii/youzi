@@ -48,6 +48,16 @@ class TrackingSyncResult(BaseModel):
         alias="excludedNotInTransit",
         description="指定单号中非转运中/已签收被跳过的数量",
     )
+    group_alerts_evaluated: int = Field(
+        default=0,
+        alias="groupAlertsEvaluated",
+        description="轨迹同步后重新评估的分组数",
+    )
+    group_alerts_created: int = Field(
+        default=0,
+        alias="groupAlertsCreated",
+        description="轨迹同步后新增的分组提醒数",
+    )
     logs: list[str] = Field(default_factory=list, description="同步过程日志（批次进度、每单返回摘要）")
 
     model_config = {"populate_by_name": True}

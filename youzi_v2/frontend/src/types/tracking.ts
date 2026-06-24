@@ -26,6 +26,8 @@ export interface TrackingSyncResult {
   jobId?: string
   unassigned?: number
   excludedNotInTransit?: number
+  groupAlertsEvaluated?: number
+  groupAlertsCreated?: number
   logs?: string[]
 }
 

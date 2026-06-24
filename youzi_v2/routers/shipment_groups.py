@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Query, Response
 
 from ..context import *
+from ..schemas.shipment_groups import ShipmentGroupRulePatchIn, ShipmentGroupRulesReplaceIn
 
 router = APIRouter()
 
@@ -43,16 +44,18 @@ def apply_shipment_group_suggestions(body: ShipmentGroupSuggestionsApplyIn):
 
 @router.get("/api/v1/shipment-groups/meta")
 def get_shipment_groups_meta():
-    """分组类型等元数据（标签与说明）。"""
-    from ..shipment_group_types import group_types_meta
+    """分组规则类型元数据。"""
+    from ..shipment_group_rules import rules_meta
 
-    return {"groupTypes": group_types_meta()}
+    return {"ruleTypes": rules_meta()}
 
 
 @router.get("/api/v1/shipment-groups")
 def list_shipment_groups(
     search: str | None = None,
-    group_type: str | None = Query(None, alias="groupType"),
+    rule_type: str | None = Query(None, alias="ruleType"),
+    has_rule: bool | None = Query(None, alias="hasRule"),
+    has_unread: bool | None = Query(None, alias="hasUnread"),
     payment_status: str | None = Query(None, alias="paymentStatus"),
     customer: str | None = None,
     limit: int = 50,
@@ -60,7 +63,9 @@ def list_shipment_groups(
 ):
     return shipment_groups_repo.list_rows(
         search=search,
-        group_type=group_type,
+        rule_type=rule_type,
+        has_rule=has_rule,
+        has_unread=has_unread,
         payment_status=payment_status,
         customer=customer,
         limit=limit,
@@ -71,12 +76,10 @@ def list_shipment_groups(
 @router.post("/api/v1/shipment-groups", status_code=201)
 def create_shipment_group(body: ShipmentGroupIn):
     try:
-        primary, types = body.resolve_types()
+        rules = [r.model_dump(by_alias=False) for r in body.rules]
         return shipment_groups_repo.create(
             group_no=body.group_no,
             group_name=body.group_name,
-            primary_type=primary,
-            group_types=types,
             customer=body.customer,
             customer_no=body.customer_no,
             vessel_voyage=body.vessel_voyage,
@@ -84,6 +87,7 @@ def create_shipment_group(body: ShipmentGroupIn):
             payment_status=body.payment_status,
             payment_due_rule=body.payment_due_rule,
             note=body.note,
+            rules=rules,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -127,12 +131,7 @@ def delete_shipment_group(item_id: str):
 )
 def add_shipment_group_members(item_id: str, body: ShipmentGroupMembersAddIn):
     try:
-        result = shipment_groups_repo.add_members(
-            item_id,
-            body.shipment_ids,
-            role=body.role,
-            batch_no=body.batch_no,
-        )
+        result = shipment_groups_repo.add_members(item_id, body.shipment_ids)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="分组不存在") from exc
     except ValueError as exc:
@@ -152,27 +151,44 @@ def remove_shipment_group_members(item_id: str, body: ShipmentGroupMembersRemove
     return ShipmentGroupMembersRemoveResult(**result)
 
 
-@router.patch(
-    "/api/v1/shipment-groups/{item_id}/members/batch",
-    response_model=ShipmentGroupMembersBatchPatchResult,
-)
-def patch_shipment_group_members_batch(
-    item_id: str,
-    body: ShipmentGroupMembersBatchPatchIn,
-):
-    items = [
-        {
-            "shipment_id": item.shipment_id,
-            "role": item.role,
-            "batch_no": item.batch_no,
-        }
-        for item in body.items
-    ]
+@router.get("/api/v1/shipment-groups/{item_id}/rules")
+def list_shipment_group_rules(item_id: str):
+    if shipment_groups_repo.get_by_id(item_id, include_members=False) is None:
+        raise HTTPException(status_code=404, detail="分组不存在")
+    return {"items": shipment_group_alerts_repo.list_rules(item_id)}
+
+
+@router.put("/api/v1/shipment-groups/{item_id}/rules")
+def replace_shipment_group_rules(item_id: str, body: ShipmentGroupRulesReplaceIn):
+    if shipment_groups_repo.get_by_id(item_id, include_members=False) is None:
+        raise HTTPException(status_code=404, detail="分组不存在")
     try:
-        result = shipment_groups_repo.patch_members_batch(item_id, items)
-    except KeyError as exc:
-        raise HTTPException(status_code=404, detail="分组不存在") from exc
-    return ShipmentGroupMembersBatchPatchResult(**result)
+        rules = [r.model_dump(by_alias=False) for r in body.rules]
+        items = shipment_group_alerts_repo.replace_rules(item_id, rules)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"items": items}
+
+
+@router.patch("/api/v1/shipment-groups/{item_id}/rules/{rule_type}")
+def patch_shipment_group_rule(
+    item_id: str,
+    rule_type: str,
+    body: ShipmentGroupRulePatchIn,
+):
+    if shipment_groups_repo.get_by_id(item_id, include_members=False) is None:
+        raise HTTPException(status_code=404, detail="分组不存在")
+    try:
+        row = shipment_group_alerts_repo.patch_rule(
+            item_id,
+            rule_type,
+            body.model_dump(exclude_unset=True, by_alias=False),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if row is None:
+        raise HTTPException(status_code=404, detail="规则不存在")
+    return row
 
 
 @router.get("/api/v1/shipment-groups/{item_id}/notifications")

@@ -3,7 +3,6 @@ import { NButton, NCheckbox, NEmpty, NInput, NModal, NSpin, useMessage } from 'n
 import { computed, ref, watch } from 'vue'
 import { applyShipmentGroupSuggestions, previewShipmentGroupSuggestions } from '@/api/shipmentGroups'
 import type { ShipmentGroupSuggestion } from '@/types/shipmentGroup'
-import ShipmentGroupTypeLabel from '@/components/shipments/ShipmentGroupTypeLabel.vue'
 
 const props = defineProps<{
   show: boolean
@@ -56,9 +55,6 @@ async function loadPreview() {
   }
 }
 
-function displayName(s: ShipmentGroupSuggestion): string {
-  return nameOverrides.value[s.suggestionKey] ?? s.proposedGroupName
-}
 
 async function submit() {
   const items = checkedSuggestions.value.map((s) => ({
@@ -122,14 +118,6 @@ async function submit() {
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-1 text-xs text-violet-300">
                 <span>{{ s.ruleLabel }}</span>
-                <span aria-hidden="true">·</span>
-                <ShipmentGroupTypeLabel :type="s.primaryType || s.groupType" :icon-size="12" />
-                <span
-                  v-if="(s.groupTypes?.length ?? 0) > 1"
-                  class="text-[10px] text-[var(--color-muted)]"
-                >
-                  +{{ (s.groupTypes?.length ?? 1) - 1 }}
-                </span>
                 <span aria-hidden="true">·</span>
                 <span>{{ s.memberCount }} 票</span>
               </div>

@@ -16,6 +16,7 @@ Youzi v2 前端 — Vue 3 SPA
 | `src/App.vue` | 根组件 |
 | `src/router/index.ts` | 路由定义 |
 | `src/constants/navigation.ts` | 侧栏一二级导航（7 个中心分组） |
+| `src/composables/useNavGroupsExpanded.ts` | 侧栏分组展开状态（localStorage 记忆、当前页强制展开） |
 | `src/api/` | API 客户端封装 |
 | `src/views/` | 页面级组件 |
 | `src/components/` | 可复用组件 |

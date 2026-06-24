@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import AppLayout from '@/layouts/AppLayout.vue'
+import { usePageTabs } from '@/composables/usePageTabs'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -112,6 +113,7 @@ const router = createRouter({
 router.afterEach((to) => {
   const title = (to.meta.title as string) || 'Youzi'
   document.title = `${title} · Youzi`
+  usePageTabs().openFromRoute(to)
 })
 
 export default router

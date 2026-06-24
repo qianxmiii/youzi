@@ -34,12 +34,22 @@ def create_customer(body: CustomerIn):
 
 @router.patch("/api/v1/customers/{item_id}")
 def update_customer(item_id: str, body: CustomerUpdateIn):
-    row = customers_repo.patch(
-        item_id,
-        is_vip=body.is_vip,
-        note=body.note,
-        customer_lang=body.customer_lang,
-    )
+    try:
+        if body.customer_name is not None:
+            row = customers_repo.rename(
+                item_id,
+                body.customer_name,
+                update_shipments=bool(body.update_shipments),
+            )
+        else:
+            row = customers_repo.patch(
+                item_id,
+                is_vip=body.is_vip,
+                note=body.note,
+                customer_lang=body.customer_lang,
+            )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if row is None:
         raise HTTPException(status_code=404, detail="客户不存在")
     return row

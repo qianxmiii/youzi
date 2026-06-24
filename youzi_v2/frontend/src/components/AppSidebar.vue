@@ -1,19 +1,19 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronLeft } from 'lucide-vue-next'
 import { NTooltip } from 'naive-ui'
-import { computed, ref, watch } from 'vue'
+import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import NavIcon from '@/components/icons/NavIcon.vue'
 import { ICON_STROKE, ICON_STROKE_NAV } from '@/constants/icons'
 import { navGroups } from '@/constants/navigation'
+import { useNavGroupsExpanded } from '@/composables/useNavGroupsExpanded'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
 
 const route = useRoute()
 const { collapsed, toggle } = useSidebarCollapsed()
+const { isGroupExpanded, toggleGroup } = useNavGroupsExpanded()
 
 const flatItems = computed(() => navGroups.flatMap((g) => g.items))
-
-const expandedGroups = ref<Record<string, boolean>>({})
 
 function isActive(path: string) {
   if (path === '/') return route.path === '/'
@@ -25,29 +25,18 @@ function groupHasActiveItem(groupLabel: string) {
   return group?.items.some((item) => isActive(item.to)) ?? false
 }
 
-function isGroupExpanded(label: string) {
-  const stored = expandedGroups.value[label]
-  return stored === undefined ? true : stored
+function groupExpanded(label: string) {
+  return isGroupExpanded(label, groupHasActiveItem(label))
 }
 
-function syncExpandedGroups() {
-  for (const group of navGroups) {
-    if (groupHasActiveItem(group.label)) {
-      expandedGroups.value[group.label] = true
-    }
-  }
-}
-
-function toggleGroup(label: string) {
-  expandedGroups.value[label] = !isGroupExpanded(label)
+function onToggleGroup(label: string) {
+  toggleGroup(label, groupHasActiveItem(label))
 }
 
 function itemLabel(groupLabel: string, name: string, badge?: string) {
   const text = `${groupLabel} · ${name}`
   return badge ? `${text}（${badge}）` : text
 }
-
-watch(() => route.path, syncExpandedGroups, { immediate: true })
 </script>
 
 <template>
@@ -87,22 +76,25 @@ watch(() => route.path, syncExpandedGroups, { immediate: true })
           <button
             type="button"
             class="nav-group-header"
-            :class="{ 'nav-group-header--active': groupHasActiveItem(group.label) }"
-            :aria-expanded="isGroupExpanded(group.label)"
-            @click="toggleGroup(group.label)"
+            :class="{
+              'nav-group-header--active': groupHasActiveItem(group.label),
+              'nav-group-header--pinned': groupHasActiveItem(group.label),
+            }"
+            :aria-expanded="groupExpanded(group.label)"
+            @click="onToggleGroup(group.label)"
           >
             <NavIcon :name="group.icon" />
             <span class="min-w-0 flex-1 truncate text-left">{{ group.label }}</span>
             <ChevronDown
               class="nav-group-chevron shrink-0"
-              :class="{ 'nav-group-chevron--folded': !isGroupExpanded(group.label) }"
+              :class="{ 'nav-group-chevron--folded': !groupExpanded(group.label) }"
               :size="16"
               :stroke-width="ICON_STROKE"
               aria-hidden="true"
             />
           </button>
 
-          <div v-show="isGroupExpanded(group.label)" class="nav-group-children">
+          <div v-show="groupExpanded(group.label)" class="nav-group-children">
             <RouterLink
               v-for="item in group.items"
               :key="item.to"
@@ -217,6 +209,15 @@ watch(() => route.path, syncExpandedGroups, { immediate: true })
 }
 
 .nav-group-header--active {
+  color: var(--color-nav-fg-active);
+}
+
+.nav-group-header--pinned {
+  cursor: default;
+}
+
+.nav-group-header--pinned:hover {
+  background: transparent;
   color: var(--color-nav-fg-active);
 }
 

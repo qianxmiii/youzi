@@ -47,7 +47,9 @@
 
 **自动同步**：Uvicorn 启动后 `tracking_sync_scheduler` 每 N 小时全量同步（默认 2 小时，仅 `IN_TRANSIT`）。配置见 [deployment.md](./deployment.md)。
 
-同步后更新 `latest_tracking_time`、`latest_tracking_desc`、`tracking_log_count`，并可能推进 `status_code`。
+同步后更新 `latest_tracking_time`、`latest_tracking_desc`、`tracking_log_count`，并可能推进 `status_code`（含写入 `delivered_time`）。
+
+**分组提醒联动**：本次同步中摘要或状态有变化的运单，会自动对其所在分组执行规则评估（签收期限、整组到港催款等）；响应字段 `groupAlertsEvaluated`、`groupAlertsCreated`。日志含 `[分组提醒]` 行。手动「重新计算」仍可用于全量补跑。
 
 ```bash
 # 手动同步（示例：指定运单 ID 列表）

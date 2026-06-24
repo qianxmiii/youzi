@@ -13,7 +13,7 @@ from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
 from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .shipments_table import TABLE_NAME
-from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, TYPES_TABLE
+from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, RULES_TABLE
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
 from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
 from .exception_duration import duration_seconds, format_duration
@@ -38,6 +38,28 @@ from .tracking_freshness import (
 
 # 与前端承运商筛选「（未填写）」选项值一致
 CARRIER_CODE_FILTER_EMPTY = "__EMPTY__"
+
+_LIST_SORT_COLUMNS = {
+    "shipmentNo": "s.shipment_no",
+    "shipment_no": "s.shipment_no",
+}
+
+
+def _list_order_sql(sort_by: str | None, sort_order: str | None) -> str:
+    key = (sort_by or "").strip()
+    if not key:
+        return (
+            "ORDER BY datetime(s.latest_tracking_time) DESC, "
+            "datetime(s.updated_time) DESC"
+        )
+    col = _LIST_SORT_COLUMNS.get(key)
+    if not col:
+        raise ValueError("sortBy 仅支持 shipmentNo")
+    direction = (sort_order or "asc").strip().lower()
+    if direction not in ("asc", "desc"):
+        raise ValueError("sortOrder 须为 asc 或 desc")
+    sql_dir = "ASC" if direction == "asc" else "DESC"
+    return f"ORDER BY {col} {sql_dir}, datetime(s.updated_time) DESC"
 
 _LIST_FROM = (
     f"{TABLE_NAME} s "
@@ -294,8 +316,11 @@ class ShipmentsRepository:
         no_tracking: bool | None = None,
         group_id: str | None = None,
         group_no: str | None = None,
-        group_type: str | None = None,
+        rule_type: str | None = None,
+        has_rule: bool | None = None,
         has_group: bool | None = None,
+        sort_by: str | None = None,
+        sort_order: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -448,22 +473,41 @@ class ShipmentsRepository:
                 """
             )
             params.append(gn)
-        if group_type and group_type.strip():
-            gt = group_type.strip().upper()
-            from ..shipment_group_types import GROUP_TYPES
+        if rule_type and rule_type.strip():
+            from ..shipment_group_rules import normalize_rule_type
 
-            if gt not in GROUP_TYPES:
-                raise ValueError(f"groupType 无效：{group_type}")
+            rt = normalize_rule_type(rule_type)
             conditions.append(
                 f"""
                 s.id IN (
                   SELECT m.shipment_id FROM {MEMBERS_TABLE} m
-                  INNER JOIN {TYPES_TABLE} gt ON gt.group_id = m.group_id
-                  WHERE gt.group_type = ?
+                  INNER JOIN {RULES_TABLE} r ON r.group_id = m.group_id
+                  WHERE r.rule_type = ? AND r.enabled = 1
                 )
                 """
             )
-            params.append(gt)
+            params.append(rt)
+        elif has_rule is True:
+            conditions.append(
+                f"""
+                s.id IN (
+                  SELECT m.shipment_id FROM {MEMBERS_TABLE} m
+                  INNER JOIN {RULES_TABLE} r ON r.group_id = m.group_id
+                  WHERE r.enabled = 1
+                )
+                """
+            )
+        elif has_rule is False:
+            conditions.append(
+                f"""
+                s.id IN (
+                  SELECT m.shipment_id FROM {MEMBERS_TABLE} m
+                  WHERE m.group_id NOT IN (
+                    SELECT DISTINCT group_id FROM {RULES_TABLE} WHERE enabled = 1
+                  )
+                )
+                """
+            )
         if has_group is True:
             conditions.append(
                 f"""
@@ -483,6 +527,7 @@ class ShipmentsRepository:
                 """
             )
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        order_sql = _list_order_sql(sort_by, sort_order)
         with self._database.lock:
             total = self._conn.execute(
                 f"SELECT COUNT(*) AS c FROM {_LIST_FROM} {where}",
@@ -491,8 +536,7 @@ class ShipmentsRepository:
             rows = self._conn.execute(
                 f"""
                 SELECT {_LIST_SELECT} FROM {_LIST_FROM} {where}
-                ORDER BY datetime(s.latest_tracking_time) DESC,
-                         datetime(s.updated_time) DESC
+                {order_sql}
                 LIMIT ? OFFSET ?
                 """,
                 [*params, limit, offset],
@@ -513,7 +557,7 @@ class ShipmentsRepository:
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
-                SELECT m.shipment_id, m.role, m.batch_no,
+                SELECT m.shipment_id,
                        g.id AS group_id, g.group_no, g.group_name
                 FROM {MEMBERS_TABLE} m
                 INNER JOIN {GROUPS_TABLE} g ON g.id = m.group_id
@@ -523,15 +567,33 @@ class ShipmentsRepository:
                 ids,
             ).fetchall()
         by_shipment: dict[str, list[dict[str, Any]]] = {}
+        group_ids: list[str] = []
+        for row in rows:
+            gid = str(row["group_id"])
+            if gid not in group_ids:
+                group_ids.append(gid)
+        rules_map: dict[str, list[str]] = {gid: [] for gid in group_ids}
+        if group_ids:
+            g_placeholders = ", ".join("?" * len(group_ids))
+            rule_rows = self._conn.execute(
+                f"""
+                SELECT group_id, rule_type FROM {RULES_TABLE}
+                WHERE group_id IN ({g_placeholders}) AND enabled = 1
+                ORDER BY rule_type
+                """,
+                group_ids,
+            ).fetchall()
+            for rrow in rule_rows:
+                rules_map.setdefault(str(rrow["group_id"]), []).append(str(rrow["rule_type"]))
         for row in rows:
             sid = row["shipment_id"]
+            gid = str(row["group_id"])
             by_shipment.setdefault(sid, []).append(
                 {
-                    "groupId": row["group_id"],
+                    "groupId": gid,
                     "groupNo": row["group_no"],
                     "groupName": row["group_name"] or "",
-                    "role": row["role"],
-                    "batchNo": row["batch_no"] or "",
+                    "enabledRules": rules_map.get(gid, []),
                 }
             )
         for item in items:
@@ -1002,6 +1064,21 @@ class ShipmentsRepository:
             }
             for r in rows
         ]
+
+    def list_ids_by_shipment_nos(self, shipment_nos: list[str]) -> list[str]:
+        cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))
+        if not cleaned:
+            return []
+        placeholders = ", ".join("?" * len(cleaned))
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT id FROM {TABLE_NAME}
+                WHERE shipment_no IN ({placeholders})
+                """,
+                cleaned,
+            ).fetchall()
+        return [str(r["id"]) for r in rows]
 
     def insert_row(self, data: dict[str, Any]) -> dict[str, Any]:
         payload = _normalize_payload(data)

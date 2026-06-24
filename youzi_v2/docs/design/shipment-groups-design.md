@@ -1,34 +1,69 @@
-# 运单分组与组提醒设计方案
+# 运单分组与组规则提醒设计方案
 
 ## 背景
 
-当前系统已有运单主表 `shipments`、轨迹同步、运单订阅通知、海运预警、船期和计划任务能力。新的需求是对运单进行业务分组，并基于同一组内运单状态生成提醒，例如：
+当前系统已有运单主表 `shipments`、轨迹同步、运单订阅通知、海运预警、船期和计划任务能力。新的需求是对运单进行业务成组，并基于同一组内运单状态执行一组可配置规则，生成提醒，例如：
 
-- 同一批次第一票货物签收后，其他货物超过 30 天还未签收会产生罚款，需要提前一周提醒。
-- 最后一批到港时提醒催款。
+- 同一组货物中，第一票签收后，其他货物超过 30 天还未签收会产生罚款，需要提前一周提醒。
+- 同一组货物全部到港后，如果客户尚未付清款项，需要提醒催款。
 
-因此，本方案建议在现有运单体系外增加一层“运单组”，并通过组规则和组提醒事件承载后续业务扩展。
+因此，本方案建议在现有运单体系外增加一层“运单组”。运单组只表达“这些货物属于同一组”，不再通过分组类型决定业务含义；需要执行哪些检查，由分组上配置的规则决定。
 
 ## 设计目标
 
 1. 支持多票运单归为同一业务组。
-2. 支持手动分组、批量加入分组，并为后续自动分组建议留接口。
-3. 支持组级提醒规则，例如签收超时、最后一批到港催款。
-4. 提醒结果可进入现有首页/顶栏通知体系。
+2. 支持手动分组、批量加入分组，并为后续自动成组建议留接口。
+3. 支持给同一分组配置多条组规则，例如签收超时、整组到港催款。
+4. 规则结果可进入现有首页/顶栏通知体系。
 5. 尽量复用现有 `shipments`、轨迹摘要、海运 ETA/ATA、订阅通知和计划任务机制。
+
+## 核心设计原则
+
+### 组不需要分组类型
+
+分组只表示一批业务上需要一起跟进的货物，例如同一客户、同一订单、同一柜、同一船次或运营人工整理的一批货。系统不再维护 `group_type`、`primary_type` 或 `shipment_group_types`。
+
+原先的“客户批次、订单批次、船次批次、到港批次、收款批次”等概念，本质上有两类用途：
+
+1. 说明这批货为什么被放在一起。
+2. 决定这批货需要执行哪些规则。
+
+这两件事不应该绑定。首版只保留“组”与“规则”的关系：
+
+```text
+组 = 货物集合
+规则 = 挂在组上的自动检查逻辑
+提醒 = 规则运行后的结果
+```
+
+因此，一组货可以同时启用多条规则；规则是否执行，只取决于 `shipment_group_rules.enabled`，不再由分组类型推导。
+
+### 规则显式配置
+
+用户创建或编辑分组时，可以选择该分组需要启用的规则。每条规则可保存独立阈值、提醒提前量和扩展配置。
+
+示例：
+
+```text
+分组 G20260622001:
+- BATCH_DELIVERY_DEADLINE: 首票签收后 30 天期限，提前 7 天提醒
+- GROUP_ARRIVED_PAYMENT: 整组货物全部到港后，如果未付清则提醒催款
+- SINGLE_IN_TRANSIT_ETA_WARNING: 客户仅有一票在途时，按 ETA 提前 N 天提醒到港（默认 10 天，可改为 7 天等）
+```
+
+后续新增“预约送仓超时”“清关超时”“查验未解除”等规则时，只需要新增规则类型和执行逻辑，不需要调整分组类型体系。
 
 ## 核心模型
 
 ### 1. shipment_groups
 
-分组主表，用来表示一批业务上有关联的运单，例如同一客户、同一订单、同一柜、同一船次或同一批货。
+分组主表，用来表示一批业务上有关联、需要统一跟进的运单。
 
 ```sql
 CREATE TABLE shipment_groups (
     id TEXT PRIMARY KEY,
     group_no TEXT NOT NULL UNIQUE,
     group_name TEXT NOT NULL DEFAULT '',
-    primary_type TEXT NOT NULL DEFAULT 'MANUAL',
     customer TEXT,
     customer_no TEXT,
     vessel_voyage TEXT,
@@ -47,83 +82,16 @@ CREATE TABLE shipment_groups (
 | --- | --- |
 | `group_no` | 分组编号，例如 `G20260622001` |
 | `group_name` | 分组展示名称 |
-| `primary_type` | 主分组类型，用于列表默认图标、排序和主标签展示 |
 | `customer` / `customer_no` | 组级客户信息，便于筛选 |
 | `vessel_voyage` | 组级船名航次，便于海运批次聚合 |
 | `destination_port_code` | 目的港 |
 | `payment_status` | 收款状态：`UNPAID`、`PARTIAL`、`PAID` |
 | `payment_due_rule` | 催款触发规则，首版可用 `LAST_ARRIVAL` |
-
-#### 分组类型
-
-分组类型用于说明这组运单为什么被放在一起。注意：一批货物可以同时具备多个业务类型，例如既是“到港批次”，也是“收款批次”。因此不能只在 `shipment_groups` 上使用单个 `group_type` 字段。
-
-推荐设计：
-
-- `shipment_groups.primary_type`：主类型，只负责默认展示、排序和图标。
-- `shipment_group_types`：多类型关系表，保存一组货物拥有的全部业务类型。
-- 创建分组时至少选择一个类型，并从中选择一个主类型；如果用户不选，默认 `MANUAL`。
-- 筛选 `groupType=PAYMENT_BATCH` 的语义是“包含该类型的分组”，不是“主类型等于该类型”。
-
-#### shipment_group_types
-
-```sql
-CREATE TABLE shipment_group_types (
-    id TEXT PRIMARY KEY,
-    group_id TEXT NOT NULL,
-    group_type TEXT NOT NULL,
-    created_time TEXT NOT NULL,
-    UNIQUE(group_id, group_type)
-);
-```
-
-示例：
-
-```text
-分组 G20260622001:
-primary_type = PAYMENT_BATCH
-
-shipment_group_types:
-- CUSTOMER_BATCH
-- PORT_BATCH
-- PAYMENT_BATCH
-```
-
-这样同一批货可以同时启用签收期限提醒和到港催款提醒。
-
-首版建议将类型做成固定枚举，后续可在系统字典中维护。
-
-| 类型 | 名称 | 适用场景 | 建议自动匹配依据 |
-| --- | --- | --- | --- |
-| `MANUAL` | 手动分组 | 临时跟进、运营人工整理的任意组合 | 无，完全由用户选择 |
-| `CUSTOMER_BATCH` | 客户批次 | 同一客户的一批货，需要统一跟进签收、罚款和收款 | `customer`、`customer_no` |
-| `ORDER_BATCH` | 订单批次 | 同一客户订单或平台订单下的多票运单 | `customer_shipment_id`、`amazon_ref_id`、`customer_no` |
-| `VESSEL_BATCH` | 船次批次 | 同一船名航次的一批海运货 | `vessel_voyage`、`vessel_name`、`voyage_no` |
-| `PORT_BATCH` | 到港批次 | 同一目的港或同一 ETA 窗口内的货 | `destination_port_code`、`eta`、`ata` |
-| `PAYMENT_BATCH` | 收款批次 | 以催款、账期、尾款为核心管理的一组运单 | `customer`、收款状态、人工选择 |
-
-首版规则适用建议：
-
-| 规则 | 默认适用分组类型 |
-| --- | --- |
-| `BATCH_DELIVERY_DEADLINE` | `CUSTOMER_BATCH`、`ORDER_BATCH`、`MANUAL` |
-| `LAST_BATCH_ARRIVED_PAYMENT` | `VESSEL_BATCH`、`PORT_BATCH`、`PAYMENT_BATCH`、`MANUAL` |
-
-规则启用判断必须基于 `shipment_group_types` 的多类型集合：
-
-```text
-启用 BATCH_DELIVERY_DEADLINE:
-  group_types 与 {CUSTOMER_BATCH, ORDER_BATCH, MANUAL} 有交集
-
-启用 LAST_BATCH_ARRIVED_PAYMENT:
-  group_types 与 {VESSEL_BATCH, PORT_BATCH, PAYMENT_BATCH, MANUAL} 有交集
-```
-
-不要只判断 `primary_type`，否则同一批货同时需要“到港”和“催款”等多种业务视角时会漏提醒。
+| `note` | 运营备注 |
 
 ### 2. shipment_group_members
 
-分组成员表。建议使用关系表，而不是只在 `shipments` 表加 `group_id`，因为后续一票运单可能同时属于“客户批次”和“船次批次”。
+分组成员表。建议使用关系表，而不是只在 `shipments` 表加 `group_id`，因为后续一票运单可能同时出现在多个运营跟进组中。
 
 ```sql
 CREATE TABLE shipment_group_members (
@@ -131,8 +99,6 @@ CREATE TABLE shipment_group_members (
     group_id TEXT NOT NULL,
     shipment_id TEXT NOT NULL,
     shipment_no TEXT NOT NULL,
-    role TEXT NOT NULL DEFAULT 'NORMAL',
-    batch_no TEXT NOT NULL DEFAULT '',
     created_time TEXT NOT NULL,
     UNIQUE(group_id, shipment_id)
 );
@@ -144,12 +110,10 @@ CREATE TABLE shipment_group_members (
 | --- | --- |
 | `group_id` | 所属分组 |
 | `shipment_id` / `shipment_no` | 关联运单 |
-| `role` | 成员角色：`NORMAL`、`LAST_BATCH`、`KEY_BATCH` |
-| `batch_no` | 第几批，可为空 |
 
 ### 3. shipment_group_rules
 
-组提醒规则表。首版可以只内置固定规则，但用规则表保存开关和阈值，方便后续扩展。
+组规则配置表。每一行表示某个分组启用了一条规则。一组货可以配置多条规则，同一规则在同一分组内只能配置一次。
 
 ```sql
 CREATE TABLE shipment_group_rules (
@@ -167,12 +131,34 @@ CREATE TABLE shipment_group_rules (
 );
 ```
 
-首版规则类型：
+字段说明：
 
-| `rule_type` | 说明 |
+| 字段 | 说明 |
 | --- | --- |
-| `BATCH_DELIVERY_DEADLINE` | 同批次首票签收后 30 天签收期限提醒 |
-| `LAST_BATCH_ARRIVED_PAYMENT` | 最后一批到港催款提醒 |
+| `rule_type` | 规则类型 |
+| `enabled` | 是否启用 |
+| `threshold_days` | 规则阈值天数，例如 30 天 |
+| `warning_days` | 提前提醒天数，例如提前 7 天 |
+| `trigger_status` | 可选触发状态，首版可为空 |
+| `config_json` | 规则扩展配置 |
+
+首版内置规则类型：
+
+| `rule_type` | 默认配置 | 说明 |
+| --- | --- | --- |
+| `BATCH_DELIVERY_DEADLINE` | `threshold_days = 30`，`warning_days = 7` | 同组首票签收后 30 天签收期限提醒 |
+| `GROUP_ARRIVED_PAYMENT` | 无固定天数 | 整组到港催款提醒 |
+| `SINGLE_IN_TRANSIT_ETA_WARNING` | `warning_days = 10` | 客户仅有一票在途时，按 ETA 提前 N 天提醒到港 |
+
+规则执行判断必须基于 `shipment_group_rules`：
+
+```text
+启用某条规则:
+  shipment_group_rules 中存在 group_id + rule_type
+  且 enabled = 1
+```
+
+不要再通过分组类型判断规则是否启用。
 
 ### 4. shipment_group_notifications
 
@@ -207,67 +193,100 @@ CREATE TABLE shipment_group_notifications (
 
 ## 规则设计
 
-### 规则一：同批次签收不能超过 30 天
+### 规则一：同组签收不能超过 30 天
+
+规则类型：`BATCH_DELIVERY_DEADLINE`
 
 业务含义：
 
-同一批次内，第一票货物签收后开始计算 30 天期限。其他货物如果在 30 天内仍未签收，会产生罚款风险；系统需要在到期前一周生成预警，并在超过 30 天后生成超期提醒。
+同一组货物中，第一票货物签收后开始计算签收期限。最先签收的可能是组内任意一票运单，例如运单 2 先签收，则从运单 2 的签收时间开始计算；运单 1 和运单 3 如果到提醒时间仍未签收，就需要提醒。系统不需要人工标记“第一票”或“最后一批”，只根据组内运单状态自动判断。
+
+默认配置：
+
+```text
+threshold_days = 30
+warning_days = 7
+```
 
 首版判定建议：
 
 1. 运单已签收条件：
    - `status_code = 'DELIVERED'`，或
    - `delivered_time` 非空。
-2. 批次范围：
-   - 优先使用 `shipment_group_members.batch_no` 区分同一分组下的不同批次。
-   - 如果 `batch_no` 为空，则默认整个分组视为同一批次。
+2. 规则范围：
+   - 默认以整个分组作为计算范围。
+   - 如果业务上存在多批货，建议创建多个分组分别跟进，而不是在同一分组内再拆子批次。
 3. 起算时间：
-   - 取同一批次内最早的签收时间作为 `first_delivered_time`。
+   - 取组内最早的签收时间作为 `first_delivered_time`。
    - 签收时间优先使用 `delivered_time`，其次可从已签收状态对应的最新轨迹时间兜底。
 4. 提前提醒条件：
-   - `first_delivered_time + 23 天` 后，批次内仍有未签收运单。
-   - 生成“签收期限将到期”提醒，提醒距离罚款期限还有 7 天。
+   - `first_delivered_time + (threshold_days - warning_days) 天` 后，组内仍有未签收运单。
+   - 生成“签收期限将到期”提醒。
 5. 超期提醒条件：
-   - `first_delivered_time + 30 天` 后，批次内仍有未签收运单。
+   - `first_delivered_time + threshold_days 天` 后，组内仍有未签收运单。
    - 生成“签收已超期，存在罚款风险”提醒。
 6. 防重复：
-   - 提前提醒使用 `event_key = group_id + batch_no + DELIVERED_DEADLINE_WARNING + first_delivered_date`。
-   - 超期提醒使用 `event_key = group_id + batch_no + DELIVERED_DEADLINE_OVERDUE + first_delivered_date`。
+   - 提前提醒使用 `event_key = group_id + DELIVERED_DEADLINE_WARNING + first_delivered_date`。
+   - 超期提醒使用 `event_key = group_id + DELIVERED_DEADLINE_OVERDUE + first_delivered_date`。
 
 提醒示例：
 
 ```text
 签收期限将到期
-分组 G20260622001 批次 B01 第一票货物已于 2026-06-01 签收，仍有 3 票未签收，距离 30 天罚款期限还有 7 天，请提前跟进。
+分组 G20260622001 第一票货物已于 2026-06-01 签收，仍有 3 票未签收，距离 30 天罚款期限还有 7 天，请提前跟进。
 
 签收已超期，存在罚款风险
-分组 G20260622001 批次 B01 第一票货物已于 2026-06-01 签收，仍有 2 票超过 30 天未签收，请尽快处理。
+分组 G20260622001 第一票货物已于 2026-06-01 签收，仍有 2 票超过 30 天未签收，请尽快处理。
 ```
 
-### 规则二：最后一批到港时催款
+### 规则二：整组到港时催款
+
+规则类型：`GROUP_ARRIVED_PAYMENT`
 
 业务含义：
 
-同一组的最后一批货到港后，如果客户尚未付清款项，则生成催款提醒。
+同一组货物全部到港后，如果客户尚未付清款项，则生成催款提醒。
 
 首版判定建议：
 
-1. 最后一批识别：
-   - 优先使用 `shipment_group_members.role = 'LAST_BATCH'`。
-   - 如果没有人工标记最后一批，则使用组内全部运单到港作为触发条件。
-2. 到港条件：
+1. 到港条件：
    - `ata` 非空，或
    - 海运状态已经判定为 `arrived`。
+2. 触发条件：
+   - 组内全部运单均已到港。
 3. 催款条件：
    - `shipment_groups.payment_status != 'PAID'`。
 4. 防重复：
-   - 使用 `event_key = group_id + LAST_BATCH_ARRIVED_PAYMENT + arrival_date`。
+   - 使用 `event_key = group_id + GROUP_ARRIVED_PAYMENT + latest_arrival_date`。
 
 提醒示例：
 
 ```text
-最后一批已到港，请催款
-分组 G20260622001 最后一批货已到港，当前收款状态为 UNPAID，请及时催款。
+整组货物已到港，请催款
+分组 G20260622001 组内货物已全部到港，当前收款状态为 UNPAID，请及时催款。
+```
+
+### 规则三：单票在途到港预警
+
+规则类型：`SINGLE_IN_TRANSIT_ETA_WARNING`
+
+业务含义：
+
+当该客户在全库范围内**仅有一票**处于在途状态（`status_code = IN_TRANSIT`、无 ATA、未签收），且该运单在本分组内，并在 ETA 前 N 天内即将到港时，生成到港预警提醒。默认 N = 10，可在分组规则中配置为 7 天等。
+
+首版判定建议：
+
+1. 客户范围：分组 `customer` 字段，或从组内运单推断客户名。
+2. 在途条件：全库该客户 `IN_TRANSIT` 运单**恰好 1 票**，且该票在本分组成员中。
+3. 到港窗口：`eta` 非空、未到港（无 ATA），且 `0 <= ETA日期 - 今天 <= warning_days`。
+4. 防重复：`event_key = group_id + SINGLE_IN_TRANSIT_ETA + shipment_id + eta_date`。
+5. 严重级别：`info`；提醒卡片使用船舶图标与青绿色主题。
+
+提醒示例：
+
+```text
+单票在途货物即将到港
+客户 ABC 当前仅有一票在途（SN-001），预计 2026-06-25 到港，还有 5 天。
 ```
 
 ## 分组方式
@@ -279,13 +298,13 @@ CREATE TABLE shipment_group_notifications (
 - 新建分组
 - 加入已有分组
 - 移出分组
-- 标记为最后一批
+- 配置组规则
 
 这是首版优先实现方式，最贴合实际操作。
 
-### 2. 自动建议分组
+### 2. 自动建议成组
 
-后续可以根据以下字段生成分组建议：
+后续可以根据以下字段生成成组建议：
 
 - `customer + customer_no`
 - `customer + vessel_voyage`
@@ -293,7 +312,7 @@ CREATE TABLE shipment_group_notifications (
 - `amazon_ref_id`
 - `customer_shipment_id`
 
-建议先做“推荐分组”，由用户确认后落库，不建议首版自动强制分组。
+建议先做“推荐成组”，由用户确认后落库，不建议首版自动强制成组。推荐逻辑只负责建议哪些货物可以组成一组，不负责决定要启用哪些规则。
 
 ### 3. Excel 导入分组
 
@@ -301,10 +320,10 @@ CREATE TABLE shipment_group_notifications (
 
 - 分组编号
 - 分组名称
-- 批次号
-- 是否最后一批
+- 启用规则
+- 规则配置
 
-导入时按 `group_no` 自动创建或更新分组关系。
+导入时按 `group_no` 自动创建或更新分组关系，并按导入内容写入 `shipment_group_rules`。
 
 ## 后端设计
 
@@ -325,10 +344,18 @@ def evaluate_group_alerts(group_id: str | None = None) -> dict:
     ...
 ```
 
+执行流程：
+
+1. 查询需要评估的分组。
+2. 查询每个分组启用的 `shipment_group_rules`。
+3. 按 `rule_type` 分发到对应规则处理器。
+4. 规则处理器读取组成员和运单状态。
+5. 生成或跳过 `shipment_group_notifications`。
+
 调用入口：
 
-1. 计划任务定时扫描，例如每 1 小时扫描一次。
-2. 运单轨迹同步后，对受影响运单所在分组即时评估。
+1. 计划任务定时扫描，例如每 1 小时扫描一次。（**未实现**）
+2. **运单轨迹同步后**，对本次有更新的运单所在分组即时评估（`evaluate_groups_after_tracking_sync`，内部/承运商同步均已接入）。
 3. 用户在分组详情页点击“重新计算提醒”。
 
 ## API 设计
@@ -337,14 +364,16 @@ def evaluate_group_alerts(group_id: str | None = None) -> dict:
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
-| `GET` | `/api/v1/shipment-groups` | 分组列表，支持按 `groupType`、客户、船名航次、收款状态筛选；`groupType` 表示包含该类型 |
+| `GET` | `/api/v1/shipment-groups` | 分组列表，支持按客户、船名航次、目的港、收款状态、规则类型筛选 |
 | `POST` | `/api/v1/shipment-groups` | 新建分组 |
 | `GET` | `/api/v1/shipment-groups/{id}` | 分组详情 |
 | `PUT` | `/api/v1/shipment-groups/{id}` | 更新分组 |
 | `DELETE` | `/api/v1/shipment-groups/{id}` | 删除分组 |
 | `POST` | `/api/v1/shipment-groups/{id}/members` | 添加成员 |
 | `DELETE` | `/api/v1/shipment-groups/{id}/members` | 移除成员 |
-| `PATCH` | `/api/v1/shipment-groups/{id}/members/batch` | 批量更新成员角色/批次 |
+| `GET` | `/api/v1/shipment-groups/{id}/rules` | 分组规则列表 |
+| `PUT` | `/api/v1/shipment-groups/{id}/rules` | 覆盖更新分组启用规则 |
+| `PATCH` | `/api/v1/shipment-groups/{id}/rules/{ruleType}` | 更新单条规则配置或开关 |
 | `GET` | `/api/v1/shipment-groups/{id}/notifications` | 分组提醒列表 |
 | `POST` | `/api/v1/shipment-groups/{id}/evaluate-alerts` | 手动重新计算提醒 |
 | `POST` | `/api/v1/shipment-group-notifications/read-all` | 分组提醒全部已读 |
@@ -354,8 +383,9 @@ def evaluate_group_alerts(group_id: str | None = None) -> dict:
 ```text
 groupId
 groupNo
-groupType
 hasGroup
+ruleType
+hasRule
 ```
 
 分组创建/更新 payload 建议使用：
@@ -363,16 +393,35 @@ hasGroup
 ```json
 {
   "groupName": "客户A 6月第一批",
-  "primaryType": "PAYMENT_BATCH",
-  "groupTypes": ["CUSTOMER_BATCH", "PORT_BATCH", "PAYMENT_BATCH"]
+  "customer": "客户A",
+  "paymentStatus": "UNPAID",
+  "rules": [
+    {
+      "ruleType": "BATCH_DELIVERY_DEADLINE",
+      "enabled": true,
+      "thresholdDays": 30,
+      "warningDays": 7
+    },
+    {
+      "ruleType": "GROUP_ARRIVED_PAYMENT",
+      "enabled": true
+    },
+    {
+      "ruleType": "SINGLE_IN_TRANSIT_ETA_WARNING",
+      "enabled": true,
+      "warningDays": 10
+    }
+  ]
 }
 ```
 
 后端需要保证：
 
-- `groupTypes` 至少一项。
-- `primaryType` 必须包含在 `groupTypes` 中。
-- 如果只传旧字段 `groupType`，可兼容转换为 `primaryType = groupType` 且 `groupTypes = [groupType]`。
+- `rules` 可以为空；为空表示该组当前不自动产生规则提醒。
+- 同一分组内 `ruleType` 不能重复。
+- 只允许写入系统支持的 `ruleType`。
+- 每类规则校验自己的必填配置，例如 `BATCH_DELIVERY_DEADLINE` 需要有效的 `thresholdDays` 和 `warningDays`；`SINGLE_IN_TRANSIT_ETA_WARNING` 需要有效的 `warningDays`（到港前提醒天数，默认 10）。
+- 如果后续需要兼容旧字段 `groupType`，只能作为备注或迁移辅助，不参与规则启用判断。
 
 ## 前端设计
 
@@ -381,12 +430,12 @@ hasGroup
 在现有运单列表中增加：
 
 - “分组”列，显示组名或组号。
-- 分组筛选项，支持按分组类型筛选；筛选结果包含拥有该类型的分组。
+- 分组筛选项，支持按分组、是否已分组、已启用规则筛选。
 - 批量操作：
   - 新建分组
   - 加入已有分组
   - 移出分组
-  - 标记最后一批
+  - 配置组规则
 
 ### 分组管理页
 
@@ -394,25 +443,31 @@ hasGroup
 
 页面结构：
 
-- 左侧：分组列表和筛选，包含分组类型、客户、船名航次、收款状态。
+- 左侧：分组列表和筛选，包含客户、船名航次、目的港、收款状态、启用规则。
 - 右侧：分组详情。
 - 详情展示：
-  - 主分组类型
-  - 全部分组类型标签
   - 组内运单数
   - 已到港数
   - 已签收数
   - 未签收超时数
   - 收款状态
+  - 已启用规则
   - 未读提醒
   - 组内运单明细
+
+规则配置交互：
+
+- 分组详情页提供“规则配置”区域。
+- 支持启用/停用规则。
+- 支持编辑规则阈值，例如签收期限天数和提前提醒天数。
+- 保存规则后可提示用户是否立即重新计算提醒。
 
 ### 首页与顶栏提醒
 
 复用现有通知风格，增加“分组提醒”来源：
 
 - 顶栏铃铛显示未读组提醒。
-- 首页海运预警区域可增加“批次提醒”面板。
+- 首页海运预警区域可增加“分组提醒”面板。
 - 点击提醒跳转到对应分组详情。
 
 ## 与现有模块的关系
@@ -425,25 +480,25 @@ hasGroup
 | 海运预警 | 复用到港状态判断逻辑 |
 | 计划任务 | 增加组提醒扫描任务 |
 
-## 审查结论：单 group_type 不满足业务
+## 审查结论：规则不应由分组类型推导
 
-当前如果只实现 `shipment_groups.group_type` 单字段，会产生 P1 级设计问题：一批货物只能属于一种业务类型，无法同时表达“客户批次 + 到港批次 + 收款批次”。
+如果通过 `group_type` 或 `primary_type` 决定规则是否启用，会产生设计问题：
 
-具体风险：
-
-1. 若分组类型选为 `PORT_BATCH`，签收期限规则 `BATCH_DELIVERY_DEADLINE` 可能不会启用。
-2. 若分组类型选为 `CUSTOMER_BATCH`，最后一批到港催款规则 `LAST_BATCH_ARRIVED_PAYMENT` 可能不会启用。
-3. 前端筛选 `groupType` 会被误实现为单值等于，而不是“包含该类型”。
-4. 后续扩展规则时会继续遇到类型互斥问题。
+1. 一组货可能同时需要执行多种业务规则，类型容易变成互斥标签。
+2. “为什么成组”和“执行什么规则”被耦合，后续新增规则时需要不断调整类型体系。
+3. 前端筛选和后端规则判断容易出现歧义，例如到底筛选“某种类型的组”，还是“启用了某条规则的组”。
+4. 用户真正关心的是这组货要不要执行某条规则，而不是这组货叫什么类型。
 
 因此实现必须调整为：
 
 ```text
-shipment_groups.primary_type
-shipment_group_types(group_id, group_type)
+shipment_groups: 只保存组本身
+shipment_group_members: 保存组内运单
+shipment_group_rules: 保存该组启用的规则
+shipment_group_notifications: 保存规则产生的提醒
 ```
 
-所有规则判断、筛选、自动建议和 Excel 导入都应基于 `shipment_group_types` 多类型集合；`primary_type` 只用于默认展示。
+所有规则判断、筛选、自动建议和 Excel 导入都应围绕 `shipment_group_rules` 展开。
 
 ## 实施路线
 
@@ -454,24 +509,30 @@ shipment_group_types(group_id, group_type)
 3. 支持运单批量加入/移出分组。
 4. 运单列表展示分组信息并支持分组筛选。
 
-### 阶段二：固定规则提醒
+### 阶段二：规则配置
+
+1. 新增 `shipment_group_rules` 表和规则配置 API。
+2. 分组创建/编辑时支持配置启用规则。
+3. 分组详情页展示和编辑规则配置。
+
+### 阶段三：固定规则提醒
 
 1. 实现 `BATCH_DELIVERY_DEADLINE`。
-2. 实现 `LAST_BATCH_ARRIVED_PAYMENT`。
+2. 实现 `GROUP_ARRIVED_PAYMENT`。
 3. 新增分组提醒表和未读提醒接口。
 4. 分组详情页展示提醒。
 
-### 阶段三：通知中心接入
+### 阶段四：通知中心接入
 
 1. 顶栏铃铛聚合分组提醒。
-2. 首页增加批次提醒区域。
+2. 首页增加分组提醒区域。
 3. 支持提醒已读和处理完成。
 
-### 阶段四：自动分组建议
+### 阶段五：自动成组建议
 
 1. 根据客户、客户单号、船名航次、目的港等字段生成候选分组。
 2. 用户确认后批量创建分组。
-3. Excel 导入支持分组字段。
+3. Excel 导入支持分组字段和规则字段。
 
 ## 设计取舍
 

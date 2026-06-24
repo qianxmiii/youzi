@@ -14,6 +14,7 @@ from .internal_batch_schedule import (
     record_internal_batch_finished,
     should_run_scheduled_internal_batch,
 )
+from .shipment_group_alerts import evaluate_groups_after_tracking_sync
 from .sync_log import make_sync_logger
 from .logistics_tracking import (
     BATCH_SIZE,
@@ -158,6 +159,7 @@ def _sync_all_tracking_body(
     empty = 0
     log_count = 0
     not_found = 0
+    updated_shipment_nos: list[str] = []
 
     for idx, row in enumerate(tracking_list, start=1):
         sn = row["tracking_number"]
@@ -182,6 +184,7 @@ def _sync_all_tracking_body(
                 )
                 out_log(f"[轨迹同步] {sn} 报文 {status_label} -> {api_status}（无有效轨迹节点）")
                 updated += 1
+                updated_shipment_nos.append(sn)
             elif is_internal_no_tracking_desc(row.get("latest_tracking_desc")):
                 shipments_repo.update_internal_tracking_summary(sn, "", "", log_count=0)
             continue
@@ -207,6 +210,7 @@ def _sync_all_tracking_body(
             delivered_time=_delivered_time_for_status(api_status, latest_time),
         )
         updated += 1
+        updated_shipment_nos.append(sn)
         if api_status:
             out_log(
                 f"[轨迹同步] {sn} 报文 {status_label} -> {api_status}，"
@@ -249,6 +253,12 @@ def _sync_all_tracking_body(
     ):
         record_internal_batch_finished(shipments_repo._database)
 
+    group_alerts = evaluate_groups_after_tracking_sync(
+        shipments_repo._database,
+        updated_shipment_nos,
+        out_log,
+    )
+
     return {
         "jobId": job_id,
         "total": total,
@@ -262,6 +272,7 @@ def _sync_all_tracking_body(
         "batchSize": batch_size,
         "batches": total_batches,
         "logs": log_lines[-200:],
+        **group_alerts,
     }
 
 

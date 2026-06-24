@@ -126,7 +126,7 @@ erDiagram
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | id | TEXT PK | UUID |
-| group_no | TEXT UNIQUE | 分组编号，如 `G20260622001` |
+| group_no | TEXT UNIQUE | 分组编号，如 `G260622001` |
 | group_name | TEXT | 分组展示名称 |
 | primary_type | TEXT | 主分组类型（列表图标/默认展示）；`MANUAL` / `CUSTOMER_BATCH` / … |
 | customer | TEXT | 组级客户名 |
@@ -169,10 +169,10 @@ erDiagram
 |------|------|------|
 | id | TEXT PK | UUID |
 | group_id | TEXT | → shipment_groups.id |
-| rule_type | TEXT | `BATCH_DELIVERY_DEADLINE` / `LAST_BATCH_ARRIVED_PAYMENT` |
+| rule_type | TEXT | `BATCH_DELIVERY_DEADLINE` / `GROUP_ARRIVED_PAYMENT` / `SINGLE_IN_TRANSIT_ETA_WARNING` |
 | enabled | INTEGER | 1/0 |
-| threshold_days | INTEGER | 签收期限天数（默认 30） |
-| warning_days | INTEGER | 提前预警天数（默认 7） |
+| threshold_days | INTEGER | 签收期限天数（默认 30；单票到港规则不使用） |
+| warning_days | INTEGER | 提前预警天数（签收默认 7；单票到港默认 10） |
 | trigger_status | TEXT | 预留 |
 | config_json | TEXT | 扩展配置 JSON |
 | created_time, updated_time | TEXT | 审计字段 |

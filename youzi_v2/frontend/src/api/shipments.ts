@@ -60,9 +60,15 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.noTracking) q.noTracking = 'true'
   if (params.groupId?.trim()) q.groupId = params.groupId.trim()
   if (params.groupNo?.trim()) q.groupNo = params.groupNo.trim()
-  if (params.groupType?.trim()) q.groupType = params.groupType.trim()
+  if (params.ruleType?.trim()) q.ruleType = params.ruleType.trim()
+  if (params.hasRule === true) q.hasRule = 'true'
+  if (params.hasRule === false) q.hasRule = 'false'
   if (params.hasGroup === true) q.hasGroup = 'true'
   if (params.hasGroup === false) q.hasGroup = 'false'
+  if (params.sortBy?.trim()) q.sortBy = params.sortBy.trim()
+  if (params.sortOrder === 'asc' || params.sortOrder === 'desc') {
+    q.sortOrder = params.sortOrder
+  }
   if (params.limit != null) q.limit = String(params.limit)
   if (params.offset != null) q.offset = String(params.offset)
   return q
@@ -91,8 +97,11 @@ export interface ListShipmentsParams {
   noTracking?: boolean
   groupId?: string
   groupNo?: string
-  groupType?: string
+  ruleType?: string
+  hasRule?: boolean
   hasGroup?: boolean
+  sortBy?: 'shipmentNo'
+  sortOrder?: 'asc' | 'desc'
   limit?: number
   offset?: number
 }

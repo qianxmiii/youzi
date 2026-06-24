@@ -13,10 +13,13 @@ import {
   useDialog,
   useMessage,
   type DataTableColumns,
+  type DataTableSortState,
   type DropdownOption,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 import { useRoute, useRouter } from 'vue-router'
+import ShipmentGroupRuleIcon from '@/components/shipments/ShipmentGroupRuleIcon.vue'
 import ShipmentGroupActionModal from '@/components/shipments/ShipmentGroupActionModal.vue'
 import ShipmentGroupSuggestionsModal from '@/components/shipments/ShipmentGroupSuggestionsModal.vue'
 import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
@@ -53,21 +56,14 @@ import {
 import {
   addShipmentGroupMembers,
   createShipmentGroup,
-  patchShipmentGroupMembersBatch,
   removeShipmentGroupMembers,
 } from '@/api/shipmentGroups'
 import ShipmentFormModal from '@/components/shipments/ShipmentFormModal.vue'
 import type { Shipment, ShipmentBatchResult, ShipmentPayload } from '@/types/shipment'
-import type { ShipmentGroupBatchMode, ShipmentGroupFilterOption } from '@/types/shipmentGroup'
-import type { ShipmentFilterOptions } from '@/api/shipments'
-import {
-  shipmentGroupTypeSelectOptions,
-  type ShipmentGroupType,
-} from '@/constants/shipmentGroupTypes'
-import {
-  renderShipmentGroupTypeSelectLabel,
-} from '@/utils/shipmentGroupTypeSelectRender'
-import type { TrackingSyncDailyStats, TrackingSyncResult } from '@/types/tracking'
+import type { ShipmentGroupBatchMode, ShipmentGroupFilterOption, ShipmentGroupRuleInput } from '@/types/shipmentGroup'
+import { Layers } from 'lucide-vue-next'
+import { shipmentGroupRuleSelectOptions, sortShipmentGroupEnabledRules } from '@/constants/shipmentGroupRules'
+import { ICON_STROKE } from '@/constants/icons'
 import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
 import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
@@ -119,7 +115,7 @@ const filterNoTracking = ref(false)
 const filterException = ref<string | null>(null)
 const filterHasException = ref<boolean | null>(null)
 const filterGroupId = ref<string | null>(null)
-const filterGroupType = ref<string | null>(null)
+const filterRuleType = ref<string | null>(null)
 const filterHasGroup = ref<boolean | null>(null)
 const filterOptions = ref<ShipmentFilterOptions>({
   customers: [],
@@ -145,6 +141,8 @@ const groupActionSubmitting = ref(false)
 const subscriptionTogglingId = ref<string | null>(null)
 const page = ref(1)
 const pageSize = ref(20)
+const sortBy = ref<'shipmentNo' | null>(null)
+const sortOrder = ref<'asc' | 'desc' | null>(null)
 const trackingDrawerShow = ref(false)
 const trackingDrawerShipment = ref<Shipment | null>(null)
 const trackingDrawerTab = ref<'internal' | 'carrier'>('internal')
@@ -166,14 +164,13 @@ function syncSelectionWithItems() {
 const shipmentNoTokens = computed(() => parseBatchSearchTokens(searchShipmentNo.value))
 const batchShipmentSearchActive = computed(() => shipmentNoTokens.value.length > 1)
 
-/** 按当前页最长运单号 + 侧栏标识（VIP / 异常）估算列宽 */
+/** 按当前页最长运单号 + 侧栏标识（异常等）估算列宽 */
 const shipmentNoColWidth = computed(() => {
   let maxLen = 10
   let maxBadges = 0
   for (const row of items.value) {
     maxLen = Math.max(maxLen, (row.shipmentNo || '').length)
     let badges = 0
-    if (row.isVip) badges++
     if (hasActiveException(row)) badges++
     maxBadges = Math.max(maxBadges, badges)
   }
@@ -218,43 +215,85 @@ const selectedMemberGroupOptions = computed((): ShipmentGroupFilterOption[] => {
 })
 
 const groupFilterOptions = computed(() =>
-  filterOptions.value.groups.map((g) => ({
-    label: g.groupName?.trim() ? `${g.groupName}（${g.groupNo}）` : g.groupNo,
-    value: g.id,
-  })),
+  filterOptions.value.groups.map((g) => {
+    const no = formatGroupNoDisplay(g.groupNo)
+    return {
+      label: g.groupName?.trim() ? `${g.groupName}（${no}）` : no,
+      value: g.id,
+    }
+  }),
 )
-const groupTypeFilterOptions = shipmentGroupTypeSelectOptions()
+const ruleTypeFilterOptions = shipmentGroupRuleSelectOptions()
 
 const hasGroupFilterOptions = [
   { label: '有分组', value: 'yes' },
   { label: '无分组', value: 'no' },
 ]
 
-function groupCellLabel(g: NonNullable<Shipment['groups']>[number]): string {
-  const name = g.groupName?.trim()
-  return name || g.groupNo
+function goShipmentGroup(groupId: string) {
+  if (!groupId?.trim()) return
+  void router.push({ path: '/shipment-groups', query: { groupId: groupId.trim() } })
+}
+
+function renderGroupIconButton(
+  g: NonNullable<Shipment['groups']>[number],
+  child: ReturnType<typeof h>,
+) {
+  const groupNo = formatGroupNoDisplay(g.groupNo)
+  return h(
+    NTooltip,
+    { placement: 'top' },
+    {
+      trigger: () =>
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'shipment-group-rule-icon-btn',
+            onClick: (e: MouseEvent) => {
+              e.stopPropagation()
+              goShipmentGroup(g.groupId)
+            },
+          },
+          [child],
+        ),
+      default: () => groupNo,
+    },
+  )
+}
+
+function renderGroupIconCluster(g: NonNullable<Shipment['groups']>[number]) {
+  const rules = sortShipmentGroupEnabledRules(g.enabledRules ?? [])
+  if (!rules.length) {
+    return renderGroupIconButton(
+      g,
+      h(Layers, {
+        class: 'shipment-group-rule-icon__svg shipment-group-rule-icon--placeholder',
+        size: 14,
+        strokeWidth: ICON_STROKE,
+      }),
+    )
+  }
+  return h(
+    'span',
+    { class: 'shipment-group-icon-cluster' },
+    rules.map((ruleType) =>
+      renderGroupIconButton(g, h(ShipmentGroupRuleIcon, { ruleType, size: 14 })),
+    ),
+  )
 }
 
 function renderShipmentGroups(row: Shipment) {
   const groups = row.groups ?? []
   if (!groups.length) return h('span', { class: 'tracking-empty' }, '—')
-  const text = groups.map((g) => groupCellLabel(g)).join('、')
-  const tooltip = groups
-    .map((g) => {
-      const role =
-        g.role === 'LAST_BATCH' ? ' [末批]' : g.role === 'KEY_BATCH' ? ' [关键]' : ''
-      const batch = g.batchNo?.trim() ? ` #${g.batchNo}` : ''
-      return `${g.groupNo}${g.groupName?.trim() ? ` ${g.groupName}` : ''}${role}${batch}`
-    })
-    .join('\n')
-  return h(
-    NTooltip,
-    { placement: 'top' },
-    {
-      trigger: () => h('span', { class: 'cursor-default truncate block max-w-full' }, text),
-      default: () => h('span', { class: 'whitespace-pre-line' }, tooltip),
-    },
-  )
+  const nodes = groups.flatMap((g, index) => {
+    const parts: ReturnType<typeof h>[] = [renderGroupIconCluster(g)]
+    if (index < groups.length - 1) {
+      parts.push(h('span', { class: 'shipment-group-cell-sep', 'aria-hidden': 'true' }, '·'))
+    }
+    return parts
+  })
+  return h('span', { class: 'shipment-group-cell truncate block max-w-full' }, nodes)
 }
 
 const channelCodeOptions = computed(() =>
@@ -277,6 +316,9 @@ function formatTrackingMessage(res: TrackingSyncResult, label = '轨迹') {
       ? `，已跳过不可同步 ${res.excludedNotInTransit} 单`
       : '') +
     unassigned
+  if (res.groupAlertsCreated && res.groupAlertsCreated > 0) {
+    text += `；分组提醒 +${res.groupAlertsCreated}`
+  }
   if (res.errors.length) {
     const preview = res.errors.slice(0, 3).join('；')
     const more = res.errors.length > 3 ? `…等 ${res.errors.length} 条` : ''
@@ -469,11 +511,6 @@ function renderTrackingSummaryCell(
   return clickable
 }
 
-function renderVipBadge(row: Shipment) {
-  if (!row.isVip) return null
-  return h(VipStarBadge)
-}
-
 function openLastMileTrackUrl(row: Shipment) {
   const info = resolveLastMileTracking(row)
   if (!info?.url) {
@@ -579,7 +616,6 @@ function renderShipmentNo(row: Shipment) {
   )
   const inner = h('span', { class: 'shipment-no-cell-row' }, [
     noCell,
-    renderVipBadge(row),
     renderLastMileBadge(row),
     renderExceptionBadge(row),
   ])
@@ -680,7 +716,7 @@ const advancedFiltersActiveCount = computed(() => {
   if (filterException.value) n++
   if (filterNoTracking.value) n++
   if (filterGroupId.value) n++
-  if (filterGroupType.value) n++
+  if (filterRuleType.value) n++
   if (filterHasGroup.value != null) n++
   if (filterInternalFreshness.value) n++
   if (filterCarrierFreshness.value) n++
@@ -768,7 +804,7 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
         : staleDays,
     noTracking: filterNoTracking.value || undefined,
     groupId: filterGroupId.value || undefined,
-    groupType: filterGroupType.value || undefined,
+    ruleType: filterRuleType.value || undefined,
     hasGroup:
       filterHasGroup.value === true
         ? true
@@ -777,7 +813,22 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
           : undefined,
     limit,
     offset,
+    ...(sortBy.value && sortOrder.value
+      ? { sortBy: sortBy.value, sortOrder: sortOrder.value }
+      : {}),
   }
+}
+
+function handleSorterChange(sorter: DataTableSortState | null) {
+  if (!sorter || sorter.columnKey !== 'shipmentNo' || !sorter.order) {
+    sortBy.value = null
+    sortOrder.value = null
+  } else {
+    sortBy.value = 'shipmentNo'
+    sortOrder.value = sorter.order === 'ascend' ? 'asc' : 'desc'
+  }
+  page.value = 1
+  void loadList()
 }
 
 let listRequestSeq = 0
@@ -1139,7 +1190,7 @@ function resetFilters() {
   filterStaleDays.value = null
   filterNoTracking.value = false
   filterGroupId.value = null
-  filterGroupType.value = null
+  filterRuleType.value = null
   filterHasGroup.value = null
   searchShipmentNo.value = ''
   searchKeyword.value = ''
@@ -1170,7 +1221,7 @@ function openGroupAction(mode: ShipmentGroupBatchMode) {
     message.warning('请先勾选运单')
     return
   }
-  if ((mode === 'remove' || mode === 'lastBatch') && !selectedMemberGroupOptions.value.length) {
+  if (mode === 'remove' && !selectedMemberGroupOptions.value.length) {
     message.warning('所选运单未加入任何分组')
     return
   }
@@ -1189,7 +1240,7 @@ function openGroupAction(mode: ShipmentGroupBatchMode) {
 async function handleGroupCreate(
   groupName: string,
   customer?: string,
-  types?: { primaryType: ShipmentGroupType; groupTypes: ShipmentGroupType[] },
+  rules?: ShipmentGroupRuleInput[],
 ) {
   const ids = selectedIds.value
   if (!ids.length) return
@@ -1197,12 +1248,11 @@ async function handleGroupCreate(
   try {
     const group = await createShipmentGroup({
       groupName,
-      primaryType: types?.primaryType ?? 'MANUAL',
-      groupTypes: types?.groupTypes ?? ['MANUAL'],
+      rules: rules ?? [],
       customer: customer ?? null,
     })
     const res = await addShipmentGroupMembers(group.id, ids)
-    let text = `已新建分组 ${group.groupNo}，加入 ${res.added} / ${res.total} 条`
+    let text = `已新建分组 ${formatGroupNoDisplay(group.groupNo)}，加入 ${res.added} / ${res.total} 条`
     if (res.skipped) text += `，跳过 ${res.skipped} 条`
     if (res.failed) text += `，失败 ${res.failed} 条`
     message.success(text)
@@ -1253,44 +1303,17 @@ async function handleGroupRemove(groupId: string) {
   }
 }
 
-async function handleGroupLastBatch(groupId: string, batchNo?: string) {
-  const ids = selectedIds.value
-  if (!ids.length) return
-  groupActionSubmitting.value = true
-  try {
-    const res = await patchShipmentGroupMembersBatch(
-      groupId,
-      ids.map((shipmentId) => ({
-        shipmentId,
-        role: 'LAST_BATCH',
-        batchNo: batchNo ?? '',
-      })),
-    )
-    let text = `已标记末批 ${res.updated} / ${res.total} 条`
-    if (res.notFound) text += `，未在组内 ${res.notFound} 条`
-    if (res.skipped) text += `，跳过 ${res.skipped} 条`
-    message.success(text)
-    groupActionShow.value = false
-    await loadList()
-  } catch (e) {
-    message.error(e instanceof Error ? e.message : '标记最后一批失败')
-  } finally {
-    groupActionSubmitting.value = false
-  }
-}
-
 function onGroupActionConfirmCreate(
   groupName: string,
   customer?: string,
-  types?: { primaryType: ShipmentGroupType; groupTypes: ShipmentGroupType[] },
+  rules?: ShipmentGroupRuleInput[],
 ) {
-  void handleGroupCreate(groupName, customer, types)
+  void handleGroupCreate(groupName, customer, rules)
 }
 
-function onGroupActionConfirmGroupId(groupId: string, batchNo?: string) {
+function onGroupActionConfirmGroupId(groupId: string) {
   if (groupActionMode.value === 'add') void handleGroupAdd(groupId)
   else if (groupActionMode.value === 'remove') void handleGroupRemove(groupId)
-  else if (groupActionMode.value === 'lastBatch') void handleGroupLastBatch(groupId, batchNo)
 }
 
 async function handleOpenException(
@@ -1552,7 +1575,6 @@ const groupDropdownOptions: DropdownOption[] = [
   { label: '新建分组', key: 'create' },
   { label: '加入已有分组', key: 'add' },
   { label: '移出分组', key: 'remove' },
-  { label: '标记最后一批', key: 'lastBatch' },
 ]
 
 function handleGroupMenuSelect(key: string | number) {
@@ -1560,7 +1582,6 @@ function handleGroupMenuSelect(key: string | number) {
   else if (key === 'create') openGroupAction('create')
   else if (key === 'add') openGroupAction('add')
   else if (key === 'remove') openGroupAction('remove')
-  else if (key === 'lastBatch') openGroupAction('lastBatch')
 }
 
 const exceptionDropdownOptions: DropdownOption[] = [
@@ -1615,6 +1636,17 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     width: shipmentNoColWidth.value,
     minWidth: 176,
     fixed: 'left',
+    sorter: {
+      compare: () => 0,
+    },
+    sortOrder:
+      sortBy.value === 'shipmentNo'
+        ? sortOrder.value === 'asc'
+          ? 'ascend'
+          : sortOrder.value === 'desc'
+            ? 'descend'
+            : false
+        : false,
     cellProps: () => ({ class: 'shipment-td-no' }),
     render: (row) => renderShipmentNo(row),
   },
@@ -1654,7 +1686,8 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
   {
     title: '分组',
     key: 'groups',
-    width: 120,
+    width: 104,
+    align: 'center',
     ellipsis: { tooltip: false },
     render: (row) => renderShipmentGroups(row),
   },
@@ -1799,7 +1832,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       <div>
         <h2 class="page-h2">运单管理</h2>
         <p class="page-subtitle">
-          共 {{ total }} 条 · 支持手动新增、导入/导出运单 Excel
+          共 {{ total }} 条
           <span v-if="batchShipmentSearchActive" class="text-violet-400">
             · 批量运单号 {{ shipmentNoTokens.length }} 个
           </span>
@@ -1990,15 +2023,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             @update:value="onFiltersChanged"
           />
           <NSelect
-            v-model:value="filterGroupType"
-            :options="groupTypeFilterOptions"
-            :render-label="renderShipmentGroupTypeSelectLabel"
+            v-model:value="filterRuleType"
+            :options="ruleTypeFilterOptions"
             consistent-menu-width
-            placeholder="分组类型"
+            placeholder="启用规则"
             clearable
             size="small"
             class="shipments-filter-select shipments-filter-select--wide"
-            @update:value="onGroupTypeFilterChange"
+            @update:value="onFiltersChanged"
           />
           <NSelect
             :value="filterHasGroup === true ? 'yes' : filterHasGroup === false ? 'no' : null"
@@ -2044,6 +2076,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         flex-height
         class="shipments-data-table h-full"
         :bordered="false"
+        @update:sorter="handleSorterChange"
       />
     </div>
 
@@ -2367,6 +2400,73 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   word-break: keep-all;
   font-variant-numeric: tabular-nums;
   color: var(--color-fg-emphasis);
+}
+
+.shipments-data-table :deep(.shipment-group-cell) {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: nowrap;
+  white-space: nowrap;
+  gap: 0.125rem;
+}
+
+.shipments-data-table :deep(.shipment-group-icon-cluster) {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  cursor: pointer;
+  line-height: 0;
+  transition: background-color 0.15s ease;
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon-btn:hover) {
+  background: var(--color-btn-ghost-bg);
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon__svg) {
+  display: block;
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon--delivery) {
+  color: var(--tag-warning-fg, #d97706);
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon--payment) {
+  color: var(--color-accent-text, #6366f1);
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon--arrival) {
+  color: #0ea5e9;
+}
+
+.shipments-data-table :deep(.shipment-group-rule-icon--default),
+.shipments-data-table :deep(.shipment-group-rule-icon--placeholder) {
+  color: var(--color-muted);
+}
+
+.shipments-data-table :deep(.shipment-group-cell-sep) {
+  flex-shrink: 0;
+  margin: 0 0.0625rem;
+  color: var(--color-muted);
+  user-select: none;
 }
 
 .shipments-data-table :deep(.last-mile-badge-btn) {

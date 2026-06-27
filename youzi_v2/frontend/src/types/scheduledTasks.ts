@@ -6,6 +6,8 @@ export interface ScheduledTaskConfig {
   initialDelaySec: number
   lastInternalFinished: string | null
   lastCarrierFinished: string | null
+  groupAutoArchiveEnabled?: boolean
+  groupAutoArchiveLastFinished?: string | null
   schedulerActive: boolean
   scriptPath?: string
   pollIntervalSec?: number
@@ -17,6 +19,7 @@ export interface ScheduledSyncSettingsUpdate {
   carrierEnabled: boolean
   carrierIntervalHours: number
   initialDelaySec: number
+  groupAutoArchiveEnabled?: boolean
 }
 
 export interface BuiltinScheduledTask {
@@ -71,4 +74,12 @@ export interface ScheduledSyncRunResult {
   reason?: string | null
   internal?: Record<string, unknown> | null
   carrier?: Record<string, unknown> | null
+}
+
+export interface GroupAutoArchiveRunResult {
+  skipped: boolean
+  reason?: string | null
+  total: number
+  archived: number
+  groupIds: string[]
 }

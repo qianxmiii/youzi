@@ -16,6 +16,7 @@ import {
 } from '@/api/shipmentSubscriptions'
 import BellIcon from '@/components/common/BellIcon.vue'
 import ShipmentGroupAlertCard from '@/components/shipments/ShipmentGroupAlertCard.vue'
+import { hasDeliveredKeyword, splitDeliveredHighlight } from '@/utils/highlightDelivered'
 import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 
 const router = useRouter()
@@ -124,7 +125,6 @@ function goGroup(groupId: string) {
 }
 
 function onPopoverShowChange(show: boolean) {
-  popoverShow.value = show
   if (show) void load()
 }
 
@@ -142,11 +142,12 @@ onUnmounted(() => {
 
 <template>
   <NPopover
+    v-model:show="popoverShow"
     trigger="click"
     placement="bottom-end"
-    :show="popoverShow"
     :width="380"
     :show-arrow="false"
+    display-directive="if"
     @update:show="onPopoverShowChange"
   >
     <template #trigger>

@@ -11,6 +11,10 @@ class ScheduledTaskConfig(BaseModel):
     initial_delay_sec: float = Field(alias="initialDelaySec")
     last_internal_finished: str | None = Field(default=None, alias="lastInternalFinished")
     last_carrier_finished: str | None = Field(default=None, alias="lastCarrierFinished")
+    group_auto_archive_enabled: bool = Field(default=False, alias="groupAutoArchiveEnabled")
+    group_auto_archive_last_finished: str | None = Field(
+        default=None, alias="groupAutoArchiveLastFinished"
+    )
     scheduler_active: bool = Field(alias="schedulerActive")
     script_path: str | None = Field(default=None, alias="scriptPath")
     poll_interval_sec: float | None = Field(default=None, alias="pollIntervalSec")
@@ -28,6 +32,19 @@ class ScheduledSyncSettingsUpdate(BaseModel):
         alias="carrierIntervalHours", ge=0.25, le=168
     )
     initial_delay_sec: float = Field(alias="initialDelaySec", ge=0, le=86400)
+    group_auto_archive_enabled: bool | None = Field(
+        default=None, alias="groupAutoArchiveEnabled"
+    )
+
+
+class GroupAutoArchiveRunResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    skipped: bool = False
+    reason: str | None = None
+    total: int = 0
+    archived: int = 0
+    group_ids: list[str] = Field(default_factory=list, alias="groupIds")
 
 
 class ScheduledTaskOverview(BaseModel):

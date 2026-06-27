@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { Check, Clock, Copy } from 'lucide-vue-next'
+import { Check, Copy } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
-import { NSpin, useMessage } from 'naive-ui'
+import { NButton, NSpin, useMessage } from 'naive-ui'
 import { computed, onMounted, ref, watch } from 'vue'
-import { getShipmentCarrierTrackingLogs, getShipmentTrackingLogs } from '@/api/shipments'
+import {
+  getShipmentCarrierTrackingLogs,
+  getShipmentTrackingLogs,
+  getShipment,
+  syncCarrierTracking,
+  syncTracking,
+} from '@/api/shipments'
 import type { CarrierTrackingLog } from '@/types/tracking'
 import type { Shipment } from '@/types/shipment'
-import { formatAbsoluteDateTime } from '@/utils/formatDateTime'
+import { notifyTrackingSyncResult } from '@/utils/trackingSyncNotify'
 
 const props = withDefaults(
   defineProps<{
@@ -21,35 +27,23 @@ const props = withDefaults(
   },
 )
 
+const emit = defineEmits<{
+  'shipment-updated': [shipment: Shipment]
+}>()
+
 type LogRow = { id: string; trackingTime: string; trackingDesc: string }
 
 const message = useMessage()
 
 const activeTab = ref<'internal' | 'carrier'>(props.initialTab)
 const loading = ref(false)
+const syncingInternal = ref(false)
+const syncingCarrier = ref(false)
 const logs = ref<LogRow[]>([])
 const total = ref(0)
 const copiedLogId = ref<string | null>(null)
 
 const isDrawer = computed(() => props.mode === 'drawer')
-
-const expectedItem = computed(() => {
-  const s = props.shipment
-  if (!s || s.statusCode === 'DELIVERED') return null
-  const eta = s.eta?.trim()
-  if (!eta) return null
-  const d = new Date(eta.replace(' ', 'T'))
-  if (Number.isNaN(d.getTime())) return null
-  const dateStr = d.getMonth() + 1 + '/' + d.getDate()
-  const label = isDrawer.value
-    ? 'Expected to be delivered on ' + dateStr
-    : '预计送达 ' + dateStr
-  return {
-    id: 'expected',
-    desc: label,
-    time: formatAbsoluteDateTime(eta) || eta,
-  }
-})
 
 async function load() {
   loading.value = true
@@ -109,17 +103,61 @@ async function copyLog(log: LogRow) {
   }
 }
 
-const expectedLog = computed<LogRow | null>(() => {
-  const item = expectedItem.value
-  if (!item) return null
-  return { id: item.id, trackingTime: item.time, trackingDesc: item.desc }
-})
+async function refreshShipmentAfterSync() {
+  try {
+    const row = await getShipment(props.shipmentId)
+    emit('shipment-updated', row)
+  } catch {
+    /* 列表/抽屉已有行数据兜底 */
+  }
+}
+
+async function handleSyncInternal() {
+  const sn = props.shipment?.shipmentNo?.trim()
+  if (!sn) {
+    message.warning('缺少运单号')
+    return
+  }
+  syncingInternal.value = true
+  try {
+    const res = await syncTracking([sn])
+    notifyTrackingSyncResult(message, res, '内部轨迹')
+    activeTab.value = 'internal'
+    await load()
+    await refreshShipmentAfterSync()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '更新内部轨迹失败')
+  } finally {
+    syncingInternal.value = false
+  }
+}
+
+async function handleSyncCarrier() {
+  const sn = props.shipment?.shipmentNo?.trim()
+  if (!sn) {
+    message.warning('缺少运单号')
+    return
+  }
+  syncingCarrier.value = true
+  try {
+    const res = await syncCarrierTracking([sn])
+    notifyTrackingSyncResult(message, res, '承运商轨迹')
+    activeTab.value = 'carrier'
+    await load()
+    await refreshShipmentAfterSync()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '更新承运商轨迹失败')
+  } finally {
+    syncingCarrier.value = false
+  }
+}
+
 </script>
 
 <template>
   <!-- Drawer：设计稿时间轴 -->
   <div v-if="isDrawer" class="tracking-timeline-section">
-    <div class="tracking-tab-switch tracking-tab-switch--full mb-4 rounded-lg p-0.5">
+    <div class="tracking-tab-switch tracking-tab-switch--full mb-3 rounded-lg p-0.5">
       <button
         type="button"
         class="tracking-tab-btn"
@@ -138,60 +176,44 @@ const expectedLog = computed<LogRow | null>(() => {
       </button>
     </div>
 
+    <div class="tracking-sync-actions mb-4 flex gap-2">
+      <NButton
+        size="small"
+        class="flex-1"
+        :loading="syncingInternal"
+        :disabled="syncingCarrier"
+        @click="handleSyncInternal"
+      >
+        更新内部轨迹
+      </NButton>
+      <NButton
+        size="small"
+        class="flex-1"
+        :loading="syncingCarrier"
+        :disabled="syncingInternal"
+        @click="handleSyncCarrier"
+      >
+        更新承运商轨迹
+      </NButton>
+    </div>
+
     <NSpin :show="loading">
-      <div v-if="!loading && total === 0 && !expectedItem" class="text-sm text-[var(--color-muted)]">
+      <div v-if="!loading && total === 0" class="text-sm text-[var(--color-muted)]">
         暂无轨迹记录
       </div>
       <ol v-else class="tracking-timeline-list">
-        <li v-if="expectedLog" class="tracking-timeline-item tracking-timeline-item--expected">
-          <div class="tracking-timeline-marker tracking-timeline-marker--clock" aria-hidden="true">
-            <Clock class="h-3.5 w-3.5" :stroke-width="ICON_STROKE" />
-          </div>
-          <div
-            class="tracking-timeline-body tracking-timeline-body--copyable"
-            role="button"
-            tabindex="0"
-            title="点击复制时间与描述"
-            @click="copyLog(expectedLog)"
-            @keydown.enter.prevent="copyLog(expectedLog)"
-          >
-            <button
-              type="button"
-              class="tracking-copy-btn"
-              :class="{ 'tracking-copy-btn--copied': copiedLogId === expectedLog.id }"
-              :aria-label="copiedLogId === expectedLog.id ? '已复制' : '复制轨迹'"
-              @click.stop="copyLog(expectedLog)"
-            >
-              <Check
-                v-if="copiedLogId === expectedLog.id"
-                class="h-3.5 w-3.5"
-                :stroke-width="ICON_STROKE"
-                aria-hidden="true"
-              />
-              <Copy
-                v-else
-                class="h-3.5 w-3.5"
-                :stroke-width="ICON_STROKE"
-                aria-hidden="true"
-              />
-            </button>
-            <div class="timeline-time">{{ expectedLog.trackingTime }}</div>
-            <div class="timeline-content timeline-content--emphasis">{{ expectedLog.trackingDesc }}</div>
-          </div>
-        </li>
-
         <li
           v-for="(log, index) in logs"
           :key="log.id"
           class="tracking-timeline-item"
           :class="{
-            'tracking-timeline-item--latest': index === 0 && !expectedItem,
-            'tracking-timeline-item--past': index > 0 || !!expectedItem,
+            'tracking-timeline-item--latest': index === 0,
+            'tracking-timeline-item--past': index > 0,
           }"
         >
           <div
             class="tracking-timeline-marker"
-            :class="index === 0 && !expectedItem ? 'tracking-timeline-marker--solid' : 'tracking-timeline-marker--dot'"
+            :class="index === 0 ? 'tracking-timeline-marker--solid' : 'tracking-timeline-marker--dot'"
             aria-hidden="true"
           />
           <div
@@ -225,7 +247,7 @@ const expectedLog = computed<LogRow | null>(() => {
             <div class="timeline-time">{{ log.trackingTime }}</div>
             <div
               class="timeline-content"
-              :class="{ 'timeline-content--emphasis': index === 0 && !expectedItem }"
+              :class="{ 'timeline-content--emphasis': index === 0 }"
             >
               {{ log.trackingDesc }}
             </div>
@@ -371,17 +393,6 @@ const expectedLog = computed<LogRow | null>(() => {
   z-index: 1;
   flex-shrink: 0;
   margin-top: 2px;
-}
-
-.tracking-timeline-marker--clock {
-  display: flex;
-  height: 24px;
-  width: 24px;
-  align-items: center;
-  justify-content: center;
-  border-radius: 9999px;
-  background: rgb(139 92 246);
-  color: #fff;
 }
 
 .tracking-timeline-marker--solid,

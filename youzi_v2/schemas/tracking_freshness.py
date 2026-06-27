@@ -20,3 +20,8 @@ class TrackingFreshnessStats(BaseModel):
         alias="carrierAheadOfInternal",
         description="承运商最新节点新于内部的运单数",
     )
+    pending_tracking_time_review: int = Field(
+        0,
+        alias="pendingTrackingTimeReview",
+        description="签收时间待轨迹审批的运单数",
+    )

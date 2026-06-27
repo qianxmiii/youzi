@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS {GROUPS_TABLE} (
     payment_status TEXT NOT NULL DEFAULT 'UNPAID',
     payment_due_rule TEXT NOT NULL DEFAULT 'LAST_ARRIVAL',
     note TEXT NOT NULL DEFAULT '',
+    archived_at TEXT NOT NULL DEFAULT '',
     created_time TEXT NOT NULL,
     updated_time TEXT NOT NULL
 )
@@ -102,8 +103,8 @@ _INDEXES = [
     f"ON {RULES_TABLE}(group_id)",
     f"CREATE INDEX IF NOT EXISTS idx_{NOTIFICATIONS_TABLE}_group_unread "
     f"ON {NOTIFICATIONS_TABLE}(group_id, read_at, triggered_at)",
-    f"CREATE INDEX IF NOT EXISTS idx_{NOTIFICATIONS_TABLE}_event_key "
-    f"ON {NOTIFICATIONS_TABLE}(event_key)",
+    f"CREATE INDEX IF NOT EXISTS idx_{GROUPS_TABLE}_archived_at "
+    f"ON {GROUPS_TABLE}(archived_at)",
 ]
 
 
@@ -141,9 +142,18 @@ def _migrate_rule_type_names(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_groups_archived_at(conn: sqlite3.Connection) -> None:
+    cols = _table_columns(conn, GROUPS_TABLE)
+    if "archived_at" not in cols:
+        conn.execute(
+            f"ALTER TABLE {GROUPS_TABLE} ADD COLUMN archived_at TEXT NOT NULL DEFAULT ''"
+        )
+
+
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_GROUPS_SQL)
     _migrate_groups_primary_type(conn)
+    _migrate_groups_archived_at(conn)
     conn.execute(_CREATE_MEMBERS_SQL)
     conn.execute(_CREATE_TYPES_SQL)
     conn.execute(_CREATE_RULES_SQL)

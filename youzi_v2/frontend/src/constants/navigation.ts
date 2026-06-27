@@ -51,6 +51,11 @@ export const navGroups: NavGroup[] = [
     items: [{ name: '客户管理', to: '/customers', icon: 'users' }],
   },
   {
+    label: '审批管理',
+    icon: 'group-approval',
+    items: [{ name: '轨迹审批', to: '/approvals/tracking-time', icon: 'approval' }],
+  },
+  {
     label: '数据中心',
     icon: 'group-data',
     items: [{ name: '统计管理', to: '/statistics', icon: 'chart' }],

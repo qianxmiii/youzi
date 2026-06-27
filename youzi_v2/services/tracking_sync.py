@@ -15,6 +15,7 @@ from .internal_batch_schedule import (
     should_run_scheduled_internal_batch,
 )
 from .shipment_group_alerts import evaluate_groups_after_tracking_sync
+from .tracking_time_writeback import recalculate_for_shipment_nos
 from .sync_log import make_sync_logger
 from .logistics_tracking import (
     BATCH_SIZE,
@@ -33,8 +34,7 @@ LogFn = Callable[[str], None]
 def _delivered_time_for_status(
     status_code: str | None, latest_time: str
 ) -> str | None:
-    if status_code == "DELIVERED" and (latest_time or "").strip():
-        return latest_time.strip()
+    """Legacy：签收时间改由 tracking_time_writeback 根据内部轨迹回写。"""
     return None
 
 
@@ -259,6 +259,12 @@ def _sync_all_tracking_body(
         out_log,
     )
 
+    writeback = recalculate_for_shipment_nos(
+        shipments_repo._database,
+        updated_shipment_nos,
+        log=out_log,
+    )
+
     return {
         "jobId": job_id,
         "total": total,
@@ -273,6 +279,9 @@ def _sync_all_tracking_body(
         "batches": total_batches,
         "logs": log_lines[-200:],
         **group_alerts,
+        "timeWritebackProcessed": writeback.get("processed", 0),
+        "timeWritebackApplied": writeback.get("appliedTotal", 0),
+        "timeWritebackPendingReview": writeback.get("pendingReviewTotal", 0),
     }
 
 

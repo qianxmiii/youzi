@@ -21,6 +21,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { listShipments, updateShipment } from '@/api/shipments'
 import {
   evaluateShipmentGroupAlerts,
+  archiveShipmentGroup,
   deleteShipmentGroup,
   getShipmentGroup,
   listShipmentGroupNotifications,
@@ -29,6 +30,7 @@ import {
   markShipmentGroupNotificationRead,
   replaceShipmentGroupRules,
   resolveShipmentGroupNotification,
+  unarchiveShipmentGroup,
   updateShipmentGroup,
 } from '@/api/shipmentGroups'
 import type { Shipment } from '@/types/shipment'
@@ -63,10 +65,11 @@ const loadingDetail = ref(false)
 const evaluating = ref(false)
 const savingRules = ref(false)
 const deletingGroup = ref(false)
+const archivingGroup = ref(false)
 const groups = ref<ShipmentGroup[]>([])
 const total = ref(0)
 const search = ref('')
-type ListFilter = 'all' | 'hasRule' | 'pending'
+type ListFilter = 'all' | 'hasRule' | 'pending' | 'archived'
 const listFilter = ref<ListFilter>('all')
 const selectedId = ref<string | null>(null)
 const detail = ref<ShipmentGroupDetail | null>(null)
@@ -79,6 +82,7 @@ const listFilterOptions: { value: ListFilter; label: string }[] = [
   { value: 'all', label: '全部' },
   { value: 'hasRule', label: '启用规则' },
   { value: 'pending', label: '待处理' },
+  { value: 'archived', label: '已归档' },
 ]
 
 const enabledRuleTypes = ref<ShipmentGroupRuleType[]>([])
@@ -161,8 +165,29 @@ function memberStatusLabel(code: string | null | undefined): string {
   return c
 }
 
-function goToShipment(row: Shipment) {
-  router.push({ path: '/shipments', query: { shipmentNo: row.shipmentNo } })
+function goToShipment(_row: Shipment) {
+  openGroupShipmentsInList()
+}
+
+const groupMemberShipmentNos = computed(() =>
+  memberShipments.value
+    .map((s) => s.shipmentNo?.trim())
+    .filter((n): n is string => Boolean(n)),
+)
+
+function openGroupShipmentsInList() {
+  const nos = groupMemberShipmentNos.value
+  if (!nos.length) {
+    message.warning('组内暂无运单')
+    return
+  }
+  void router.push({
+    path: '/shipments',
+    query: {
+      shipmentNo: nos.join(','),
+      fromGroup: '1',
+    },
+  })
 }
 
 const hasEnabledRules = computed(() => enabledRuleTypes.value.length > 0)
@@ -182,6 +207,8 @@ const detailGroupName = computed(() => {
   if (!name || name === detailCustomer.value) return ''
   return name
 })
+
+const isArchived = computed(() => Boolean(detail.value?.archivedAt?.trim()))
 
 const memberColumns = computed<DataTableColumns<Shipment>>(() => [
   {
@@ -333,6 +360,7 @@ async function loadGroups() {
       search: search.value.trim() || undefined,
       hasRule: listFilter.value === 'hasRule' ? true : undefined,
       hasUnread: listFilter.value === 'pending' ? true : undefined,
+      archived: listFilter.value === 'archived' ? true : false,
       limit: 100,
       offset: 0,
     })
@@ -497,6 +525,49 @@ async function handleDeleteGroup() {
   }
 }
 
+async function handleArchiveGroup() {
+  if (!selectedId.value || !detail.value) return
+  archivingGroup.value = true
+  const gid = selectedId.value
+  const label = formatGroupNoDisplay(detail.value.groupNo)
+  try {
+    await archiveShipmentGroup(gid)
+    message.success(`分组 ${label} 已归档`)
+    await loadGroups()
+    if (listFilter.value !== 'archived') {
+      selectedId.value = null
+      detail.value = null
+      notifications.value = []
+      memberShipments.value = []
+    } else {
+      await loadDetail(gid)
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '归档失败')
+  } finally {
+    archivingGroup.value = false
+  }
+}
+
+async function handleUnarchiveGroup() {
+  if (!selectedId.value || !detail.value) return
+  archivingGroup.value = true
+  const gid = selectedId.value
+  const label = formatGroupNoDisplay(detail.value.groupNo)
+  try {
+    await unarchiveShipmentGroup(gid)
+    message.success(`分组 ${label} 已恢复`)
+    listFilter.value = 'all'
+    await loadGroups()
+    selectedId.value = gid
+    await loadDetail(gid)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '取消归档失败')
+  } finally {
+    archivingGroup.value = false
+  }
+}
+
 function groupCardTitle(g: ShipmentGroup): string {
   return g.groupName?.trim() || g.customer?.trim() || formatGroupNoDisplay(g.groupNo)
 }
@@ -653,21 +724,39 @@ onMounted(async () => {
                     >
                       启用规则
                     </NTag>
+                    <NTag v-if="isArchived" size="small" :bordered="false" type="default">
+                      已归档
+                    </NTag>
                   </div>
                   <p v-if="detailGroupName" class="shipment-group-detail__group-name">
                     {{ detailGroupName }}
                   </p>
                 </div>
-                <NPopconfirm
-                  @positive-click="handleDeleteGroup"
-                >
-                  <template #trigger>
-                    <NButton size="small" type="error" quaternary :loading="deletingGroup">
-                      删除分组
-                    </NButton>
-                  </template>
-                  确定删除分组「{{ formatGroupNoDisplay(detail.groupNo) }}」？组内运单不会被删除，仅解除分组关系。
-                </NPopconfirm>
+                <NSpace size="small">
+                  <NPopconfirm v-if="!isArchived" @positive-click="handleArchiveGroup">
+                    <template #trigger>
+                      <NButton size="small" quaternary :loading="archivingGroup">归档</NButton>
+                    </template>
+                    归档后将从默认列表隐藏；可在「已归档」中查看或恢复。
+                  </NPopconfirm>
+                  <NButton
+                    v-else
+                    size="small"
+                    quaternary
+                    :loading="archivingGroup"
+                    @click="handleUnarchiveGroup"
+                  >
+                    取消归档
+                  </NButton>
+                  <NPopconfirm @positive-click="handleDeleteGroup">
+                    <template #trigger>
+                      <NButton size="small" type="error" quaternary :loading="deletingGroup">
+                        删除分组
+                      </NButton>
+                    </template>
+                    确定删除分组「{{ formatGroupNoDisplay(detail.groupNo) }}」？组内运单不会被删除，仅解除分组关系。
+                  </NPopconfirm>
+                </NSpace>
               </div>
 
               <div class="shipment-group-detail__stats">
@@ -702,6 +791,7 @@ onMounted(async () => {
                     :options="paymentOptions"
                     size="small"
                     class="shipment-group-detail__payment-select"
+                    :disabled="isArchived"
                     @update:value="handlePaymentChange"
                   />
                 </div>
@@ -714,7 +804,7 @@ onMounted(async () => {
                     size="tiny"
                     type="primary"
                     :loading="savingRules"
-                    :disabled="!rulesDirty"
+                    :disabled="!rulesDirty || isArchived"
                     @click="handleRulesSave"
                   >
                     保存规则
@@ -790,7 +880,13 @@ onMounted(async () => {
                 <div class="shipment-group-panel-head">
                   <span class="shipment-group-panel-head__title">提醒与待处理</span>
                   <NSpace size="small">
-                    <NButton size="tiny" quaternary :loading="evaluating" @click="handleEvaluate">
+                    <NButton
+                      size="tiny"
+                      quaternary
+                      :loading="evaluating"
+                      :disabled="isArchived"
+                      @click="handleEvaluate"
+                    >
                       重新计算
                     </NButton>
                     <NButton
@@ -848,7 +944,24 @@ onMounted(async () => {
 
               <div class="flex min-h-0 flex-col">
                 <div class="shipment-group-panel-head">
-                  <span class="shipment-group-panel-head__title">组内运单</span>
+                  <span class="shipment-group-panel-head__title">
+                    组内运单
+                    <span
+                      v-if="memberShipments.length"
+                      class="ml-1 text-xs font-normal text-[var(--color-muted)]"
+                    >
+                      {{ memberShipments.length }}
+                    </span>
+                  </span>
+                  <NButton
+                    size="tiny"
+                    quaternary
+                    type="primary"
+                    :disabled="!groupMemberShipmentNos.length"
+                    @click="openGroupShipmentsInList"
+                  >
+                    运单管理
+                  </NButton>
                 </div>
                 <div class="min-h-0 flex-1 overflow-hidden p-3">
                   <NDataTable

@@ -12,6 +12,7 @@ from .context import (
     carrier_tracking_repo,
     internal_tracking_repo,
     shipments_repo,
+    shipment_groups_repo,
     start_tracking_sync_scheduler,
     tracking_jobs_repo,
 )
@@ -61,6 +62,7 @@ def _start_scheduled_tracking_sync() -> None:
         internal_tracking_repo,
         carrier_tracking_repo,
         tracking_jobs_repo,
+        shipment_groups_repo,
         LOGISTICS_CONFIG_PATH,
     )
 

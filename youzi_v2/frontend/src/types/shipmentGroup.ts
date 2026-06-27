@@ -108,6 +108,7 @@ export interface ShipmentGroup {
   paymentStatus: string
   paymentDueRule: string
   note: string
+  archivedAt?: string | null
   createdTime: string
   updatedTime: string
   memberCount?: number

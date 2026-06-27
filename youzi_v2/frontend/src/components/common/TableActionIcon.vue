@@ -9,9 +9,11 @@ withDefaults(
     title: string
     /** 订阅图标：已订阅高亮 */
     active?: boolean
+    /** 轨迹图标：待审批高亮 */
+    emphasis?: boolean
     loading?: boolean
   }>(),
-  { active: false, loading: false },
+  { active: false, emphasis: false, loading: false },
 )
 
 defineEmits<{
@@ -26,6 +28,7 @@ defineEmits<{
     :class="[
       'table-action-icon--' + kind,
       kind === 'subscribe' && active ? 'table-action-icon--subscribe-active' : '',
+      kind === 'view' && emphasis ? 'table-action-icon--view-emphasis' : '',
     ]"
     :aria-label="title"
     :disabled="loading"
@@ -79,6 +82,15 @@ defineEmits<{
   background: rgb(239 246 255);
 }
 
+.table-action-icon--view-emphasis {
+  color: rgb(217 119 6);
+}
+
+.table-action-icon--view-emphasis:hover {
+  background: rgb(255 247 237);
+  color: rgb(180 83 9);
+}
+
 .table-action-icon--edit {
   color: rgb(82 82 91);
 }
@@ -125,6 +137,15 @@ defineEmits<{
 
 [data-theme='dark'] .table-action-icon--view:hover {
   background: rgb(30 58 138 / 0.35);
+}
+
+[data-theme='dark'] .table-action-icon--view-emphasis {
+  color: rgb(251 191 36);
+}
+
+[data-theme='dark'] .table-action-icon--view-emphasis:hover {
+  background: rgb(120 53 15 / 0.35);
+  color: rgb(253 230 138);
 }
 
 [data-theme='dark'] .table-action-icon--edit {

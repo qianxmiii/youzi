@@ -18,6 +18,7 @@ import { computed, h, onMounted, reactive, ref } from 'vue'
 import {
   getScheduledTasksOverview,
   listScheduledTaskJobs,
+  runGroupAutoArchive,
   runScheduledCarrierSync,
   runScheduledInternalSync,
   updateScheduledTasksSettings,
@@ -33,6 +34,7 @@ const loading = ref(false)
 const saving = ref(false)
 const runningInternal = ref(false)
 const runningCarrier = ref(false)
+const runningGroupArchive = ref(false)
 const overview = ref<ScheduledTaskOverview | null>(null)
 const jobs = ref<TrackingSyncJobRecord[]>([])
 const jobsTotal = ref(0)
@@ -47,6 +49,7 @@ const form = reactive<ScheduledSyncSettingsUpdate>({
   carrierEnabled: true,
   carrierIntervalHours: 2,
   initialDelaySec: 60,
+  groupAutoArchiveEnabled: false,
 })
 
 const SOURCE_LABEL: Record<string, string> = {
@@ -117,6 +120,7 @@ function applyConfigFromOverview(data: ScheduledTaskOverview) {
   form.carrierEnabled = c.carrierEnabled
   form.carrierIntervalHours = c.carrierIntervalHours
   form.initialDelaySec = c.initialDelaySec
+  form.groupAutoArchiveEnabled = c.groupAutoArchiveEnabled ?? false
 }
 
 function syncResultMessage(res: { skipped?: boolean; reason?: string | null; internal?: unknown; carrier?: unknown }) {
@@ -198,6 +202,25 @@ async function onRunCarrier() {
   }
 }
 
+async function onRunGroupArchive() {
+  runningGroupArchive.value = true
+  try {
+    const res = await runGroupAutoArchive()
+    if (res.skipped) {
+      message.warning(res.reason || '已跳过')
+    } else if (res.archived > 0) {
+      message.success(`已自动归档 ${res.archived} 个分组（候选 ${res.total} 个）`)
+    } else {
+      message.info('暂无符合自动归档条件的分组')
+    }
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningGroupArchive.value = false
+  }
+}
+
 function onPageChange(p: number) {
   page.value = p
   void loadJobs()
@@ -229,6 +252,11 @@ const statusCards = computed(() => {
       value: c.lastCarrierFinished || '尚无',
       hint: `今日 ${ct.jobCount} 次 · 更新 ${ct.updatedShipments} 单`,
     },
+    {
+      label: '分组 · 上次自动归档',
+      value: c.groupAutoArchiveLastFinished || '尚无',
+      hint: c.groupAutoArchiveEnabled ? '每日批处理已启用' : '自动归档默认关闭',
+    },
   ]
 })
 
@@ -253,7 +281,7 @@ onMounted(load)
     <NSpin :show="loading">
       <div v-if="error" class="panel px-4 py-6 text-sm text-red-400">{{ error }}</div>
       <template v-else-if="overview">
-        <div class="grid gap-3 sm:grid-cols-3">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <article v-for="card in statusCards" :key="card.label" class="panel p-4">
             <p class="text-xs text-[var(--color-muted)]">{{ card.label }}</p>
             <p class="mt-1 text-sm font-medium text-[var(--color-fg-emphasis)]">{{ card.value }}</p>
@@ -296,6 +324,15 @@ onMounted(load)
                   class="w-28"
                 />
                 <NButton size="tiny" :loading="runningCarrier" @click="onRunCarrier">
+                  立即执行
+                </NButton>
+              </NSpace>
+            </NFormItem>
+            <NFormItem label="分组自动归档">
+              <NSpace align="center">
+                <NSwitch v-model:value="form.groupAutoArchiveEnabled" />
+                <span class="text-xs text-[var(--color-muted)]">每日批处理（约 24 小时）</span>
+                <NButton size="tiny" :loading="runningGroupArchive" @click="onRunGroupArchive">
                   立即执行
                 </NButton>
               </NSpace>

@@ -5,6 +5,7 @@ import { NDrawer } from 'naive-ui'
 import { computed } from 'vue'
 import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
 import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
+import ShipmentTrackingTimeReview from '@/components/shipments/ShipmentTrackingTimeReview.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import type { Shipment } from '@/types/shipment'
 import { resolveLastMileTracking } from '@/utils/lastMileTracking'
@@ -18,6 +19,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'update:show': [value: boolean]
+  'shipment-updated': [shipment: Shipment]
 }>()
 
 const showModel = computed({
@@ -152,12 +154,18 @@ function openTrackUrl() {
       </section>
 
       <section class="drawer-section timeline-section">
+        <ShipmentTrackingTimeReview
+          :key="shipment.id + '-' + shipment.updatedTime"
+          :shipment="shipment"
+          @updated="(row) => emit('shipment-updated', row)"
+        />
         <ShipmentTrackingPanel
           :key="shipment.id + '-' + (initialTab || 'internal')"
           :shipment-id="shipment.id"
           :shipment="shipment"
           mode="drawer"
           :initial-tab="initialTab || 'internal'"
+          @shipment-updated="(row) => emit('shipment-updated', row)"
         />
       </section>
 

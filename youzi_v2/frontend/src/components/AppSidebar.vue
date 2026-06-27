@@ -1,17 +1,24 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronLeft } from 'lucide-vue-next'
 import { NTooltip } from 'naive-ui'
-import { computed } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import NavIcon from '@/components/icons/NavIcon.vue'
 import { ICON_STROKE, ICON_STROKE_NAV } from '@/constants/icons'
 import { navGroups } from '@/constants/navigation'
 import { useNavGroupsExpanded } from '@/composables/useNavGroupsExpanded'
+import { usePendingTrackingTimeReviewCount } from '@/composables/usePendingTrackingTimeReviewCount'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
 
 const route = useRoute()
 const { collapsed, toggle } = useSidebarCollapsed()
 const { isGroupExpanded, toggleGroup } = useNavGroupsExpanded()
+const { pendingTrackingTimeReviewCount, refreshPendingTrackingTimeReviewCount } =
+  usePendingTrackingTimeReviewCount()
+
+onMounted(() => {
+  void refreshPendingTrackingTimeReviewCount()
+})
 
 const flatItems = computed(() => navGroups.flatMap((g) => g.items))
 
@@ -36,6 +43,21 @@ function onToggleGroup(label: string) {
 function itemLabel(groupLabel: string, name: string, badge?: string) {
   const text = `${groupLabel} · ${name}`
   return badge ? `${text}（${badge}）` : text
+}
+
+function pendingReviewNavCount(path: string) {
+  if (path !== '/approvals/tracking-time') return 0
+  return pendingTrackingTimeReviewCount.value
+}
+
+function formatNavPendingCount(count: number) {
+  if (count <= 0) return ''
+  return count > 99 ? '99+' : String(count)
+}
+
+function groupPendingReviewCount(groupLabel: string) {
+  if (groupLabel !== '审批管理') return 0
+  return pendingTrackingTimeReviewCount.value
 }
 </script>
 
@@ -85,6 +107,16 @@ function itemLabel(groupLabel: string, name: string, badge?: string) {
           >
             <NavIcon :name="group.icon" />
             <span class="min-w-0 flex-1 truncate text-left">{{ group.label }}</span>
+            <span
+              v-if="groupPendingReviewCount(group.label) > 0"
+              class="nav-pending-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+            >
+              {{
+                groupPendingReviewCount(group.label) > 99
+                  ? '99+'
+                  : groupPendingReviewCount(group.label)
+              }}
+            </span>
             <ChevronDown
               class="nav-group-chevron shrink-0"
               :class="{ 'nav-group-chevron--folded': !groupExpanded(group.label) }"
@@ -104,7 +136,13 @@ function itemLabel(groupLabel: string, name: string, badge?: string) {
             >
               <span class="flex-1 truncate">{{ item.name }}</span>
               <span
-                v-if="item.badge"
+                v-if="pendingReviewNavCount(item.to) > 0"
+                class="nav-pending-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+              >
+                {{ pendingReviewNavCount(item.to) > 99 ? '99+' : pendingReviewNavCount(item.to) }}
+              </span>
+              <span
+                v-else-if="item.badge"
                 class="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
                 style="background: var(--color-badge-bg); color: var(--color-badge-fg)"
               >
@@ -133,10 +171,23 @@ function itemLabel(groupLabel: string, name: string, badge?: string) {
                 :class="{ 'nav-item-active': isActive(item.to) }"
                 :aria-label="item.name"
               >
-                <NavIcon :name="item.icon" />
+                <span class="relative inline-flex">
+                  <NavIcon :name="item.icon" />
+                  <span
+                    v-if="pendingReviewNavCount(item.to) > 0"
+                    class="nav-pending-count"
+                    :aria-label="`${pendingReviewNavCount(item.to)} 待审批`"
+                  >
+                    {{ formatNavPendingCount(pendingReviewNavCount(item.to)) }}
+                  </span>
+                </span>
               </RouterLink>
             </template>
-            {{ itemLabel(group.label, item.name, item.badge) }}
+            {{
+              pendingReviewNavCount(item.to) > 0
+                ? `${itemLabel(group.label, item.name)}（${pendingReviewNavCount(item.to)} 待审）`
+                : itemLabel(group.label, item.name, item.badge)
+            }}
           </NTooltip>
         </template>
       </div>
@@ -242,5 +293,41 @@ function itemLabel(groupLabel: string, name: string, badge?: string) {
   margin-bottom: 0.125rem;
   padding: 0.4375rem 0.625rem;
   font-size: 0.8125rem;
+}
+
+.nav-pending-badge {
+  background: rgb(254 243 199);
+  color: rgb(180 83 9);
+  border: 1px solid rgb(251 191 36 / 0.55);
+}
+
+[data-theme='dark'] .nav-pending-badge {
+  background: rgb(120 53 15 / 0.45);
+  color: rgb(253 230 138);
+  border-color: rgb(245 158 11 / 0.35);
+}
+
+.nav-pending-count {
+  position: absolute;
+  top: -0.375rem;
+  right: -0.5rem;
+  min-width: 1rem;
+  height: 1rem;
+  padding: 0 0.1875rem;
+  border-radius: 9999px;
+  border: 1px solid rgb(251 191 36 / 0.55);
+  background: rgb(254 243 199);
+  color: rgb(180 83 9);
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 0.875rem;
+  text-align: center;
+  box-shadow: 0 0 0 1px var(--color-panel);
+}
+
+[data-theme='dark'] .nav-pending-count {
+  background: rgb(120 53 15 / 0.92);
+  color: rgb(253 230 138);
+  border-color: rgb(245 158 11 / 0.35);
 }
 </style>

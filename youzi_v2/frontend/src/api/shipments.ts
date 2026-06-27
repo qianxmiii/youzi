@@ -9,6 +9,10 @@ import type {
   ShipmentPayload,
 } from '@/types/shipment'
 import type {
+  TrackingTimeCandidate,
+  TrackingTimeRecalculateResult,
+} from '@/types/trackingTimeWriteback'
+import type {
   TrackingLogListResponse,
   TrackingSyncDailyStats,
   TrackingSyncResult,
@@ -54,6 +58,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.internalFreshness) q.internalFreshness = params.internalFreshness
   if (params.carrierFreshness) q.carrierFreshness = params.carrierFreshness
   if (params.carrierAheadOfInternal) q.carrierAheadOfInternal = 'true'
+  if (params.pendingTrackingTimeReview) q.pendingTrackingTimeReview = 'true'
   if (params.minStaleDays != null && params.minStaleDays > 0) {
     q.minStaleDays = String(params.minStaleDays)
   }
@@ -93,6 +98,7 @@ export interface ListShipmentsParams {
   internalFreshness?: TrackingFreshnessBucket
   carrierFreshness?: TrackingFreshnessBucket
   carrierAheadOfInternal?: boolean
+  pendingTrackingTimeReview?: boolean
   minStaleDays?: number
   noTracking?: boolean
   groupId?: string
@@ -305,5 +311,43 @@ export async function batchUnsubscribeShipments(
   return api<ShipmentUnsubscribeBatchResult>('/api/v1/shipments/batch-unsubscribe', {
     method: 'POST',
     body: { ids },
+  })
+}
+
+export async function getShipmentTrackingTimeCandidates(
+  shipmentId: string,
+): Promise<{ items: TrackingTimeCandidate[] }> {
+  return api(`/api/v1/shipments/${encodeURIComponent(shipmentId)}/tracking-time-candidates`)
+}
+
+export async function recalculateShipmentTrackingTimes(
+  shipmentId: string,
+): Promise<TrackingTimeRecalculateResult> {
+  return api(`/api/v1/shipments/${encodeURIComponent(shipmentId)}/recalculate-tracking-times`, {
+    method: 'POST',
+  })
+}
+
+export async function listPendingTrackingTimeReviews(
+  params?: { limit?: number; offset?: number },
+): Promise<{
+  items: TrackingTimeCandidate[]
+  total: number
+  limit: number
+  offset: number
+}> {
+  return api('/api/v1/shipment-tracking-time-candidates/pending', { query: params })
+}
+
+export async function reviewTrackingTimeCandidate(
+  candidateId: string,
+  body: {
+    action: import('@/types/trackingTimeWriteback').TrackingTimeReviewAction
+    manualValue?: string
+  },
+): Promise<{ action: string; deliveredTime?: string }> {
+  return api(`/api/v1/shipment-tracking-time-candidates/${encodeURIComponent(candidateId)}/review`, {
+    method: 'POST',
+    body,
   })
 }

@@ -288,6 +288,9 @@ def evaluate_group_alerts(
                 group = _load_group_row(database.conn, gid)
                 if not group:
                     continue
+                if (group.get("archived_at") or "").strip():
+                    evaluated += 1
+                    continue
                 members = _load_members_with_shipments(database.conn, gid)
                 conn = database.conn
             if not members:

@@ -11,6 +11,7 @@ from ..internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER, mask_internal_su
 from .datetime_util import now_str
 from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
 from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
+from .shipment_tracking_time_candidates_table import TABLE_NAME as CANDIDATES_TABLE
 from .shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .shipments_table import TABLE_NAME
 from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, RULES_TABLE
@@ -68,7 +69,10 @@ _LIST_FROM = (
 )
 _LIST_SELECT = (
     "s.*, cc.name_zh AS _channel_name_zh, cc.category AS _channel_category, "
-    "cu.track_query_lang AS _customer_track_query_lang"
+    "cu.track_query_lang AS _customer_track_query_lang, "
+    f"EXISTS(SELECT 1 FROM {CANDIDATES_TABLE} c "
+    f"WHERE c.shipment_id = s.id AND c.review_status = 'pending_review') "
+    f"AS _has_pending_tracking_time_review"
 )
 
 
@@ -101,6 +105,7 @@ _UPDATABLE = (
     "ata",
     "origin_port_code",
     "destination_port_code",
+    "expected_delivery_time",
     "delivered_time",
     "status_code",
 )
@@ -176,6 +181,11 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "ata": row["ata"],
         "originPortCode": row["origin_port_code"],
         "destinationPortCode": row["destination_port_code"],
+        "expectedDeliveryTime": (
+            row["expected_delivery_time"]
+            if "expected_delivery_time" in row.keys()
+            else None
+        ),
         "deliveredTime": row["delivered_time"],
         "statusCode": row["status_code"],
         "exceptionCode": row["exception_code"],
@@ -190,6 +200,11 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "carrierLogCount": row["carrier_log_count"],
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
+        "hasPendingSignedTimeReview": bool(
+            row["_has_pending_tracking_time_review"]
+            if "_has_pending_tracking_time_review" in row.keys()
+            else False
+        ),
     }
 
 
@@ -218,6 +233,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "vesselVoyage": "vessel_voyage",
         "originPortCode": "origin_port_code",
         "destinationPortCode": "destination_port_code",
+        "expectedDeliveryTime": "expected_delivery_time",
         "deliveredTime": "delivered_time",
         "statusCode": "status_code",
         "createdTime": "created_time",
@@ -312,6 +328,7 @@ class ShipmentsRepository:
         internal_freshness: str | None = None,
         carrier_freshness: str | None = None,
         carrier_ahead_of_internal: bool | None = None,
+        pending_tracking_time_review: bool | None = None,
         min_stale_days: int | None = None,
         no_tracking: bool | None = None,
         group_id: str | None = None,
@@ -437,6 +454,11 @@ class ShipmentsRepository:
             frag, frag_params = carrier_ahead_of_internal_sql("s")
             conditions.append(frag)
             params.extend(frag_params)
+        if pending_tracking_time_review is True:
+            conditions.append(
+                f"EXISTS (SELECT 1 FROM {CANDIDATES_TABLE} c "
+                f"WHERE c.shipment_id = s.id AND c.review_status = 'pending_review')"
+            )
         if no_tracking:
             conditions.append(
                 f"(s.latest_tracking_time IS NULL OR TRIM(s.latest_tracking_time) = '' "
@@ -604,6 +626,12 @@ class ShipmentsRepository:
         sql, params = freshness_stats_sql()
         with self._database.lock:
             row = self._conn.execute(sql, params).fetchone()
+            pending = self._conn.execute(
+                f"""
+                SELECT COUNT(*) AS c FROM {CANDIDATES_TABLE}
+                WHERE review_status = 'pending_review'
+                """
+            ).fetchone()["c"]
         return {
             "internal": {
                 "today": int(row["internal_today"] or 0),
@@ -618,6 +646,7 @@ class ShipmentsRepository:
                 "none": int(row["carrier_none"] or 0),
             },
             "carrierAheadOfInternal": int(row["carrier_ahead_of_internal"] or 0),
+            "pendingTrackingTimeReview": int(pending or 0),
         }
 
     def list_filter_options(self) -> dict[str, Any]:

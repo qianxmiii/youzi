@@ -87,6 +87,10 @@ class ShipmentRecordIn(BaseModel):
         default=None,
         validation_alias=AliasChoices("destinationPortCode", "destination_port_code"),
     )
+    expected_delivery_time: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("expectedDeliveryTime", "expected_delivery_time"),
+    )
     delivered_time: str | None = Field(
         default=None, validation_alias=AliasChoices("deliveredTime", "delivered_time")
     )
@@ -171,6 +175,10 @@ class ShipmentUpdateIn(BaseModel):
     destination_port_code: str | None = Field(
         default=None,
         validation_alias=AliasChoices("destinationPortCode", "destination_port_code"),
+    )
+    expected_delivery_time: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("expectedDeliveryTime", "expected_delivery_time"),
     )
     delivered_time: str | None = Field(
         default=None, validation_alias=AliasChoices("deliveredTime", "delivered_time")

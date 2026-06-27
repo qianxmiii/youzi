@@ -17,6 +17,7 @@ export interface TrackingFreshnessStats {
   internal: TrackingFreshnessCounts
   carrier: TrackingFreshnessCounts
   carrierAheadOfInternal: number
+  pendingTrackingTimeReview: number
 }
 
 function startOfLocalDay(d: Date): Date {

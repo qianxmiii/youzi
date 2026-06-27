@@ -1,5 +1,6 @@
 import { api } from '@/api/client'
 import type {
+  GroupAutoArchiveRunResult,
   ScheduledSyncRunResult,
   ScheduledSyncSettingsUpdate,
   ScheduledTaskConfig,
@@ -47,6 +48,12 @@ export async function runScheduledCarrierSync(): Promise<ScheduledSyncRunResult>
 
 export async function runScheduledTrackingSync(): Promise<ScheduledSyncRunResult> {
   return api<ScheduledSyncRunResult>('/api/v1/scheduled-tasks/run-tracking-sync', {
+    method: 'POST',
+  })
+}
+
+export async function runGroupAutoArchive(): Promise<GroupAutoArchiveRunResult> {
+  return api<GroupAutoArchiveRunResult>('/api/v1/scheduled-tasks/run-group-auto-archive', {
     method: 'POST',
   })
 }

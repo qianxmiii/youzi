@@ -37,6 +37,7 @@ export interface Shipment {
   ata: string | null
   originPortCode: string | null
   destinationPortCode: string | null
+  expectedDeliveryTime: string | null
   deliveredTime: string | null
   statusCode: string | null
   exceptionCode: string | null
@@ -53,6 +54,8 @@ export interface Shipment {
   updatedTime: string
   /** 是否已订阅轨迹更新（内部/承运商最新轨迹变更时提醒） */
   subscribed?: boolean
+  /** 签收时间存在待轨迹审批候选 */
+  hasPendingSignedTimeReview?: boolean
   /** 所属分组（只读，来自 shipment_group_members） */
   groups?: ShipmentGroupSummary[]
 }
@@ -155,6 +158,7 @@ export function emptyShipmentForm(): ShipmentPayload {
     ata: null,
     originPortCode: null,
     destinationPortCode: null,
+    expectedDeliveryTime: null,
     deliveredTime: null,
     statusCode: 'IN_TRANSIT',
   }
@@ -190,6 +194,7 @@ export function shipmentToForm(row: Shipment): ShipmentPayload {
     ata: row.ata,
     originPortCode: row.originPortCode,
     destinationPortCode: row.destinationPortCode,
+    expectedDeliveryTime: row.expectedDeliveryTime,
     deliveredTime: row.deliveredTime,
     statusCode: row.statusCode,
   }

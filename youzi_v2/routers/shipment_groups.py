@@ -58,6 +58,7 @@ def list_shipment_groups(
     has_unread: bool | None = Query(None, alias="hasUnread"),
     payment_status: str | None = Query(None, alias="paymentStatus"),
     customer: str | None = None,
+    archived: bool | None = Query(None, description="true=仅已归档，false/省略=仅未归档"),
     limit: int = 50,
     offset: int = 0,
 ):
@@ -68,6 +69,7 @@ def list_shipment_groups(
         has_unread=has_unread,
         payment_status=payment_status,
         customer=customer,
+        archived=archived if archived is not None else False,
         limit=limit,
         offset=offset,
     )
@@ -206,6 +208,22 @@ def list_shipment_group_notifications(
         limit=limit,
         offset=offset,
     )
+
+
+@router.post("/api/v1/shipment-groups/{item_id}/archive")
+def archive_shipment_group(item_id: str):
+    row = shipment_groups_repo.archive(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="分组不存在")
+    return row
+
+
+@router.post("/api/v1/shipment-groups/{item_id}/unarchive")
+def unarchive_shipment_group(item_id: str):
+    row = shipment_groups_repo.unarchive(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="分组不存在或未归档")
+    return row
 
 
 @router.post(

@@ -76,6 +76,7 @@ def _row_to_api(
         "paymentStatus": row["payment_status"],
         "paymentDueRule": row["payment_due_rule"],
         "note": row["note"] or "",
+        "archivedAt": (row["archived_at"] or "").strip() or None,
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
     }
@@ -173,6 +174,7 @@ class ShipmentGroupsRepository:
         has_unread: bool | None = None,
         payment_status: str | None = None,
         customer: str | None = None,
+        archived: bool | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -180,6 +182,11 @@ class ShipmentGroupsRepository:
         offset = max(0, offset)
         conditions: list[str] = []
         params: list[Any] = []
+
+        if archived is True:
+            conditions.append("(archived_at IS NOT NULL AND TRIM(archived_at) != '')")
+        else:
+            conditions.append("(archived_at IS NULL OR TRIM(archived_at) = '')")
 
         if search and search.strip():
             q = f"%{search.strip()}%"
@@ -852,3 +859,120 @@ class ShipmentGroupsRepository:
             "skipped": skipped,
             "errors": errors,
         }
+
+    def _is_active_group(self, group_id: str) -> bool:
+        gid = group_id.strip()
+        with self._database.lock:
+            row = self._conn.execute(
+                f"""
+                SELECT archived_at FROM {GROUPS_TABLE}
+                WHERE id = ?
+                """,
+                (gid,),
+            ).fetchone()
+        if not row:
+            return False
+        return not (row["archived_at"] or "").strip()
+
+    def archive(self, item_id: str) -> dict[str, Any] | None:
+        gid = item_id.strip()
+        now = now_str()
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {GROUPS_TABLE}
+                SET archived_at = ?, updated_time = ?
+                WHERE id = ?
+                  AND (archived_at IS NULL OR TRIM(archived_at) = '')
+                """,
+                (now, now, gid),
+            )
+            self._conn.commit()
+            if not cur.rowcount:
+                existing = self.get_by_id(gid, include_members=False)
+                if existing is None:
+                    return None
+                if (existing.get("archivedAt") or "").strip():
+                    return existing
+                return None
+        return self.get_by_id(gid, include_members=False)
+
+    def unarchive(self, item_id: str) -> dict[str, Any] | None:
+        gid = item_id.strip()
+        now = now_str()
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {GROUPS_TABLE}
+                SET archived_at = '', updated_time = ?
+                WHERE id = ?
+                  AND archived_at IS NOT NULL AND TRIM(archived_at) != ''
+                """,
+                (now, gid),
+            )
+            self._conn.commit()
+            if not cur.rowcount:
+                return None
+        return self.get_by_id(gid, include_members=False)
+
+    def list_auto_archive_candidate_ids(self) -> list[str]:
+        """全部签收且已付款的未归档分组。"""
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT g.id
+                FROM {GROUPS_TABLE} g
+                WHERE (g.archived_at IS NULL OR TRIM(g.archived_at) = '')
+                  AND UPPER(COALESCE(g.payment_status, '')) = 'PAID'
+                  AND EXISTS (
+                    SELECT 1 FROM {MEMBERS_TABLE} m
+                    WHERE m.group_id = g.id
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM {MEMBERS_TABLE} m
+                    INNER JOIN {SHIPMENTS_TABLE} s ON s.id = m.shipment_id
+                    WHERE m.group_id = g.id
+                      AND NOT (
+                        UPPER(COALESCE(s.status_code, '')) = 'DELIVERED'
+                        OR TRIM(COALESCE(s.delivered_time, '')) != ''
+                      )
+                  )
+                ORDER BY datetime(g.updated_time) ASC, g.group_no ASC
+                """
+            ).fetchall()
+        return [str(r["id"]) for r in rows]
+
+    def auto_archive_candidates(self, group_ids: list[str]) -> int:
+        ids = [gid.strip() for gid in group_ids if gid and gid.strip()]
+        if not ids:
+            return 0
+        now = now_str()
+        placeholders = ",".join("?" * len(ids))
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {GROUPS_TABLE}
+                SET archived_at = ?, updated_time = ?
+                WHERE id IN ({placeholders})
+                  AND (archived_at IS NULL OR TRIM(archived_at) = '')
+                  AND UPPER(COALESCE(payment_status, '')) = 'PAID'
+                  AND EXISTS (
+                    SELECT 1 FROM {MEMBERS_TABLE} m
+                    WHERE m.group_id = {GROUPS_TABLE}.id
+                  )
+                  AND NOT EXISTS (
+                    SELECT 1
+                    FROM {MEMBERS_TABLE} m
+                    INNER JOIN {SHIPMENTS_TABLE} s ON s.id = m.shipment_id
+                    WHERE m.group_id = {GROUPS_TABLE}.id
+                      AND NOT (
+                        UPPER(COALESCE(s.status_code, '')) = 'DELIVERED'
+                        OR TRIM(COALESCE(s.delivered_time, '')) != ''
+                      )
+                  )
+                """,
+                [now, now, *ids],
+            )
+            self._conn.commit()
+            return int(cur.rowcount or 0)

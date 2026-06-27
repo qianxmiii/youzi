@@ -25,6 +25,7 @@ export interface ListShipmentGroupsParams {
   hasUnread?: boolean
   paymentStatus?: string
   customer?: string
+  archived?: boolean
   limit?: number
   offset?: number
 }
@@ -81,6 +82,14 @@ export async function updateShipmentGroup(
 
 export async function deleteShipmentGroup(groupId: string): Promise<void> {
   await api(`/api/v1/shipment-groups/${groupId}`, { method: 'DELETE' })
+}
+
+export async function archiveShipmentGroup(groupId: string): Promise<ShipmentGroup> {
+  return api<ShipmentGroup>(`/api/v1/shipment-groups/${groupId}/archive`, { method: 'POST' })
+}
+
+export async function unarchiveShipmentGroup(groupId: string): Promise<ShipmentGroup> {
+  return api<ShipmentGroup>(`/api/v1/shipment-groups/${groupId}/unarchive`, { method: 'POST' })
 }
 
 export async function listShipmentGroupRules(groupId: string): Promise<{ items: ShipmentGroupRule[] }> {
@@ -147,6 +156,9 @@ export async function listShipmentGroups(
   if (params?.ruleType?.trim()) query.ruleType = params.ruleType.trim()
   if (params?.hasRule === true) query.hasRule = 'true'
   if (params?.hasRule === false) query.hasRule = 'false'
+  if (params?.hasUnread === true) query.hasUnread = 'true'
+  if (params?.archived === true) query.archived = 'true'
+  else if (params?.archived === false) query.archived = 'false'
   if (params?.paymentStatus?.trim()) query.paymentStatus = params.paymentStatus.trim()
   if (params?.customer?.trim()) query.customer = params.customer.trim()
   if (params?.limit != null) query.limit = String(params.limit)

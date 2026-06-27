@@ -65,6 +65,7 @@ def list_shipments(
     internal_freshness: str | None = Query(None, alias="internalFreshness"),
     carrier_freshness: str | None = Query(None, alias="carrierFreshness"),
     carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
+    pending_tracking_time_review: bool | None = Query(None, alias="pendingTrackingTimeReview"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
     group_id: str | None = Query(None, alias="groupId"),
@@ -101,6 +102,7 @@ def list_shipments(
             internal_freshness=internal_freshness,
             carrier_freshness=carrier_freshness,
             carrier_ahead_of_internal=carrier_ahead_of_internal,
+            pending_tracking_time_review=pending_tracking_time_review,
             min_stale_days=min_stale_days,
             no_tracking=no_tracking,
             group_id=group_id,
@@ -180,6 +182,7 @@ def export_shipments_excel(
     internal_freshness: str | None = Query(None, alias="internalFreshness"),
     carrier_freshness: str | None = Query(None, alias="carrierFreshness"),
     carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
+    pending_tracking_time_review: bool | None = Query(None, alias="pendingTrackingTimeReview"),
     min_stale_days: int | None = Query(None, alias="minStaleDays"),
     no_tracking: bool | None = Query(None, alias="noTracking"),
     group_id: str | None = Query(None, alias="groupId"),
@@ -216,6 +219,7 @@ def export_shipments_excel(
             internal_freshness=internal_freshness,
             carrier_freshness=carrier_freshness,
             carrier_ahead_of_internal=carrier_ahead_of_internal,
+            pending_tracking_time_review=pending_tracking_time_review,
             min_stale_days=min_stale_days,
             no_tracking=no_tracking,
             group_id=group_id,
@@ -282,6 +286,59 @@ def list_shipment_carrier_tracking_logs(item_id: str, limit: int = 20, offset: i
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/api/v1/shipments/{item_id}/tracking-time-candidates")
+def list_shipment_tracking_time_candidates(item_id: str):
+    """运单轨迹时间候选（含审批状态）。"""
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    items = tracking_time_candidates_repo.list_for_shipment(item_id)
+    return {"items": items}
+
+
+@router.post("/api/v1/shipments/recalculate-tracking-times")
+def recalculate_all_shipment_tracking_times():
+    """对有内部轨迹的运单批量重算时间候选并回写正式字段。"""
+    from ..services.tracking_time_writeback import recalculate_all_with_internal_tracks
+
+    return recalculate_all_with_internal_tracks(shipments_repo._database)
+
+
+@router.post("/api/v1/shipments/{item_id}/recalculate-tracking-times")
+def recalculate_shipment_tracking_times(item_id: str):
+    """根据内部轨迹重算时间候选并回写正式字段。"""
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    from ..services.tracking_time_writeback import recalculate_for_shipment
+
+    return recalculate_for_shipment(shipments_repo._database, shipment_id=item_id)
+
+
+@router.get("/api/v1/shipment-tracking-time-candidates/pending")
+def list_pending_tracking_time_reviews(limit: int = 50, offset: int = 0):
+    """待审批的签收时间候选列表（分页）。"""
+    return tracking_time_candidates_repo.list_pending_reviews(limit=limit, offset=offset)
+
+
+@router.post("/api/v1/shipment-tracking-time-candidates/{candidate_id}/review")
+def review_tracking_time_candidate(candidate_id: str, body: TrackingTimeReviewIn):
+    from ..services.tracking_time_writeback import approve_signed_time_candidate
+
+    try:
+        return approve_signed_time_candidate(
+            shipments_repo._database,
+            candidate_id,
+            action=body.action.strip().lower(),
+            manual_value=body.manual_value,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="候选不存在") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
 
 @router.get("/api/v1/shipments/tracking-sync/daily-stats")
 def get_tracking_sync_daily_stats(source: str = Query("carrier")):

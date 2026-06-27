@@ -40,6 +40,9 @@ from .db.port_subscriptions_table import PortSubscriptionsRepository
 from .db.shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .db.shipment_groups_repository import ShipmentGroupsRepository
 from .db.shipment_group_alerts_repository import ShipmentGroupAlertsRepository
+from .db.shipment_tracking_time_candidates_repository import (
+    ShipmentTrackingTimeCandidatesRepository,
+)
 from .db.vessel_schedules_repository import VesselSchedulesRepository
 from .schemas.code_tables import CodeTableRecordIn, CodeTableUpdateIn
 from .schemas.shipment_exceptions import ShipmentExceptionCloseIn, ShipmentExceptionOpenIn
@@ -91,6 +94,7 @@ from .services.vessel_schedule_sync import (
 from .schemas.statistics import ShipmentStatisticsOverview
 from .schemas.tracking_freshness import TrackingFreshnessStats
 from .schemas.scheduled_tasks import (
+    GroupAutoArchiveRunResult,
     ScheduledSyncRunResult,
     ScheduledSyncSettingsUpdate,
     ScheduledTaskConfig,
@@ -102,6 +106,8 @@ from .schemas.tracking import (
     TrackingSyncRequest,
     TrackingSyncResult,
 )
+from .schemas.tracking_time_writeback import TrackingTimeReviewIn
+from .services.shipment_group_archive import run_group_auto_archive_batch
 from .services.shipment_group_alerts import evaluate_group_alerts
 from .services.shipment_group_suggestions import apply_group_suggestions, build_group_suggestions
 from .services.carrier_tracking_sync import sync_carrier_tracking
@@ -109,6 +115,7 @@ from .services.scheduled_tasks_info import (
     build_scheduled_task_config,
     builtin_scheduled_tasks,
 )
+from .services.group_archive_settings import save_group_auto_archive_enabled
 from .services.scheduled_sync_settings import (
     get_scheduled_sync_settings,
     save_scheduled_sync_settings,
@@ -269,6 +276,7 @@ port_subscriptions_repo = PortSubscriptionsRepository(_database)
 shipment_subscriptions_repo = ShipmentSubscriptionsRepository(_database)
 shipment_groups_repo = ShipmentGroupsRepository(_database)
 shipment_group_alerts_repo = ShipmentGroupAlertsRepository(_database)
+tracking_time_candidates_repo = ShipmentTrackingTimeCandidatesRepository(_database)
 # 兼容旧名
 tracking_logs_repo = internal_tracking_repo
 LOGISTICS_CONFIG_PATH = REPO_ROOT / "config" / "config.json"

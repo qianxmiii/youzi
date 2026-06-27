@@ -31,6 +31,7 @@ import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import LastMileBadge from '@/components/common/LastMileBadge.vue'
 import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
+import { usePendingTrackingTimeReviewCount } from '@/composables/usePendingTrackingTimeReviewCount'
 import {
   batchDeleteShipments,
   batchUpdateShipments,
@@ -79,6 +80,7 @@ import {
   type TrackingFreshnessBucket,
   type TrackingFreshnessStats,
 } from '@/utils/trackingFreshness'
+import { notifyTrackingSyncResult } from '@/utils/trackingSyncNotify'
 
 const route = useRoute()
 const router = useRouter()
@@ -96,6 +98,8 @@ const freshnessStats = ref<TrackingFreshnessStats | null>(null)
 const filterInternalFreshness = ref<TrackingFreshnessBucket | null>(null)
 const filterCarrierFreshness = ref<TrackingFreshnessBucket | null>(null)
 const filterCarrierAheadOfInternal = ref(false)
+const filterPendingTrackingTimeReview = ref(false)
+const { refreshPendingTrackingTimeReviewCount } = usePendingTrackingTimeReviewCount()
 const items = ref<Shipment[]>([])
 const total = ref(0)
 const searchShipmentNo = ref('')
@@ -304,46 +308,6 @@ function rowKey(row: Shipment) {
   return row.id
 }
 
-function formatTrackingMessage(res: TrackingSyncResult, label = '轨迹') {
-  const unassigned =
-    res.unassigned && res.unassigned > 0 ? `，未匹配 vendor ${res.unassigned} 单` : ''
-  let text =
-    `${label}已更新：${res.updated}/${res.total} 单（${res.batches} 批×${res.batchSize}），新增 ${res.logCount} 条` +
-    (res.skipped ? `，跳过 ${res.skipped} 单` : '') +
-    (res.notFound ? `，未返回/失败 ${res.notFound} 单` : '') +
-    (res.empty ? `，无轨迹 ${res.empty} 单` : '') +
-    (res.excludedNotInTransit
-      ? `，已跳过不可同步 ${res.excludedNotInTransit} 单`
-      : '') +
-    unassigned
-  if (res.groupAlertsCreated && res.groupAlertsCreated > 0) {
-    text += `；分组提醒 +${res.groupAlertsCreated}`
-  }
-  if (res.errors.length) {
-    const preview = res.errors.slice(0, 3).join('；')
-    const more = res.errors.length > 3 ? `…等 ${res.errors.length} 条` : ''
-    text += `；错误：${preview}${more}`
-  }
-  return text
-}
-
-function notifyTrackingSyncResult(res: TrackingSyncResult, label: string) {
-  const content = formatTrackingMessage(res, label)
-  if (res.errors.length && res.updated === 0) {
-    message.error(content, { duration: 12_000 })
-  } else if (res.errors.length) {
-    message.warning(content, { duration: 12_000 })
-  } else {
-    message.success(content, { duration: 8000 })
-  }
-  if (res.errors.length) {
-    console.warn(`sync ${label} errors:`, res.errors)
-  }
-  if (res.logs?.length) {
-    console.info(`sync ${label} log:\n${res.logs.join('\n')}`)
-  }
-}
-
 async function loadCarrierDailyStats() {
   try {
     carrierDaily.value = await getTrackingSyncDailyStats('carrier')
@@ -355,6 +319,7 @@ async function loadCarrierDailyStats() {
 async function loadFreshnessStats() {
   try {
     freshnessStats.value = await getTrackingFreshnessStats()
+    await refreshPendingTrackingTimeReviewCount()
   } catch {
     freshnessStats.value = null
   }
@@ -386,6 +351,12 @@ function clearFreshnessFilter(source: 'internal' | 'carrier') {
 
 function toggleCarrierAheadFilter() {
   filterCarrierAheadOfInternal.value = !filterCarrierAheadOfInternal.value
+  filtersExpanded.value = true
+  onFiltersChanged()
+}
+
+function togglePendingReviewFilter() {
+  filterPendingTrackingTimeReview.value = !filterPendingTrackingTimeReview.value
   filtersExpanded.value = true
   onFiltersChanged()
 }
@@ -423,6 +394,14 @@ async function openTrackingDrawer(row: Shipment, tab: 'internal' | 'carrier' = '
   } catch {
     /* 列表行数据兜底 */
   }
+}
+
+function handleTrackingDrawerShipmentUpdated(row: Shipment) {
+  trackingDrawerShipment.value = row
+  const idx = items.value.findIndex((x) => x.id === row.id)
+  if (idx >= 0) items.value[idx] = { ...items.value[idx], ...row }
+  void loadFreshnessStats()
+  void loadCarrierDailyStats()
 }
 
 function renderTrackingSummaryCell(
@@ -578,6 +557,7 @@ function renderActionWithTooltip(
   options?: {
     onClick?: () => void
     active?: boolean
+    emphasis?: boolean
     loading?: boolean
   },
 ) {
@@ -590,6 +570,7 @@ function renderActionWithTooltip(
           kind,
           title: tooltip,
           active: options?.active,
+          emphasis: options?.emphasis,
           loading: options?.loading,
           onClick: options?.onClick,
         }),
@@ -763,6 +744,7 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
   const tokens = shipmentNoTokens.value
   const keyword = searchKeyword.value.trim()
   const multiShipment = batchShipmentSearchActive.value
+  const shipmentNoSearchActive = tokens.length > 0
   const limit = multiShipment
     ? Math.min(500, Math.max(pageSize.value, tokens.length))
     : pageSize.value
@@ -781,7 +763,7 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
     ...(searchTrackingContent.value.trim()
       ? { trackingSearch: searchTrackingContent.value.trim() }
       : {}),
-    statusCode: filterStatus.value || undefined,
+    statusCode: shipmentNoSearchActive ? undefined : filterStatus.value || undefined,
     exceptionCode: filterException.value || undefined,
     hasException:
       filterHasException.value === true
@@ -798,6 +780,7 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
     internalFreshness: filterInternalFreshness.value || undefined,
     carrierFreshness: filterCarrierFreshness.value || undefined,
     carrierAheadOfInternal: filterCarrierAheadOfInternal.value || undefined,
+    pendingTrackingTimeReview: filterPendingTrackingTimeReview.value || undefined,
     minStaleDays:
       filterNoTracking.value || staleDays == null || Number.isNaN(staleDays) || staleDays <= 0
         ? undefined
@@ -864,6 +847,9 @@ function onNoTrackingChanged(checked: boolean) {
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 watch([searchShipmentNo, searchKeyword, searchTrackingContent], () => {
+  if (shipmentNoTokens.value.length > 0) {
+    filterStatus.value = null
+  }
   page.value = 1
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(() => {
@@ -903,25 +889,46 @@ function isRouteFromNotify(): boolean {
   return false
 }
 
+function isRouteFromGroup(): boolean {
+  const f = route.query.fromGroup
+  if (f === '1' || f === 'true') return true
+  if (Array.isArray(f)) return f[0] === '1' || f[0] === 'true'
+  return false
+}
+
 function showNotifyJumpHint(sn: string) {
   message.success(`已定位运单 ${sn}`)
+}
+
+function showGroupJumpHint(count: number, firstNo: string) {
+  if (count > 1) {
+    message.success(`已筛选组内 ${count} 个运单`)
+    return
+  }
+  message.success(`已定位运单 ${firstNo}`)
 }
 
 function applyRouteShipmentNoToSearch() {
   const sn = readRouteShipmentNo()
   if (!sn) return
   const fromNotify = isRouteFromNotify()
+  const fromGroup = isRouteFromGroup()
+  const tokens = parseBatchSearchTokens(sn)
   if (searchShipmentNo.value !== sn) {
     searchShipmentNo.value = sn
   }
-  if (fromNotify) {
-    showNotifyJumpHint(sn)
+  filterStatus.value = null
+  if (fromGroup && tokens.length > 0) {
+    showGroupJumpHint(tokens.length, tokens[0] || sn)
+    void router.replace({ path: '/shipments', query: { shipmentNo: sn } })
+  } else if (fromNotify) {
+    showNotifyJumpHint(tokens[0] || sn)
     void router.replace({ path: '/shipments', query: { shipmentNo: sn } })
   }
 }
 
 watch(
-  () => [readRouteShipmentNo(), route.query.fromNotify] as const,
+  () => [readRouteShipmentNo(), route.query.fromNotify, route.query.fromGroup] as const,
   () => {
     applyRouteShipmentNoToSearch()
   },
@@ -1148,7 +1155,7 @@ async function handleSyncTracking(shipmentNos?: string[]) {
   syncingTracking.value = true
   try {
     const res = await syncTracking(shipmentNos)
-    notifyTrackingSyncResult(res, '内部轨迹')
+    notifyTrackingSyncResult(message, res, '内部轨迹')
     await loadFreshnessStats()
     await loadList()
   } catch (e) {
@@ -1162,7 +1169,7 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
   syncingCarrier.value = true
   try {
     const res = await syncCarrierTracking(shipmentNos)
-    notifyTrackingSyncResult(res, '承运商轨迹')
+    notifyTrackingSyncResult(message, res, '承运商轨迹')
     await loadCarrierDailyStats()
     await loadFreshnessStats()
     await loadList()
@@ -1186,6 +1193,7 @@ function resetFilters() {
   filterInternalFreshness.value = null
   filterCarrierFreshness.value = null
   filterCarrierAheadOfInternal.value = false
+  filterPendingTrackingTimeReview.value = false
   filtersExpanded.value = false
   filterStaleDays.value = null
   filterNoTracking.value = false
@@ -1808,7 +1816,14 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         { size: 6, justify: 'center', wrap: false, itemStyle: 'display:flex' },
         () => [
           renderSubscribeAction(row),
-          renderActionWithTooltip('view', '轨迹', { onClick: () => openTrackingDrawer(row, 'internal') }),
+          renderActionWithTooltip(
+            'view',
+            row.hasPendingSignedTimeReview ? '签收时间待确认' : '轨迹',
+            {
+              emphasis: Boolean(row.hasPendingSignedTimeReview),
+              onClick: () => openTrackingDrawer(row, 'internal'),
+            },
+          ),
           renderActionWithTooltip('edit', '编辑', { onClick: () => openEdit(row) }),
           h(
             NPopconfirm,
@@ -1874,11 +1889,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :internal-active="filterInternalFreshness"
       :carrier-active="filterCarrierFreshness"
       :carrier-ahead-active="filterCarrierAheadOfInternal"
+      :pending-review-active="filterPendingTrackingTimeReview"
+      :filtered-pending-review-count="filterPendingTrackingTimeReview ? total : null"
       :filtered-carrier-ahead-count="filterCarrierAheadOfInternal ? total : null"
       :carrier-sync-hint="carrierSyncHint"
       @apply="applyFreshnessFilter"
       @clear="clearFreshnessFilter"
       @toggle-carrier-ahead="toggleCarrierAheadFilter"
+      @toggle-pending-review="togglePendingReviewFilter"
     />
 
     <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
@@ -2230,6 +2248,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :shipment="trackingDrawerShipment"
       :initial-tab="trackingDrawerTab"
       :exception-label-by-code="exceptionLabelByCode"
+      @shipment-updated="handleTrackingDrawerShipmentUpdated"
     />
   </div>
 </template>

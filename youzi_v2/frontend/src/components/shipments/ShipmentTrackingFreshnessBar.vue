@@ -10,6 +10,9 @@ const props = defineProps<{
   internalActive: TrackingFreshnessBucket | null
   carrierActive: TrackingFreshnessBucket | null
   carrierAheadActive: boolean
+  pendingReviewActive: boolean
+  /** 已启用「待轨迹审批」筛选时，用列表 total 与分页一致 */
+  filteredPendingReviewCount?: number | null
   /** 已启用「承新于内」筛选时，用列表 total 与分页一致 */
   filteredCarrierAheadCount?: number | null
   carrierSyncHint?: string | null
@@ -19,6 +22,7 @@ const emit = defineEmits<{
   apply: [source: 'internal' | 'carrier', bucket: TrackingFreshnessBucket]
   clear: [source: 'internal' | 'carrier']
   toggleCarrierAhead: []
+  togglePendingReview: []
 }>()
 
 const expanded = ref(false)
@@ -72,6 +76,15 @@ const displayCarrierAheadCount = computed(() => {
   return globalCarrierAheadCount.value
 })
 
+const globalPendingReviewCount = computed(() => props.stats?.pendingTrackingTimeReview ?? 0)
+
+const displayPendingReviewCount = computed(() => {
+  if (props.pendingReviewActive && props.filteredPendingReviewCount != null) {
+    return props.filteredPendingReviewCount
+  }
+  return globalPendingReviewCount.value
+})
+
 const carrierAheadTitle = computed(() => {
   if (props.carrierAheadActive) {
     return `当前列表 ${displayCarrierAheadCount.value} 单（承运最新时间晚于内部）；再点取消筛选`
@@ -79,10 +92,18 @@ const carrierAheadTitle = computed(() => {
   return `全库 ${globalCarrierAheadCount.value} 单：承运最新时间晚于内部（按运单计，非轨迹节点数）；再点筛选`
 })
 
+const pendingReviewTitle = computed(() => {
+  if (props.pendingReviewActive) {
+    return `当前列表 ${displayPendingReviewCount.value} 单待轨迹审批；再点取消筛选`
+  }
+  return `全库 ${globalPendingReviewCount.value} 单签收时间待确认；再点筛选`
+})
+
 const summaryLine = computed(() => {
   const s = props.stats
   if (!s) return '统计加载中…'
-  return [`内部今日 ${s.internal.today}单`, `承运今日 ${s.carrier.today}单`].join(' · ')
+  const pending = s.pendingTrackingTimeReview > 0 ? ` · 待审 ${s.pendingTrackingTimeReview}单` : ''
+  return [`内部今日 ${s.internal.today}单`, `承运今日 ${s.carrier.today}单`].join(' · ') + pending
 })
 
 const activeFilterHint = computed(() => {
@@ -90,6 +111,7 @@ const activeFilterHint = computed(() => {
   if (props.internalActive) bits.push(`内部·${FRESHNESS_LABEL[props.internalActive]}`)
   if (props.carrierActive) bits.push(`承运·${FRESHNESS_LABEL[props.carrierActive]}`)
   if (props.carrierAheadActive) bits.push('承新于内')
+  if (props.pendingReviewActive) bits.push('待轨迹审批')
   return bits.length ? bits.join('、') : ''
 })
 
@@ -97,7 +119,8 @@ const hasActiveFilter = computed(
   () =>
     Boolean(props.internalActive) ||
     Boolean(props.carrierActive) ||
-    props.carrierAheadActive,
+    props.carrierAheadActive ||
+    props.pendingReviewActive,
 )
 
 watch(hasActiveFilter, (on) => {
@@ -191,22 +214,42 @@ function toggleExpanded() {
         </p>
       </div>
 
-      <button
-        type="button"
-        class="freshness-ahead-btn"
-        :class="{
-          'freshness-ahead-btn--active': carrierAheadActive,
-          'freshness-ahead-btn--disabled': displayCarrierAheadCount === 0 && !carrierAheadActive,
-        }"
-        :disabled="displayCarrierAheadCount === 0 && !carrierAheadActive"
-        :aria-pressed="carrierAheadActive"
-        :title="carrierAheadTitle"
-        @click.stop="emit('toggleCarrierAhead')"
-      >
-        <span>承新于内</span>
-        <span class="freshness-ahead-btn-num">{{ displayCarrierAheadCount }}</span>
-        <span class="freshness-ahead-btn-unit">单</span>
-      </button>
+      <div class="flex shrink-0 flex-wrap items-center justify-end gap-2">
+        <button
+          type="button"
+          class="freshness-ahead-btn freshness-pending-btn"
+          :class="{
+            'freshness-ahead-btn--active': pendingReviewActive,
+            'freshness-ahead-btn--disabled':
+              displayPendingReviewCount === 0 && !pendingReviewActive,
+          }"
+          :disabled="displayPendingReviewCount === 0 && !pendingReviewActive"
+          :aria-pressed="pendingReviewActive"
+          :title="pendingReviewTitle"
+          @click.stop="emit('togglePendingReview')"
+        >
+          <span>待轨迹审批</span>
+          <span class="freshness-ahead-btn-num">{{ displayPendingReviewCount }}</span>
+          <span class="freshness-ahead-btn-unit">单</span>
+        </button>
+
+        <button
+          type="button"
+          class="freshness-ahead-btn"
+          :class="{
+            'freshness-ahead-btn--active': carrierAheadActive,
+            'freshness-ahead-btn--disabled': displayCarrierAheadCount === 0 && !carrierAheadActive,
+          }"
+          :disabled="displayCarrierAheadCount === 0 && !carrierAheadActive"
+          :aria-pressed="carrierAheadActive"
+          :title="carrierAheadTitle"
+          @click.stop="emit('toggleCarrierAhead')"
+        >
+          <span>承新于内</span>
+          <span class="freshness-ahead-btn-num">{{ displayCarrierAheadCount }}</span>
+          <span class="freshness-ahead-btn-unit">单</span>
+        </button>
+      </div>
 
       <span class="shrink-0 pt-0.5 text-[10px] text-[var(--color-muted)]">
         {{ expanded ? '收起' : '展开' }}
@@ -279,6 +322,16 @@ function toggleExpanded() {
 </template>
 
 <style scoped>
+.freshness-pending-btn:not(.freshness-ahead-btn--active):not(.freshness-ahead-btn--disabled) {
+  border-color: rgb(251 191 36 / 0.45);
+  color: rgb(180 83 9);
+}
+
+[data-theme='dark'] .freshness-pending-btn:not(.freshness-ahead-btn--active):not(.freshness-ahead-btn--disabled) {
+  border-color: rgb(245 158 11 / 0.35);
+  color: rgb(253 230 138);
+}
+
 .freshness-capsule__label {
   opacity: 0.9;
 }

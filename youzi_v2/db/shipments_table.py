@@ -43,6 +43,7 @@ CREATE TABLE {TABLE_NAME} (
     ata TEXT,
     origin_port_code TEXT,
     destination_port_code TEXT,
+    expected_delivery_time TEXT,
     delivered_time TEXT,
     status_code TEXT,
     exception_code TEXT,
@@ -77,7 +78,6 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(_CREATE_SQL)
         for stmt in _INDEXES:
             conn.execute(stmt)
-        return
 
     cols = {r[1] for r in conn.execute(f"PRAGMA table_info({TABLE_NAME})").fetchall()}
     if "address_type" not in cols:
@@ -125,6 +125,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN exception_code TEXT")
     if "exception_opened_time" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN exception_opened_time TEXT")
+    if "expected_delivery_time" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN expected_delivery_time TEXT")
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "
         f"ON {TABLE_NAME}(exception_code)"

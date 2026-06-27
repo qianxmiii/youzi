@@ -60,7 +60,7 @@ onMounted(async () => {
 
     <WorldClockBar class="justify-self-center" />
 
-    <div class="flex shrink-0 items-center gap-3 justify-self-end">
+    <div class="relative z-20 flex shrink-0 items-center gap-3 justify-self-end">
       <AppSubscriptionBell />
       <span class="status-pill">
         <span

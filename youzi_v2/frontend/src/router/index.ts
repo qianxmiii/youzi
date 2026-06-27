@@ -70,6 +70,12 @@ const router = createRouter({
           meta: { title: '船期监控' },
         },
         {
+          path: 'approvals/tracking-time',
+          name: 'approval-tracking-time',
+          component: () => import('@/views/approvals/TrackingTimeApprovalView.vue'),
+          meta: { title: '轨迹审批' },
+        },
+        {
           path: 'statistics',
           name: 'statistics',
           component: () => import('@/views/statistics/StatisticsView.vue'),

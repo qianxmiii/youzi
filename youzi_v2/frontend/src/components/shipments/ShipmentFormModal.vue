@@ -44,6 +44,7 @@ const etd = ref<number | null>(null)
 const eta = ref<number | null>(null)
 const atd = ref<number | null>(null)
 const ata = ref<number | null>(null)
+const expectedDeliveryAt = ref<number | null>(null)
 const deliveredAt = ref<number | null>(null)
 
 function syncVoyageDatesFromForm() {
@@ -51,6 +52,7 @@ function syncVoyageDatesFromForm() {
   eta.value = dateOnlyToTimestamp(form.value.eta)
   atd.value = dateOnlyToTimestamp(form.value.atd)
   ata.value = dateOnlyToTimestamp(form.value.ata)
+  expectedDeliveryAt.value = dateOnlyToTimestamp(form.value.expectedDeliveryTime)
 }
 
 function applyVoyageDatesToForm() {
@@ -58,6 +60,8 @@ function applyVoyageDatesToForm() {
   form.value.eta = eta.value != null ? formatDateOnlyForApi(eta.value) : null
   form.value.atd = atd.value != null ? formatDateOnlyForApi(atd.value) : null
   form.value.ata = ata.value != null ? formatDateOnlyForApi(ata.value) : null
+  form.value.expectedDeliveryTime =
+    expectedDeliveryAt.value != null ? formatDateOnlyForApi(expectedDeliveryAt.value) : null
 }
 
 function syncDeliveredTimeFromForm() {
@@ -122,6 +126,7 @@ watch(
         ata: props.initial.ata,
         originPortCode: props.initial.originPortCode,
         destinationPortCode: props.initial.destinationPortCode,
+        expectedDeliveryTime: props.initial.expectedDeliveryTime,
         deliveredTime: props.initial.deliveredTime,
         statusCode: props.initial.statusCode || 'UNKNOWN',
       }
@@ -133,6 +138,7 @@ watch(
       eta.value = null
       atd.value = null
       ata.value = null
+      expectedDeliveryAt.value = null
       deliveredAt.value = null
     }
   },
@@ -270,6 +276,9 @@ function handleSubmit() {
         </NFormItem>
         <NFormItem label="ATA">
           <NDatePicker v-model:value="ata" type="date" clearable class="w-full" />
+        </NFormItem>
+        <NFormItem label="预计送仓">
+          <NDatePicker v-model:value="expectedDeliveryAt" type="date" clearable class="w-full" />
         </NFormItem>
         <NFormItem label="出发港口">
           <NInput v-model:value="form.originPortCode" />

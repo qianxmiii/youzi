@@ -9,10 +9,13 @@ from typing import Any, Callable
 from ..db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from ..db.connection import Database
 from ..db.shipments_repository import ShipmentsRepository
+from ..db.shipment_groups_repository import ShipmentGroupsRepository
 from ..db.tracking_logs_repository import TrackingLogsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .carrier_tracking_sync import sync_carrier_tracking
+from .group_archive_settings import get_group_archive_settings
 from .scheduled_sync_settings import get_scheduled_sync_settings
+from .shipment_group_archive import run_group_auto_archive_batch
 from .sync_log import make_sync_logger
 from .tracking_sync import sync_all_tracking
 
@@ -139,6 +142,7 @@ def _scheduler_tick(
     internal_repo: TrackingLogsRepository,
     carrier_repo: CarrierTrackingLogsRepository,
     jobs_repo: TrackingSyncJobsRepository,
+    groups_repo: ShipmentGroupsRepository,
     config_path: Path,
 ) -> None:
     settings = get_scheduled_sync_settings(shipments_repo._database)
@@ -158,6 +162,7 @@ def _scheduler_tick(
             config_path,
             force=False,
         )
+    run_group_auto_archive_batch(groups_repo, force=False, trigger="scheduled")
 
 
 def start_tracking_sync_scheduler(
@@ -165,15 +170,17 @@ def start_tracking_sync_scheduler(
     internal_repo: TrackingLogsRepository,
     carrier_repo: CarrierTrackingLogsRepository,
     jobs_repo: TrackingSyncJobsRepository,
+    groups_repo: ShipmentGroupsRepository,
     config_path: Path,
 ) -> threading.Event:
-    """后台线程：按配置轮询，内部/承运商各自判断间隔。"""
+    """后台线程：按配置轮询，内部/承运商/分组归档各自判断间隔。"""
     database = shipments_repo._database
     settings = get_scheduled_sync_settings(database)
+    group_archive_enabled = get_group_archive_settings(database).auto_archive_enabled
     stop = threading.Event()
 
-    if not settings.internal_enabled and not settings.carrier_enabled:
-        print("[定时同步] 已关闭（内部与承运商均未启用）", flush=True)
+    if not settings.internal_enabled and not settings.carrier_enabled and not group_archive_enabled:
+        print("[定时同步] 已关闭（内部、承运商与分组归档均未启用）", flush=True)
         return stop
 
     initial_sec = max(0.0, settings.initial_delay_sec)
@@ -188,6 +195,7 @@ def start_tracking_sync_scheduler(
                     internal_repo,
                     carrier_repo,
                     jobs_repo,
+                    groups_repo,
                     config_path,
                 )
             except Exception:
@@ -206,7 +214,9 @@ def start_tracking_sync_scheduler(
         f"内部={'开' if settings.internal_enabled else '关'}"
         f"({settings.internal_interval_hours:g}h)、"
         f"承运商={'开' if settings.carrier_enabled else '关'}"
-        f"({settings.carrier_interval_hours:g}h)；"
+        f"({settings.carrier_interval_hours:g}h)、"
+        f"分组归档={'开' if group_archive_enabled else '关'}"
+        f"(约24h)；"
         f"{initial_sec:.0f}s 后首次检查，每 {POLL_INTERVAL_SEC:.0f}s 轮询",
         flush=True,
     )

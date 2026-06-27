@@ -29,12 +29,12 @@ def get_scheduled_tasks_overview():
         config=ScheduledTaskConfig(**build_scheduled_task_config(_database)),
         internalToday=tracking_jobs_repo.today_stats("internal"),
         carrierToday=tracking_jobs_repo.today_stats("carrier"),
-        tasks=builtin_scheduled_tasks(settings),
+        tasks=builtin_scheduled_tasks(settings, _database),
     )
 
 @router.put("/api/v1/scheduled-tasks/settings", response_model=ScheduledTaskConfig)
 def update_scheduled_tasks_settings(body: ScheduledSyncSettingsUpdate):
-    saved = save_scheduled_sync_settings(
+    save_scheduled_sync_settings(
         _database,
         internal_enabled=body.internal_enabled,
         internal_interval_hours=body.internal_interval_hours,
@@ -42,11 +42,12 @@ def update_scheduled_tasks_settings(body: ScheduledSyncSettingsUpdate):
         carrier_interval_hours=body.carrier_interval_hours,
         initial_delay_sec=body.initial_delay_sec,
     )
-    return ScheduledTaskConfig(
-        **saved.to_api_dict(),
-        scriptPath=str(REPO_ROOT / "youzi_v2" / "scripts" / "sync_all_tracking_scheduled.py"),
-        pollIntervalSec=60,
-    )
+    if body.group_auto_archive_enabled is not None:
+        save_group_auto_archive_enabled(
+            _database,
+            enabled=body.group_auto_archive_enabled,
+        )
+    return ScheduledTaskConfig(**build_scheduled_task_config(_database))
 
 @router.get("/api/v1/scheduled-tasks/jobs", response_model=TrackingSyncJobListResponse)
 def list_scheduled_task_jobs(
@@ -81,6 +82,18 @@ def run_scheduled_tasks_carrier_sync():
         force=True,
     )
     return ScheduledSyncRunResult(**result)
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-group-auto-archive",
+    response_model=GroupAutoArchiveRunResult,
+)
+def run_scheduled_tasks_group_auto_archive():
+    result = run_group_auto_archive_batch(
+        shipment_groups_repo,
+        force=True,
+        trigger="manual",
+    )
+    return GroupAutoArchiveRunResult(**result)
 
 @router.post("/api/v1/scheduled-tasks/run-tracking-sync", response_model=ScheduledSyncRunResult)
 def run_scheduled_tasks_tracking_sync():

@@ -14,6 +14,7 @@ import type {
   ShipmentGroupSuggestionsApplyResult,
   ShipmentGroupSuggestionsPreviewResult,
   ShipmentGroupSuggestion,
+  ShipmentGroupTodoNotificationsResponse,
   ShipmentGroupUnreadNotificationsResponse,
   ShipmentGroupUpdatePayload,
 } from '@/types/shipmentGroup'
@@ -56,7 +57,15 @@ export async function getShipmentGroupUnreadNotifications(
   limit = 20,
 ): Promise<ShipmentGroupUnreadNotificationsResponse> {
   return api('/api/v1/shipment-group-notifications', {
-    query: { limit: String(limit) },
+    query: { limit: String(limit), scope: 'unread' },
+  })
+}
+
+export async function getShipmentGroupTodoNotifications(
+  limit = 20,
+): Promise<ShipmentGroupTodoNotificationsResponse> {
+  return api('/api/v1/shipment-group-notifications', {
+    query: { limit: String(limit), scope: 'todo' },
   })
 }
 

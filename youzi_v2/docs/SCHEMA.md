@@ -122,11 +122,22 @@
 | `category` | 大类：空运 / 海运 / 快递 / 卡航 / 铁路 |
 | `note` | 备注 |
 
-- `code`：渠道英文编码（与运单 `channel_code` 一致）
+- `code`：渠道编码（与运单 `channel_code`、DPS `channelCode` 一致；可修改，同步更新关联运单）
 - `name_zh`：中文名称（如 美国普船）
 - `name_en`：英文名称（默认同 `code`）
 
 接口：`GET/POST/PATCH/DELETE /api/v1/channels`；`POST /api/v1/channels/seed-defaults` 导入内置 26 条；侧栏「渠道管理」`/channels`。
+
+## 承运商码表 `carrier_codes`（扩展）
+
+| 列 | 说明 |
+|----|------|
+| `carrier_id` | DPS `carrierId`（仅用于反查 `code` → 运单 `carrier_code`；**不是**运单 `carrier_id` 承运商单号） |
+
+- `code`：承运商编码（写入运单 `carrier_code`，匹配 config `vendors` 轨迹）
+- DPS 同步：`carrierId` 不写入运单 `carrier_id`；无 `endCarrier`/`carrierName` 时按本表 `carrier_id` 反查 `carrier_code`
+
+维护入口：后台管理 · 码表 · 承运商；`GET/PUT /api/v1/admin/code-tables/carrier_codes`。
 
 ## 运单统计 API
 

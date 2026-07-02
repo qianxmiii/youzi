@@ -6,6 +6,9 @@ from ..internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER
 
 FRESHNESS_BUCKETS = frozenset({"today", "within3d", "older", "none"})
 
+# 承运商无轨迹统计/筛选：整柜不走 API 轨迹，不计入「无轨迹」
+FCL_CARRIER_NAME_ZH = "整柜"
+
 # 承新于内：承运时间须晚于内部至少该分钟数（双方均有有效内部轨迹时）
 CARRIER_AHEAD_MIN_MINUTES = 1
 
@@ -33,6 +36,25 @@ def _carrier_effective_sql(alias: str = "s") -> str:
     return f"""(
       {p}latest_carrier_time IS NOT NULL AND TRIM({p}latest_carrier_time) != ''
     )"""
+
+
+def _fcl_carrier_match_sql(alias: str = "s") -> str:
+    """运单承运商为整柜（FCL，无 API 轨迹）。"""
+    p = f"{alias}." if alias else ""
+    return f"""(
+      TRIM(COALESCE({p}carrier_code, '')) = ? COLLATE NOCASE
+      OR EXISTS (
+        SELECT 1 FROM carrier_codes crc
+        WHERE TRIM(COALESCE({p}carrier_code, '')) != ''
+          AND (crc.code = {p}carrier_code OR crc.carrier_id = {p}carrier_code)
+          AND TRIM(crc.name_zh) = ? COLLATE NOCASE
+      )
+    )"""
+
+
+def carrier_no_tracking_eligible_sql(alias: str = "s") -> tuple[str, list]:
+    """承运商「无轨迹」筛选/统计的排除条件（排除整柜）。"""
+    return f"NOT {_fcl_carrier_match_sql(alias)}", [FCL_CARRIER_NAME_ZH, FCL_CARRIER_NAME_ZH]
 
 
 def internal_freshness_sql(bucket: str, alias: str = "s") -> tuple[str, list]:
@@ -64,7 +86,8 @@ def carrier_freshness_sql(bucket: str, alias: str = "s") -> tuple[str, list]:
     eff = _carrier_effective_sql(alias)
     p = f"{alias}." if alias else ""
     if bucket == "none":
-        return f"NOT {eff}", []
+        exclude_frag, exclude_params = carrier_no_tracking_eligible_sql(alias)
+        return f"NOT {eff} AND {exclude_frag}", exclude_params
     if bucket == "today":
         return f"{eff} AND date({p}latest_carrier_time) = date('now', 'localtime')", []
     if bucket == "within3d":
@@ -102,6 +125,7 @@ def freshness_stats_sql() -> tuple[str, list]:
     ie = _internal_effective_sql("s")
     ce = _carrier_effective_sql("s")
     ahead = carrier_ahead_of_internal_sql("s")[0]
+    no_carrier_exclude, _ = carrier_no_tracking_eligible_sql("s")
     ph = INTERNAL_WAREHOUSE_PLACEHOLDER
     sql = f"""
     SELECT
@@ -118,9 +142,11 @@ def freshness_stats_sql() -> tuple[str, list]:
           AND date(s.latest_carrier_time) >= date('now', 'localtime', '-2 days') THEN 1 ELSE 0 END) AS carrier_within3d,
       SUM(CASE WHEN {ce}
           AND date(s.latest_carrier_time) < date('now', 'localtime', '-2 days') THEN 1 ELSE 0 END) AS carrier_older,
-      SUM(CASE WHEN NOT {ce} THEN 1 ELSE 0 END) AS carrier_none,
+      SUM(CASE WHEN NOT {ce} AND {no_carrier_exclude} THEN 1 ELSE 0 END) AS carrier_none,
       SUM(CASE WHEN {ahead} THEN 1 ELSE 0 END) AS carrier_ahead_of_internal
     FROM shipments s
     """
-    # 每处 {ie} / ahead 内嵌的「有效内部轨迹」条件各含一个 ?，须与占位符数量一致
-    return sql, [ph] * sql.count("?")
+    fcl = FCL_CARRIER_NAME_ZH
+    params = [ph, ph, ph, ph, fcl, fcl, ph]
+    assert len(params) == sql.count("?")
+    return sql, params

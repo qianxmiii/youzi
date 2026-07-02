@@ -114,7 +114,7 @@ erDiagram
 
 ### channels（渠道）
 
-通过 `db/channels_repository.py` 管理，含默认种子 `channel_seeds.py`。
+通过 `db/channels_repository.py` 管理，含默认种子 `channel_seeds.py`。主键 `code` 与运单 `channel_code`、DPS `channelCode` 一致；修改 `code` 时会同步更新关联运单。
 
 ### shipment_groups / shipment_group_members（运单分组）
 
@@ -211,7 +211,7 @@ erDiagram
 
 | 表/模块 | 说明 |
 |---------|------|
-| code_tables | 通用码表（国家、港口、状态等），见 `db/code_tables.py` |
+| code_tables | 通用码表（国家、港口、状态等），见 `db/code_tables.py`；`carrier_codes.carrier_id` 存 DPS carrierId，反查 `carrier_code` |
 | dict | 字典项，`db/dict_table.py` |
 | app_settings | 应用设置键值 |
 | quote_history | 报价历史 |

@@ -84,11 +84,10 @@ function handleSubmit() {
     @update:show="(v: boolean) => !v && emit('close')"
   >
     <NForm label-placement="top" size="small">
-      <NFormItem label="渠道编码（英文）" required>
+      <NFormItem label="渠道编码" required>
         <NInput
           v-model:value="code"
-          placeholder="如 Sea Truck Standard Service - LAX"
-          :disabled="mode === 'edit'"
+          placeholder="与运单 channel_code、DPS channelCode 一致，如 AEE、AU sea truck"
         />
       </NFormItem>
       <NFormItem label="中文名称" required>

@@ -4,6 +4,7 @@ import {
   NDataTable,
   NDatePicker,
   NPagination,
+  NSelect,
   NSpace,
   NTag,
   NTooltip,
@@ -14,6 +15,7 @@ import { Copy } from 'lucide-vue-next'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { getShipment, getShipmentFilterOptions, listPendingTrackingTimeReviews, reviewTrackingTimeCandidate } from '@/api/shipments'
+import { buildCarrierSelectOptions } from '@/utils/carrierFilterOptions'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import { ICON_STROKE } from '@/constants/icons'
@@ -37,8 +39,10 @@ const pageSize = ref(50)
 const error = ref('')
 const trackingDrawerShow = ref(false)
 const trackingDrawerShipment = ref<Shipment | null>(null)
-const trackingDrawerTab = ref<'internal' | 'carrier'>('internal')
+const trackingDrawerTab = ref<'internal' | 'carrier'>('carrier')
 const exceptionLabelByCode = ref<Record<string, string>>({})
+const filterCarrier = ref<string | null>(null)
+const carrierOptions = ref<{ label: string; value: string }[]>([])
 
 function formatTime(value: string | null | undefined) {
   const text = (value || '').trim()
@@ -53,6 +57,7 @@ async function load() {
     const res = await listPendingTrackingTimeReviews({
       limit: pageSize.value,
       offset: (page.value - 1) * pageSize.value,
+      carrierCode: filterCarrier.value || undefined,
     })
     items.value = res.items
     total.value = res.total
@@ -114,7 +119,7 @@ function shipmentStub(row: TrackingTimeCandidate): Shipment {
   } as Shipment
 }
 
-async function openTrackingDrawer(row: TrackingTimeCandidate, tab: 'internal' | 'carrier' = 'internal') {
+async function openTrackingDrawer(row: TrackingTimeCandidate, tab: 'internal' | 'carrier' = 'carrier') {
   const sid = row.shipmentId?.trim()
   if (!sid) {
     message.warning('缺少运单 ID')
@@ -207,11 +212,17 @@ function renderTrackingAction(row: TrackingTimeCandidate) {
         h(TableActionIcon, {
           kind: 'view',
           title: '轨迹',
-          onClick: () => void openTrackingDrawer(row, 'internal'),
+          onClick: () => void openTrackingDrawer(row, 'carrier'),
         }),
       default: () => '轨迹',
     },
   )
+}
+
+function carrierDisplayLabel(row: TrackingTimeCandidate): string {
+  const zh = row.carrierNameZh?.trim()
+  if (zh) return zh
+  return row.carrierCode?.trim() || '—'
 }
 
 const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
@@ -221,6 +232,13 @@ const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
     width: 172,
     fixed: 'left',
     render: (row) => renderShipmentNoCell(row),
+  },
+  {
+    title: '承运商',
+    key: 'carrierNameZh',
+    width: 112,
+    ellipsis: { tooltip: true },
+    render: (row) => carrierDisplayLabel(row),
   },
   {
     title: '推荐（预计送仓）',
@@ -329,10 +347,16 @@ watch([page, pageSize], () => {
   void load()
 })
 
+watch(filterCarrier, () => {
+  page.value = 1
+  void load()
+})
+
 onMounted(() => {
   void load()
   void getShipmentFilterOptions()
     .then((opts) => {
+      carrierOptions.value = buildCarrierSelectOptions(opts.carriers, opts.carrierCodes)
       const m: Record<string, string> = {}
       for (const t of opts.exceptionTypes) {
         m[t.code] = t.nameZh
@@ -358,10 +382,24 @@ onMounted(() => {
     </div>
 
     <article class="panel flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-      <div class="shrink-0 border-b border-[var(--color-border)] px-4 py-3 text-sm text-[var(--color-fg-secondary)]">
-        待审批
-        <span class="ml-1 font-semibold tabular-nums text-[var(--color-fg-emphasis)]">{{ total }}</span>
-        条
+      <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
+        <div class="text-sm text-[var(--color-fg-secondary)]">
+          待审批
+          <span class="ml-1 font-semibold tabular-nums text-[var(--color-fg-emphasis)]">{{ total }}</span>
+          条
+        </div>
+        <div class="flex items-center gap-2">
+          <span class="text-xs text-[var(--color-muted)]">承运商</span>
+          <NSelect
+            v-model:value="filterCarrier"
+            :options="carrierOptions"
+            clearable
+            filterable
+            size="small"
+            class="w-40"
+            placeholder="全部"
+          />
+        </div>
       </div>
 
       <div
@@ -402,7 +440,7 @@ onMounted(() => {
           :data="items"
           :row-key="(row: TrackingTimeCandidate) => row.id"
           size="small"
-          :scroll-x="1604"
+          :scroll-x="1700"
           :bordered="false"
         />
       </div>

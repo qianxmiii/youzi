@@ -18,6 +18,7 @@ const props = defineProps<{
   mode: 'create' | 'edit'
   hasPortType: boolean
   hasChannelFields?: boolean
+  hasCarrierFields?: boolean
   initial: CodeTableRow | null
 }>()
 
@@ -47,6 +48,7 @@ const form = reactive<CodeTablePayload>({
   country: '',
   category: '',
   note: '',
+  carrierId: '',
 })
 
 const title = computed(() => (props.mode === 'create' ? '新增码表项' : '修改码表项'))
@@ -65,6 +67,7 @@ watch(
       form.country = props.initial.country || ''
       form.category = props.initial.category || ''
       form.note = props.initial.note || ''
+      form.carrierId = props.initial.carrierId || ''
     } else {
       form.code = ''
       form.nameZh = ''
@@ -75,6 +78,7 @@ watch(
       form.country = ''
       form.category = ''
       form.note = ''
+      form.carrierId = ''
     }
   },
   { immediate: true },
@@ -119,6 +123,12 @@ function handleSubmit() {
       </NFormItem>
       <NFormItem v-if="hasChannelFields" label="备注">
         <NInput v-model:value="form.note" type="textarea" :rows="2" />
+      </NFormItem>
+      <NFormItem v-if="hasCarrierFields" label="承运商ID">
+        <NInput
+          v-model:value="form.carrierId"
+          placeholder="DPS carrierId，用于反查编码（写入运单 carrier_code）"
+        />
       </NFormItem>
       <NFormItem label="排序">
         <NInputNumber v-model:value="form.sortOrder" :min="0" class="w-full" />

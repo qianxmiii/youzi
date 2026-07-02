@@ -6,6 +6,10 @@ import type {
   ScheduledTaskConfig,
   ScheduledTaskOverview,
   TrackingSyncJobListResponse,
+  ZipcodeBackfillRunResult,
+  ShipmentDpsSyncRunRequest,
+  ShipmentDpsSyncRunResult,
+  ExceptionFollowupRunResult,
 } from '@/types/scheduledTasks'
 
 export async function getScheduledTasksOverview(): Promise<ScheduledTaskOverview> {
@@ -55,5 +59,26 @@ export async function runScheduledTrackingSync(): Promise<ScheduledSyncRunResult
 export async function runGroupAutoArchive(): Promise<GroupAutoArchiveRunResult> {
   return api<GroupAutoArchiveRunResult>('/api/v1/scheduled-tasks/run-group-auto-archive', {
     method: 'POST',
+  })
+}
+
+export async function runZipcodeBackfill(): Promise<ZipcodeBackfillRunResult> {
+  return api<ZipcodeBackfillRunResult>('/api/v1/scheduled-tasks/run-zipcode-backfill', {
+    method: 'POST',
+  })
+}
+
+export async function runExceptionFollowup(): Promise<ExceptionFollowupRunResult> {
+  return api<ExceptionFollowupRunResult>('/api/v1/scheduled-tasks/run-exception-followup', {
+    method: 'POST',
+  })
+}
+
+export async function runDpsShipmentSync(
+  body?: ShipmentDpsSyncRunRequest,
+): Promise<ShipmentDpsSyncRunResult> {
+  return api<ShipmentDpsSyncRunResult>('/api/v1/scheduled-tasks/run-dps-shipment-sync', {
+    method: 'POST',
+    body: JSON.stringify(body ?? {}),
   })
 }

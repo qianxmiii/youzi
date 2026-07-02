@@ -1,0 +1,101 @@
+{
+  "_comment": "DPS 运单同步字段策略：onInsert=新建时写入，onUpdate=已有单时是否覆盖。改 false 可保留本地手工/轨迹同步结果。",
+  "fields": {
+    "customer": {
+      "label": "客户",
+      "dpsSource": "clientUserNickName",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "customer_no": {
+      "label": "客户订单号",
+      "dpsSource": "assOrderNumber",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "channel_code": {
+      "label": "渠道",
+      "dpsSource": "channelCode",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "country_code": {
+      "label": "国家",
+      "dpsSource": "params.countryVo.enAbbreviation",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "address_type": {
+      "label": "地址类型",
+      "dpsSource": "deliveryAddressType：0→AMZ/WFS（含WFS则WFS），2→3PL私人地址",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "address_code": {
+      "label": "派送仓库",
+      "dpsSource": "deliveryWarehouseCode",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "zipcode": {
+      "label": "邮编",
+      "dpsSource": "deliveryZip",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "ctns": {
+      "label": "件数",
+      "dpsSource": "totalCtns",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "product_name": {
+      "label": "品名",
+      "dpsSource": "params.productName",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "origin_warehouse_code": {
+      "label": "交货仓库",
+      "dpsSource": "receiveWarehouseName",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "supplier_name": {
+      "label": "供应商",
+      "dpsSource": "shipperCompanyName",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "carrier_code": {
+      "label": "承运商",
+      "dpsSource": "endCarrier / carrierName；无名称时按 carrierId 查承运商码表",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "customer_shipment_id": {
+      "label": "货件号",
+      "dpsSource": "params.amazonID",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "amazon_ref_id": {
+      "label": "亚马逊预约号",
+      "dpsSource": "params.amazonReferenceID",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "delivered_time": {
+      "label": "签收时间",
+      "dpsSource": "signingTime",
+      "onInsert": true,
+      "onUpdate": false
+    },
+    "status_code": {
+      "label": "状态",
+      "dpsSource": "status",
+      "onInsert": true,
+      "onUpdate": false
+    }
+  }
+}

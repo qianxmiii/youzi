@@ -15,6 +15,36 @@ class ScheduledTaskConfig(BaseModel):
     group_auto_archive_last_finished: str | None = Field(
         default=None, alias="groupAutoArchiveLastFinished"
     )
+    zipcode_backfill_enabled: bool = Field(default=False, alias="zipcodeBackfillEnabled")
+    zipcode_backfill_last_finished: str | None = Field(
+        default=None, alias="zipcodeBackfillLastFinished"
+    )
+    dps_shipment_sync_enabled: bool = Field(default=False, alias="dpsShipmentSyncEnabled")
+    dps_shipment_sync_transit_time_start: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeStart"
+    )
+    dps_shipment_sync_transit_time_end: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeEnd"
+    )
+    dps_shipment_sync_transit_time_start_default: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeStartDefault"
+    )
+    dps_shipment_sync_transit_time_end_default: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeEndDefault"
+    )
+    dps_shipment_sync_transit_time_start_effective: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeStartEffective"
+    )
+    dps_shipment_sync_transit_time_end_effective: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeEndEffective"
+    )
+    dps_shipment_sync_last_finished: str | None = Field(
+        default=None, alias="dpsShipmentSyncLastFinished"
+    )
+    exception_followup_enabled: bool = Field(default=False, alias="exceptionFollowupEnabled")
+    exception_followup_last_finished: str | None = Field(
+        default=None, alias="exceptionFollowupLastFinished"
+    )
     scheduler_active: bool = Field(alias="schedulerActive")
     script_path: str | None = Field(default=None, alias="scriptPath")
     poll_interval_sec: float | None = Field(default=None, alias="pollIntervalSec")
@@ -35,6 +65,30 @@ class ScheduledSyncSettingsUpdate(BaseModel):
     group_auto_archive_enabled: bool | None = Field(
         default=None, alias="groupAutoArchiveEnabled"
     )
+    zipcode_backfill_enabled: bool | None = Field(
+        default=None, alias="zipcodeBackfillEnabled"
+    )
+    dps_shipment_sync_enabled: bool | None = Field(
+        default=None, alias="dpsShipmentSyncEnabled"
+    )
+    dps_shipment_sync_transit_time_start: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeStart"
+    )
+    dps_shipment_sync_transit_time_end: str | None = Field(
+        default=None, alias="dpsShipmentSyncTransitTimeEnd"
+    )
+    exception_followup_enabled: bool | None = Field(
+        default=None, alias="exceptionFollowupEnabled"
+    )
+
+
+class ExceptionFollowupRunResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    skipped: bool = False
+    reason: str | None = None
+    scanned: int = 0
+    created: int = 0
 
 
 class GroupAutoArchiveRunResult(BaseModel):
@@ -45,6 +99,40 @@ class GroupAutoArchiveRunResult(BaseModel):
     total: int = 0
     archived: int = 0
     group_ids: list[str] = Field(default_factory=list, alias="groupIds")
+
+
+class ZipcodeBackfillRunResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    skipped: bool = False
+    reason: str | None = None
+    total: int = 0
+    updated: int = 0
+    unmatched: int = 0
+
+
+class ShipmentDpsSyncRunRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    transit_time_start: str | None = Field(default=None, alias="transitTimeStart")
+    transit_time_end: str | None = Field(default=None, alias="transitTimeEnd")
+
+
+class ShipmentDpsSyncRunResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    skipped: bool = False
+    reason: str | None = None
+    error: str | None = None
+    transit_time_start: str | None = Field(default=None, alias="transitTimeStart")
+    transit_time_end: str | None = Field(default=None, alias="transitTimeEnd")
+    remote_total: int = Field(default=0, alias="remoteTotal")
+    total: int = 0
+    created: int = 0
+    updated: int = 0
+    failed: int = 0
+    pages: int = 0
+    errors: list[str] = Field(default_factory=list)
 
 
 class ScheduledTaskOverview(BaseModel):

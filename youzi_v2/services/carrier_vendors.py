@@ -321,21 +321,51 @@ def detect_platform(vendor: dict[str, Any]) -> str | None:
     return None
 
 
+def build_vendor_maps(
+    vendors: list[dict[str, Any]],
+) -> tuple[dict[str, dict[str, Any]], dict[str, dict[str, Any]]]:
+    """按 name 与 id 建立 vendor 索引（id 对应运单 carrier_code / 码表 carrier_id）。"""
+    by_name: dict[str, dict[str, Any]] = {}
+    by_id: dict[str, dict[str, Any]] = {}
+    for vendor in vendors:
+        name = (vendor.get("name") or "").strip()
+        if name:
+            by_name[name] = vendor
+        raw_id = vendor.get("id")
+        if raw_id is not None:
+            vid = str(raw_id).strip()
+            if vid:
+                by_id[vid] = vendor
+    return by_name, by_id
+
+
 def resolve_vendor_for_row(
     row: dict[str, str],
-    vendor_map: dict[str, dict[str, Any]],
+    vendor_by_name: dict[str, dict[str, Any]],
+    vendor_by_id: dict[str, dict[str, Any]] | None = None,
+    *,
+    code_to_carrier_id: dict[str, str] | None = None,
 ) -> dict[str, Any] | None:
-    """承运商编码 / 供应商名 与 config vendor name（及 aliases）匹配。"""
+    """运单 carrier_code 优先按 config vendors.id 匹配；兼容码表编码与 vendor 名称。"""
+    by_id = vendor_by_id or {}
+    cc = (row.get("carrier_code") or "").strip()
+    if cc:
+        if cc in by_id:
+            return by_id[cc]
+        if code_to_carrier_id:
+            mapped = (code_to_carrier_id.get(cc) or "").strip()
+            if mapped and mapped in by_id:
+                return by_id[mapped]
     candidates = [
-        (row.get("carrier_code") or "").strip(),
+        cc,
         (row.get("supplier_name") or "").strip(),
     ]
     for name in candidates:
         if not name:
             continue
-        if name in vendor_map:
-            return vendor_map[name]
-        for vendor in vendor_map.values():
+        if name in vendor_by_name:
+            return vendor_by_name[name]
+        for vendor in vendor_by_name.values():
             aliases = [vendor.get("name") or "", *(vendor.get("aliases") or [])]
             if name in {a.strip() for a in aliases if a and str(a).strip()}:
                 return vendor
@@ -344,16 +374,23 @@ def resolve_vendor_for_row(
 
 def carrier_vendor_unassigned_reason(
     row: dict[str, str],
-    vendor_map: dict[str, dict[str, Any]],
+    vendor_by_name: dict[str, dict[str, Any]],
+    vendor_by_id: dict[str, dict[str, Any]] | None = None,
 ) -> str:
     """说明运单为何未匹配到 config.json 中的 vendors。"""
+    by_id = vendor_by_id or {}
     cc = (row.get("carrier_code") or "").strip()
     sup = (row.get("supplier_name") or "").strip()
     if not cc and not sup:
-        sample = "、".join(sorted(vendor_map.keys())[:6])
-        return f"未填写承运商/供应商，请在运单中填写以匹配 config：{sample}…"
+        sample_ids = "、".join(sorted(by_id.keys())[:4])
+        sample_names = "、".join(sorted(vendor_by_name.keys())[:4])
+        hint = f"vendors.id：{sample_ids}…" if sample_ids else f"vendors.name：{sample_names}…"
+        return f"未填写承运商/供应商，请在运单 carrier_code 填写 vendors.id 或名称以匹配 config：{hint}"
     label = cc or sup
-    return f"承运商/供应商「{label}」与 config.vendors 未匹配，请改运单或补 aliases"
+    return (
+        f"承运商「{label}」与 config.vendors 未匹配"
+        f"（carrier_code 应对应 vendors.id，或填写 vendor 名称/aliases）"
+    )
 
 
 def _normalize_details(raw_details: list[dict[str, Any]]) -> list[CarrierTrackingLogEntry]:

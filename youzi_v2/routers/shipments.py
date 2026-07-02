@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from ..context import *
+from .shipment_list_query import ShipmentListFilters
 
 router = APIRouter()
 
@@ -38,83 +39,32 @@ def close_shipment_exceptions(payload: ShipmentExceptionCloseIn):
     if len(nos) > 200:
         raise HTTPException(status_code=400, detail="单次最多 200 个运单号")
     try:
-        return shipment_exceptions_repo.close_for_shipment_nos(
+        result = shipment_exceptions_repo.close_for_shipment_nos(
             nos,
             note=payload.note,
             closed_time=payload.closed_time,
         )
+        for sn in nos:
+            shipment_exception_followup_repo.resolve_all_pending_for_shipment(sn)
+        return result
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+
 @router.get("/api/v1/shipments")
 def list_shipments(
-    search: str | None = None,
-    tracking_search: str | None = Query(None, alias="trackingSearch"),
-    shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
-    status_code: str | None = Query(None, alias="statusCode"),
-    exception_code: str | None = Query(None, alias="exceptionCode"),
-    has_exception: bool | None = Query(None, alias="hasException"),
-    customer: str | None = None,
-    vip_only: bool | None = Query(None, alias="vipOnly"),
-    carrier_code: str | None = Query(None, alias="carrierCode"),
-    country_code: str | None = Query(None, alias="countryCode"),
-    channel_code: str | None = Query(None, alias="channelCode"),
-    channel_name_zh: str | None = Query(None, alias="channelNameZh"),
-    channel_category: str | None = Query(None, alias="channelCategory"),
-    vessel_voyage: str | None = Query(None, alias="vesselVoyage"),
-    internal_freshness: str | None = Query(None, alias="internalFreshness"),
-    carrier_freshness: str | None = Query(None, alias="carrierFreshness"),
-    carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
-    pending_tracking_time_review: bool | None = Query(None, alias="pendingTrackingTimeReview"),
-    min_stale_days: int | None = Query(None, alias="minStaleDays"),
-    no_tracking: bool | None = Query(None, alias="noTracking"),
-    group_id: str | None = Query(None, alias="groupId"),
-    group_no: str | None = Query(None, alias="groupNo"),
-    rule_type: str | None = Query(None, alias="ruleType"),
-    has_rule: bool | None = Query(None, alias="hasRule"),
-    has_group: bool | None = Query(None, alias="hasGroup"),
-    sort_by: str | None = Query(None, alias="sortBy"),
-    sort_order: str | None = Query(None, alias="sortOrder"),
+    filters: ShipmentListFilters,
     limit: int = 100,
     offset: int = 0,
 ):
+    shipment_nos = filters.get("shipment_nos")
     if shipment_nos:
         cleaned = [n.strip() for n in shipment_nos if n and n.strip()]
         if len(cleaned) > 200:
             raise HTTPException(status_code=400, detail="单次最多查询 200 个单号")
-        shipment_nos = cleaned
+        filters = {**filters, "shipment_nos": cleaned}
     try:
-        result = shipments_repo.list_rows(
-            search=search,
-            tracking_search=tracking_search,
-            shipment_nos=shipment_nos,
-            status_code=status_code,
-            exception_code=exception_code,
-            has_exception=has_exception,
-            customer=customer,
-            vip_only=vip_only,
-            carrier_code=carrier_code,
-            country_code=country_code,
-            channel_code=channel_code,
-            channel_name_zh=channel_name_zh,
-            channel_category=channel_category,
-            vessel_voyage=vessel_voyage,
-            internal_freshness=internal_freshness,
-            carrier_freshness=carrier_freshness,
-            carrier_ahead_of_internal=carrier_ahead_of_internal,
-            pending_tracking_time_review=pending_tracking_time_review,
-            min_stale_days=min_stale_days,
-            no_tracking=no_tracking,
-            group_id=group_id,
-            group_no=group_no,
-            rule_type=rule_type,
-            has_rule=has_rule,
-            has_group=has_group,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            limit=limit,
-            offset=offset,
-        )
+        result = shipments_repo.list_rows(**filters, limit=limit, offset=offset)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     _apply_vip_flags(result.get("items") or [])
@@ -166,72 +116,19 @@ def batch_unsubscribe_shipments(body: ShipmentBatchIdsIn):
 
 @router.get("/api/v1/shipments/export")
 def export_shipments_excel(
-    search: str | None = None,
-    tracking_search: str | None = Query(None, alias="trackingSearch"),
-    shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
-    status_code: str | None = Query(None, alias="statusCode"),
-    exception_code: str | None = Query(None, alias="exceptionCode"),
-    has_exception: bool | None = Query(None, alias="hasException"),
-    customer: str | None = None,
-    vip_only: bool | None = Query(None, alias="vipOnly"),
-    carrier_code: str | None = Query(None, alias="carrierCode"),
-    country_code: str | None = Query(None, alias="countryCode"),
-    channel_code: str | None = Query(None, alias="channelCode"),
-    channel_name_zh: str | None = Query(None, alias="channelNameZh"),
-    channel_category: str | None = Query(None, alias="channelCategory"),
-    internal_freshness: str | None = Query(None, alias="internalFreshness"),
-    carrier_freshness: str | None = Query(None, alias="carrierFreshness"),
-    carrier_ahead_of_internal: bool | None = Query(None, alias="carrierAheadOfInternal"),
-    pending_tracking_time_review: bool | None = Query(None, alias="pendingTrackingTimeReview"),
-    min_stale_days: int | None = Query(None, alias="minStaleDays"),
-    no_tracking: bool | None = Query(None, alias="noTracking"),
-    group_id: str | None = Query(None, alias="groupId"),
-    group_no: str | None = Query(None, alias="groupNo"),
-    rule_type: str | None = Query(None, alias="ruleType"),
-    has_rule: bool | None = Query(None, alias="hasRule"),
-    has_group: bool | None = Query(None, alias="hasGroup"),
-    sort_by: str | None = Query(None, alias="sortBy"),
-    sort_order: str | None = Query(None, alias="sortOrder"),
+    filters: ShipmentListFilters,
     limit: int = Query(_SHIPMENT_EXPORT_MAX, le=_SHIPMENT_EXPORT_MAX),
     offset: int = 0,
 ):
     """导出当前筛选条件下的运单列表（Excel，表头与导入模板一致）。"""
+    shipment_nos = filters.get("shipment_nos")
     if shipment_nos:
         cleaned = [n.strip() for n in shipment_nos if n and n.strip()]
         if len(cleaned) > 200:
             raise HTTPException(status_code=400, detail="单次最多查询 200 个单号")
-        shipment_nos = cleaned
+        filters = {**filters, "shipment_nos": cleaned}
     try:
-        result = shipments_repo.list_rows(
-            search=search,
-            tracking_search=tracking_search,
-            shipment_nos=shipment_nos,
-            status_code=status_code,
-            exception_code=exception_code,
-            has_exception=has_exception,
-            customer=customer,
-            vip_only=vip_only,
-            carrier_code=carrier_code,
-            country_code=country_code,
-            channel_code=channel_code,
-            channel_name_zh=channel_name_zh,
-            channel_category=channel_category,
-            internal_freshness=internal_freshness,
-            carrier_freshness=carrier_freshness,
-            carrier_ahead_of_internal=carrier_ahead_of_internal,
-            pending_tracking_time_review=pending_tracking_time_review,
-            min_stale_days=min_stale_days,
-            no_tracking=no_tracking,
-            group_id=group_id,
-            group_no=group_no,
-            rule_type=rule_type,
-            has_rule=has_rule,
-            has_group=has_group,
-            sort_by=sort_by,
-            sort_order=sort_order,
-            limit=limit,
-            offset=offset,
-        )
+        result = shipments_repo.list_rows(**filters, limit=limit, offset=offset)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     total = int(result.get("total") or 0)
@@ -262,6 +159,43 @@ def list_shipment_exception_events(item_id: str, limit: int = 50, offset: int = 
         row["shipmentNo"],
         limit=limit,
         offset=offset,
+    )
+
+
+@router.get("/api/v1/shipment-exception-followups/notifications")
+def list_exception_followup_notifications(
+    limit: int = 20,
+    scope: str = Query("todo", pattern="^(todo)$"),
+):
+    """顶栏待办：标记异常运单的跟进提醒。"""
+    lim = max(1, min(limit, 50))
+    return {
+        "items": shipment_exception_followup_repo.list_pending_notifications(limit=lim),
+        "pendingCount": shipment_exception_followup_repo.count_pending(),
+    }
+
+
+@router.post("/api/v1/shipment-exception-followups/notifications/{notification_id}/read")
+def mark_exception_followup_notification_read(notification_id: str):
+    if not shipment_exception_followup_repo.mark_read(notification_id):
+        raise HTTPException(status_code=404, detail="通知不存在或已读")
+    return {"ok": True}
+
+
+@router.post("/api/v1/shipment-exception-followups/notifications/{notification_id}/resolve")
+def resolve_exception_followup_notification(notification_id: str):
+    if not shipment_exception_followup_repo.mark_resolved(notification_id):
+        raise HTTPException(status_code=404, detail="通知不存在或已处理")
+    return {"ok": True}
+
+
+@router.post("/api/v1/shipment-exception-followups/evaluate")
+def evaluate_exception_followup_reminders():
+    """手动触发异常跟进扫描（忽略 24 小时间隔）。"""
+    return scan_exception_followup_reminders(
+        shipment_exception_followup_repo,
+        force=True,
+        trigger="manual",
     )
 
 @router.get("/api/v1/shipments/{item_id}/tracking-logs")
@@ -318,9 +252,17 @@ def recalculate_shipment_tracking_times(item_id: str):
 
 
 @router.get("/api/v1/shipment-tracking-time-candidates/pending")
-def list_pending_tracking_time_reviews(limit: int = 50, offset: int = 0):
+def list_pending_tracking_time_reviews(
+    limit: int = 50,
+    offset: int = 0,
+    carrier_code: str | None = Query(None, alias="carrierCode"),
+):
     """待审批的签收时间候选列表（分页）。"""
-    return tracking_time_candidates_repo.list_pending_reviews(limit=limit, offset=offset)
+    return tracking_time_candidates_repo.list_pending_reviews(
+        limit=limit,
+        offset=offset,
+        carrier_code=carrier_code,
+    )
 
 
 @router.post("/api/v1/shipment-tracking-time-candidates/{candidate_id}/review")
@@ -520,6 +462,37 @@ def sync_shipments_carrier_tracking(body: TrackingSyncRequest | None = Body(None
                 status_code=503,
                 detail="数据库繁忙（可能正在同步或迁移），请稍后重试。",
             ) from exc
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+@router.post(
+    "/api/v1/shipments/sync-from-dps",
+    response_model=ShipmentDpsSyncByOrderResult,
+)
+def sync_shipments_from_dps(body: ShipmentDpsSyncByOrderRequest):
+    """
+    按运单号从 config.json shipment_queryByOrder 拉取 DPS 数据并 upsert。
+    单次最多 200 个运单号；字段策略见 shipment_dps_sync_fields.json。
+    """
+    nos = [n.strip() for n in body.shipment_nos if n and n.strip()]
+    if not nos:
+        raise HTTPException(status_code=400, detail="运单号列表不能为空")
+    if len(nos) > 200:
+        raise HTTPException(status_code=400, detail="单次最多 200 个运单号")
+    try:
+        result = run_shipment_dps_sync_by_order(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            nos,
+        )
+        return ShipmentDpsSyncByOrderResult(**result)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 shipment_queryByOrder。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 @router.post("/api/v1/shipments/import")

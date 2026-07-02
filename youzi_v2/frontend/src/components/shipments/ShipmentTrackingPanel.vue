@@ -216,20 +216,13 @@ async function handleSyncCarrier() {
             :class="index === 0 ? 'tracking-timeline-marker--solid' : 'tracking-timeline-marker--dot'"
             aria-hidden="true"
           />
-          <div
-            class="tracking-timeline-body tracking-timeline-body--copyable"
-            role="button"
-            tabindex="0"
-            title="点击复制时间与描述"
-            @click="copyLog(log)"
-            @keydown.enter.prevent="copyLog(log)"
-          >
+          <div class="tracking-timeline-body tracking-timeline-body--with-copy">
             <button
               type="button"
               class="tracking-copy-btn"
               :class="{ 'tracking-copy-btn--copied': copiedLogId === log.id }"
               :aria-label="copiedLogId === log.id ? '已复制' : '复制轨迹'"
-              @click.stop="copyLog(log)"
+              @click="copyLog(log)"
             >
               <Check
                 v-if="copiedLogId === log.id"
@@ -440,22 +433,11 @@ async function handleSyncCarrier() {
   padding-top: 1px;
 }
 
-.tracking-timeline-body--copyable {
+.tracking-timeline-body--with-copy {
   position: relative;
   margin: -0.375rem -0.5rem;
   padding: 0.375rem 2rem 0.375rem 0.5rem;
   border-radius: 0.5rem;
-  cursor: pointer;
-  transition: background-color 0.15s;
-}
-
-.tracking-timeline-body--copyable:hover {
-  background: var(--color-btn-ghost-bg);
-}
-
-.tracking-timeline-body--copyable:focus-visible {
-  outline: 2px solid rgb(59 130 246 / 0.45);
-  outline-offset: 1px;
 }
 
 .tracking-copy-btn {
@@ -473,8 +455,7 @@ async function handleSyncCarrier() {
   transition: opacity 0.15s, color 0.15s, background-color 0.15s;
 }
 
-.tracking-timeline-body--copyable:hover .tracking-copy-btn,
-.tracking-timeline-body--copyable:focus-within .tracking-copy-btn,
+.tracking-timeline-item:hover .tracking-copy-btn,
 .tracking-copy-btn--copied {
   opacity: 1;
 }
@@ -502,6 +483,7 @@ async function handleSyncCarrier() {
   line-height: 1.4;
   color: var(--color-fg);
   margin-top: 0.25rem;
+  user-select: text;
 }
 
 .timeline-content--emphasis {
@@ -513,6 +495,7 @@ async function handleSyncCarrier() {
   font-size: 13px;
   color: #8c8c8c;
   line-height: 1.35;
+  user-select: text;
 }
 
 .tracking-log-item--internal {

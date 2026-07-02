@@ -7,9 +7,17 @@ router = APIRouter()
 
 
 @router.get("/api/v1/shipment-group-notifications")
-def list_unread_shipment_group_notifications(limit: int = 20):
-    """顶栏/首页：未读分组提醒列表与计数。"""
+def list_unread_shipment_group_notifications(
+    limit: int = 20,
+    scope: str = Query("unread", pattern="^(unread|todo)$"),
+):
+    """顶栏/首页：分组提醒。scope=unread 未读消息；scope=todo 未处理待办。"""
     lim = max(1, min(limit, 50))
+    if scope == "todo":
+        return {
+            "items": shipment_group_alerts_repo.list_pending_notifications(limit=lim),
+            "pendingCount": shipment_group_alerts_repo.count_pending(),
+        }
     return {
         "items": shipment_group_alerts_repo.list_unread_notifications(limit=lim),
         "unreadCount": shipment_group_alerts_repo.count_unread(),

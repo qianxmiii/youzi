@@ -8,6 +8,7 @@ from typing import Any
 from .channel_seeds import CHANNEL_CATEGORIES, CHANNEL_SEEDS
 from .connection import Database
 from .datetime_util import now_str
+from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 
 TABLE_NAME = "channel_codes"
 
@@ -133,17 +134,27 @@ class ChannelsRepository:
         return row
 
     def update(self, code: str, data: dict[str, Any]) -> dict[str, Any]:
-        c = code.strip()
-        payload = self._normalize_payload(data, for_update=True)
+        old_code = code.strip()
+        payload = self._normalize_payload(data, for_update=True, existing_code=old_code)
+        new_code = payload["code"]
+        if new_code != old_code:
+            if self.get_row(new_code):
+                raise ValueError(f"渠道已存在: {new_code}")
         with self._database.lock:
+            if new_code != old_code:
+                self._conn.execute(
+                    f"UPDATE {SHIPMENTS_TABLE} SET channel_code = ? WHERE channel_code = ?",
+                    (new_code, old_code),
+                )
             cur = self._conn.execute(
                 f"""
                 UPDATE {TABLE_NAME} SET
-                    name_zh = ?, name_en = ?, country = ?, category = ?, note = ?,
+                    code = ?, name_zh = ?, name_en = ?, country = ?, category = ?, note = ?,
                     sort_order = ?, is_active = ?, updated_time = ?
                 WHERE code = ?
                 """,
                 (
+                    new_code,
                     payload["name_zh"],
                     payload["name_en"],
                     payload["country"],
@@ -152,15 +163,15 @@ class ChannelsRepository:
                     payload["sort_order"],
                     payload["is_active"],
                     now_str(),
-                    c,
+                    old_code,
                 ),
             )
             self._conn.commit()
             if cur.rowcount == 0:
-                raise KeyError(c)
-        row = self.get_row(c)
+                raise KeyError(old_code)
+        row = self.get_row(new_code)
         if row is None:
-            raise KeyError(c)
+            raise KeyError(old_code)
         return row
 
     def delete(self, code: str) -> bool:
@@ -213,9 +224,18 @@ class ChannelsRepository:
         data: dict[str, Any],
         *,
         for_update: bool = False,
+        existing_code: str | None = None,
     ) -> dict[str, Any]:
-        code = (data.get("code") or "").strip()
+        raw_code = data.get("code")
+        if raw_code is not None:
+            code = str(raw_code).strip()
+        elif for_update and existing_code:
+            code = existing_code.strip()
+        else:
+            code = ""
         if not for_update and not code:
+            raise ValueError("渠道编码不能为空")
+        if for_update and not code:
             raise ValueError("渠道编码不能为空")
         name_zh = (data.get("name_zh") or data.get("nameZh") or "").strip()
         name_en = (data.get("name_en") or data.get("nameEn") or code).strip()

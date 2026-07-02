@@ -23,6 +23,12 @@ export function formatDateOnlyForApi(ts: number): string {
   return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} 00:00:00`
 }
 
+/** 日期控件 → API 结束日：YYYY-MM-DD 23:59:59 */
+export function formatDateEndOfDayForApi(ts: number): string {
+  const d = new Date(ts)
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())} 23:59:59`
+}
+
 export function nowTimestamp(): number {
   return Date.now()
 }

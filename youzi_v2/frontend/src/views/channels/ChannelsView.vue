@@ -115,8 +115,7 @@ async function handleFormSubmit(payload: ChannelPayload) {
       await createChannel(payload)
       message.success('已新增渠道')
     } else {
-      const { code: _c, ...body } = payload
-      await updateChannel(editingRow.value!.code, body)
+      await updateChannel(editingRow.value!.code, payload)
       message.success('已更新')
     }
     modalShow.value = false
@@ -138,10 +137,17 @@ async function handleDelete(row: Channel) {
 
 const columns: DataTableColumns<Channel> = [
   {
-    title: '渠道（英文）',
+    title: '渠道代码',
     key: 'code',
-    minWidth: 220,
+    minWidth: 160,
     ellipsis: { tooltip: true },
+  },
+  {
+    title: '英文',
+    key: 'nameEn',
+    minWidth: 180,
+    ellipsis: { tooltip: true },
+    render: (row) => row.nameEn || row.code || '—',
   },
   {
     title: '中文',
@@ -233,8 +239,9 @@ onMounted(async () => {
       <div>
         <h1 class="page-h2">渠道管理</h1>
         <p class="mt-1 text-sm text-zinc-500">
-          配置渠道中英文、国家/地区、大类（快船 / 普船 / 卡航 / 铁路 / 空运）与备注；运单
-          <code class="text-zinc-400">channel_code</code> 与此处编码一致。
+          渠道编码（<code class="text-zinc-400">code</code>）与运单
+          <code class="text-zinc-400">channel_code</code>、DPS
+          <code class="text-zinc-400">channelCode</code> 一致，可编辑。
         </p>
       </div>
       <NSpace>
@@ -265,7 +272,7 @@ onMounted(async () => {
       <NInput
         v-model:value="search"
         clearable
-        placeholder="搜索渠道编码、中文、国家、备注…"
+        placeholder="搜索渠道代码、英文、中文、国家、备注…"
         class="min-w-0"
         size="small"
       />
@@ -280,7 +287,7 @@ onMounted(async () => {
         size="small"
         flex-height
         class="h-full"
-        :scroll-x="900"
+        :scroll-x="1080"
       />
     </div>
 

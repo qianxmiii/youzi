@@ -109,6 +109,12 @@ def parse_excel_rows(
         if table == "port_codes":
             pt = _cell_str(pick("port_type")) or "both"
             payload["port_type"] = pt.lower()
+        if table == "carrier_codes":
+            payload["carrier_id"] = _cell_str(pick("carrier_id")) or ""
+        if table == "channel_codes":
+            payload["country"] = _cell_str(pick("country")) or ""
+            payload["category"] = _cell_str(pick("category")) or ""
+            payload["note"] = _cell_str(pick("note")) or ""
         parsed.append((excel_row, payload))
 
     wb.close()
@@ -165,6 +171,9 @@ def build_template_bytes(table: str) -> bytes:
     elif table == "port_codes":
         headers = ["港口代码", "港口中文名", "港口英文名", "港口类型", "排序", "启用"]
         sample = ["NYC", "纽约", "NEWYORK", "both", 10, "是"]
+    elif table == "carrier_codes":
+        headers = ["编码", "中文名", "英文名", "承运商ID", "排序", "启用"]
+        sample = ["TXFBA", "腾信", "TXFBA", "1724258253196189697", 10, "是"]
 
     wb = Workbook()
     ws = wb.active

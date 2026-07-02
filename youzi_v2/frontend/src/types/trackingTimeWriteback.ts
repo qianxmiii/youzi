@@ -28,6 +28,8 @@ export interface TrackingTimeCandidate {
   createdTime: string
   updatedTime: string
   shipmentNo?: string
+  carrierCode?: string | null
+  carrierNameZh?: string | null
   expectedDeliveryTime?: string | null
   deliveredTime?: string | null
 }

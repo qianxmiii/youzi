@@ -66,6 +66,11 @@ export interface ShipmentGroupUnreadNotificationsResponse {
   unreadCount: number
 }
 
+export interface ShipmentGroupTodoNotificationsResponse {
+  items: ShipmentGroupNotification[]
+  pendingCount: number
+}
+
 export interface ShipmentGroupEvaluateResult {
   evaluated: number
   created: number

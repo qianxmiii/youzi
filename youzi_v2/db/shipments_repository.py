@@ -14,6 +14,14 @@ from .internal_tracking_logs_table import TABLE_NAME as INTERNAL_TRACKING_TABLE
 from .shipment_tracking_time_candidates_table import TABLE_NAME as CANDIDATES_TABLE
 from .shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .shipments_table import TABLE_NAME
+from .shipment_list_filters import (
+    append_delivery_risk,
+    append_has_ata,
+    append_keyword_search,
+    append_missing_field,
+    append_not_delivered,
+    append_time_range,
+)
 from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, RULES_TABLE
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
 from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
@@ -39,6 +47,7 @@ from .tracking_freshness import (
 
 # 与前端承运商筛选「（未填写）」选项值一致
 CARRIER_CODE_FILTER_EMPTY = "__EMPTY__"
+CARRIER_CODES_TABLE = "carrier_codes"
 
 _LIST_SORT_COLUMNS = {
     "shipmentNo": "s.shipment_no",
@@ -65,10 +74,16 @@ def _list_order_sql(sort_by: str | None, sort_order: str | None) -> str:
 _LIST_FROM = (
     f"{TABLE_NAME} s "
     f"LEFT JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code "
+    f"LEFT JOIN {CARRIER_CODES_TABLE} crc ON s.carrier_code = crc.code "
+    f"LEFT JOIN {CARRIER_CODES_TABLE} crc_by_id ON crc.code IS NULL "
+    f"AND TRIM(COALESCE(s.carrier_code, '')) != '' "
+    f"AND s.carrier_code = crc_by_id.carrier_id "
     f"LEFT JOIN {CUSTOMERS_TABLE} cu ON TRIM(s.customer) = cu.customer_name"
 )
 _LIST_SELECT = (
     "s.*, cc.name_zh AS _channel_name_zh, cc.category AS _channel_category, "
+    "COALESCE(NULLIF(TRIM(crc.name_zh), ''), NULLIF(TRIM(crc_by_id.name_zh), '')) "
+    "AS _carrier_name_zh, "
     "cu.track_query_lang AS _customer_track_query_lang, "
     f"EXISTS(SELECT 1 FROM {CANDIDATES_TABLE} c "
     f"WHERE c.shipment_id = s.id AND c.review_status = 'pending_review') "
@@ -108,6 +123,8 @@ _UPDATABLE = (
     "expected_delivery_time",
     "delivered_time",
     "status_code",
+    "latest_tracking_time",
+    "latest_tracking_desc",
 )
 
 
@@ -159,6 +176,12 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "originWarehouseCode": row["origin_warehouse_code"],
         "supplierName": row["supplier_name"],
         "carrierCode": row["carrier_code"],
+        "carrierNameZh": (
+            (row["_carrier_name_zh"] or "").strip()
+            if "_carrier_name_zh" in row.keys()
+            else ""
+        )
+        or None,
         "carrierId": row["carrier_id"],
         "trackingNumber": row["tracking_number"],
         "expressCode": row["express_code"] if "express_code" in row.keys() else None,
@@ -236,6 +259,8 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "expectedDeliveryTime": "expected_delivery_time",
         "deliveredTime": "delivered_time",
         "statusCode": "status_code",
+        "latestTrackingTime": "latest_tracking_time",
+        "latestTrackingDesc": "latest_tracking_desc",
         "createdTime": "created_time",
         "updatedTime": "updated_time",
     }
@@ -331,11 +356,43 @@ class ShipmentsRepository:
         pending_tracking_time_review: bool | None = None,
         min_stale_days: int | None = None,
         no_tracking: bool | None = None,
+        no_zipcode: bool | None = None,
         group_id: str | None = None,
         group_no: str | None = None,
         rule_type: str | None = None,
         has_rule: bool | None = None,
         has_group: bool | None = None,
+        time_field: str | None = None,
+        time_from: str | None = None,
+        time_to: str | None = None,
+        etd_from: str | None = None,
+        etd_to: str | None = None,
+        atd_from: str | None = None,
+        atd_to: str | None = None,
+        eta_from: str | None = None,
+        eta_to: str | None = None,
+        ata_from: str | None = None,
+        ata_to: str | None = None,
+        expected_delivery_from: str | None = None,
+        expected_delivery_to: str | None = None,
+        delivered_from: str | None = None,
+        delivered_to: str | None = None,
+        created_from: str | None = None,
+        created_to: str | None = None,
+        updated_from: str | None = None,
+        updated_to: str | None = None,
+        customer_no: str | None = None,
+        destination_port_code: str | None = None,
+        address_keyword: str | None = None,
+        missing_etd: bool | None = None,
+        missing_atd: bool | None = None,
+        missing_eta: bool | None = None,
+        missing_ata: bool | None = None,
+        missing_expected_delivery: bool | None = None,
+        missing_delivered: bool | None = None,
+        not_delivered: bool | None = None,
+        has_ata: bool | None = None,
+        delivery_risk: str | None = None,
         sort_by: str | None = None,
         sort_order: str | None = None,
         limit: int = 100,
@@ -360,12 +417,7 @@ class ShipmentsRepository:
                 )
                 params.extend(cleaned_nos + cleaned_nos)
         if search and search.strip():
-            q = f"%{search.strip()}%"
-            conditions.append(
-                "(s.customer LIKE ? OR s.customer_no LIKE ? "
-                "OR s.address_code LIKE ? OR s.delivery_address LIKE ?)"
-            )
-            params.extend([q, q, q, q])
+            append_keyword_search(conditions, params, search.strip())
         if tracking_search and tracking_search.strip():
             tq = f"%{tracking_search.strip()}%"
             conditions.append(
@@ -401,6 +453,18 @@ class ShipmentsRepository:
         if customer and customer.strip():
             conditions.append("s.customer = ?")
             params.append(customer.strip())
+        if customer_no and customer_no.strip():
+            conditions.append("s.customer_no = ?")
+            params.append(customer_no.strip())
+        if destination_port_code and destination_port_code.strip():
+            conditions.append("s.destination_port_code = ?")
+            params.append(destination_port_code.strip())
+        if address_keyword and address_keyword.strip():
+            q = f"%{address_keyword.strip()}%"
+            conditions.append(
+                "(s.address_code LIKE ? OR s.delivery_address LIKE ?)"
+            )
+            params.extend([q, q])
         if vip_only is True:
             conditions.append("cu.is_vip = 1")
         elif vip_only is False:
@@ -473,6 +537,8 @@ class ShipmentsRepository:
                 """
             )
             params.append(f"-{int(min_stale_days)} days")
+        if no_zipcode:
+            conditions.append("(s.zipcode IS NULL OR TRIM(s.zipcode) = '')")
         if group_id and group_id.strip():
             conditions.append(
                 f"""
@@ -548,6 +614,45 @@ class ShipmentsRepository:
                 )
                 """
             )
+        append_time_range(
+            conditions,
+            params,
+            column=time_field or "",
+            time_from=time_from,
+            time_to=time_to,
+        )
+        for field_key, start, end in (
+            ("etd", etd_from, etd_to),
+            ("atd", atd_from, atd_to),
+            ("eta", eta_from, eta_to),
+            ("ata", ata_from, ata_to),
+            ("expectedDeliveryTime", expected_delivery_from, expected_delivery_to),
+            ("deliveredTime", delivered_from, delivered_to),
+            ("createdTime", created_from, created_to),
+            ("updatedTime", updated_from, updated_to),
+        ):
+            append_time_range(
+                conditions,
+                params,
+                column=field_key,
+                time_from=start,
+                time_to=end,
+            )
+        for field_key, flag in (
+            ("etd", missing_etd),
+            ("atd", missing_atd),
+            ("eta", missing_eta),
+            ("ata", missing_ata),
+            ("expectedDeliveryTime", missing_expected_delivery),
+            ("deliveredTime", missing_delivered),
+        ):
+            if flag is True:
+                append_missing_field(conditions, field=field_key, missing=True)
+        if not_delivered is True:
+            append_not_delivered(conditions)
+        if has_ata is True:
+            append_has_ata(conditions)
+        append_delivery_risk(conditions, params, delivery_risk)
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         order_sql = _list_order_sql(sort_by, sort_order)
         with self._database.lock:
@@ -703,9 +808,31 @@ class ShipmentsRepository:
                 LIMIT 500
                 """
             ).fetchall()
+            carrier_rows = self._conn.execute(
+                f"""
+                SELECT DISTINCT s.carrier_code AS code,
+                       COALESCE(
+                           NULLIF(TRIM(crc.name_zh), ''),
+                           NULLIF(TRIM(crc_by_id.name_zh), ''),
+                           s.carrier_code
+                       ) AS name_zh
+                FROM {TABLE_NAME} s
+                LEFT JOIN {CARRIER_CODES_TABLE} crc ON s.carrier_code = crc.code
+                LEFT JOIN {CARRIER_CODES_TABLE} crc_by_id ON crc.code IS NULL
+                    AND TRIM(COALESCE(s.carrier_code, '')) != ''
+                    AND s.carrier_code = crc_by_id.carrier_id
+                WHERE s.carrier_code IS NOT NULL AND TRIM(s.carrier_code) != ''
+                ORDER BY name_zh, code
+                """
+            ).fetchall()
+        carriers = [
+            {"code": str(r["code"]), "nameZh": str(r["name_zh"] or r["code"])}
+            for r in carrier_rows
+        ]
         return {
             "customers": out["customer"],
-            "carrierCodes": out["carrier_code"],
+            "carriers": carriers,
+            "carrierCodes": [c["code"] for c in carriers],
             "countryCodes": out["country_code"],
             "channelCodes": out["channel_code"],
             "channelNameZhs": [str(r["v"]) for r in channel_name_rows],
@@ -1189,6 +1316,100 @@ class ShipmentsRepository:
         if not update_payload:
             return existing, False
         return self.update_row(existing["id"], update_payload), False
+
+    def list_shipments_missing_zipcode(self) -> list[sqlite3.Row]:
+        with self._database.lock:
+            return self._conn.execute(
+                f"""
+                SELECT id, shipment_no, address_code, address_type, delivery_address, country_code
+                FROM {TABLE_NAME}
+                WHERE zipcode IS NULL OR TRIM(zipcode) = ''
+                ORDER BY datetime(updated_time) DESC, shipment_no
+                """
+            ).fetchall()
+
+    def batch_apply_zipcodes(self, updates: list[tuple[str, str]]) -> int:
+        if not updates:
+            return 0
+        now = now_str()
+        count = 0
+        with self._database.lock:
+            for sid, zipcode in updates:
+                pc = (zipcode or "").strip()
+                if not pc:
+                    continue
+                cur = self._conn.execute(
+                    f"""
+                    UPDATE {TABLE_NAME}
+                    SET zipcode = ?, updated_time = ?
+                    WHERE id = ?
+                      AND (zipcode IS NULL OR TRIM(zipcode) = '')
+                    """,
+                    (pc, now, sid),
+                )
+                count += cur.rowcount
+            self._conn.commit()
+        return count
+
+    def replace_channel_code_matching_names(self, target_code: str, *names: str) -> int:
+        """将 channel_code 等于给定中文名/别名的运单批量改为标准编码。"""
+        code = (target_code or "").strip()
+        labels: list[str] = []
+        seen: set[str] = set()
+        for raw in names:
+            name = (raw or "").strip()
+            if not name or name == code or name in seen:
+                continue
+            seen.add(name)
+            labels.append(name)
+        if not code or not labels:
+            return 0
+        now = now_str()
+        total = 0
+        with self._database.lock:
+            for name in labels:
+                cur = self._conn.execute(
+                    f"""
+                    UPDATE {TABLE_NAME}
+                    SET channel_code = ?, updated_time = ?
+                    WHERE TRIM(channel_code) = ?
+                      AND TRIM(COALESCE(channel_code, '')) != ?
+                    """,
+                    (code, now, name, code),
+                )
+                total += cur.rowcount
+            self._conn.commit()
+        return total
+
+    def replace_carrier_code_matching_names(self, target_code: str, *names: str) -> int:
+        """将 carrier_code 等于给定中文名/别名的运单批量改为标准编码。"""
+        code = (target_code or "").strip()
+        labels: list[str] = []
+        seen: set[str] = set()
+        for raw in names:
+            name = (raw or "").strip()
+            if not name or name == code or name in seen:
+                continue
+            seen.add(name)
+            labels.append(name)
+        if not code or not labels:
+            return 0
+        now = now_str()
+        total = 0
+        with self._database.lock:
+            for name in labels:
+                cur = self._conn.execute(
+                    f"""
+                    UPDATE {TABLE_NAME}
+                    SET carrier_code = ?, updated_time = ?
+                    WHERE TRIM(carrier_code) = ?
+                      AND TRIM(COALESCE(carrier_code, '')) != ?
+                    """,
+                    (code, now, name, code),
+                )
+                total += cur.rowcount
+            self._conn.commit()
+        return total
 
     def delete_row(self, item_id: str) -> bool:
         with self._database.lock:

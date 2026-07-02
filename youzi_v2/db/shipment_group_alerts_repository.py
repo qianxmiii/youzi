@@ -326,6 +326,23 @@ class ShipmentGroupAlertsRepository:
             ).fetchall()
         return [_notification_to_api(r) for r in rows]
 
+    def list_pending_notifications(self, *, limit: int = 20) -> list[dict[str, Any]]:
+        """未处理待办（resolved_at 为空）。"""
+        lim = max(1, min(limit, 50))
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT n.*, g.group_no, g.group_name, g.customer
+                FROM {NOTIFICATIONS_TABLE} n
+                INNER JOIN {GROUPS_TABLE} g ON g.id = n.group_id
+                WHERE n.resolved_at IS NULL OR TRIM(n.resolved_at) = ''
+                ORDER BY datetime(n.triggered_at) DESC
+                LIMIT ?
+                """,
+                (lim,),
+            ).fetchall()
+        return [_notification_to_api(r) for r in rows]
+
     def count_unread(self, group_id: str | None = None) -> int:
         with self._database.lock:
             if group_id:
@@ -342,6 +359,26 @@ class ShipmentGroupAlertsRepository:
                     f"""
                     SELECT COUNT(*) AS c FROM {NOTIFICATIONS_TABLE}
                     WHERE read_at IS NULL OR TRIM(read_at) = ''
+                    """
+                ).fetchone()
+        return int(row["c"] or 0)
+
+    def count_pending(self, group_id: str | None = None) -> int:
+        with self._database.lock:
+            if group_id:
+                row = self._conn.execute(
+                    f"""
+                    SELECT COUNT(*) AS c FROM {NOTIFICATIONS_TABLE}
+                    WHERE group_id = ?
+                      AND (resolved_at IS NULL OR TRIM(resolved_at) = '')
+                    """,
+                    (group_id.strip(),),
+                ).fetchone()
+            else:
+                row = self._conn.execute(
+                    f"""
+                    SELECT COUNT(*) AS c FROM {NOTIFICATIONS_TABLE}
+                    WHERE resolved_at IS NULL OR TRIM(resolved_at) = ''
                     """
                 ).fetchone()
         return int(row["c"] or 0)

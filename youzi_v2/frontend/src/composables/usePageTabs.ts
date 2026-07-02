@@ -22,6 +22,25 @@ function defaultTabs(): PageTab[] {
   ]
 }
 
+function normalizeTab(tab: PageTab): PageTab {
+  const path = tab.path?.split('?')[0] || tab.key.split('?')[0] || tab.key
+  return {
+    key: path,
+    path,
+    fullPath: tab.fullPath,
+    title: tab.title,
+  }
+}
+
+function dedupeTabsByPath(rawTabs: PageTab[]): PageTab[] {
+  const byPath = new Map<string, PageTab>()
+  for (const tab of rawTabs) {
+    const normalized = normalizeTab(tab)
+    byPath.set(normalized.key, normalized)
+  }
+  return Array.from(byPath.values()).slice(0, MAX_TABS)
+}
+
 function readStored(): { tabs: PageTab[]; activeKey: string } {
   try {
     const raw = localStorage.getItem(STORAGE_KEY)
@@ -30,23 +49,22 @@ function readStored(): { tabs: PageTab[]; activeKey: string } {
       return { tabs, activeKey: tabs[0].key }
     }
     const parsed = JSON.parse(raw) as { tabs?: PageTab[]; activeKey?: string }
-    const tabs = (parsed.tabs ?? [])
-      .filter(
+    const tabs = dedupeTabsByPath(
+      (parsed.tabs ?? []).filter(
         (t) =>
           t &&
           typeof t.key === 'string' &&
           typeof t.fullPath === 'string' &&
           typeof t.title === 'string',
-      )
-      .slice(0, MAX_TABS)
+      ),
+    )
     if (!tabs.length) {
       const fallback = defaultTabs()
       return { tabs: fallback, activeKey: fallback[0].key }
     }
+    const rawActive = parsed.activeKey?.split('?')[0]
     const activeKey =
-      parsed.activeKey && tabs.some((t) => t.key === parsed.activeKey)
-        ? parsed.activeKey
-        : tabs[0].key
+      rawActive && tabs.some((t) => t.key === rawActive) ? rawActive : tabs[0].key
     return { tabs, activeKey }
   } catch {
     const tabs = defaultTabs()
@@ -77,7 +95,8 @@ function tabTitle(route: RouteLocationNormalizedLoaded): string {
 }
 
 function openFromRoute(route: RouteLocationNormalizedLoaded) {
-  const key = route.fullPath
+  tabs.value = dedupeTabsByPath(tabs.value)
+  const key = route.path
   const title = tabTitle(route)
   const existing = tabs.value.find((t) => t.key === key)
   if (!existing) {
@@ -90,8 +109,12 @@ function openFromRoute(route: RouteLocationNormalizedLoaded) {
         title,
       },
     ].slice(-MAX_TABS)
-  } else if (existing.title !== title) {
-    existing.title = title
+  } else {
+    existing.fullPath = route.fullPath
+    existing.path = route.path
+    if (existing.title !== title) {
+      existing.title = title
+    }
   }
   activeKey.value = key
   writeStored(tabs.value, activeKey.value)

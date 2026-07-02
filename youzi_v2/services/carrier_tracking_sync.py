@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
+from ..db.code_tables_repository import CodeTablesRepository
 from ..db.shipment_tracking_numbers_repository import ShipmentTrackingNumbersRepository
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
@@ -20,6 +21,7 @@ from ..carrier_tracking_entry import latest_from_logs
 from ..last_mile_tracking import is_conwest_tracking_number, resolve_conwest_writeback
 from .carrier_vendors import (
     BATCH_SIZE,
+    build_vendor_maps,
     carrier_vendor_unassigned_reason,
     detect_platform,
     fetch_tracking_batch,
@@ -75,7 +77,10 @@ def sync_carrier_tracking(
         )
         raise
 
-    vendor_map = {v["name"]: v for v in vendors if v.get("name")}
+    vendor_by_name, vendor_by_id = build_vendor_maps(vendors)
+    code_to_carrier_id = CodeTablesRepository(
+        shipments_repo._database
+    ).carrier_code_vendor_id_lookup()
     requested_nos = (
         len([s for s in shipment_nos if s and s.strip()]) if shipment_nos else 0
     )
@@ -100,11 +105,18 @@ def sync_carrier_tracking(
     unassigned = 0
     errors: list[str] = []
     for row in rows:
-        vendor = resolve_vendor_for_row(row, vendor_map)
+        vendor = resolve_vendor_for_row(
+            row,
+            vendor_by_name,
+            vendor_by_id,
+            code_to_carrier_id=code_to_carrier_id,
+        )
         if vendor is None:
             unassigned += 1
             sn = row.get("shipment_no") or ""
-            reason = carrier_vendor_unassigned_reason(row, vendor_map)
+            reason = carrier_vendor_unassigned_reason(
+                row, vendor_by_name, vendor_by_id
+            )
             err_line = f"未匹配承运商/{sn}: {reason}"
             errors.append(err_line)
             out_log(f"[承运商轨迹] {err_line}")
@@ -126,7 +138,7 @@ def sync_carrier_tracking(
 
     for vendor_name in sorted(by_vendor.keys()):
         group = by_vendor[vendor_name]
-        vendor = vendor_map[vendor_name]
+        vendor = vendor_by_name[vendor_name]
         v_stat = {"updated": 0, "newLogs": 0, "batches": 0}
         out_log(f"[承运商轨迹] vendor={vendor_name} 开始，{len(group)} 单")
 

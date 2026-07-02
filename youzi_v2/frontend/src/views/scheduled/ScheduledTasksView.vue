@@ -2,6 +2,7 @@
 import {
   NButton,
   NDataTable,
+  NDatePicker,
   NForm,
   NFormItem,
   NInputNumber,
@@ -21,6 +22,9 @@ import {
   runGroupAutoArchive,
   runScheduledCarrierSync,
   runScheduledInternalSync,
+  runZipcodeBackfill,
+  runExceptionFollowup,
+  runDpsShipmentSync,
   updateScheduledTasksSettings,
 } from '@/api/scheduledTasks'
 import type {
@@ -28,6 +32,11 @@ import type {
   ScheduledTaskOverview,
   TrackingSyncJobRecord,
 } from '@/types/scheduledTasks'
+import {
+  dateOnlyToTimestamp,
+  formatDateEndOfDayForApi,
+  formatDateOnlyForApi,
+} from '@/utils/formatDateTime'
 
 const message = useMessage()
 const loading = ref(false)
@@ -35,6 +44,9 @@ const saving = ref(false)
 const runningInternal = ref(false)
 const runningCarrier = ref(false)
 const runningGroupArchive = ref(false)
+const runningZipcodeBackfill = ref(false)
+const runningExceptionFollowup = ref(false)
+const runningDpsShipmentSync = ref(false)
 const overview = ref<ScheduledTaskOverview | null>(null)
 const jobs = ref<TrackingSyncJobRecord[]>([])
 const jobsTotal = ref(0)
@@ -50,7 +62,35 @@ const form = reactive<ScheduledSyncSettingsUpdate>({
   carrierIntervalHours: 2,
   initialDelaySec: 60,
   groupAutoArchiveEnabled: false,
+  zipcodeBackfillEnabled: false,
+  dpsShipmentSyncEnabled: false,
+  dpsShipmentSyncTransitTimeStart: '',
+  dpsShipmentSyncTransitTimeEnd: '',
+  exceptionFollowupEnabled: false,
 })
+
+/** DPS 发运时间范围（日期控件，提交时转为 API 时间串） */
+const dpsTransitTimeStartTs = ref<number | null>(null)
+const dpsTransitTimeEndTs = ref<number | null>(null)
+
+function dpsTransitTimeStartForApi(): string | null {
+  if (dpsTransitTimeStartTs.value == null) return null
+  return formatDateOnlyForApi(dpsTransitTimeStartTs.value)
+}
+
+function dpsTransitTimeEndForApi(): string | null {
+  if (dpsTransitTimeEndTs.value == null) return null
+  return formatDateEndOfDayForApi(dpsTransitTimeEndTs.value)
+}
+
+function applyDpsTransitTimePickers(c: ScheduledTaskOverview['config']) {
+  dpsTransitTimeStartTs.value = dateOnlyToTimestamp(
+    c.dpsShipmentSyncTransitTimeStart || c.dpsShipmentSyncTransitTimeStartDefault,
+  )
+  dpsTransitTimeEndTs.value = dateOnlyToTimestamp(
+    c.dpsShipmentSyncTransitTimeEnd || c.dpsShipmentSyncTransitTimeEndDefault,
+  )
+}
 
 const SOURCE_LABEL: Record<string, string> = {
   carrier: '承运商轨迹',
@@ -121,6 +161,12 @@ function applyConfigFromOverview(data: ScheduledTaskOverview) {
   form.carrierIntervalHours = c.carrierIntervalHours
   form.initialDelaySec = c.initialDelaySec
   form.groupAutoArchiveEnabled = c.groupAutoArchiveEnabled ?? false
+  form.zipcodeBackfillEnabled = c.zipcodeBackfillEnabled ?? false
+  form.dpsShipmentSyncEnabled = c.dpsShipmentSyncEnabled ?? false
+  form.dpsShipmentSyncTransitTimeStart = c.dpsShipmentSyncTransitTimeStart ?? ''
+  form.dpsShipmentSyncTransitTimeEnd = c.dpsShipmentSyncTransitTimeEnd ?? ''
+  form.exceptionFollowupEnabled = c.exceptionFollowupEnabled ?? false
+  applyDpsTransitTimePickers(c)
 }
 
 function syncResultMessage(res: { skipped?: boolean; reason?: string | null; internal?: unknown; carrier?: unknown }) {
@@ -162,7 +208,11 @@ async function load() {
 async function onSave() {
   saving.value = true
   try {
-    await updateScheduledTasksSettings({ ...form })
+    await updateScheduledTasksSettings({
+      ...form,
+      dpsShipmentSyncTransitTimeStart: dpsTransitTimeStartForApi(),
+      dpsShipmentSyncTransitTimeEnd: dpsTransitTimeEndForApi(),
+    })
     message.success('配置已保存，后台轮询将按新间隔执行（无需重启）')
     await load()
   } catch (e) {
@@ -221,6 +271,70 @@ async function onRunGroupArchive() {
   }
 }
 
+async function onRunZipcodeBackfill() {
+  runningZipcodeBackfill.value = true
+  try {
+    const res = await runZipcodeBackfill()
+    if (res.skipped) {
+      message.warning(res.reason || '已跳过')
+    } else if (res.updated > 0) {
+      message.success(`已回写 ${res.updated} 单邮编（候选 ${res.total} 单，未匹配 ${res.unmatched}）`)
+    } else if (res.total > 0) {
+      message.info(`共 ${res.total} 单缺邮编，地址库未匹配到可回写数据`)
+    } else {
+      message.info('暂无需要回写邮编的运单')
+    }
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningZipcodeBackfill.value = false
+  }
+}
+
+async function onRunExceptionFollowup() {
+  runningExceptionFollowup.value = true
+  try {
+    const res = await runExceptionFollowup()
+    if (res.skipped) {
+      message.warning(res.reason || '已跳过')
+    } else if (res.created > 0) {
+      message.success(`已生成 ${res.created} 条异常跟进待办（扫描 ${res.scanned} 单）`)
+    } else {
+      message.info(`已扫描 ${res.scanned} 单，暂无到期需跟进的异常`)
+    }
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningExceptionFollowup.value = false
+  }
+}
+
+async function onRunDpsShipmentSync() {
+  runningDpsShipmentSync.value = true
+  try {
+    const res = await runDpsShipmentSync({
+      transitTimeStart: dpsTransitTimeStartForApi(),
+      transitTimeEnd: dpsTransitTimeEndForApi(),
+    })
+    if (res.skipped) {
+      message.warning(res.reason || '已跳过')
+    } else if (res.error) {
+      message.error(res.error)
+    } else {
+      message.success(
+        `DPS 同步完成：新增 ${res.created}、更新 ${res.updated}（远程 ${res.remoteTotal ?? res.total} 单）`,
+      )
+    }
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningDpsShipmentSync.value = false
+  }
+}
+
 function onPageChange(p: number) {
   page.value = p
   void loadJobs()
@@ -257,6 +371,23 @@ const statusCards = computed(() => {
       value: c.groupAutoArchiveLastFinished || '尚无',
       hint: c.groupAutoArchiveEnabled ? '每日批处理已启用' : '自动归档默认关闭',
     },
+    {
+      label: '邮编 · 上次回写',
+      value: c.zipcodeBackfillLastFinished || '尚无',
+      hint: c.zipcodeBackfillEnabled ? '每日批处理已启用' : '邮编回写默认关闭',
+    },
+    {
+      label: 'DPS · 上次运单同步',
+      value: c.dpsShipmentSyncLastFinished || '尚无',
+      hint: c.dpsShipmentSyncEnabled
+        ? `已启用 · ${c.dpsShipmentSyncTransitTimeStartEffective ?? ''} ~ ${c.dpsShipmentSyncTransitTimeEndEffective ?? ''}`
+        : 'DPS 运单同步默认关闭',
+    },
+    {
+      label: '异常 · 上次跟进扫描',
+      value: c.exceptionFollowupLastFinished || '尚无',
+      hint: c.exceptionFollowupEnabled ? '每日批处理已启用' : '异常跟进默认关闭',
+    },
   ]
 })
 
@@ -281,7 +412,7 @@ onMounted(load)
     <NSpin :show="loading">
       <div v-if="error" class="panel px-4 py-6 text-sm text-red-400">{{ error }}</div>
       <template v-else-if="overview">
-        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
           <article v-for="card in statusCards" :key="card.label" class="panel p-4">
             <p class="text-xs text-[var(--color-muted)]">{{ card.label }}</p>
             <p class="mt-1 text-sm font-medium text-[var(--color-fg-emphasis)]">{{ card.value }}</p>
@@ -335,6 +466,58 @@ onMounted(load)
                 <NButton size="tiny" :loading="runningGroupArchive" @click="onRunGroupArchive">
                   立即执行
                 </NButton>
+              </NSpace>
+            </NFormItem>
+            <NFormItem label="邮编回写">
+              <NSpace align="center">
+                <NSwitch v-model:value="form.zipcodeBackfillEnabled" />
+                <span class="text-xs text-[var(--color-muted)]">每日批处理（约 24 小时）</span>
+                <NButton size="tiny" :loading="runningZipcodeBackfill" @click="onRunZipcodeBackfill">
+                  立即执行
+                </NButton>
+              </NSpace>
+            </NFormItem>
+            <NFormItem label="异常跟进提醒">
+              <NSpace align="center">
+                <NSwitch v-model:value="form.exceptionFollowupEnabled" />
+                <span class="text-xs text-[var(--color-muted)]">每日批处理（约 24 小时，默认关闭）</span>
+                <NButton size="tiny" :loading="runningExceptionFollowup" @click="onRunExceptionFollowup">
+                  立即执行
+                </NButton>
+              </NSpace>
+            </NFormItem>
+            <NFormItem label="DPS 运单同步">
+              <NSpace vertical :size="8" class="w-full max-w-3xl">
+                <NSpace align="center">
+                  <NSwitch v-model:value="form.dpsShipmentSyncEnabled" />
+                  <span class="text-xs text-[var(--color-muted)]">每日批处理（约 24 小时，默认关闭）</span>
+                  <NButton size="tiny" :loading="runningDpsShipmentSync" @click="onRunDpsShipmentSync">
+                    立即执行
+                  </NButton>
+                </NSpace>
+                <NSpace align="center" wrap>
+                  <span class="text-xs text-[var(--color-fg-secondary)]">发运开始</span>
+                  <NDatePicker
+                    v-model:value="dpsTransitTimeStartTs"
+                    type="date"
+                    size="small"
+                    clearable
+                    class="w-40"
+                    placeholder="默认当月首日"
+                  />
+                  <span class="text-xs text-[var(--color-fg-secondary)]">发运结束</span>
+                  <NDatePicker
+                    v-model:value="dpsTransitTimeEndTs"
+                    type="date"
+                    size="small"
+                    clearable
+                    class="w-40"
+                    placeholder="默认当月末日"
+                  />
+                  <span class="text-[10px] text-[var(--color-muted)]">
+                    开始 00:00:00 · 结束 23:59:59
+                  </span>
+                </NSpace>
               </NSpace>
             </NFormItem>
             <NFormItem label="启动延迟">

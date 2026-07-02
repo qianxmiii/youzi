@@ -84,22 +84,24 @@ export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
 
 /** 与 shipment-list-filter-design.md 默认列一致（不含固定列运单号/操作） */
 export const DEFAULT_SHIPMENT_VISIBLE_COLUMNS = [
-  'statusCode',
   'customer',
+  'groups',
   'channelCode',
+  'ctns',
   'addressCode',
   'zipcode',
   'carrierCode',
   'latestTracking',
   'latestCarrier',
-  'supplierName',
+  'customerNo',
   'customerShipmentId',
   'amazonRefId',
+  'supplierName',
+  'productName',
   'updatedTime',
-  'exceptionCode',
 ] as const
 
-export const SHIPMENT_COLUMN_STORAGE_KEY = 'youzi-shipment-list-columns-v2'
+export const SHIPMENT_COLUMN_STORAGE_KEY = 'youzi-shipment-list-columns-v3'
 
 export type ShipmentSystemViewId =
   | 'warning_soon'

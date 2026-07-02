@@ -26,13 +26,14 @@ export const SHIPMENT_GROUP_RULE_OPTIONS = [
 
 export type ShipmentGroupRuleType = (typeof SHIPMENT_GROUP_RULE_OPTIONS)[number]['value']
 
-export type ShipmentGroupAlertRuleKind = 'delivery' | 'payment' | 'arrival' | 'default'
+export type ShipmentGroupAlertRuleKind = 'delivery' | 'payment' | 'arrival' | 'exception' | 'default'
 
 /** 提醒卡片视觉分类 */
 export function shipmentGroupAlertRuleKind(
   ruleType: string | null | undefined,
 ): ShipmentGroupAlertRuleKind {
   const key = (ruleType || '').trim().toUpperCase()
+  if (key === 'EXCEPTION_FOLLOWUP') return 'exception'
   if (key === 'BATCH_DELIVERY_DEADLINE') return 'delivery'
   if (key === 'GROUP_ARRIVED_PAYMENT' || key === 'LAST_BATCH_ARRIVED_PAYMENT') return 'payment'
   if (key === 'SINGLE_IN_TRANSIT_ETA_WARNING') return 'arrival'

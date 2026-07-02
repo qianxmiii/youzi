@@ -66,6 +66,8 @@ def test_scan_creates_followup_when_due(tmp_path: Path) -> None:
     assert len(pending) == 1
     assert pending[0]["shipmentNo"] == "YZ-FUP-001"
     assert pending[0]["daysOpen"] >= 3
+    assert "每" not in pending[0]["message"]
+    assert "请跟进" in pending[0]["message"]
 
     result2 = scan_exception_followup_reminders(repo, force=True, trigger="manual")
     assert result2["created"] == 0

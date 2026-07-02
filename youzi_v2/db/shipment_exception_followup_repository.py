@@ -14,6 +14,18 @@ from .shipment_exception_followup_table import TABLE_NAME
 EXCEPTION_CODES_TABLE = "shipment_exception_codes"
 
 
+def _format_followup_display_message(row: sqlite3.Row) -> str:
+    """统一展示文案，不暴露分档间隔；兼容库内旧 message。"""
+    sn = (row["shipment_no"] or "").strip()
+    days_open = int(row["days_open"] or 0)
+    exc_label = "异常"
+    if "exception_name_zh" in row.keys():
+        exc_label = (row["exception_name_zh"] or "").strip()
+    if not exc_label:
+        exc_label = (row["exception_code"] or "").strip() or "异常"
+    return f"运单 {sn} · {exc_label}。异常已持续 {days_open} 天，请跟进。"
+
+
 def _notification_to_api(row: sqlite3.Row) -> dict[str, Any]:
     read_at = (row["read_at"] or "").strip()
     resolved_at = (row["resolved_at"] or "").strip()
@@ -24,7 +36,7 @@ def _notification_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "exceptionCode": row["exception_code"],
         "severity": row["severity"],
         "title": row["title"],
-        "message": row["message"],
+        "message": _format_followup_display_message(row),
         "daysOpen": int(row["days_open"] or 0),
         "followupIntervalDays": int(row["followup_interval_days"] or 3),
         "eventKey": row["event_key"],
@@ -171,9 +183,11 @@ class ShipmentExceptionFollowupRepository:
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
-                SELECT n.*, s.customer
+                SELECT n.*, s.customer,
+                       COALESCE(ec.name_zh, n.exception_code) AS exception_name_zh
                 FROM {TABLE_NAME} n
                 LEFT JOIN {SHIPMENTS_TABLE} s ON s.id = n.shipment_id
+                LEFT JOIN {EXCEPTION_CODES_TABLE} ec ON ec.code = n.exception_code
                 WHERE n.resolved_at IS NULL OR TRIM(n.resolved_at) = ''
                 ORDER BY datetime(n.triggered_at) DESC
                 LIMIT ?

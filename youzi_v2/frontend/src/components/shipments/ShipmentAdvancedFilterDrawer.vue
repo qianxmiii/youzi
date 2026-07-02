@@ -18,13 +18,18 @@ const filterCarrier = defineModel<string | null>('filterCarrier', { default: nul
 const filterCountry = defineModel<string | null>('filterCountry', { default: null })
 const filterChannelNameZh = defineModel<string | null>('filterChannelNameZh', { default: null })
 const filterChannelCategory = defineModel<string | null>('filterChannelCategory', { default: null })
-const filterCustomerNo = defineModel<string | null>('filterCustomerNo', { default: null })
+const filterCustomerNo = defineModel<string>('filterCustomerNo', { default: '' })
+const advExactShipmentNo = defineModel<string>('advExactShipmentNo', { default: '' })
+const advContainerNos = defineModel<string>('advContainerNos', { default: '' })
+const advBillNos = defineModel<string>('advBillNos', { default: '' })
+const advCustomerShipmentIds = defineModel<string>('advCustomerShipmentIds', { default: '' })
+const searchKeyword = defineModel<string>('searchKeyword', { default: '' })
 const filterDestinationPort = defineModel<string | null>('filterDestinationPort', { default: null })
 const filterAddressKeyword = defineModel<string | null>('filterAddressKeyword', { default: null })
 const filterVesselVoyage = defineModel<string | null>('filterVesselVoyage', { default: null })
 const filterVipOnly = defineModel<boolean>('filterVipOnly', { default: false })
-const searchTrackingContent = defineModel<string>('searchTrackingContent', { default: '' })
 const filterException = defineModel<string | null>('filterException', { default: null })
+const hasAta = defineModel<boolean>('hasAta', { default: false })
 const filterHasException = defineModel<boolean | null>('filterHasException', { default: null })
 const filterStaleDays = defineModel<number | null>('filterStaleDays', { default: null })
 const filterNoInternalTracking = defineModel<boolean>('filterNoInternalTracking', { default: false })
@@ -96,7 +101,47 @@ function apply() {
         <section>
           <p class="mb-2 text-xs font-medium text-[var(--color-muted)]">基础信息</p>
           <NSpace vertical :size="10">
-            <NInput v-model:value="filterCustomerNo" placeholder="客户编号" clearable size="small" />
+            <NInput
+              v-model:value="advExactShipmentNo"
+              type="textarea"
+              placeholder="运单号（多个用逗号、空格或换行分隔）"
+              :autosize="{ minRows: 1, maxRows: 3 }"
+              clearable
+              size="small"
+            />
+            <NInput
+              v-model:value="advContainerNos"
+              type="textarea"
+              placeholder="柜号（多个精确匹配）"
+              :autosize="{ minRows: 1, maxRows: 3 }"
+              clearable
+              size="small"
+            />
+            <NInput
+              v-model:value="advBillNos"
+              type="textarea"
+              placeholder="提单号（多个精确匹配）"
+              :autosize="{ minRows: 1, maxRows: 3 }"
+              clearable
+              size="small"
+            />
+            <NInput
+              v-model:value="advCustomerShipmentIds"
+              type="textarea"
+              placeholder="货件号（多个精确匹配）"
+              :autosize="{ minRows: 1, maxRows: 3 }"
+              clearable
+              size="small"
+            />
+            <NInput
+              v-model:value="filterCustomerNo"
+              type="textarea"
+              placeholder="客户编号（多个精确匹配）"
+              :autosize="{ minRows: 1, maxRows: 3 }"
+              clearable
+              size="small"
+            />
+            <NInput v-model:value="searchKeyword" placeholder="关键词：供应商、品名、地址等" clearable size="small" />
             <NSelect v-model:value="filterCountry" :options="countryOptions" placeholder="国家/地区" clearable filterable size="small" />
             <NInput v-model:value="filterDestinationPort" placeholder="目的港" clearable size="small" />
             <NInput v-model:value="filterAddressKeyword" placeholder="仓库 / 地址关键词" clearable size="small" />
@@ -136,10 +181,10 @@ function apply() {
         <section>
           <p class="mb-2 text-xs font-medium text-[var(--color-muted)]">轨迹与状态</p>
           <NSpace vertical :size="10">
-            <NInput v-model:value="searchTrackingContent" placeholder="最新轨迹关键词（搜全部节点）" clearable size="small" />
             <NSelect v-model:value="filterStaleDays" :options="staleOptions" :disabled="filterNoInternalTracking" placeholder="内部轨迹停滞" clearable size="small" />
             <NCheckbox v-model:checked="filterNoInternalTracking" size="small">内部无轨迹</NCheckbox>
             <NCheckbox v-model:checked="filterNoCarrierTracking" size="small">承运商无轨迹</NCheckbox>
+            <NCheckbox v-model:checked="hasAta" size="small">已到港</NCheckbox>
             <NCheckbox v-model:checked="notDelivered" size="small">未签收</NCheckbox>
             <NCheckbox v-model:checked="missingEtd" size="small">缺 ETD</NCheckbox>
             <NCheckbox v-model:checked="missingAtd" size="small">缺 ATD</NCheckbox>

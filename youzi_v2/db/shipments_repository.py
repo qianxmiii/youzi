@@ -15,12 +15,16 @@ from .shipment_tracking_time_candidates_table import TABLE_NAME as CANDIDATES_TA
 from .shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .shipments_table import TABLE_NAME
 from .shipment_list_filters import (
+    append_bill_nos_exact,
+    append_container_nos_exact,
     append_delivery_risk,
+    append_exact_in_column,
     append_has_ata,
     append_keyword_search,
     append_missing_field,
     append_not_delivered,
     append_time_range,
+    append_unified_batch_number_search,
 )
 from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, RULES_TABLE
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
@@ -336,6 +340,11 @@ class ShipmentsRepository:
         search: str | None = None,
         tracking_search: str | None = None,
         shipment_nos: list[str] | None = None,
+        exact_shipment_nos: list[str] | None = None,
+        container_nos: list[str] | None = None,
+        bill_nos: list[str] | None = None,
+        customer_shipment_ids: list[str] | None = None,
+        customer_nos: list[str] | None = None,
         status_code: str | None = None,
         exception_code: str | None = None,
         has_exception: bool | None = None,
@@ -405,17 +414,19 @@ class ShipmentsRepository:
         cleaned_nos = list(
             dict.fromkeys(s.strip() for s in (shipment_nos or []) if s and s.strip())
         )
-        if cleaned_nos:
-            if len(cleaned_nos) == 1:
-                q = f"%{cleaned_nos[0]}%"
-                conditions.append("(s.shipment_no LIKE ? OR s.customer_no LIKE ?)")
-                params.extend([q, q])
-            else:
-                placeholders = ", ".join("?" * len(cleaned_nos))
-                conditions.append(
-                    f"(s.shipment_no IN ({placeholders}) OR s.customer_no IN ({placeholders}))"
-                )
-                params.extend(cleaned_nos + cleaned_nos)
+        append_unified_batch_number_search(conditions, params, cleaned_nos)
+        append_exact_in_column(
+            conditions, params, column="shipment_no", values=exact_shipment_nos
+        )
+        append_container_nos_exact(conditions, params, container_nos)
+        append_bill_nos_exact(conditions, params, bill_nos)
+        append_exact_in_column(
+            conditions,
+            params,
+            column="customer_shipment_id",
+            values=customer_shipment_ids,
+        )
+        append_exact_in_column(conditions, params, column="customer_no", values=customer_nos)
         if search and search.strip():
             append_keyword_search(conditions, params, search.strip())
         if tracking_search and tracking_search.strip():
@@ -453,7 +464,7 @@ class ShipmentsRepository:
         if customer and customer.strip():
             conditions.append("s.customer = ?")
             params.append(customer.strip())
-        if customer_no and customer_no.strip():
+        if customer_no and customer_no.strip() and not customer_nos:
             conditions.append("s.customer_no = ?")
             params.append(customer_no.strip())
         if destination_port_code and destination_port_code.strip():
@@ -782,6 +793,17 @@ class ShipmentsRepository:
                 ORDER BY sort_order, code
                 """
             ).fetchall()
+            channel_rows = self._conn.execute(
+                f"""
+                SELECT TRIM(s.channel_code) AS code,
+                       MAX(COALESCE(NULLIF(TRIM(cc.name_zh), ''), TRIM(s.channel_code))) AS name_zh
+                FROM {TABLE_NAME} s
+                LEFT JOIN {CHANNEL_CODES_TABLE} cc ON TRIM(s.channel_code) = TRIM(cc.code)
+                WHERE s.channel_code IS NOT NULL AND TRIM(s.channel_code) != ''
+                GROUP BY TRIM(s.channel_code)
+                ORDER BY name_zh, code
+                """
+            ).fetchall()
             channel_name_rows = self._conn.execute(
                 f"""
                 SELECT DISTINCT cc.name_zh AS v
@@ -829,12 +851,24 @@ class ShipmentsRepository:
             {"code": str(r["code"]), "nameZh": str(r["name_zh"] or r["code"])}
             for r in carrier_rows
         ]
+        channels = []
+        seen_channel_codes: set[str] = set()
+        for r in channel_rows:
+            code = str(r["code"]).strip()
+            if not code or code in seen_channel_codes:
+                continue
+            seen_channel_codes.add(code)
+            channels.append(
+                {"code": code, "nameZh": str(r["name_zh"] or code).strip() or code}
+            )
+        channels.sort(key=lambda c: (c["nameZh"].casefold(), c["code"]))
         return {
             "customers": out["customer"],
             "carriers": carriers,
             "carrierCodes": [c["code"] for c in carriers],
+            "channels": channels,
             "countryCodes": out["country_code"],
-            "channelCodes": out["channel_code"],
+            "channelCodes": [c["code"] for c in channels] or out["channel_code"],
             "channelNameZhs": [str(r["v"]) for r in channel_name_rows],
             "channelCategories": [str(r["v"]) for r in channel_category_rows],
             "statusCodes": out["status_code"],

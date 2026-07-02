@@ -98,3 +98,30 @@ export function formatShipmentDetailsCopyText(rows: Shipment[]): string {
   const body = rows.map((row) => formatShipmentDetailTsvRow(row))
   return [header, ...body].join('\n')
 }
+
+function formatCtnsForCopy(ctns: number | null | undefined): string {
+  if (ctns === null || ctns === undefined) return ''
+  return `${ctns}ctns`
+}
+
+function warehouseOrZipForCopy(row: Shipment): string {
+  const warehouse = cell(row.addressCode)
+  if (warehouse) return warehouse
+  return cell(row.zipcode)
+}
+
+/** 单行：运单号 = 货件号 = 派送仓库（空则邮编）= 件数ctns */
+export function formatShipmentDetailSummaryLine(row: Shipment): string {
+  return [
+    cell(row.shipmentNo),
+    cell(row.customerShipmentId),
+    warehouseOrZipForCopy(row),
+    formatCtnsForCopy(row.ctns),
+  ].join(' = ')
+}
+
+/** 多行运单明细摘要，每行一条运单 */
+export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
+  if (!rows.length) return ''
+  return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n')
+}

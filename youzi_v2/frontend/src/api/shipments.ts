@@ -30,10 +30,16 @@ export interface ShipmentCarrierFilterOption {
   nameZh: string
 }
 
+export interface ShipmentChannelFilterOption {
+  code: string
+  nameZh: string
+}
+
 export interface ShipmentFilterOptions {
   customers: string[]
   carriers: ShipmentCarrierFilterOption[]
   carrierCodes: string[]
+  channels: ShipmentChannelFilterOption[]
   countryCodes: string[]
   channelCodes: string[]
   channelNameZhs: string[]
@@ -50,6 +56,11 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.search?.trim()) q.search = params.search.trim()
   if (params.trackingSearch?.trim()) q.trackingSearch = params.trackingSearch.trim()
   if (params.shipmentNos?.length) q.shipmentNos = params.shipmentNos
+  if (params.exactShipmentNos?.length) q.exactShipmentNos = params.exactShipmentNos
+  if (params.containerNos?.length) q.containerNos = params.containerNos
+  if (params.billNos?.length) q.billNos = params.billNos
+  if (params.customerShipmentIds?.length) q.customerShipmentIds = params.customerShipmentIds
+  if (params.customerNos?.length) q.customerNos = params.customerNos
   if (params.statusCode?.trim()) q.statusCode = params.statusCode.trim()
   if (params.exceptionCode?.trim()) q.exceptionCode = params.exceptionCode.trim()
   if (params.hasException === true) q.hasException = 'true'
@@ -123,8 +134,15 @@ export interface ListShipmentsParams {
   search?: string
   /** 在全部内部/承运商轨迹节点描述中模糊匹配 */
   trackingSearch?: string
-  /** 批量精确查询运单号 / 客户订单号（与 search 二选一） */
+  /** 批量精确查询（顶部多号搜索：运单/柜/提单/货件/客户编号等） */
   shipmentNos?: string[]
+  /** 高级筛选：仅运单号精确 IN */
+  exactShipmentNos?: string[]
+  containerNos?: string[]
+  billNos?: string[]
+  customerShipmentIds?: string[]
+  /** 高级筛选：客户编号批量精确 */
+  customerNos?: string[]
   statusCode?: string
   exceptionCode?: string
   hasException?: boolean

@@ -83,6 +83,7 @@ import {
   type ShipmentTimeField,
 } from '@/constants/shipmentListFilterMeta'
 import { buildCarrierSelectOptions } from '@/utils/carrierFilterOptions'
+import { buildChannelSelectOptions, channelFilterLabel } from '@/utils/channelFilterOptions'
 import {
   buildShipmentFilterQuery,
   buildShipmentFilterSummaryTags,
@@ -92,7 +93,7 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
-import { formatShipmentDetailsCopyText } from '@/utils/shipmentCopyFormat'
+import { formatShipmentDetailSummaryCopyText } from '@/utils/shipmentCopyFormat'
 import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
   daysSinceLocalCalendar,
@@ -129,6 +130,10 @@ const total = ref(0)
 const searchShipmentNo = ref('')
 const searchKeyword = ref('')
 const searchTrackingContent = ref('')
+const advExactShipmentNo = ref('')
+const advContainerNos = ref('')
+const advBillNos = ref('')
+const advCustomerShipmentIds = ref('')
 const DEFAULT_STATUS_FILTER = 'IN_TRANSIT'
 const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
 const filterCustomer = ref<string | null>(null)
@@ -140,7 +145,7 @@ const filterCarrier = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannelNameZh = ref<string | null>(null)
 const filterChannelCategory = ref<string | null>(null)
-const filterCustomerNo = ref<string | null>(null)
+const filterCustomerNo = ref('')
 const filterDestinationPort = ref<string | null>(null)
 const filterAddressKeyword = ref<string | null>(null)
 const filterVesselVoyage = ref<string | null>(null)
@@ -188,6 +193,7 @@ const filterOptions = ref<ShipmentFilterOptions>({
   carriers: [],
   countryCodes: [],
   channelCodes: [],
+  channels: [],
   channelNameZhs: [],
   channelCategories: [],
   statusCodes: [],
@@ -240,9 +246,9 @@ const shipmentNoColWidth = computed(() => {
     if (hasActiveException(row)) badges++
     maxBadges = Math.max(maxBadges, badges)
   }
-  const textW = Math.ceil(maxLen * 7) + 28
+  const textW = Math.ceil(maxLen * 7.5) + 21
   const badgeW = maxBadges > 0 ? 8 + maxBadges * 22 : 0
-  return Math.min(320, Math.max(176, textW + badgeW))
+  return Math.min(385, Math.max(193, textW + badgeW))
 })
 
 /** 按当前页最长客户名估算列宽 */
@@ -363,7 +369,7 @@ function renderShipmentGroups(row: Shipment) {
 }
 
 const channelCodeOptions = computed(() =>
-  filterOptions.value.channelCodes.map((v) => ({ label: v, value: v })),
+  buildChannelSelectOptions(filterOptions.value.channels, filterOptions.value.channelCodes),
 )
 
 const timeFieldOptions = [...SHIPMENT_TIME_FIELD_OPTIONS]
@@ -740,7 +746,10 @@ const countryOptions = computed(() =>
   })),
 )
 const channelNameZhOptions = computed(() =>
-  filterOptions.value.channelNameZhs.map((v) => ({ label: v, value: v })),
+  [...new Set(filterOptions.value.channelNameZhs.filter(Boolean))].map((v) => ({
+    label: v,
+    value: v,
+  })),
 )
 const channelCategoryOptions = computed(() =>
   filterOptions.value.channelCategories.map((v) => ({ label: v, value: v })),
@@ -767,6 +776,10 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   searchKeyword: searchKeyword.value,
   searchShipmentNo: searchShipmentNo.value,
   searchTrackingContent: searchTrackingContent.value,
+  advExactShipmentNo: advExactShipmentNo.value,
+  advContainerNos: advContainerNos.value,
+  advBillNos: advBillNos.value,
+  advCustomerShipmentIds: advCustomerShipmentIds.value,
   filterStatus: filterStatus.value,
   filterCustomer: filterCustomer.value,
   filterChannelCode: filterChannelCode.value,
@@ -812,7 +825,7 @@ const filterSummaryTags = computed(() =>
     statusLabel,
     countryLabel,
     carrierLabel,
-    channelLabel: (code) => code || '',
+    channelLabel: (code) => channelFilterLabel(filterOptions.value.channels, code),
     groupLabel,
     exceptionLabel,
     freshnessLabel: FRESHNESS_LABEL,
@@ -821,7 +834,11 @@ const filterSummaryTags = computed(() =>
 
 const advancedOnlyActiveCount = computed(() => {
   let n = 0
-  if (searchTrackingContent.value.trim()) n++
+  if (searchKeyword.value.trim()) n++
+  if (advExactShipmentNo.value.trim()) n++
+  if (advContainerNos.value.trim()) n++
+  if (advBillNos.value.trim()) n++
+  if (advCustomerShipmentIds.value.trim()) n++
   if (filterCarrier.value) n++
   if (filterCountry.value) n++
   if (filterChannelNameZh.value) n++
@@ -1307,7 +1324,7 @@ function resetFilterValues() {
   filterCountry.value = null
   filterChannelNameZh.value = null
   filterChannelCategory.value = null
-  filterCustomerNo.value = null
+  filterCustomerNo.value = ''
   filterDestinationPort.value = null
   filterAddressKeyword.value = null
   filterVesselVoyage.value = null
@@ -1334,6 +1351,10 @@ function resetFilterValues() {
   searchShipmentNo.value = ''
   searchKeyword.value = ''
   searchTrackingContent.value = ''
+  advExactShipmentNo.value = ''
+  advContainerNos.value = ''
+  advBillNos.value = ''
+  advCustomerShipmentIds.value = ''
 }
 
 function resetFilters() {
@@ -1349,6 +1370,18 @@ function removeFilterTag(key: string) {
       break
     case 'searchShipmentNo':
       searchShipmentNo.value = ''
+      break
+    case 'advExactShipmentNo':
+      advExactShipmentNo.value = ''
+      break
+    case 'advContainerNos':
+      advContainerNos.value = ''
+      break
+    case 'advBillNos':
+      advBillNos.value = ''
+      break
+    case 'advCustomerShipmentIds':
+      advCustomerShipmentIds.value = ''
       break
     case 'searchTrackingContent':
       searchTrackingContent.value = ''
@@ -1379,7 +1412,7 @@ function removeFilterTag(key: string) {
       filterChannelCategory.value = null
       break
     case 'filterCustomerNo':
-      filterCustomerNo.value = null
+      filterCustomerNo.value = ''
       break
     case 'filterDestinationPort':
       filterDestinationPort.value = null
@@ -1809,33 +1842,33 @@ async function copySelectedLatestTracking() {
   }
 }
 
-async function copySelectedShipmentDetails() {
+async function copySelectedShipmentDetailSummary() {
   const rows = selectedRows.value
   if (!rows.length) {
     message.warning('请先勾选运单')
     return
   }
-  const text = formatShipmentDetailsCopyText(rows)
+  const text = formatShipmentDetailSummaryCopyText(rows)
   if (!text) {
     message.warning('无可复制内容')
     return
   }
   try {
     await navigator.clipboard.writeText(text)
-    message.success(`已复制 ${rows.length} 条运单明细（含表头，可粘贴到 Excel）`)
+    message.success(`已复制 ${rows.length} 条运单明细`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
 }
 
 const copyDropdownOptions: DropdownOption[] = [
-  { label: '运单明细', key: 'details' },
+  { label: '运单明细', key: 'detailSummary' },
   { label: '最新轨迹', key: 'latestTracking' },
   { label: '转单号', key: 'trackingNumbers' },
 ]
 
 function handleCopyMenuSelect(key: string | number) {
-  if (key === 'details') void copySelectedShipmentDetails()
+  if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
 }
@@ -2206,7 +2239,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
       title: '运单号',
       key: 'shipmentNo',
       width: shipmentNoColWidth.value,
-      minWidth: 176,
+      minWidth: 193,
       fixed: 'left',
       sorter: {
         compare: () => 0,
@@ -2327,7 +2360,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
           <NInput
             v-model:value="searchShipmentNo"
             type="textarea"
-            placeholder="运单号（多个用逗号、空格或换行分隔，最多 200 个）"
+            placeholder="多号精确搜索：运单号、柜号、提单号、货件号、客户编号（逗号/空格/换行分隔，最多 200 个）"
             :autosize="{ minRows: 1, maxRows: 4 }"
             clearable
             size="small"
@@ -2342,11 +2375,12 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </div>
         <div class="shipments-filter-row flex min-w-0 flex-wrap items-center gap-2">
           <NInput
-            v-model:value="searchKeyword"
-            placeholder="柜号/提单号/货件号/客户编号/供应商"
+            v-model:value="searchTrackingContent"
+            placeholder="轨迹搜索"
             clearable
             size="small"
-            class="shipments-filter-keyword"
+            class="shipments-filter-tracking"
+            @keyup.enter="onFiltersChanged"
           />
           <NSelect
             v-model:value="filterStatus"
@@ -2416,6 +2450,9 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             列设置
           </NButton>
           <NButton size="small" quaternary class="shrink-0" @click="resetFilters">重置</NButton>
+          <NButton size="small" quaternary class="shrink-0" :loading="exporting" @click="handleExport">
+            导出
+          </NButton>
         </div>
       </div>
     </div>
@@ -2611,11 +2648,16 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:filter-channel-name-zh="filterChannelNameZh"
       v-model:filter-channel-category="filterChannelCategory"
       v-model:filter-customer-no="filterCustomerNo"
+      v-model:adv-exact-shipment-no="advExactShipmentNo"
+      v-model:adv-container-nos="advContainerNos"
+      v-model:adv-bill-nos="advBillNos"
+      v-model:adv-customer-shipment-ids="advCustomerShipmentIds"
+      v-model:search-keyword="searchKeyword"
       v-model:filter-destination-port="filterDestinationPort"
       v-model:filter-address-keyword="filterAddressKeyword"
       v-model:filter-vessel-voyage="filterVesselVoyage"
       v-model:filter-vip-only="filterVipOnly"
-      v-model:search-tracking-content="searchTrackingContent"
+      v-model:has-ata="hasAta"
       v-model:filter-exception="filterException"
       v-model:filter-has-exception="filterHasException"
       v-model:filter-stale-days="filterStaleDays"
@@ -2672,6 +2714,11 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   max-width: 100%;
 }
 
+.shipments-filters-bar .shipments-filter-tracking {
+  width: 10rem;
+  min-width: 8rem;
+}
+
 .shipments-filters-bar .shipments-filter-keyword {
   width: 180px;
   min-width: 140px;
@@ -2693,8 +2740,8 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 }
 
 .shipments-filters-bar .shipments-filter-select--wide {
-  width: 8.75rem;
-  min-width: 7.5rem;
+  width: 11rem;
+  min-width: 9rem;
 }
 
 /* 左侧固定列：不透明 + 轻阴影，横滚时不与右侧双行轨迹叠字 */

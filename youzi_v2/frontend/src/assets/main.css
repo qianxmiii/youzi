@@ -101,6 +101,15 @@
   --group-alert-arrival-btn-bg: #0d9488;
   --group-alert-arrival-btn-fg: #fff;
   --group-alert-arrival-btn-hover: #0f766e;
+  --group-alert-exception-bg: rgb(109 156 121 / 0.16);
+  --group-alert-exception-border: rgb(109 156 121 / 0.42);
+  --group-alert-exception-title: #c5dcc9;
+  --group-alert-exception-body: #a8c9b0;
+  --group-alert-exception-icon-bg: #6d9c79;
+  --group-alert-exception-icon-fg: #fff;
+  --group-alert-exception-btn-bg: #6d9c79;
+  --group-alert-exception-btn-fg: #fff;
+  --group-alert-exception-btn-hover: #5a8464;
   --group-alert-muted-bg: var(--color-btn-ghost-bg);
   --group-alert-muted-border: var(--color-border);
   --group-alert-muted-title: var(--color-fg-secondary);
@@ -200,6 +209,15 @@
   --group-alert-arrival-btn-bg: #0d9488;
   --group-alert-arrival-btn-fg: #fff;
   --group-alert-arrival-btn-hover: #0f766e;
+  --group-alert-exception-bg: #eef5f0;
+  --group-alert-exception-border: #b8d4be;
+  --group-alert-exception-title: #3d5c45;
+  --group-alert-exception-body: #5a8464;
+  --group-alert-exception-icon-bg: #6d9c79;
+  --group-alert-exception-icon-fg: #fff;
+  --group-alert-exception-btn-bg: #6d9c79;
+  --group-alert-exception-btn-fg: #fff;
+  --group-alert-exception-btn-hover: #5a8464;
   --group-alert-muted-bg: var(--color-btn-ghost-bg);
   --group-alert-muted-border: var(--color-border);
   --group-alert-muted-title: var(--color-fg-secondary);
@@ -865,6 +883,18 @@
     --group-alert-btn-hover: var(--group-alert-arrival-btn-hover);
   }
 
+  .group-alert-card--exception.group-alert-card--active {
+    --group-alert-bg: var(--group-alert-exception-bg);
+    --group-alert-border: var(--group-alert-exception-border);
+    --group-alert-title: var(--group-alert-exception-title);
+    --group-alert-body: var(--group-alert-exception-body);
+    --group-alert-icon-bg: var(--group-alert-exception-icon-bg);
+    --group-alert-icon-fg: var(--group-alert-exception-icon-fg);
+    --group-alert-btn-bg: var(--group-alert-exception-btn-bg);
+    --group-alert-btn-fg: var(--group-alert-exception-btn-fg);
+    --group-alert-btn-hover: var(--group-alert-exception-btn-hover);
+  }
+
   .group-alert-card--kind-delivery.group-alert-card--active {
     border-left-width: 3px;
     border-left-color: var(--group-alert-icon-bg);
@@ -888,6 +918,16 @@
   .group-alert-card--kind-arrival.group-alert-card--active .group-alert-card__customer-badge {
     background: rgb(13 148 136 / 0.14);
     color: var(--group-alert-arrival-title);
+  }
+
+  .group-alert-card--kind-exception.group-alert-card--active {
+    border-left-width: 3px;
+    border-left-color: var(--group-alert-exception-icon-bg);
+  }
+
+  .group-alert-card--kind-exception.group-alert-card--active .group-alert-card__customer-badge {
+    background: rgb(147 51 234 / 0.14);
+    color: var(--group-alert-exception-title);
   }
 
   .group-alert-card--info.group-alert-card--active {

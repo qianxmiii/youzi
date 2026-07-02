@@ -25,17 +25,8 @@ def _build_message(
     shipment_no: str,
     exception_label: str,
     days_open: int,
-    interval: int,
 ) -> str:
-    if days_open >= 20:
-        tier_hint = f"异常已持续 {days_open} 天，当前每 {interval} 天需跟进一次。"
-    elif days_open >= 10:
-        tier_hint = (
-            f"异常已持续 {days_open} 天（≥10 天每 5 天 / ≥20 天每 7 天），请跟进。"
-        )
-    else:
-        tier_hint = f"异常已持续 {days_open} 天（10 天以内每 3 天跟进），请确认处理进展。"
-    return f"运单 {shipment_no} · {exception_label}。{tier_hint}"
+    return f"运单 {shipment_no} · {exception_label}。异常已持续 {days_open} 天，请跟进。"
 
 
 def scan_exception_followup_reminders(
@@ -89,7 +80,6 @@ def scan_exception_followup_reminders(
                 shipment_no=sn,
                 exception_label=exc_label,
                 days_open=days_open,
-                interval=interval,
             )
             event_key = f"exception_followup:{sn}:{today_key}"
             if repo.create_followup_notification(

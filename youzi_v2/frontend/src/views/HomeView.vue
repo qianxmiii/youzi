@@ -3,7 +3,7 @@ import MaritimeAlertsPanel from '@/components/home/MaritimeAlertsPanel.vue'
 </script>
 
 <template>
-  <div class="scrollbar-subtle h-full min-h-0 w-full overflow-y-auto pb-2">
+  <div class="scrollbar-subtle flex h-full min-h-0 w-full flex-col overflow-y-auto">
     <MaritimeAlertsPanel />
   </div>
 </template>

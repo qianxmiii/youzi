@@ -46,7 +46,7 @@ def _insert(
         db.conn.commit()
 
 
-def test_keyword_search_matches_shipment_no(tmp_path: Path) -> None:
+def test_batch_search_matches_shipment_no(tmp_path: Path) -> None:
     db = Database(tmp_path / "kw.db")
     ensure_shipments_schema(db.conn)
     ensure_group_schema(db.conn)
@@ -54,12 +54,12 @@ def test_keyword_search_matches_shipment_no(tmp_path: Path) -> None:
     _insert(db, shipment_no="ABC-999")
     _insert(db, shipment_no="OTHER-1")
 
-    res = repo.list_rows(search="ABC-999")
+    res = repo.list_rows(shipment_nos=["ABC-999"])
     assert res["total"] == 1
     assert res["items"][0]["shipmentNo"] == "ABC-999"
 
 
-def test_keyword_search_matches_supplier_and_shipment_id(tmp_path: Path) -> None:
+def test_keyword_search_matches_supplier_only(tmp_path: Path) -> None:
     db = Database(tmp_path / "kw2.db")
     ensure_shipments_schema(db.conn)
     ensure_group_schema(db.conn)
@@ -97,10 +97,42 @@ def test_keyword_search_matches_supplier_and_shipment_id(tmp_path: Path) -> None
         db.conn.commit()
 
     assert repo.list_rows(search="某某供应商")["total"] == 1
-    assert repo.list_rows(search="FBA123456789")["total"] == 1
-    assert repo.list_rows(search="PO-9988")["total"] == 1
-    assert repo.list_rows(search="BL-2026001")["total"] == 1
-    assert repo.list_rows(search="CONT9876543")["total"] == 1
+    assert repo.list_rows(shipment_nos=["FBA123456789"])["total"] == 1
+    assert repo.list_rows(shipment_nos=["PO-9988"])["total"] == 1
+    assert repo.list_rows(bill_nos=["BL-2026001"])["total"] == 1
+    assert repo.list_rows(container_nos=["CONT9876543"])["total"] == 1
+    assert repo.list_rows(search="FBA123456789")["total"] == 0
+
+
+def test_unified_batch_number_search(tmp_path: Path) -> None:
+    db = Database(tmp_path / "batch.db")
+    ensure_shipments_schema(db.conn)
+    ensure_group_schema(db.conn)
+    repo = ShipmentsRepository(db)
+    now = now_str()
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, customer_shipment_id, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "SN-A", "FBA-001", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, customer_shipment_id, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "SN-B", "FBA-002", now, now),
+        )
+        db.conn.commit()
+
+    res = repo.list_rows(shipment_nos=["SN-A", "FBA-002"])
+    assert res["total"] == 2
+    nos = {row["shipmentNo"] for row in res["items"]}
+    assert nos == {"SN-A", "SN-B"}
 
 
 def test_time_field_atd_range(tmp_path: Path) -> None:

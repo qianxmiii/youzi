@@ -21,6 +21,10 @@ export interface ShipmentFilterQueryInput {
   searchKeyword: string
   searchShipmentNo: string
   searchTrackingContent: string
+  advExactShipmentNo: string
+  advContainerNos: string
+  advBillNos: string
+  advCustomerShipmentIds: string
   filterStatus: string | null
   filterCustomer: string | null
   filterChannelCode: string | null
@@ -83,10 +87,20 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
 
   const keyword = input.searchKeyword.trim()
   const tokens = parseBatchSearchTokens(input.searchShipmentNo)
+  const exactShipmentTokens = parseBatchSearchTokens(input.advExactShipmentNo)
+  const containerTokens = parseBatchSearchTokens(input.advContainerNos)
+  const billTokens = parseBatchSearchTokens(input.advBillNos)
+  const customerShipmentTokens = parseBatchSearchTokens(input.advCustomerShipmentIds)
+  const customerNoTokens = parseBatchSearchTokens(input.filterCustomerNo || '')
   const noInternal = input.filterNoInternalTracking || input.filterNoTracking
 
   return {
     ...(tokens.length ? { shipmentNos: tokens } : {}),
+    ...(exactShipmentTokens.length ? { exactShipmentNos: exactShipmentTokens } : {}),
+    ...(containerTokens.length ? { containerNos: containerTokens } : {}),
+    ...(billTokens.length ? { billNos: billTokens } : {}),
+    ...(customerShipmentTokens.length ? { customerShipmentIds: customerShipmentTokens } : {}),
+    ...(customerNoTokens.length ? { customerNos: customerNoTokens } : {}),
     ...(keyword ? { search: keyword } : {}),
     ...(input.searchTrackingContent.trim()
       ? { trackingSearch: input.searchTrackingContent.trim() }
@@ -98,7 +112,6 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
       : input.filterHasException === false ? false
       : undefined,
     customer: input.filterCustomer || undefined,
-    customerNo: input.filterCustomerNo || undefined,
     vipOnly: input.filterVipOnly ? true : undefined,
     carrierCode: input.filterCarrier || undefined,
     countryCode: input.filterCountry || undefined,
@@ -172,7 +185,26 @@ export function buildShipmentFilterSummaryTags(
     const n = parseBatchSearchTokens(input.searchShipmentNo).length
     tags.push({
       key: 'searchShipmentNo',
-      label: n > 1 ? `运单号 × ${n}` : `运单号 = ${input.searchShipmentNo.trim().slice(0, 40)}`,
+      label: n > 1 ? `多号搜索 × ${n}` : `多号搜索 = ${input.searchShipmentNo.trim().slice(0, 40)}`,
+    })
+  }
+  if (input.advExactShipmentNo.trim()) {
+    const n = parseBatchSearchTokens(input.advExactShipmentNo).length
+    tags.push({ key: 'advExactShipmentNo', label: n > 1 ? `运单号 × ${n}` : `运单号 = ${input.advExactShipmentNo.trim()}` })
+  }
+  if (input.advContainerNos.trim()) {
+    const n = parseBatchSearchTokens(input.advContainerNos).length
+    tags.push({ key: 'advContainerNos', label: n > 1 ? `柜号 × ${n}` : `柜号 = ${input.advContainerNos.trim()}` })
+  }
+  if (input.advBillNos.trim()) {
+    const n = parseBatchSearchTokens(input.advBillNos).length
+    tags.push({ key: 'advBillNos', label: n > 1 ? `提单号 × ${n}` : `提单号 = ${input.advBillNos.trim()}` })
+  }
+  if (input.advCustomerShipmentIds.trim()) {
+    const n = parseBatchSearchTokens(input.advCustomerShipmentIds).length
+    tags.push({
+      key: 'advCustomerShipmentIds',
+      label: n > 1 ? `货件号 × ${n}` : `货件号 = ${input.advCustomerShipmentIds.trim()}`,
     })
   }
   if (input.searchTrackingContent.trim()) {
@@ -212,7 +244,13 @@ export function buildShipmentFilterSummaryTags(
   if (input.filterChannelCategory) {
     tags.push({ key: 'filterChannelCategory', label: `大类 = ${input.filterChannelCategory}` })
   }
-  if (input.filterCustomerNo) tags.push({ key: 'filterCustomerNo', label: `客户编号 = ${input.filterCustomerNo}` })
+  if (input.filterCustomerNo?.trim()) {
+    const n = parseBatchSearchTokens(input.filterCustomerNo).length
+    tags.push({
+      key: 'filterCustomerNo',
+      label: n > 1 ? `客户编号 × ${n}` : `客户编号 = ${input.filterCustomerNo.trim()}`,
+    })
+  }
   if (input.filterDestinationPort) {
     tags.push({ key: 'filterDestinationPort', label: `目的港 = ${input.filterDestinationPort}` })
   }

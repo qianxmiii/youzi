@@ -16,7 +16,8 @@
 
 ### 新增
 
-- 运单分组规则 `SINGLE_IN_TRANSIT_ETA_WARNING`：客户仅有一票在途时，按 ETA 提前 N 天（默认 10，可配 7）提醒到港；分组规则 UI 支持「到港前提醒(天)」；提醒卡片青绿主题 + 船舶图标
+- 运单列表复制菜单增加「运单明细」：`运单号 = 货件号 = 派送仓库（空则邮编）= 件数ctns`；移除原 Excel 宽表复制项
+
 
 - 页面多标签：顶栏下方 Tab 栏，可同时打开多个页面（如运单管理 + 运单分组）；切换保留页面状态（KeepAlive）；标签列表写入 `localStorage`（`youzi.pageTabs`）；支持「关闭全部」（保留工作台）
 
@@ -31,7 +32,11 @@
 
 ### 修改
 
-- `config/config.json` 运单查询拆为 `shipment_queryByPerson`（全量）与 `shipment_queryByOrder`（按 `odds`）；`pageNum` / `transitTimeStart` / `transitTimeEnd` 代码注入，按 `total` 自动翻页
+- 运单列表：渠道筛选项与摘要显示中文名；运单号列默认更宽
+- 运单列表筛选与列配置对齐 `docs/design/shipment-list-filter-design.md`：顶部多号精确搜索 + 轨迹搜索；关键词/分号码批次迁入高级筛选；默认列更新；后端号码精确 IN 匹配
+- 异常跟进待办文案去掉分档间隔说明（如「≥10 天每 5 天」「当前每 7 天需跟进一次」）；API 返回时统一格式化，历史待办即时生效
+- 异常跟进卡片固定鼠尾草绿主题 `#6d9c79`（不再因 urgent 级别显示红色）
+- 工作台待办提醒合并异常跟进（与顶栏待办一致）；异常跟进卡片采用 `#6d9c79` 独立配色
 - 计划任务新增 **DPS 运单同步**：从 DPS 拉取运单 upsert 至本地，下单时间范围可配（默认当月），批处理默认关闭
 - DPS 同步字段策略：`config/shipment_dps_sync_fields.json`；`address_type` 按 `deliveryAddressType`（0=AMZ/WFS，2=3PL）
 - DPS 运单同步查询参数：`orderTimeStart` / `orderTimeEnd` 改为 `transitTimeStart` / `transitTimeEnd`（发运时间）；计划任务配置字段同步更名

@@ -67,7 +67,11 @@ const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
       :key="card.key"
       type="button"
       class="stat-card"
-      :class="'stat-card--' + (cardMeta[card.key]?.theme || 'indigo')"
+      :class="[
+        'stat-card--' + (cardMeta[card.key]?.theme || 'indigo'),
+        { 'stat-card--zero': card.count === 0 },
+      ]"
+      :aria-label="`${card.label} ${card.count} 票，点击查看详情`"
       @click="emit('navigate', card.query)"
     >
       <div class="stat-card__head">
@@ -151,8 +155,25 @@ const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
 }
 
 .stat-card:focus-visible {
-  outline: 2px solid rgb(139 92 246 / 0.5);
+  outline: 2px solid color-mix(in srgb, var(--color-accent) 50%, transparent);
   outline-offset: 2px;
+}
+
+.stat-card--zero {
+  opacity: 0.72;
+}
+
+.stat-card--zero .stat-card__value {
+  color: var(--color-muted);
+}
+
+.stat-card--zero .stat-card__icon,
+.stat-card--zero .stat-card__sparkline {
+  color: var(--color-muted);
+}
+
+.stat-card--zero:hover {
+  opacity: 1;
 }
 
 [data-theme='dark'] .stat-card:hover:not(.stat-card--skeleton) {
@@ -289,6 +310,21 @@ const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
   }
   50% {
     opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stat-card {
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .stat-card:hover:not(.stat-card--skeleton) {
+    transform: none;
+  }
+
+  .stat-card--skeleton {
+    animation: none;
+    opacity: 0.65;
   }
 }
 </style>

@@ -6,7 +6,8 @@ from typing import Any
 
 from .shipment_tracking_numbers_table import TABLE_NAME as TRACKING_NUMBERS_TABLE
 
-TIME_FIELD_MAP: dict[str, str] = {    "createdTime": "created_time",
+TIME_FIELD_MAP: dict[str, str] = {
+    "createdTime": "created_time",
     "etd": "etd",
     "atd": "atd",
     "eta": "eta",
@@ -35,24 +36,107 @@ VALID_DELIVERY_RISKS = frozenset(
 WARNING_SOON_DAYS = 3
 SEVERE_OVERDUE_DAYS = 7
 
-# 关键词模糊匹配：运单号、柜号/提单号（tracking/carrier_id）、货件号、客户编号、供应商等
+# 关键词模糊匹配：供应商、客户名、品名、地址等非号码字段（号码走精确多号搜索）
 _KEYWORD_SHIPMENT_COLUMNS = (
-    "shipment_no",
-    "customer_no",
-    "customer_shipment_id",
     "supplier_name",
-    "carrier_id",
-    "tracking_number",
-    "amazon_ref_id",
-    "vessel_voyage",
-    "vessel_name",
-    "voyage_no",
     "customer",
-    "channel_code",
-    "carrier_code",
-    "address_code",
+    "product_name",
     "delivery_address",
+    "address_code",
 )
+
+
+def _dedupe_tokens(values: list[str] | None) -> list[str]:
+    return list(dict.fromkeys(s.strip() for s in (values or []) if s and s.strip()))
+
+
+def append_unified_batch_number_search(
+    conditions: list[str],
+    params: list[Any],
+    tokens: list[str] | None,
+) -> None:
+    """顶部多号精确搜索：每个号码在运单号/柜号/提单/货件号/客户编号等字段精确匹配（OR）。"""
+    cleaned = _dedupe_tokens(tokens)
+    if not cleaned:
+        return
+    token_clauses: list[str] = []
+    for token in cleaned:
+        token_clauses.append(
+            f"""(
+              s.shipment_no = ?
+              OR s.customer_no = ?
+              OR s.customer_shipment_id = ?
+              OR s.tracking_number = ?
+              OR s.carrier_id = ?
+              OR s.amazon_ref_id = ?
+              OR EXISTS (
+                SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
+                WHERE stn.shipment_no = s.shipment_no
+                  AND (stn.tracking_number = ? OR stn.main_tracking_number = ?)
+              )
+            )"""
+        )
+        params.extend([token] * 8)
+    conditions.append(f"({' OR '.join(token_clauses)})")
+
+
+def append_exact_in_column(
+    conditions: list[str],
+    params: list[Any],
+    *,
+    column: str,
+    values: list[str] | None,
+) -> None:
+    cleaned = _dedupe_tokens(values)
+    if not cleaned:
+        return
+    placeholders = ", ".join("?" * len(cleaned))
+    conditions.append(f"s.{column} IN ({placeholders})")
+    params.extend(cleaned)
+
+
+def append_container_nos_exact(
+    conditions: list[str],
+    params: list[Any],
+    values: list[str] | None,
+) -> None:
+    cleaned = _dedupe_tokens(values)
+    if not cleaned:
+        return
+    placeholders = ", ".join("?" * len(cleaned))
+    conditions.append(
+        f"""(
+          s.tracking_number IN ({placeholders})
+          OR EXISTS (
+            SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
+            WHERE stn.shipment_no = s.shipment_no
+              AND stn.tracking_number IN ({placeholders})
+          )
+        )"""
+    )
+    params.extend(cleaned + cleaned)
+
+
+def append_bill_nos_exact(
+    conditions: list[str],
+    params: list[Any],
+    values: list[str] | None,
+) -> None:
+    cleaned = _dedupe_tokens(values)
+    if not cleaned:
+        return
+    placeholders = ", ".join("?" * len(cleaned))
+    conditions.append(
+        f"""(
+          s.carrier_id IN ({placeholders})
+          OR EXISTS (
+            SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
+            WHERE stn.shipment_no = s.shipment_no
+              AND stn.main_tracking_number IN ({placeholders})
+          )
+        )"""
+    )
+    params.extend(cleaned + cleaned)
 
 
 def validate_time_field(field: str | None) -> str | None:
@@ -77,19 +161,11 @@ def append_keyword_search(
             "cc.name_zh LIKE ?",
             "crc.name_zh LIKE ?",
             "crc_by_id.name_zh LIKE ?",
-            f"""EXISTS (
-                SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
-                WHERE stn.shipment_no = s.shipment_no
-                  AND (
-                    stn.tracking_number LIKE ?
-                    OR stn.main_tracking_number LIKE ?
-                  )
-            )""",
         ]
     )
     conditions.append(f"({' OR '.join(parts)})")
     params.extend([q] * len(_KEYWORD_SHIPMENT_COLUMNS))
-    params.extend([q, q, q, q, q])
+    params.extend([q, q, q])
 
 
 def append_time_range(

@@ -23,6 +23,7 @@ class ChannelIn(BaseModel):
 class ChannelUpdateIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
+    code: str | None = Field(default=None, min_length=1)
     name_zh: str | None = Field(default=None, validation_alias=AliasChoices("nameZh", "name_zh"))
     name_en: str | None = Field(default=None, validation_alias=AliasChoices("nameEn", "name_en"))
     country: str | None = None

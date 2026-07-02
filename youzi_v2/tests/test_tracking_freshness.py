@@ -35,10 +35,18 @@ class TrackingFreshnessTest(unittest.TestCase):
         self.assertIn("+1 minutes", sql)
         self.assertEqual(len(params), 1)
 
+    def test_carrier_none_sql_excludes_fcl(self) -> None:
+        sql, params = carrier_freshness_sql("none")
+        self.assertIn("carrier_code", sql)
+        self.assertIn("整柜", params[0])
+        self.assertEqual(len(params), 2)
+
     def test_freshness_stats_sql_binding_count(self) -> None:
         sql, params = freshness_stats_sql()
         self.assertEqual(sql.count("?"), len(params))
-        self.assertTrue(all(p == INTERNAL_WAREHOUSE_PLACEHOLDER for p in params))
+        self.assertIn("carrier_codes", sql)
+        self.assertEqual(params.count(INTERNAL_WAREHOUSE_PLACEHOLDER), 5)
+        self.assertEqual(params.count("整柜"), 2)
 
 
 if __name__ == "__main__":

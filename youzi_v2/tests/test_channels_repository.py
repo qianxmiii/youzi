@@ -34,6 +34,19 @@ def test_seed_defaults_inserts_26(repo: ChannelsRepository) -> None:
     assert fast["category"] == "快船"
 
 
+def test_rename_code_updates_shipments(repo: ChannelsRepository) -> None:
+    from youzi_v2.db.shipments_repository import ShipmentsRepository
+
+    repo.create({"code": "OLD-CH", "nameZh": "旧渠道", "category": "空运"})
+    ship_repo = ShipmentsRepository(repo._database)
+    ship_repo.insert_row({"shipment_no": "SN001", "channel_code": "OLD-CH"})
+    updated = repo.update("OLD-CH", {"code": "NEW-CH", "nameZh": "新渠道"})
+    assert updated["code"] == "NEW-CH"
+    row = ship_repo.get_by_shipment_no("SN001")
+    assert row is not None
+    assert row["channelCode"] == "NEW-CH"
+
+
 def test_create_validates_category(repo: ChannelsRepository) -> None:
     with pytest.raises(ValueError, match="大类"):
         repo.create(

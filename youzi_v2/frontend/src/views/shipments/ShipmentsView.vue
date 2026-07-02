@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import {
   NButton,
-  NCheckbox,
   NDataTable,
+  NDatePicker,
   NDropdown,
   NInput,
   NPagination,
@@ -26,6 +26,9 @@ import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptio
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
+import ShipmentFilterSummaryBar from '@/components/shipments/ShipmentFilterSummaryBar.vue'
+import ShipmentAdvancedFilterDrawer from '@/components/shipments/ShipmentAdvancedFilterDrawer.vue'
+import ShipmentColumnSettingsDrawer from '@/components/shipments/ShipmentColumnSettingsDrawer.vue'
 import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
 import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
@@ -50,10 +53,13 @@ import {
   batchUnsubscribeShipments,
   subscribeShipment,
   syncCarrierTracking,
+  syncShipmentsFromDps,
   syncTracking,
   unsubscribeShipment,
   updateShipment,
+  type ShipmentFilterOptions,
 } from '@/api/shipments'
+import type { TrackingSyncDailyStats } from '@/types/tracking'
 import {
   addShipmentGroupMembers,
   createShipmentGroup,
@@ -66,6 +72,22 @@ import { Layers } from 'lucide-vue-next'
 import { shipmentGroupRuleSelectOptions, sortShipmentGroupEnabledRules } from '@/constants/shipmentGroupRules'
 import { ICON_STROKE } from '@/constants/icons'
 import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
+import {
+  DEFAULT_SHIPMENT_VISIBLE_COLUMNS,
+  SHIPMENT_COLUMN_STORAGE_KEY,
+  SHIPMENT_SYSTEM_VIEWS,
+  SHIPMENT_TIME_FIELD_OPTIONS,
+  emptyAdvancedTimeRanges,
+  systemViewFilters,
+  type ShipmentSystemViewId,
+  type ShipmentTimeField,
+} from '@/constants/shipmentListFilterMeta'
+import { buildCarrierSelectOptions } from '@/utils/carrierFilterOptions'
+import {
+  buildShipmentFilterQuery,
+  buildShipmentFilterSummaryTags,
+  type ShipmentFilterQueryInput,
+} from '@/utils/shipmentListFilterQuery'
 import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
@@ -75,6 +97,7 @@ import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMile
 import {
   daysSinceLocalCalendar,
   FRESHNESS_DOT_CLASS,
+  FRESHNESS_LABEL,
   isCarrierTrackingNewerThanInternal,
   trackingFreshnessLevel,
   type TrackingFreshnessBucket,
@@ -93,10 +116,11 @@ const importing = ref(false)
 const exporting = ref(false)
 const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
+const syncingDps = ref(false)
 const carrierDaily = ref<TrackingSyncDailyStats | null>(null)
 const freshnessStats = ref<TrackingFreshnessStats | null>(null)
-const filterInternalFreshness = ref<TrackingFreshnessBucket | null>(null)
-const filterCarrierFreshness = ref<TrackingFreshnessBucket | null>(null)
+const filterNoInternalTracking = ref(false)
+const filterNoCarrierTracking = ref(false)
 const filterCarrierAheadOfInternal = ref(false)
 const filterPendingTrackingTimeReview = ref(false)
 const { refreshPendingTrackingTimeReviewCount } = usePendingTrackingTimeReviewCount()
@@ -108,22 +132,60 @@ const searchTrackingContent = ref('')
 const DEFAULT_STATUS_FILTER = 'IN_TRANSIT'
 const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
 const filterCustomer = ref<string | null>(null)
+const filterChannelCode = ref<string | null>(null)
+const timeField = ref<ShipmentTimeField | null>(null)
+const timeRange = ref<[number, number] | null>(null)
 const filterVipOnly = ref(false)
 const filterCarrier = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannelNameZh = ref<string | null>(null)
 const filterChannelCategory = ref<string | null>(null)
-const filtersExpanded = ref(false)
+const filterCustomerNo = ref<string | null>(null)
+const filterDestinationPort = ref<string | null>(null)
+const filterAddressKeyword = ref<string | null>(null)
+const filterVesselVoyage = ref<string | null>(null)
 const filterStaleDays = ref<number | null>(null)
-const filterNoTracking = ref(false)
+const filterNoZipcode = ref(false)
 const filterException = ref<string | null>(null)
 const filterHasException = ref<boolean | null>(null)
 const filterGroupId = ref<string | null>(null)
+const filterGroupNo = ref<string | null>(null)
 const filterRuleType = ref<string | null>(null)
 const filterHasGroup = ref<boolean | null>(null)
+const missingEtd = ref(false)
+const missingAtd = ref(false)
+const missingEta = ref(false)
+const missingAta = ref(false)
+const missingExpectedDelivery = ref(false)
+const missingDelivered = ref(false)
+const notDelivered = ref(false)
+const hasAta = ref(false)
+const deliveryRisk = ref<string | null>(null)
+const advancedTimes = ref(emptyAdvancedTimeRanges())
+const advancedFilterShow = ref(false)
+const columnSettingsShow = ref(false)
+const selectedSystemView = ref<ShipmentSystemViewId | null>(null)
+
+function loadVisibleColumnKeys(): string[] {
+  try {
+    const raw = localStorage.getItem(SHIPMENT_COLUMN_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown
+      if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) {
+        return parsed
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return [...DEFAULT_SHIPMENT_VISIBLE_COLUMNS]
+}
+
+const visibleColumnKeys = ref<string[]>(loadVisibleColumnKeys())
 const filterOptions = ref<ShipmentFilterOptions>({
   customers: [],
   carrierCodes: [],
+  carriers: [],
   countryCodes: [],
   channelCodes: [],
   channelNameZhs: [],
@@ -304,6 +366,8 @@ const channelCodeOptions = computed(() =>
   filterOptions.value.channelCodes.map((v) => ({ label: v, value: v })),
 )
 
+const timeFieldOptions = [...SHIPMENT_TIME_FIELD_OPTIONS]
+
 function rowKey(row: Shipment) {
   return row.id
 }
@@ -333,31 +397,23 @@ const carrierSyncHint = computed(() => {
   return s
 })
 
-function applyFreshnessFilter(source: 'internal' | 'carrier', bucket: TrackingFreshnessBucket) {
-  if (source === 'internal') {
-    filterInternalFreshness.value = bucket
-  } else {
-    filterCarrierFreshness.value = bucket
-  }
-  filtersExpanded.value = true
+function toggleNoInternalTrackingFilter() {
+  filterNoInternalTracking.value = !filterNoInternalTracking.value
   onFiltersChanged()
 }
 
-function clearFreshnessFilter(source: 'internal' | 'carrier') {
-  if (source === 'internal') filterInternalFreshness.value = null
-  else filterCarrierFreshness.value = null
+function toggleNoCarrierTrackingFilter() {
+  filterNoCarrierTracking.value = !filterNoCarrierTracking.value
   onFiltersChanged()
 }
 
 function toggleCarrierAheadFilter() {
   filterCarrierAheadOfInternal.value = !filterCarrierAheadOfInternal.value
-  filtersExpanded.value = true
   onFiltersChanged()
 }
 
 function togglePendingReviewFilter() {
   filterPendingTrackingTimeReview.value = !filterPendingTrackingTimeReview.value
-  filtersExpanded.value = true
   onFiltersChanged()
 }
 
@@ -524,22 +580,22 @@ function renderLastMileBadge(row: Shipment) {
   )
 }
 
-function renderUpdatedTime(row: Shipment) {
-  const formatted = formatRelativeTime(row.updatedTime)
+function renderRelativeTimeCell(iso: string | null | undefined) {
+  const formatted = formatRelativeTime(iso)
   if (!formatted) return '—'
   return h(
     NTooltip,
     { trigger: 'hover' },
     {
       trigger: () =>
-        h(
-          'span',
-          { class: 'cursor-default text-zinc-400 tabular-nums' },
-          formatted.relative,
-        ),
+        h('span', { class: 'cursor-default text-zinc-400 tabular-nums' }, formatted.relative),
       default: () => formatted.absolute,
     },
   )
+}
+
+function renderUpdatedTime(row: Shipment) {
+  return renderRelativeTimeCell(row.updatedTime)
 }
 
 function renderExceptionBadge(row: Shipment) {
@@ -612,7 +668,7 @@ function renderShipmentNo(row: Shipment) {
 
 const exceptionColumns: DataTableColumns<Shipment> = [
   {
-    title: '异常',
+    title: '异常状态',
     key: 'exceptionCode',
     width: 88,
     align: 'center',
@@ -670,10 +726,13 @@ const staleOptions = [
 const customerOptions = computed(() =>
   filterOptions.value.customers.map((v) => ({ label: v, value: v })),
 )
-const carrierOptions = computed(() => [
-  { label: '（未填写）', value: CARRIER_FILTER_EMPTY },
-  ...filterOptions.value.carrierCodes.map((v) => ({ label: v, value: v })),
-])
+const carrierOptions = computed(() =>
+  buildCarrierSelectOptions(
+    filterOptions.value.carriers,
+    filterOptions.value.carrierCodes,
+    { includeEmpty: true, emptyValue: CARRIER_FILTER_EMPTY },
+  ),
+)
 const countryOptions = computed(() =>
   filterOptions.value.countryCodes.map((code) => ({
     label: countryLabel(code) === code ? code : `${countryLabel(code)} (${code})`,
@@ -687,21 +746,114 @@ const channelCategoryOptions = computed(() =>
   filterOptions.value.channelCategories.map((v) => ({ label: v, value: v })),
 )
 
-const advancedFiltersActiveCount = computed(() => {
+const systemViewOptions = computed(() =>
+  SHIPMENT_SYSTEM_VIEWS.map((v) => ({ label: v.label, value: v.id })),
+)
+
+function carrierLabel(code: string | null | undefined): string {
+  if (!code) return ''
+  if (code === CARRIER_FILTER_EMPTY) return '（未填写）'
+  const opt = carrierOptions.value.find((o) => o.value === code)
+  return opt?.label || code
+}
+
+function groupLabel(id: string | null | undefined): string {
+  if (!id) return ''
+  const opt = groupFilterOptions.value.find((o) => o.value === id)
+  return opt?.label || id
+}
+
+const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
+  searchKeyword: searchKeyword.value,
+  searchShipmentNo: searchShipmentNo.value,
+  searchTrackingContent: searchTrackingContent.value,
+  filterStatus: filterStatus.value,
+  filterCustomer: filterCustomer.value,
+  filterChannelCode: filterChannelCode.value,
+  timeField: timeField.value,
+  timeRange: timeRange.value,
+  filterCarrier: filterCarrier.value,
+  filterCountry: filterCountry.value,
+  filterChannelNameZh: filterChannelNameZh.value,
+  filterChannelCategory: filterChannelCategory.value,
+  filterCustomerNo: filterCustomerNo.value,
+  filterDestinationPort: filterDestinationPort.value,
+  filterAddressKeyword: filterAddressKeyword.value,
+  filterVesselVoyage: filterVesselVoyage.value,
+  filterVipOnly: filterVipOnly.value,
+  filterNoInternalTracking: filterNoInternalTracking.value,
+  filterNoCarrierTracking: filterNoCarrierTracking.value,
+  filterCarrierAheadOfInternal: filterCarrierAheadOfInternal.value,
+  filterPendingTrackingTimeReview: filterPendingTrackingTimeReview.value,
+  filterStaleDays: filterStaleDays.value,
+  filterNoTracking: filterNoInternalTracking.value,
+  filterNoZipcode: filterNoZipcode.value,
+  filterException: filterException.value,
+  filterHasException: filterHasException.value,
+  filterGroupId: filterGroupId.value,
+  filterGroupNo: filterGroupNo.value,
+  filterRuleType: filterRuleType.value,
+  filterHasGroup: filterHasGroup.value,
+  missingEtd: missingEtd.value,
+  missingAtd: missingAtd.value,
+  missingEta: missingEta.value,
+  missingAta: missingAta.value,
+  missingExpectedDelivery: missingExpectedDelivery.value,
+  missingDelivered: missingDelivered.value,
+  notDelivered: notDelivered.value,
+  hasAta: hasAta.value,
+  deliveryRisk: deliveryRisk.value,
+  advancedTimes: advancedTimes.value,
+  shipmentNoSearchActive: shipmentNoTokens.value.length > 0,
+}))
+
+const filterSummaryTags = computed(() =>
+  buildShipmentFilterSummaryTags(filterQueryInput.value, {
+    statusLabel,
+    countryLabel,
+    carrierLabel,
+    channelLabel: (code) => code || '',
+    groupLabel,
+    exceptionLabel,
+    freshnessLabel: FRESHNESS_LABEL,
+  }),
+)
+
+const advancedOnlyActiveCount = computed(() => {
   let n = 0
+  if (searchTrackingContent.value.trim()) n++
   if (filterCarrier.value) n++
   if (filterCountry.value) n++
   if (filterChannelNameZh.value) n++
   if (filterChannelCategory.value) n++
+  if (filterCustomerNo.value) n++
+  if (filterDestinationPort.value) n++
+  if (filterAddressKeyword.value) n++
+  if (filterVesselVoyage.value) n++
+  if (filterVipOnly.value) n++
   if (filterHasException.value != null) n++
   if (filterException.value) n++
-  if (filterNoTracking.value) n++
+  if (filterNoInternalTracking.value) n++
+  if (filterNoCarrierTracking.value) n++
+  if (filterNoZipcode.value) n++
+  if (filterStaleDays.value) n++
   if (filterGroupId.value) n++
+  if (filterGroupNo.value) n++
   if (filterRuleType.value) n++
   if (filterHasGroup.value != null) n++
-  if (filterInternalFreshness.value) n++
-  if (filterCarrierFreshness.value) n++
-  if (filterCarrierAheadOfInternal.value) n++
+  if (missingEtd.value) n++
+  if (missingAtd.value) n++
+  if (missingEta.value) n++
+  if (missingAta.value) n++
+  if (missingExpectedDelivery.value) n++
+  if (missingDelivered.value) n++
+  if (notDelivered.value) n++
+  if (hasAta.value) n++
+  if (deliveryRisk.value) n++
+  const adv = advancedTimes.value
+  for (const key of Object.keys(adv) as (keyof typeof adv)[]) {
+    if (adv[key]) n++
+  }
   return n
 })
 
@@ -709,6 +861,12 @@ function channelDisplayLabel(row: Shipment): string {
   const zh = row.channelNameZh?.trim()
   if (zh) return zh
   return row.channelCode?.trim() || '—'
+}
+
+function carrierDisplayLabel(row: Shipment): string {
+  const zh = row.carrierNameZh?.trim()
+  if (zh) return zh
+  return row.carrierCode?.trim() || '—'
 }
 
 /** 横向滚动宽度 = 各列 width 之和 + 余量（避免滑条到不了最右侧） */
@@ -742,58 +900,14 @@ function clearSelection() {
 
 function buildListParams(): Parameters<typeof listShipments>[0] {
   const tokens = shipmentNoTokens.value
-  const keyword = searchKeyword.value.trim()
   const multiShipment = batchShipmentSearchActive.value
-  const shipmentNoSearchActive = tokens.length > 0
   const limit = multiShipment
     ? Math.min(500, Math.max(pageSize.value, tokens.length))
     : pageSize.value
   const offset = multiShipment ? 0 : (page.value - 1) * pageSize.value
-  const staleRaw = filterStaleDays.value
-  const staleDays =
-    staleRaw == null || staleRaw === ''
-      ? undefined
-      : typeof staleRaw === 'number'
-        ? staleRaw
-        : Number(staleRaw)
 
   return {
-    ...(tokens.length ? { shipmentNos: tokens } : {}),
-    ...(keyword ? { search: keyword } : {}),
-    ...(searchTrackingContent.value.trim()
-      ? { trackingSearch: searchTrackingContent.value.trim() }
-      : {}),
-    statusCode: shipmentNoSearchActive ? undefined : filterStatus.value || undefined,
-    exceptionCode: filterException.value || undefined,
-    hasException:
-      filterHasException.value === true
-        ? true
-        : filterHasException.value === false
-          ? false
-          : undefined,
-    customer: filterCustomer.value || undefined,
-    vipOnly: filterVipOnly.value ? true : undefined,
-    carrierCode: filterCarrier.value || undefined,
-    countryCode: filterCountry.value || undefined,
-    channelNameZh: filterChannelNameZh.value || undefined,
-    channelCategory: filterChannelCategory.value || undefined,
-    internalFreshness: filterInternalFreshness.value || undefined,
-    carrierFreshness: filterCarrierFreshness.value || undefined,
-    carrierAheadOfInternal: filterCarrierAheadOfInternal.value || undefined,
-    pendingTrackingTimeReview: filterPendingTrackingTimeReview.value || undefined,
-    minStaleDays:
-      filterNoTracking.value || staleDays == null || Number.isNaN(staleDays) || staleDays <= 0
-        ? undefined
-        : staleDays,
-    noTracking: filterNoTracking.value || undefined,
-    groupId: filterGroupId.value || undefined,
-    ruleType: filterRuleType.value || undefined,
-    hasGroup:
-      filterHasGroup.value === true
-        ? true
-        : filterHasGroup.value === false
-          ? false
-          : undefined,
+    ...buildShipmentFilterQuery(filterQueryInput.value),
     limit,
     offset,
     ...(sortBy.value && sortOrder.value
@@ -840,11 +954,6 @@ function onFiltersChanged() {
   void loadList()
 }
 
-function onNoTrackingChanged(checked: boolean) {
-  if (checked) filterStaleDays.value = null
-  onFiltersChanged()
-}
-
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 watch([searchShipmentNo, searchKeyword, searchTrackingContent], () => {
   if (shipmentNoTokens.value.length > 0) {
@@ -861,6 +970,10 @@ watch([searchShipmentNo, searchKeyword, searchTrackingContent], () => {
 watch([page, pageSize], () => {
   checkedRowKeys.value = []
   void loadList()
+})
+
+watch(filterNoInternalTracking, (checked) => {
+  if (checked) filterStaleDays.value = null
 })
 
 async function loadFilterOptions() {
@@ -1180,47 +1293,187 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
   }
 }
 
-function resetFilters() {
+function resetFilterValues() {
+  selectedSystemView.value = null
   filterStatus.value = DEFAULT_STATUS_FILTER
   filterException.value = null
   filterHasException.value = null
   filterCustomer.value = null
+  filterChannelCode.value = null
+  timeField.value = null
+  timeRange.value = null
   filterVipOnly.value = false
   filterCarrier.value = null
   filterCountry.value = null
   filterChannelNameZh.value = null
   filterChannelCategory.value = null
-  filterInternalFreshness.value = null
-  filterCarrierFreshness.value = null
+  filterCustomerNo.value = null
+  filterDestinationPort.value = null
+  filterAddressKeyword.value = null
+  filterVesselVoyage.value = null
+  filterNoInternalTracking.value = false
+  filterNoCarrierTracking.value = false
   filterCarrierAheadOfInternal.value = false
   filterPendingTrackingTimeReview.value = false
-  filtersExpanded.value = false
   filterStaleDays.value = null
-  filterNoTracking.value = false
+  filterNoZipcode.value = false
   filterGroupId.value = null
+  filterGroupNo.value = null
   filterRuleType.value = null
   filterHasGroup.value = null
+  missingEtd.value = false
+  missingAtd.value = false
+  missingEta.value = false
+  missingAta.value = false
+  missingExpectedDelivery.value = false
+  missingDelivered.value = false
+  notDelivered.value = false
+  hasAta.value = false
+  deliveryRisk.value = null
+  advancedTimes.value = emptyAdvancedTimeRanges()
   searchShipmentNo.value = ''
   searchKeyword.value = ''
   searchTrackingContent.value = ''
+}
+
+function resetFilters() {
+  resetFilterValues()
   page.value = 1
   loadList()
 }
 
-function onHasExceptionFilterChange(val: string | null) {
-  filterHasException.value = val === 'yes' ? true : val === 'no' ? false : null
+function removeFilterTag(key: string) {
+  switch (key) {
+    case 'searchKeyword':
+      searchKeyword.value = ''
+      break
+    case 'searchShipmentNo':
+      searchShipmentNo.value = ''
+      break
+    case 'searchTrackingContent':
+      searchTrackingContent.value = ''
+      break
+    case 'filterStatus':
+      filterStatus.value = DEFAULT_STATUS_FILTER
+      break
+    case 'filterCustomer':
+      filterCustomer.value = null
+      break
+    case 'filterChannelCode':
+      filterChannelCode.value = null
+      break
+    case 'timeRange':
+      timeField.value = null
+      timeRange.value = null
+      break
+    case 'filterCarrier':
+      filterCarrier.value = null
+      break
+    case 'filterCountry':
+      filterCountry.value = null
+      break
+    case 'filterChannelNameZh':
+      filterChannelNameZh.value = null
+      break
+    case 'filterChannelCategory':
+      filterChannelCategory.value = null
+      break
+    case 'filterCustomerNo':
+      filterCustomerNo.value = null
+      break
+    case 'filterDestinationPort':
+      filterDestinationPort.value = null
+      break
+    case 'filterAddressKeyword':
+      filterAddressKeyword.value = null
+      break
+    case 'filterVesselVoyage':
+      filterVesselVoyage.value = null
+      break
+    case 'filterVipOnly':
+      filterVipOnly.value = false
+      break
+    case 'filterHasException':
+      filterHasException.value = null
+      break
+    case 'filterException':
+      filterException.value = null
+      break
+    case 'filterNoInternalTracking':
+      filterNoInternalTracking.value = false
+      break
+    case 'filterNoCarrierTracking':
+      filterNoCarrierTracking.value = false
+      break
+    case 'filterNoZipcode':
+      filterNoZipcode.value = false
+      break
+    case 'filterStaleDays':
+      filterStaleDays.value = null
+      break
+    case 'filterCarrierAheadOfInternal':
+      filterCarrierAheadOfInternal.value = false
+      break
+    case 'filterPendingTrackingTimeReview':
+      filterPendingTrackingTimeReview.value = false
+      break
+    case 'filterGroupId':
+      filterGroupId.value = null
+      break
+    case 'filterGroupNo':
+      filterGroupNo.value = null
+      break
+    case 'filterRuleType':
+      filterRuleType.value = null
+      break
+    case 'filterHasGroup':
+      filterHasGroup.value = null
+      break
+    case 'missingEtd':
+      missingEtd.value = false
+      break
+    case 'missingAtd':
+      missingAtd.value = false
+      break
+    case 'missingEta':
+      missingEta.value = false
+      break
+    case 'missingAta':
+      missingAta.value = false
+      break
+    case 'missingExpectedDelivery':
+      missingExpectedDelivery.value = false
+      break
+    case 'missingDelivered':
+      missingDelivered.value = false
+      break
+    case 'notDelivered':
+      notDelivered.value = false
+      break
+    case 'hasAta':
+      hasAta.value = false
+      break
+    case 'deliveryRisk':
+      deliveryRisk.value = null
+      break
+  }
+  selectedSystemView.value = null
   onFiltersChanged()
 }
 
-function onHasGroupFilterChange(val: string | null) {
-  filterHasGroup.value = val === 'yes' ? true : val === 'no' ? false : null
-  if (filterHasGroup.value != null) filterGroupId.value = null
-  onFiltersChanged()
-}
-
-function onGroupIdFilterChange(val: string | null) {
-  filterGroupId.value = val
-  if (val) filterHasGroup.value = null
+function applySystemView(viewId: ShipmentSystemViewId | null) {
+  if (!viewId) {
+    selectedSystemView.value = null
+    return
+  }
+  resetFilterValues()
+  const overrides = systemViewFilters(viewId)
+  if (overrides.deliveryRisk) deliveryRisk.value = overrides.deliveryRisk
+  if (overrides.notDelivered) notDelivered.value = true
+  if (overrides.hasAta) hasAta.value = true
+  if (overrides.pendingTrackingTimeReview) filterPendingTrackingTimeReview.value = true
+  filterStatus.value = null
+  selectedSystemView.value = viewId
   onFiltersChanged()
 }
 
@@ -1402,6 +1655,42 @@ async function handleSyncSelectedCarrier() {
   await handleSyncCarrierTracking(nos)
 }
 
+async function handleSyncSelectedFromDps() {
+  if (!selectedRows.value.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const nos = selectedShipmentNos.value
+  if (!nos.length) {
+    message.warning('所选运单无有效运单号')
+    return
+  }
+  syncingDps.value = true
+  try {
+    const res = await syncShipmentsFromDps(nos)
+    if (res.skipped) {
+      message.warning(res.reason || 'DPS 更新已跳过')
+      return
+    }
+    if (res.error) {
+      message.error(res.error)
+      return
+    }
+    let text = `DPS 更新：新增 ${res.created}，更新 ${res.updated}`
+    if (res.unchanged) text += `，无变化 ${res.unchanged}`
+    if (res.failed) text += `，失败 ${res.failed}`
+    if (res.notFound) text += `，DPS 未返回 ${res.notFound}`
+    message.success(text)
+    clearSelection()
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : 'DPS 更新失败')
+  } finally {
+    syncingDps.value = false
+  }
+}
+
 async function copySelectedShipmentNos() {
   const nos = selectedShipmentNos.value
   if (!nos.length) {
@@ -1420,6 +1709,12 @@ async function copySelectedShipmentNos() {
 function displayField(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return ''
   return String(value)
+}
+
+function formatDateCell(value: string | null | undefined): string {
+  const v = displayField(value)
+  if (!v) return '—'
+  return v.length > 10 ? v.slice(0, 10) : v
 }
 
 function formatCtnsField(ctns: number | null | undefined): string {
@@ -1636,29 +1931,8 @@ async function onFileSelected(ev: Event) {
   }
 }
 
-const columns = computed<DataTableColumns<Shipment>>(() => [
-  { type: 'selection', fixed: 'left', width: 40 },
-  {
-    title: '运单号',
-    key: 'shipmentNo',
-    width: shipmentNoColWidth.value,
-    minWidth: 176,
-    fixed: 'left',
-    sorter: {
-      compare: () => 0,
-    },
-    sortOrder:
-      sortBy.value === 'shipmentNo'
-        ? sortOrder.value === 'asc'
-          ? 'ascend'
-          : sortOrder.value === 'desc'
-            ? 'descend'
-            : false
-        : false,
-    cellProps: () => ({ class: 'shipment-td-no' }),
-    render: (row) => renderShipmentNo(row),
-  },
-  {
+const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment>[number]> => ({
+  statusCode: {
     title: '状态',
     key: 'statusCode',
     width: 88,
@@ -1675,7 +1949,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       return h('span', { class: ['shipment-status-badge', tone] }, label)
     },
   },
-  {
+  customer: {
     title: '客户',
     key: 'customer',
     width: customerColWidth.value,
@@ -1690,8 +1964,8 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       ])
     },
   },
-  { title: '件数', key: 'ctns', width: 64, align: 'center' },
-  {
+  ctns: { title: '件数', key: 'ctns', width: 64, align: 'center' },
+  groups: {
     title: '分组',
     key: 'groups',
     width: 104,
@@ -1699,7 +1973,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
     ellipsis: { tooltip: false },
     render: (row) => renderShipmentGroups(row),
   },
-  {
+  channelCode: {
     title: '渠道',
     key: 'channelCode',
     width: 120,
@@ -1720,22 +1994,140 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       )
     },
   },
-  { title: '承运商', key: 'carrierCode', width: 90, ellipsis: { tooltip: true } },
-  {
-    title: '派送地址',
+  carrierCode: {
+    title: '承运商',
+    key: 'carrierCode',
+    width: 90,
+    ellipsis: { tooltip: true },
+    render: (row) => {
+      const label = carrierDisplayLabel(row)
+      const code = row.carrierCode?.trim()
+      if (!code || label === code) {
+        return h('span', label)
+      }
+      return h(
+        NTooltip,
+        { placement: 'top' },
+        {
+          trigger: () => h('span', { class: 'cursor-default' }, label),
+          default: () => code,
+        },
+      )
+    },
+  },
+  addressCode: {
+    title: '派送仓库',
     key: 'addressCode',
     width: 100,
     ellipsis: { tooltip: true },
     render: (row) => displayField(row.addressCode) || '—',
   },
-  {
+  zipcode: {
     title: '邮编',
     key: 'zipcode',
     width: 96,
     ellipsis: { tooltip: true },
     render: (row) => displayField(row.zipcode) || '—',
   },
-  {
+  supplierName: {
+    title: '供应商',
+    key: 'supplierName',
+    width: 100,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.supplierName) || '—',
+  },
+  customerShipmentId: {
+    title: '货件号',
+    key: 'customerShipmentId',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.customerShipmentId) || '—',
+  },
+  amazonRefId: {
+    title: '亚马逊预约号',
+    key: 'amazonRefId',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.amazonRefId) || '—',
+  },
+  customerNo: {
+    title: '客户编号',
+    key: 'customerNo',
+    width: 108,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.customerNo) || '—',
+  },
+  countryCode: {
+    title: '国家',
+    key: 'countryCode',
+    width: 80,
+    ellipsis: { tooltip: true },
+    render: (row) => countryLabel(row.countryCode) || '—',
+  },
+  deliveryAddress: {
+    title: '派送地址',
+    key: 'deliveryAddress',
+    width: 160,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.deliveryAddress) || '—',
+  },
+  productName: {
+    title: '品名',
+    key: 'productName',
+    width: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.productName) || '—',
+  },
+  originWarehouseCode: {
+    title: '起运仓',
+    key: 'originWarehouseCode',
+    width: 96,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.originWarehouseCode) || '—',
+  },
+  etd: {
+    title: 'ETD',
+    key: 'etd',
+    width: 100,
+    render: (row) => formatDateCell(row.etd),
+  },
+  atd: {
+    title: 'ATD',
+    key: 'atd',
+    width: 100,
+    render: (row) => formatDateCell(row.atd),
+  },
+  eta: {
+    title: 'ETA',
+    key: 'eta',
+    width: 100,
+    render: (row) => formatDateCell(row.eta),
+  },
+  ata: {
+    title: 'ATA',
+    key: 'ata',
+    width: 100,
+    render: (row) => formatDateCell(row.ata),
+  },
+  expectedDeliveryTime: {
+    title: '预计送仓',
+    key: 'expectedDeliveryTime',
+    width: 108,
+    render: (row) => formatDateCell(row.expectedDeliveryTime),
+  },
+  deliveredTime: {
+    title: '签收时间',
+    key: 'deliveredTime',
+    width: 108,
+    render: (row) => formatDateCell(row.deliveredTime),
+  },
+  createdTime: {
+    title: '创建时间',
+    key: 'createdTime',
+    width: 108,
+    render: (row) => renderRelativeTimeCell(row.createdTime),
+  },
+  latestTracking: {
     title: '内部轨迹',
     key: 'latestTracking',
     width: 220,
@@ -1752,7 +2144,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       )
     },
   },
-  {
+  latestCarrier: {
     key: 'latestCarrier',
     width: 220,
     ellipsis: { tooltip: true },
@@ -1769,14 +2161,9 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
         ),
       ]),
     render: (row) =>
-      renderTrackingSummaryCell(
-        row,
-        'carrier',
-        row.latestCarrierTime,
-        row.latestCarrierDesc,
-      ),
+      renderTrackingSummaryCell(row, 'carrier', row.latestCarrierTime, row.latestCarrierDesc),
   },
-  {
+  staleDays: {
     title: '未更新',
     key: 'staleDays',
     width: 72,
@@ -1797,46 +2184,79 @@ const columns = computed<DataTableColumns<Shipment>>(() => [
       return h('span', { class: ['shipment-status-badge', tone] }, `${d}天`)
     },
   },
-  {
+  updatedTime: {
     title: '更新时间',
     key: 'updatedTime',
     width: 108,
     render: (row) => renderUpdatedTime(row),
   },
-  ...exceptionColumns,
-  {
-    title: '操作',
-    key: 'actions',
-    width: 132,
-    align: 'center',
-    fixed: 'right',
-    render: (row) =>
-      h(
-        NSpace,
-        { size: 6, justify: 'center', wrap: false, itemStyle: 'display:flex' },
-        () => [
-          renderSubscribeAction(row),
-          renderActionWithTooltip(
-            'view',
-            row.hasPendingSignedTimeReview ? '签收时间待确认' : '轨迹',
-            {
-              emphasis: Boolean(row.hasPendingSignedTimeReview),
-              onClick: () => openTrackingDrawer(row, 'internal'),
-            },
-          ),
-          renderActionWithTooltip('edit', '编辑', { onClick: () => openEdit(row) }),
-          h(
-            NPopconfirm,
-            { onPositiveClick: () => handleDelete(row) },
-            {
-              trigger: () => renderActionWithTooltip('delete', '删除'),
-              default: () => '确定删除该运单？',
-            },
-          ),
-        ],
-      ),
-  },
-])
+  exceptionCode: exceptionColumns[0],
+  exceptionDurationLabel: exceptionColumns[1],
+}))
+
+const columns = computed<DataTableColumns<Shipment>>(() => {
+  const defs = optionalColumnDefs.value
+  const dynamicCols = visibleColumnKeys.value
+    .map((key) => defs[key])
+    .filter((col): col is DataTableColumns<Shipment>[number] => Boolean(col))
+
+  return [
+    { type: 'selection', fixed: 'left', width: 40 },
+    {
+      title: '运单号',
+      key: 'shipmentNo',
+      width: shipmentNoColWidth.value,
+      minWidth: 176,
+      fixed: 'left',
+      sorter: {
+        compare: () => 0,
+      },
+      sortOrder:
+        sortBy.value === 'shipmentNo'
+          ? sortOrder.value === 'asc'
+            ? 'ascend'
+            : sortOrder.value === 'desc'
+              ? 'descend'
+              : false
+          : false,
+      cellProps: () => ({ class: 'shipment-td-no' }),
+      render: (row) => renderShipmentNo(row),
+    },
+    ...dynamicCols,
+    {
+      title: '操作',
+      key: 'actions',
+      width: 132,
+      align: 'center',
+      fixed: 'right',
+      render: (row) =>
+        h(
+          NSpace,
+          { size: 6, justify: 'center', wrap: false, itemStyle: 'display:flex' },
+          () => [
+            renderSubscribeAction(row),
+            renderActionWithTooltip(
+              'view',
+              row.hasPendingSignedTimeReview ? '签收时间待确认' : '轨迹',
+              {
+                emphasis: Boolean(row.hasPendingSignedTimeReview),
+                onClick: () => openTrackingDrawer(row, 'internal'),
+              },
+            ),
+            renderActionWithTooltip('edit', '编辑', { onClick: () => openEdit(row) }),
+            h(
+              NPopconfirm,
+              { onPositiveClick: () => handleDelete(row) },
+              {
+                trigger: () => renderActionWithTooltip('delete', '删除'),
+                default: () => '确定删除该运单？',
+              },
+            ),
+          ],
+        ),
+    },
+  ] as DataTableColumns<Shipment>
+})
 
 const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 </script>
@@ -1886,64 +2306,48 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
     <ShipmentTrackingFreshnessBar
       :stats="freshnessStats"
-      :internal-active="filterInternalFreshness"
-      :carrier-active="filterCarrierFreshness"
+      :no-internal-active="filterNoInternalTracking"
+      :no-carrier-active="filterNoCarrierTracking"
       :carrier-ahead-active="filterCarrierAheadOfInternal"
       :pending-review-active="filterPendingTrackingTimeReview"
+      :filtered-no-internal-count="filterNoInternalTracking ? total : null"
+      :filtered-no-carrier-count="filterNoCarrierTracking ? total : null"
       :filtered-pending-review-count="filterPendingTrackingTimeReview ? total : null"
       :filtered-carrier-ahead-count="filterCarrierAheadOfInternal ? total : null"
       :carrier-sync-hint="carrierSyncHint"
-      @apply="applyFreshnessFilter"
-      @clear="clearFreshnessFilter"
+      @toggle-no-internal="toggleNoInternalTrackingFilter"
+      @toggle-no-carrier="toggleNoCarrierTrackingFilter"
       @toggle-carrier-ahead="toggleCarrierAheadFilter"
       @toggle-pending-review="togglePendingReviewFilter"
     />
 
     <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
       <div class="flex min-w-0 flex-col gap-2">
-        <div class="shipments-filter-row flex min-w-0 flex-wrap items-center gap-2">
+        <div class="flex min-w-0 flex-wrap items-start gap-2">
           <NInput
             v-model:value="searchShipmentNo"
             type="textarea"
-            placeholder="运单号（逗号/换行）"
-            :autosize="{ minRows: 1, maxRows: 3 }"
+            placeholder="运单号（多个用逗号、空格或换行分隔，最多 200 个）"
+            :autosize="{ minRows: 1, maxRows: 4 }"
             clearable
             size="small"
             class="shipments-filter-shipment-no"
           />
+          <span
+            v-if="shipmentNoTokens.length > 0"
+            class="mt-1 shrink-0 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-200"
+          >
+            {{ shipmentNoTokens.length }} 个单号
+          </span>
+        </div>
+        <div class="shipments-filter-row flex min-w-0 flex-wrap items-center gap-2">
           <NInput
             v-model:value="searchKeyword"
-            placeholder="客户/订单号/地址"
+            placeholder="柜号/提单号/货件号/客户编号/供应商"
             clearable
             size="small"
             class="shipments-filter-keyword"
           />
-          <NInput
-            v-model:value="searchTrackingContent"
-            placeholder="轨迹内容（搜全部节点）"
-            clearable
-            size="small"
-            class="shipments-filter-tracking"
-          />
-          <span class="shipments-filter-divider" aria-hidden="true" />
-          <NSelect
-            v-model:value="filterCustomer"
-            :options="customerOptions"
-            placeholder="客户"
-            clearable
-            filterable
-            size="small"
-            class="shipments-filter-select shipments-filter-select--customer"
-            @update:value="onFiltersChanged"
-          />
-          <NCheckbox
-            v-model:checked="filterVipOnly"
-            size="small"
-            class="shrink-0 whitespace-nowrap"
-            @update:checked="onFiltersChanged"
-          >
-            仅 VIP
-          </NCheckbox>
           <NSelect
             v-model:value="filterStatus"
             :options="statusOptions"
@@ -1954,132 +2358,73 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             @update:value="onFiltersChanged"
           />
           <NSelect
-            v-model:value="filterStaleDays"
-            :options="staleOptions"
-            :disabled="filterNoTracking"
-            placeholder="停滞"
+            v-model:value="filterChannelCode"
+            :options="channelCodeOptions"
+            placeholder="渠道"
             clearable
+            filterable
             size="small"
-            class="shipments-filter-select"
+            class="shipments-filter-select shipments-filter-select--wide"
             @update:value="onFiltersChanged"
           />
-          <NButton
+          <NSelect
+            v-model:value="filterCustomer"
+            :options="customerOptions"
+            placeholder="客户"
+            clearable
+            filterable
             size="small"
-            quaternary
-            class="shrink-0"
-            @click="filtersExpanded = !filtersExpanded"
-          >
-            {{ filtersExpanded ? '收起筛选' : '更多筛选' }}
+            class="shipments-filter-select shipments-filter-select--customer"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="timeField"
+            :options="timeFieldOptions"
+            placeholder="时间口径"
+            clearable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onFiltersChanged"
+          />
+          <NDatePicker
+            v-model:value="timeRange"
+            type="daterange"
+            clearable
+            size="small"
+            class="shipments-filter-daterange"
+            @update:value="onFiltersChanged"
+          />
+          <NButton size="small" quaternary class="shrink-0" @click="advancedFilterShow = true">
+            高级筛选
             <span
-              v-if="!filtersExpanded && advancedFiltersActiveCount > 0"
+              v-if="advancedOnlyActiveCount > 0"
               class="ml-1 rounded bg-violet-500/25 px-1.5 text-[10px] text-violet-200"
             >
-              {{ advancedFiltersActiveCount }}
+              {{ advancedOnlyActiveCount }}
             </span>
+          </NButton>
+          <NSelect
+            :value="selectedSystemView"
+            :options="systemViewOptions"
+            placeholder="系统视图"
+            clearable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="(v) => (v ? applySystemView(v) : resetFilters())"
+          />
+          <NButton size="small" quaternary class="shrink-0" @click="columnSettingsShow = true">
+            列设置
           </NButton>
           <NButton size="small" quaternary class="shrink-0" @click="resetFilters">重置</NButton>
         </div>
-        <div
-          v-show="filtersExpanded"
-          class="flex min-w-0 flex-wrap items-center gap-2 border-t border-[var(--color-border)] pt-2"
-        >
-          <NSelect
-            v-model:value="filterChannelNameZh"
-            :options="channelNameZhOptions"
-            placeholder="渠道（中文）"
-            clearable
-            filterable
-            size="small"
-            class="shipments-filter-select shipments-filter-select--wide"
-            @update:value="onFiltersChanged"
-          />
-          <NSelect
-            v-model:value="filterChannelCategory"
-            :options="channelCategoryOptions"
-            placeholder="大类"
-            clearable
-            size="small"
-            class="shipments-filter-select"
-            @update:value="onFiltersChanged"
-          />
-          <NSelect
-            v-model:value="filterCarrier"
-            :options="carrierOptions"
-            placeholder="承运商"
-            clearable
-            filterable
-            size="small"
-            class="shipments-filter-select"
-            @update:value="onFiltersChanged"
-          />
-          <NSelect
-            v-model:value="filterCountry"
-            :options="countryOptions"
-            placeholder="国家"
-            clearable
-            filterable
-            size="small"
-            class="shipments-filter-select shipments-filter-select--wide"
-            @update:value="onFiltersChanged"
-          />
-          <NSelect
-            :value="filterHasException === true ? 'yes' : filterHasException === false ? 'no' : null"
-            :options="hasExceptionFilterOptions"
-            placeholder="异常"
-            clearable
-            size="small"
-            class="shipments-filter-select"
-            @update:value="onHasExceptionFilterChange"
-          />
-          <NSelect
-            v-model:value="filterException"
-            :options="exceptionFilterOptions"
-            placeholder="异常类型"
-            clearable
-            size="small"
-            class="shipments-filter-select"
-            @update:value="onFiltersChanged"
-          />
-          <NSelect
-            v-model:value="filterRuleType"
-            :options="ruleTypeFilterOptions"
-            consistent-menu-width
-            placeholder="启用规则"
-            clearable
-            size="small"
-            class="shipments-filter-select shipments-filter-select--wide"
-            @update:value="onFiltersChanged"
-          />
-          <NSelect
-            :value="filterHasGroup === true ? 'yes' : filterHasGroup === false ? 'no' : null"
-            :options="hasGroupFilterOptions"
-            placeholder="分组"
-            clearable
-            size="small"
-            class="shipments-filter-select"
-            @update:value="onHasGroupFilterChange"
-          />
-          <NSelect
-            :value="filterGroupId"
-            :options="groupFilterOptions"
-            placeholder="指定分组"
-            clearable
-            filterable
-            size="small"
-            class="shipments-filter-select shipments-filter-select--wide"
-            @update:value="onGroupIdFilterChange"
-          />
-          <NCheckbox
-            v-model:checked="filterNoTracking"
-            size="small"
-            class="shrink-0 whitespace-nowrap"
-            @update:checked="onNoTrackingChanged"
-          >
-            无轨迹
-          </NCheckbox>
-        </div>
       </div>
     </div>
+
+    <ShipmentFilterSummaryBar
+      :tags="filterSummaryTags"
+      @remove="removeFilterTag"
+      @clear="resetFilters"
+    />
 
     <div class="panel shipments-table-panel min-h-0 flex-1 overflow-hidden p-0">
       <NDataTable
@@ -2160,6 +2505,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
           @click="handleSyncSelectedCarrier"
         >
           更新选中承运商轨迹
+        </NButton>
+        <NButton
+          size="small"
+          :loading="syncingDps"
+          title="从 DPS shipment_queryByOrder 拉取并更新选中运单"
+          @click="handleSyncSelectedFromDps"
+        >
+          更新选中运单
         </NButton>
         <NDropdown trigger="hover" :options="groupDropdownOptions" @select="handleGroupMenuSelect">
           <NButton size="small" :loading="groupActionSubmitting" @click="openGroupAction('create')">
@@ -2250,6 +2603,57 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :exception-label-by-code="exceptionLabelByCode"
       @shipment-updated="handleTrackingDrawerShipmentUpdated"
     />
+
+    <ShipmentAdvancedFilterDrawer
+      v-model:show="advancedFilterShow"
+      v-model:filter-carrier="filterCarrier"
+      v-model:filter-country="filterCountry"
+      v-model:filter-channel-name-zh="filterChannelNameZh"
+      v-model:filter-channel-category="filterChannelCategory"
+      v-model:filter-customer-no="filterCustomerNo"
+      v-model:filter-destination-port="filterDestinationPort"
+      v-model:filter-address-keyword="filterAddressKeyword"
+      v-model:filter-vessel-voyage="filterVesselVoyage"
+      v-model:filter-vip-only="filterVipOnly"
+      v-model:search-tracking-content="searchTrackingContent"
+      v-model:filter-exception="filterException"
+      v-model:filter-has-exception="filterHasException"
+      v-model:filter-stale-days="filterStaleDays"
+      v-model:filter-no-internal-tracking="filterNoInternalTracking"
+      v-model:filter-no-carrier-tracking="filterNoCarrierTracking"
+      v-model:filter-no-zipcode="filterNoZipcode"
+      v-model:filter-group-id="filterGroupId"
+      v-model:filter-group-no="filterGroupNo"
+      v-model:filter-rule-type="filterRuleType"
+      v-model:filter-has-group="filterHasGroup"
+      v-model:filter-pending-tracking-time-review="filterPendingTrackingTimeReview"
+      v-model:missing-etd="missingEtd"
+      v-model:missing-atd="missingAtd"
+      v-model:missing-eta="missingEta"
+      v-model:missing-ata="missingAta"
+      v-model:missing-expected-delivery="missingExpectedDelivery"
+      v-model:missing-delivered="missingDelivered"
+      v-model:not-delivered="notDelivered"
+      v-model:delivery-risk="deliveryRisk"
+      v-model:advanced-times="advancedTimes"
+      :filter-options="filterOptions"
+      :carrier-options="carrierOptions"
+      :country-options="countryOptions"
+      :channel-name-zh-options="channelNameZhOptions"
+      :channel-category-options="channelCategoryOptions"
+      :exception-filter-options="exceptionFilterOptions"
+      :has-exception-filter-options="hasExceptionFilterOptions"
+      :stale-options="staleOptions"
+      :has-group-filter-options="hasGroupFilterOptions"
+      :group-filter-options="groupFilterOptions"
+      :rule-type-filter-options="ruleTypeFilterOptions"
+      @apply="onFiltersChanged"
+    />
+
+    <ShipmentColumnSettingsDrawer
+      v-model:show="columnSettingsShow"
+      v-model:visible-keys="visibleColumnKeys"
+    />
   </div>
 </template>
 
@@ -2263,22 +2667,17 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 }
 
 .shipments-filters-bar .shipments-filter-shipment-no {
-  width: 220px;
-  min-width: 180px;
-  max-width: 280px;
-}
-
-.shipments-filters-bar .shipments-filter-shipment-no :deep(.n-input__textarea-el) {
-  min-height: 28px;
-  line-height: 1.4;
+  flex: 1 1 280px;
+  min-width: 220px;
+  max-width: 100%;
 }
 
 .shipments-filters-bar .shipments-filter-keyword {
-  width: 140px;
-  min-width: 120px;
+  width: 180px;
+  min-width: 140px;
 }
 
-.shipments-filters-bar .shipments-filter-tracking {
+.shipments-filters-bar .shipments-filter-daterange {
   width: 240px;
   min-width: 200px;
 }
@@ -2288,21 +2687,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   min-width: 6.5rem;
 }
 
-.shipments-filters-bar .shipments-filter-select--wide {
-  width: 8.75rem;
-  min-width: 7.5rem;
-}
-
 .shipments-filters-bar .shipments-filter-select--customer {
   width: 12rem;
   min-width: 10.5rem;
 }
 
-.shipments-filter-divider {
-  width: 1px;
-  height: 1.25rem;
-  flex-shrink: 0;
-  background: var(--color-border);
+.shipments-filters-bar .shipments-filter-select--wide {
+  width: 8.75rem;
+  min-width: 7.5rem;
 }
 
 /* 左侧固定列：不透明 + 轻阴影，横滚时不与右侧双行轨迹叠字 */

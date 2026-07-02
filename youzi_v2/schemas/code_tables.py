@@ -20,6 +20,12 @@ class CodeTableRecordIn(BaseModel):
     port_type: str = Field(
         default="both", validation_alias=AliasChoices("portType", "port_type")
     )
+    country: str = Field(default="")
+    category: str = Field(default="")
+    note: str = Field(default="")
+    carrier_id: str = Field(
+        default="", validation_alias=AliasChoices("carrierId", "carrier_id")
+    )
 
     def to_payload(self) -> dict:
         return self.model_dump()
@@ -38,6 +44,12 @@ class CodeTableUpdateIn(BaseModel):
     )
     port_type: str = Field(
         default="both", validation_alias=AliasChoices("portType", "port_type")
+    )
+    country: str = Field(default="")
+    category: str = Field(default="")
+    note: str = Field(default="")
+    carrier_id: str = Field(
+        default="", validation_alias=AliasChoices("carrierId", "carrier_id")
     )
 
     def to_payload(self) -> dict:

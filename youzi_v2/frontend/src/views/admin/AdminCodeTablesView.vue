@@ -44,6 +44,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const activeMeta = computed(() => tables.value.find((t) => t.table === activeTable.value))
 const hasPortType = computed(() => activeMeta.value?.hasPortType ?? false)
 const hasChannelFields = computed(() => activeMeta.value?.hasChannelFields ?? false)
+const hasCarrierFields = computed(() => activeMeta.value?.hasCarrierFields ?? false)
 
 async function loadTables() {
   const res = await listCodeTableTypes()
@@ -180,6 +181,15 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       render: (row) => row.portType || '—',
     })
   }
+  if (hasCarrierFields.value) {
+    cols.push({
+      title: '承运商ID',
+      key: 'carrierId',
+      minWidth: 160,
+      ellipsis: { tooltip: true },
+      render: (row) => row.carrierId || '—',
+    })
+  }
   if (hasChannelFields.value) {
     cols.push(
       { title: '国家', key: 'country', width: 88, render: (row) => row.country || '—' },
@@ -249,7 +259,12 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
     <div class="shrink-0 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="page-h2">后台管理 · 码表</h2>
-        <p class="text-xs text-zinc-500">维护渠道、国家、承运商等码表，支持 Excel 批量导入（按编码 upsert）</p>
+        <p class="text-xs text-zinc-500">
+          维护渠道、国家、承运商等码表；承运商「编码」对应运单
+          <code class="text-zinc-400">carrier_code</code>；「承运商ID」为 DPS
+          <code class="text-zinc-400">carrierId</code>，仅用于反查编码（不是运单
+          <code class="text-zinc-400">carrier_id</code> 承运商单号）。
+        </p>
       </div>
       <NSpace>
         <NButton size="small" quaternary @click="downloadTemplate">下载模板</NButton>
@@ -292,7 +307,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
         :columns="columns"
         :data="items"
         :loading="loading"
-        :scroll-x="hasPortType ? 980 : hasChannelFields ? 1080 : 880"
+        :scroll-x="hasPortType ? 980 : hasChannelFields ? 1080 : hasCarrierFields ? 980 : 880"
         size="small"
         flex-height
         class="code-tables-data-table h-full"
@@ -316,6 +331,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       :mode="modalMode"
       :has-port-type="hasPortType"
       :has-channel-fields="hasChannelFields"
+      :has-carrier-fields="hasCarrierFields"
       :initial="editingRow"
       @close="modalShow = false"
       @submit="handleFormSubmit"

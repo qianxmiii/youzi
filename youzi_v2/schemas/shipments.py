@@ -250,3 +250,31 @@ class ShipmentBatchResult(BaseModel):
     deleted: int = 0
     skipped: list[ShipmentBatchItemError] = Field(default_factory=list)
     errors: list[ShipmentBatchItemError] = Field(default_factory=list)
+
+
+class ShipmentDpsSyncByOrderRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    shipment_nos: list[str] = Field(
+        ...,
+        min_length=1,
+        validation_alias=AliasChoices("shipmentNos", "shipment_nos"),
+    )
+
+
+class ShipmentDpsSyncByOrderResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    skipped: bool = False
+    reason: str | None = None
+    error: str | None = None
+    remote_total: int = Field(default=0, alias="remoteTotal")
+    total: int = 0
+    created: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    failed: int = 0
+    not_found: int = Field(default=0, alias="notFound")
+    not_found_nos: list[str] = Field(default_factory=list, alias="notFoundNos")
+    pages: int = 0
+    errors: list[str] = Field(default_factory=list)

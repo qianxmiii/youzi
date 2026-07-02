@@ -96,6 +96,24 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 **禁止**将 Token、appKey、authorization 等写入 `youzi_v2/` 业务代码或提交 Git。
 
 - 路径：仓库根 `config/config.json`（gitignore）
+- 内部轨迹：`base_url`，由 `services/logistics_tracking.py` 读取
+- 运单查询（DPS 销售助理接口）：
+  - **`shipment_queryByPerson`**：查全部运单（url 内已带 `salesAssistantId`、`status` 等筛选），代码注入 `pageNum`、`transitTimeStart`、`transitTimeEnd`（默认当月）
+  - **`shipment_queryByOrder`**：按运单号查，拼接 `odds`（多单空格 → `%20`）+ `pageNum`
+  - 响应 `{ code, msg, total, rows }`，按 `total` 与 `pageSize`（默认 10）自动翻页。见 `services/shipment_query_config.py`
+  - **DPS 运单同步批处理**（计划任务页）：从 `shipment_queryByPerson` 拉取并 upsert 至本地 `shipments`；`transitTimeStart` / `transitTimeEnd` 可配置，默认当月；**默认关闭**，约 24 小时执行一次。见 `services/shipment_dps_sync.py`
+  - **同步哪些字段**：`youzi_v2/config/shipment_dps_sync_fields.json`（`onInsert` / `onUpdate`）；映射逻辑见 `services/shipment_dps_mapper.py`
+
+```json
+"shipment_queryByPerson": {
+  "url": "https://.../customPageSalesAssistant?pageSize=10&salesAssistantId=...&status=3",
+  "Authorization": "Bearer <token>"
+},
+"shipment_queryByOrder": {
+  "url": "https://.../customPageSalesAssistant?pageSize=10&orderByColumn=createTime&isAsc=asc",
+  "Authorization": "Bearer <token>"
+}
+```
 - 承运商：`vendors` 数组，由 `services/carrier_vendors.py` 按 `platform` 读取
 - 说明：根目录 `config/README.md`
 

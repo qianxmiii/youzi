@@ -22,6 +22,7 @@ export interface Shipment {
   originWarehouseCode: string | null
   supplierName: string | null
   carrierCode: string | null
+  carrierNameZh?: string | null
   carrierId: string | null
   trackingNumber: string | null
   /** 尾程快递：UPS/FEDEX/DPD/CWE 等，优先于单号自动识别跳转 */
@@ -126,6 +127,22 @@ export interface ShipmentImportResult {
   groupsTouched?: number
   membersAdded?: number
   groupErrors?: { row?: number; message: string; shipmentNo?: string; groupNo?: string }[]
+}
+
+export interface ShipmentDpsSyncByOrderResult {
+  skipped: boolean
+  reason?: string | null
+  error?: string | null
+  remoteTotal?: number
+  total: number
+  created: number
+  updated: number
+  unchanged?: number
+  failed: number
+  notFound?: number
+  notFoundNos?: string[]
+  pages?: number
+  errors?: string[]
 }
 
 export function emptyShipmentForm(): ShipmentPayload {

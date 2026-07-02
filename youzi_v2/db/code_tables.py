@@ -18,7 +18,7 @@ _CODE_TABLE_DEFS: list[tuple[str, str]] = [
     ),
     ("country_codes", ""),
     ("address_codes", ""),
-    ("carrier_codes", ""),
+    ("carrier_codes", "carrier_id TEXT NOT NULL DEFAULT '',"),
     (
         "port_codes",
         "port_type TEXT NOT NULL DEFAULT 'both',",
@@ -68,10 +68,19 @@ def _migrate_channel_codes(conn: sqlite3.Connection) -> None:
             conn.execute(ddl)
 
 
+def _migrate_carrier_codes(conn: sqlite3.Connection) -> None:
+    cols = {row[1] for row in conn.execute("PRAGMA table_info(carrier_codes)").fetchall()}
+    if "carrier_id" not in cols:
+        conn.execute(
+            "ALTER TABLE carrier_codes ADD COLUMN carrier_id TEXT NOT NULL DEFAULT ''"
+        )
+
+
 def ensure_schema(conn: sqlite3.Connection) -> None:
     for table, extra in _CODE_TABLE_DEFS:
         conn.execute(_create_code_table_sql(table, extra))
     _migrate_channel_codes(conn)
+    _migrate_carrier_codes(conn)
 
 
 def seed_if_empty(conn: sqlite3.Connection) -> None:

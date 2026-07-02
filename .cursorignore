@@ -1,0 +1,3 @@
+﻿# 本地私密配置（API 密钥、承运商 token 等），禁止 Cursor 索引/上传
+/config/
+

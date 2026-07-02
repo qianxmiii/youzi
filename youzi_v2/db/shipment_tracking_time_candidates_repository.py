@@ -10,6 +10,8 @@ from .connection import Database
 from .datetime_util import now_str
 from .shipment_tracking_time_candidates_table import TABLE_NAME
 
+CARRIER_CODES_TABLE = "carrier_codes"
+
 
 def _optional(row: sqlite3.Row, key: str, default: Any = "") -> Any:
     return row[key] if key in row.keys() else default
@@ -65,31 +67,53 @@ class ShipmentTrackingTimeCandidatesRepository:
         *,
         limit: int = 50,
         offset: int = 0,
+        carrier_code: str | None = None,
     ) -> dict[str, Any]:
         limit = max(1, min(limit, 500))
         offset = max(0, offset)
+        carrier = (carrier_code or "").strip() or None
+        where = "c.review_status = 'pending_review'"
+        params: list[Any] = []
+        if carrier:
+            where += " AND TRIM(s.carrier_code) = ?"
+            params.append(carrier)
         with self._database.lock:
             total = self._conn.execute(
                 f"""
-                SELECT COUNT(*) FROM {TABLE_NAME}
-                WHERE review_status = 'pending_review'
-                """
+                SELECT COUNT(*) FROM {TABLE_NAME} c
+                INNER JOIN shipments s ON s.id = c.shipment_id
+                WHERE {where}
+                """,
+                params,
             ).fetchone()[0]
             rows = self._conn.execute(
                 f"""
-                SELECT c.*, s.shipment_no, s.expected_delivery_time, s.delivered_time
+                SELECT c.*, s.shipment_no, s.carrier_code, s.expected_delivery_time,
+                    s.delivered_time,
+                    COALESCE(
+                        NULLIF(TRIM(crc.name_zh), ''),
+                        NULLIF(TRIM(crc_by_id.name_zh), '')
+                    ) AS _carrier_name_zh
                 FROM {TABLE_NAME} c
                 INNER JOIN shipments s ON s.id = c.shipment_id
-                WHERE c.review_status = 'pending_review'
+                LEFT JOIN {CARRIER_CODES_TABLE} crc ON s.carrier_code = crc.code
+                LEFT JOIN {CARRIER_CODES_TABLE} crc_by_id ON crc.code IS NULL
+                    AND TRIM(COALESCE(s.carrier_code, '')) != ''
+                    AND s.carrier_code = crc_by_id.carrier_id
+                WHERE {where}
                 ORDER BY c.updated_time DESC
                 LIMIT ? OFFSET ?
                 """,
-                (limit, offset),
+                [*params, limit, offset],
             ).fetchall()
         items = []
         for row in rows:
             item = _row_to_api(row)
             item["shipmentNo"] = row["shipment_no"]
+            if "carrier_code" in row.keys():
+                item["carrierCode"] = (row["carrier_code"] or "").strip() or None
+            if "_carrier_name_zh" in row.keys():
+                item["carrierNameZh"] = (row["_carrier_name_zh"] or "").strip() or None
             if "expected_delivery_time" in row.keys():
                 item["expectedDeliveryTime"] = row["expected_delivery_time"]
             if "delivered_time" in row.keys():

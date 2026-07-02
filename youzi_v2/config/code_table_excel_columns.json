@@ -27,7 +27,10 @@
     "大类": "category",
     "category": "category",
     "备注": "note",
-    "note": "note"
+    "note": "note",
+    "承运商ID": "carrier_id",
+    "carrier_id": "carrier_id",
+    "carrierId": "carrier_id"
   },
   "is_active_true": ["1", "true", "yes", "y", "是", "启用", "TRUE", "Yes"]
 }

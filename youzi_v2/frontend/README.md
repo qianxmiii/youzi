@@ -53,6 +53,32 @@ npm run build    # 输出 dist/
 
 业务 UI 图标统一使用 [Lucide](https://lucide.dev/)（`lucide-vue-next`），按名从包内 tree-shake 引入。描边宽度见 `src/constants/icons.ts`（默认 `ICON_STROKE` 2.25，侧栏 `ICON_STROKE_NAV` 2.75）；`main.css` 对 `.lucide` 有全局兜底。侧栏导航经 `NavIcon.vue` 映射 `navigation.ts` 的 `icon` 字段；表格操作见 `TableActionIcon.vue`。Naive UI 组件内置图标（下拉箭头等）仍由组件库自带。
 
+## UI/UX 设计
+
+前端 UI 设计与改版须遵循 Cursor Skill **ui-ux-pro-max**（`.cursor/skills/ui-ux-pro-max/SKILL.md`），规则见 `.cursor/rules/youzi-v2-ui-ux.mdc`。新页或大改版可先运行：
+
+```bash
+python .cursor/skills/ui-ux-pro-max/scripts/search.py "<页面描述>" --design-system --stack vue -p "Youzi"
+```
+
+## 外部运单查询（config.json）
+
+| 配置键 | 用途 |
+|--------|------|
+| `shipment_queryByPerson` | 查全部运单（url 内筛选条件 + 自动 `pageNum`） |
+| `shipment_queryByOrder` | 按运单号查（追加 `odds` + `pageNum`） |
+
+```python
+from youzi_v2.context import LOGISTICS_CONFIG_PATH
+from youzi_v2.services.shipment_query_config import (
+    query_shipments_by_person,
+    query_shipments_by_order,
+)
+
+all_rows, _ = query_shipments_by_person(LOGISTICS_CONFIG_PATH)
+by_odd, _ = query_shipments_by_order(["DPSECO260610178"], LOGISTICS_CONFIG_PATH)
+```
+
 ## 注意事项
 
 - API 基址通过 Vite 代理，无需硬编码端口

@@ -29,12 +29,14 @@ from .db.connection import get_database
 from .db.dict_repository import DictRepository
 from .db.quote_history_table import QuoteHistoryRepository
 from .db.shipment_exception_events_repository import ShipmentExceptionEventsRepository
+from .db.shipment_exception_followup_repository import ShipmentExceptionFollowupRepository
 from .db.shipments_repository import ShipmentsRepository
 from .db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from .db.tracking_logs_repository import TrackingLogsRepository
 from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .db.customers_repository import CustomersRepository
 from .db.channels_repository import ChannelsRepository
+from .db.shipment_performance_statistics_repository import ShipmentPerformanceStatisticsRepository
 from .db.shipment_statistics_repository import ShipmentStatisticsRepository
 from .db.port_subscriptions_table import PortSubscriptionsRepository
 from .db.shipment_subscriptions_table import ShipmentSubscriptionsRepository
@@ -50,6 +52,8 @@ from .schemas.shipments import (
     ShipmentBatchIdsIn,
     ShipmentBatchResult,
     ShipmentBatchUpdateIn,
+    ShipmentDpsSyncByOrderRequest,
+    ShipmentDpsSyncByOrderResult,
     ShipmentRecordIn,
     ShipmentSubscribeBatchResult,
     ShipmentUnsubscribeBatchResult,
@@ -91,15 +95,24 @@ from .services.vessel_schedule_sync import (
     sync_all_vessel_schedules,
     sync_one_vessel_schedule,
 )
+from .schemas.shipment_performance_statistics import (
+    ShipmentPerformanceAnalysis,
+    ShipmentPerformanceDetailsResponse,
+    ShipmentPerformanceQuery,
+)
 from .schemas.statistics import ShipmentStatisticsOverview
 from .schemas.tracking_freshness import TrackingFreshnessStats
 from .schemas.scheduled_tasks import (
+    ExceptionFollowupRunResult,
     GroupAutoArchiveRunResult,
     ScheduledSyncRunResult,
     ScheduledSyncSettingsUpdate,
     ScheduledTaskConfig,
     ScheduledTaskOverview,
     TrackingSyncJobListResponse,
+    ZipcodeBackfillRunResult,
+    ShipmentDpsSyncRunRequest,
+    ShipmentDpsSyncRunResult,
 )
 from .schemas.tracking import (
     TrackingSyncDailyStats,
@@ -116,6 +129,17 @@ from .services.scheduled_tasks_info import (
     builtin_scheduled_tasks,
 )
 from .services.group_archive_settings import save_group_auto_archive_enabled
+from .services.zipcode_backfill_settings import save_zipcode_backfill_enabled
+from .services.exception_followup_settings import save_exception_followup_enabled
+from .services.shipment_zipcode_backfill import run_zipcode_backfill_batch
+from .services.shipment_dps_sync_settings import (
+    save_shipment_dps_sync_enabled,
+    save_shipment_dps_sync_transit_time_range,
+)
+from .services.shipment_dps_sync import (
+    run_shipment_dps_sync_batch,
+    run_shipment_dps_sync_by_order,
+)
 from .services.scheduled_sync_settings import (
     get_scheduled_sync_settings,
     save_scheduled_sync_settings,
@@ -144,6 +168,7 @@ from .services.tracking_sync_scheduler import (
     run_scheduled_tracking_sync,
     start_tracking_sync_scheduler,
 )
+from .services.exception_followup_reminders import scan_exception_followup_reminders
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
@@ -263,6 +288,7 @@ addresses_repo = AddressesRepository(_database)
 addresses_warehouse_repo = AddressesWarehouseRepository(_database)
 shipments_repo = ShipmentsRepository(_database)
 shipment_exceptions_repo = ShipmentExceptionEventsRepository(_database)
+shipment_exception_followup_repo = ShipmentExceptionFollowupRepository(_database)
 internal_tracking_repo = TrackingLogsRepository(_database)
 carrier_tracking_repo = CarrierTrackingLogsRepository(_database)
 tracking_jobs_repo = TrackingSyncJobsRepository(_database)
@@ -271,6 +297,7 @@ dict_repo = DictRepository(_database)
 customers_repo = CustomersRepository(_database)
 channels_repo = ChannelsRepository(_database)
 shipment_statistics_repo = ShipmentStatisticsRepository(_database)
+performance_statistics_repo = ShipmentPerformanceStatisticsRepository(_database)
 vessel_schedules_repo = VesselSchedulesRepository(_database)
 port_subscriptions_repo = PortSubscriptionsRepository(_database)
 shipment_subscriptions_repo = ShipmentSubscriptionsRepository(_database)

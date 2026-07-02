@@ -31,6 +31,20 @@
 
 ### 修改
 
+- `config/config.json` 运单查询拆为 `shipment_queryByPerson`（全量）与 `shipment_queryByOrder`（按 `odds`）；`pageNum` / `transitTimeStart` / `transitTimeEnd` 代码注入，按 `total` 自动翻页
+- 计划任务新增 **DPS 运单同步**：从 DPS 拉取运单 upsert 至本地，下单时间范围可配（默认当月），批处理默认关闭
+- DPS 同步字段策略：`config/shipment_dps_sync_fields.json`；`address_type` 按 `deliveryAddressType`（0=AMZ/WFS，2=3PL）
+- DPS 运单同步查询参数：`orderTimeStart` / `orderTimeEnd` 改为 `transitTimeStart` / `transitTimeEnd`（发运时间）；计划任务配置字段同步更名
+- 码表 · 承运商：`carrier_id` 存 DPS `carrierId` 用于反查 `carrier_code`；DPS 同步不再把 `carrierId` 写入运单 `carrier_id`（承运商单号）
+- 运单列表：勾选运单「从 DPS 更新选中」，调用 `shipment_queryByOrder` upsert（`POST /api/v1/shipments/sync-from-dps`）
+- 轨迹审批列表承运商列显示码表中文名（`carrierNameZh`）
+
+- 安装 [ui-ux-pro-max](https://github.com/nextlevelbuilder/ui-ux-pro-max-skill) 至 `.cursor/skills/`；新增规则 `.cursor/rules/youzi-v2-ui-ux.mdc`，前端 UI/UX 工作须遵循该 Skill
+
+- 顶栏通知拆分为 **待办**（清单图标，分组提醒未处理项，支持「知道了 / 已处理」）与 **消息**（铃铛，轨迹订阅更新，支持「知道了 / 全部已读」）；分组提醒 API 增加 `scope=todo|unread`
+
+- 运单列表筛选：新增「无邮编」（`noZipcode=true`），便于找出导入后需补全邮编的运单；导出 Excel 同步支持该筛选
+
 - 分组提醒卡片：签收期限（橙/红 + 日历时钟图标）与整组催款（蓝色 + 钱币图标）分开展示
 
 - 运单分组详情：分组编号与客户名分开展示，客户名用 badge；提醒卡片标题旁增加客户 badge

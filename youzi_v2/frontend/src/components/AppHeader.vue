@@ -2,7 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchHealth, fetchLegacyHealth } from '@/api/client'
-import AppSubscriptionBell from '@/components/AppSubscriptionBell.vue'
+import AppMessageBell from '@/components/AppMessageBell.vue'
+import AppTodoBell from '@/components/AppTodoBell.vue'
 import WorldClockBar from '@/components/header/WorldClockBar.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
 import { ChevronLeft } from 'lucide-vue-next'
@@ -60,8 +61,9 @@ onMounted(async () => {
 
     <WorldClockBar class="justify-self-center" />
 
-    <div class="relative z-20 flex shrink-0 items-center gap-3 justify-self-end">
-      <AppSubscriptionBell />
+    <div class="relative z-20 flex shrink-0 items-center gap-2 justify-self-end">
+      <AppTodoBell />
+      <AppMessageBell />
       <span class="status-pill">
         <span
           class="h-1.5 w-1.5 rounded-full"

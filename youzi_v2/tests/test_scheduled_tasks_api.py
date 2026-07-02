@@ -19,13 +19,26 @@ from youzi_v2.services.scheduled_tasks_info import (
 
 
 class ScheduledTasksInfoTest(unittest.TestCase):
-    def test_builtin_tasks_two_entries(self) -> None:
+    def test_builtin_tasks_include_zipcode_backfill(self) -> None:
         tmp = tempfile.TemporaryDirectory()
         db = Database(Path(tmp.name) / "t.db")
         settings = get_scheduled_sync_settings(db)
-        tasks = builtin_scheduled_tasks(settings)
-        self.assertEqual(len(tasks), 2)
+        tasks = builtin_scheduled_tasks(settings, db)
+        self.assertGreaterEqual(len(tasks), 3)
         sources = {t["source"] for t in tasks}
+        self.assertIn("zipcode-backfill", sources)
+        self.assertIn("dps-shipment-sync", sources)
+        db.conn.close()
+        tmp.cleanup()
+
+    def test_builtin_tasks_tracking_entries(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "t.db")
+        settings = get_scheduled_sync_settings(db)
+        tasks = builtin_scheduled_tasks(settings, db)
+        tracking = [t for t in tasks if t["source"] in ("internal", "carrier")]
+        self.assertEqual(len(tracking), 2)
+        sources = {t["source"] for t in tracking}
         self.assertEqual(sources, {"internal", "carrier"})
         db.conn.close()
         tmp.cleanup()

@@ -72,7 +72,7 @@ export async function createChannel(payload: ChannelPayload): Promise<Channel> {
 
 export async function updateChannel(
   code: string,
-  payload: Partial<Omit<ChannelPayload, 'code'>>,
+  payload: Partial<ChannelPayload>,
 ): Promise<Channel> {
   return api<Channel>(`/api/v1/channels/${encodeURIComponent(code)}`, {
     method: 'PATCH',

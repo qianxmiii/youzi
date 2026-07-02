@@ -47,6 +47,30 @@ def update_scheduled_tasks_settings(body: ScheduledSyncSettingsUpdate):
             _database,
             enabled=body.group_auto_archive_enabled,
         )
+    if body.zipcode_backfill_enabled is not None:
+        save_zipcode_backfill_enabled(
+            _database,
+            enabled=body.zipcode_backfill_enabled,
+        )
+    if body.dps_shipment_sync_enabled is not None:
+        save_shipment_dps_sync_enabled(
+            _database,
+            enabled=body.dps_shipment_sync_enabled,
+        )
+    if (
+        body.dps_shipment_sync_transit_time_start is not None
+        or body.dps_shipment_sync_transit_time_end is not None
+    ):
+        save_shipment_dps_sync_transit_time_range(
+            _database,
+            transit_time_start=body.dps_shipment_sync_transit_time_start,
+            transit_time_end=body.dps_shipment_sync_transit_time_end,
+        )
+    if body.exception_followup_enabled is not None:
+        save_exception_followup_enabled(
+            _database,
+            enabled=body.exception_followup_enabled,
+        )
     return ScheduledTaskConfig(**build_scheduled_task_config(_database))
 
 @router.get("/api/v1/scheduled-tasks/jobs", response_model=TrackingSyncJobListResponse)
@@ -94,6 +118,47 @@ def run_scheduled_tasks_group_auto_archive():
         trigger="manual",
     )
     return GroupAutoArchiveRunResult(**result)
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-zipcode-backfill",
+    response_model=ZipcodeBackfillRunResult,
+)
+def run_scheduled_tasks_zipcode_backfill():
+    result = run_zipcode_backfill_batch(
+        shipments_repo,
+        force=True,
+        trigger="manual",
+    )
+    return ZipcodeBackfillRunResult(**result)
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-dps-shipment-sync",
+    response_model=ShipmentDpsSyncRunResult,
+)
+def run_scheduled_tasks_dps_shipment_sync(
+    body: ShipmentDpsSyncRunRequest | None = Body(None),
+):
+    result = run_shipment_dps_sync_batch(
+        shipments_repo,
+        LOGISTICS_CONFIG_PATH,
+        transit_time_start=body.transit_time_start if body else None,
+        transit_time_end=body.transit_time_end if body else None,
+        force=True,
+        trigger="manual",
+    )
+    return ShipmentDpsSyncRunResult(**result)
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-exception-followup",
+    response_model=ExceptionFollowupRunResult,
+)
+def run_scheduled_tasks_exception_followup():
+    result = scan_exception_followup_reminders(
+        shipment_exception_followup_repo,
+        force=True,
+        trigger="manual",
+    )
+    return ExceptionFollowupRunResult(**result)
 
 @router.post("/api/v1/scheduled-tasks/run-tracking-sync", response_model=ScheduledSyncRunResult)
 def run_scheduled_tasks_tracking_sync():

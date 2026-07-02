@@ -1,0 +1,28 @@
+---
+description: UI/UX 设计必须遵循 ui-ux-pro-max Skill（Vue + Tailwind + Naive UI）
+globs: youzi_v2/frontend/**/*
+alwaysApply: false
+---
+
+# UI/UX 设计（ui-ux-pro-max）
+
+在 `youzi_v2/frontend/` 内做 **页面、组件、布局、视觉、交互、无障碍** 相关设计与实现时，**必须先读取并遵循** `.cursor/skills/ui-ux-pro-max/SKILL.md`。
+
+## 必做流程
+
+1. **读 Skill** — 按 Skill 内优先级（无障碍 → 触控 → 性能 → 风格…）决策，勿凭直觉堆样式。
+2. **新页 / 大改版** — 先生成设计系统再写代码：
+   ```bash
+   python .cursor/skills/ui-ux-pro-max/scripts/search.py "<产品/页面描述>" --design-system --stack vue -p "Youzi"
+   ```
+   需要持久化时加 `--persist`；细节补充用 `--domain ux|style|color|typography|landing` 等（见 Skill）。
+3. **技术栈约束** — Vue 3 + Tailwind + Naive UI + Lucide 图标；复用 `main.css` 的 `--color-*` / 现有组件模式，避免与全局 token 冲突的全局样式。
+4. **交付自检** — 对照 Skill 的 Pre-Delivery Checklist：对比度、可点击态 `cursor-pointer`、hover/focus、响应式断点、`prefers-reduced-motion` 等。
+
+## 不适用
+
+纯脚本、API、数据库、后端逻辑；仅改字段/文案且不影响界面结构与视觉的任务。
+
+## 相关 Skill（按需）
+
+同目录下 `design-system`、`ui-styling`、`design` 等子 Skill 可在 Skill 内路由时使用；**主入口仍为 `ui-ux-pro-max`**。

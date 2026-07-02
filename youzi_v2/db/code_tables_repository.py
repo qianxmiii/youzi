@@ -9,6 +9,7 @@ from .channel_seeds import CHANNEL_CATEGORIES
 from .code_tables import list_code_tables
 from .connection import Database
 from .datetime_util import now_str
+from .shipments_repository import ShipmentsRepository
 
 _ALLOWED_TABLES = frozenset(list_code_tables())
 
@@ -43,6 +44,7 @@ def list_table_meta() -> list[dict[str, Any]]:
             "label": _TABLE_LABELS[name],
             "hasPortType": name == "port_codes",
             "hasChannelFields": name == "channel_codes",
+            "hasCarrierFields": name == "carrier_codes",
         }
         for name in sorted(_ALLOWED_TABLES)
     ]
@@ -64,7 +66,35 @@ def _row_to_api(table: str, row: sqlite3.Row) -> dict[str, Any]:
         out["country"] = row["country"] if "country" in row.keys() else ""
         out["category"] = row["category"] if "category" in row.keys() else ""
         out["note"] = row["note"] if "note" in row.keys() else ""
+    if table == "carrier_codes":
+        out["carrierId"] = row["carrier_id"] if "carrier_id" in row.keys() else ""
     return out
+
+
+def _sync_shipments_channel_code(
+    database: Database,
+    code: str,
+    name_zh: str,
+    *extra_names: str,
+) -> int:
+    return ShipmentsRepository(database).replace_channel_code_matching_names(
+        code,
+        name_zh,
+        *extra_names,
+    )
+
+
+def _sync_shipments_carrier_code(
+    database: Database,
+    code: str,
+    name_zh: str,
+    *extra_names: str,
+) -> int:
+    return ShipmentsRepository(database).replace_carrier_code_matching_names(
+        code,
+        name_zh,
+        *extra_names,
+    )
 
 
 class CodeTablesRepository:
@@ -90,8 +120,14 @@ class CodeTablesRepository:
         params: list[Any] = []
         if search and search.strip():
             q = f"%{search.strip()}%"
-            conditions.append("(code LIKE ? OR name_zh LIKE ? OR name_en LIKE ?)")
-            params.extend([q, q, q])
+            if t == "carrier_codes":
+                conditions.append(
+                    "(code LIKE ? OR name_zh LIKE ? OR name_en LIKE ? OR carrier_id LIKE ?)"
+                )
+                params.extend([q, q, q, q])
+            else:
+                conditions.append("(code LIKE ? OR name_zh LIKE ? OR name_en LIKE ?)")
+                params.extend([q, q, q])
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         with self._database.lock:
             total = self._conn.execute(
@@ -171,6 +207,25 @@ class CodeTablesRepository:
                         now,
                     ),
                 )
+            elif t == "carrier_codes":
+                self._conn.execute(
+                    f"""
+                    INSERT INTO {t} (
+                        code, name_zh, name_en, carrier_id,
+                        sort_order, is_active, created_time, updated_time
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        code,
+                        payload["name_zh"],
+                        payload["name_en"],
+                        payload["carrier_id"],
+                        payload["sort_order"],
+                        payload["is_active"],
+                        now,
+                        now,
+                    ),
+                )
             else:
                 self._conn.execute(
                     f"""
@@ -190,9 +245,31 @@ class CodeTablesRepository:
                     ),
                 )
             self._conn.commit()
+        replaced = 0
+        if t == "channel_codes":
+            replaced = _sync_shipments_channel_code(
+                self._database,
+                code,
+                payload["name_zh"],
+            )
+        elif t == "carrier_codes":
+            target = (payload["carrier_id"] or code).strip()
+            extras: list[str] = []
+            if payload["carrier_id"] and code != target:
+                extras.append(code)
+            replaced = _sync_shipments_carrier_code(
+                self._database,
+                target,
+                payload["name_zh"],
+                *extras,
+            )
         row = self.get_row(t, code)
         if row is None:
             raise RuntimeError("插入后读取失败")
+        if replaced and t == "channel_codes":
+            row["shipmentsChannelCodeReplaced"] = replaced
+        if replaced and t == "carrier_codes":
+            row["shipmentsCarrierCodeReplaced"] = replaced
         return row
 
     def update_row(self, table: str, code: str, data: dict[str, Any]) -> dict[str, Any]:
@@ -213,18 +290,56 @@ class CodeTablesRepository:
         if t == "channel_codes":
             sets[1:1] = ["country = ?", "category = ?", "note = ?"]
             vals[1:1] = [payload["country"], payload["category"], payload["note"]]
+        if t == "carrier_codes":
+            sets.insert(2, "carrier_id = ?")
+            vals.insert(2, payload["carrier_id"])
         vals.append(c)
+        replaced = 0
         with self._database.lock:
+            old_name_zh = ""
+            if t in ("channel_codes", "carrier_codes"):
+                old = self._conn.execute(
+                    f"SELECT name_zh FROM {t} WHERE code = ?",
+                    (c,),
+                ).fetchone()
+                if old:
+                    old_name_zh = (old["name_zh"] or "").strip()
             cur = self._conn.execute(
                 f"UPDATE {t} SET {', '.join(sets)} WHERE code = ?",
                 vals,
             )
-            self._conn.commit()
             if cur.rowcount == 0:
+                self._conn.commit()
                 raise KeyError(c)
+            if t == "channel_codes":
+                extra = [old_name_zh] if old_name_zh and old_name_zh != payload["name_zh"] else []
+                replaced = _sync_shipments_channel_code(
+                    self._database,
+                    c,
+                    payload["name_zh"],
+                    *extra,
+                )
+            elif t == "carrier_codes":
+                extra: list[str] = []
+                if old_name_zh and old_name_zh != payload["name_zh"]:
+                    extra.append(old_name_zh)
+                target = (payload["carrier_id"] or c).strip()
+                if payload["carrier_id"] and c != target:
+                    extra.append(c)
+                replaced = _sync_shipments_carrier_code(
+                    self._database,
+                    target,
+                    payload["name_zh"],
+                    *extra,
+                )
+            self._conn.commit()
         row = self.get_row(t, c)
         if row is None:
             raise KeyError(c)
+        if replaced and t == "channel_codes":
+            row["shipmentsChannelCodeReplaced"] = replaced
+        if replaced and t == "carrier_codes":
+            row["shipmentsCarrierCodeReplaced"] = replaced
         return row
 
     def upsert_row(self, table: str, data: dict[str, Any]) -> tuple[dict[str, Any], bool]:
@@ -285,4 +400,44 @@ class CodeTablesRepository:
             out["country"] = country
             out["category"] = category
             out["note"] = note
+        if table == "carrier_codes":
+            out["carrier_id"] = (
+                data.get("carrier_id") or data.get("carrierId") or ""
+            ).strip()
+        return out
+
+    def lookup_carrier_code_by_id(self, carrier_id: str) -> str | None:
+        """按 DPS/运单 carrier_id 反查 carrier_codes.code（carrier_code）。"""
+        cid = (carrier_id or "").strip()
+        if not cid:
+            return None
+        with self._database.lock:
+            row = self._conn.execute(
+                """
+                SELECT code FROM carrier_codes
+                WHERE carrier_id = ? AND is_active = 1
+                ORDER BY sort_order ASC, code ASC
+                LIMIT 1
+                """,
+                (cid,),
+            ).fetchone()
+        return str(row["code"]) if row else None
+
+    def carrier_code_vendor_id_lookup(self) -> dict[str, str]:
+        """码表 code / carrier_id → carrier_id，供轨迹同步按 vendors.id 匹配。"""
+        out: dict[str, str] = {}
+        with self._database.lock:
+            rows = self._conn.execute(
+                """
+                SELECT code, carrier_id FROM carrier_codes
+                WHERE is_active = 1
+                """
+            ).fetchall()
+        for row in rows:
+            code = (row["code"] or "").strip()
+            cid = (row["carrier_id"] or "").strip()
+            if cid:
+                out[cid] = cid
+            if code and cid:
+                out[code] = cid
         return out

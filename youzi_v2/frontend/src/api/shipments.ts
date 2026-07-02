@@ -6,6 +6,7 @@ import type {
   ShipmentExceptionEvent,
   ShipmentImportResult,
   ShipmentListResponse,
+  ShipmentDpsSyncByOrderResult,
   ShipmentPayload,
 } from '@/types/shipment'
 import type {
@@ -24,8 +25,14 @@ import type {
 
 import type { ShipmentGroupFilterOption } from '@/types/shipmentGroup'
 
+export interface ShipmentCarrierFilterOption {
+  code: string
+  nameZh: string
+}
+
 export interface ShipmentFilterOptions {
   customers: string[]
+  carriers: ShipmentCarrierFilterOption[]
   carrierCodes: string[]
   countryCodes: string[]
   channelCodes: string[]
@@ -55,6 +62,38 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.channelCode?.trim()) q.channelCode = params.channelCode.trim()
   if (params.channelNameZh?.trim()) q.channelNameZh = params.channelNameZh.trim()
   if (params.channelCategory?.trim()) q.channelCategory = params.channelCategory.trim()
+  if (params.vesselVoyage?.trim()) q.vesselVoyage = params.vesselVoyage.trim()
+  if (params.customerNo?.trim()) q.customerNo = params.customerNo.trim()
+  if (params.destinationPortCode?.trim()) q.destinationPortCode = params.destinationPortCode.trim()
+  if (params.addressKeyword?.trim()) q.addressKeyword = params.addressKeyword.trim()
+  if (params.timeField?.trim()) q.timeField = params.timeField.trim()
+  if (params.timeFrom?.trim()) q.timeFrom = params.timeFrom.trim()
+  if (params.timeTo?.trim()) q.timeTo = params.timeTo.trim()
+  const dateKeys = [
+    ['etdFrom', 'etdTo'],
+    ['atdFrom', 'atdTo'],
+    ['etaFrom', 'etaTo'],
+    ['ataFrom', 'ataTo'],
+    ['expectedDeliveryFrom', 'expectedDeliveryTo'],
+    ['deliveredFrom', 'deliveredTo'],
+    ['createdFrom', 'createdTo'],
+    ['updatedFrom', 'updatedTo'],
+  ] as const
+  for (const [fromKey, toKey] of dateKeys) {
+    const from = params[fromKey]?.trim()
+    const to = params[toKey]?.trim()
+    if (from) q[fromKey] = from
+    if (to) q[toKey] = to
+  }
+  if (params.missingEtd) q.missingEtd = 'true'
+  if (params.missingAtd) q.missingAtd = 'true'
+  if (params.missingEta) q.missingEta = 'true'
+  if (params.missingAta) q.missingAta = 'true'
+  if (params.missingExpectedDelivery) q.missingExpectedDelivery = 'true'
+  if (params.missingDelivered) q.missingDelivered = 'true'
+  if (params.notDelivered) q.notDelivered = 'true'
+  if (params.hasAta) q.hasAta = 'true'
+  if (params.deliveryRisk?.trim()) q.deliveryRisk = params.deliveryRisk.trim()
   if (params.internalFreshness) q.internalFreshness = params.internalFreshness
   if (params.carrierFreshness) q.carrierFreshness = params.carrierFreshness
   if (params.carrierAheadOfInternal) q.carrierAheadOfInternal = 'true'
@@ -63,6 +102,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
     q.minStaleDays = String(params.minStaleDays)
   }
   if (params.noTracking) q.noTracking = 'true'
+  if (params.noZipcode) q.noZipcode = 'true'
   if (params.groupId?.trim()) q.groupId = params.groupId.trim()
   if (params.groupNo?.trim()) q.groupNo = params.groupNo.trim()
   if (params.ruleType?.trim()) q.ruleType = params.ruleType.trim()
@@ -95,12 +135,45 @@ export interface ListShipmentsParams {
   channelCode?: string
   channelNameZh?: string
   channelCategory?: string
+  vesselVoyage?: string
+  customerNo?: string
+  destinationPortCode?: string
+  addressKeyword?: string
+  timeField?: string
+  timeFrom?: string
+  timeTo?: string
+  etdFrom?: string
+  etdTo?: string
+  atdFrom?: string
+  atdTo?: string
+  etaFrom?: string
+  etaTo?: string
+  ataFrom?: string
+  ataTo?: string
+  expectedDeliveryFrom?: string
+  expectedDeliveryTo?: string
+  deliveredFrom?: string
+  deliveredTo?: string
+  createdFrom?: string
+  createdTo?: string
+  updatedFrom?: string
+  updatedTo?: string
+  missingEtd?: boolean
+  missingAtd?: boolean
+  missingEta?: boolean
+  missingAta?: boolean
+  missingExpectedDelivery?: boolean
+  missingDelivered?: boolean
+  notDelivered?: boolean
+  hasAta?: boolean
+  deliveryRisk?: string
   internalFreshness?: TrackingFreshnessBucket
   carrierFreshness?: TrackingFreshnessBucket
   carrierAheadOfInternal?: boolean
   pendingTrackingTimeReview?: boolean
   minStaleDays?: number
   noTracking?: boolean
+  noZipcode?: boolean
   groupId?: string
   groupNo?: string
   ruleType?: string
@@ -267,6 +340,17 @@ export async function syncCarrierTracking(shipmentNos?: string[]): Promise<Track
   })
 }
 
+/** 从 DPS shipment_queryByOrder 按运单号更新选中运单 */
+export async function syncShipmentsFromDps(
+  shipmentNos: string[],
+): Promise<ShipmentDpsSyncByOrderResult> {
+  return api<ShipmentDpsSyncByOrderResult>('/api/v1/shipments/sync-from-dps', {
+    method: 'POST',
+    body: { shipmentNos },
+    timeout: 600_000,
+  })
+}
+
 /** @deprecated 使用 syncTracking() */
 export async function syncAllTracking(): Promise<TrackingSyncResult> {
   return syncTracking()
@@ -329,14 +413,18 @@ export async function recalculateShipmentTrackingTimes(
 }
 
 export async function listPendingTrackingTimeReviews(
-  params?: { limit?: number; offset?: number },
+  params?: { limit?: number; offset?: number; carrierCode?: string },
 ): Promise<{
   items: TrackingTimeCandidate[]
   total: number
   limit: number
   offset: number
 }> {
-  return api('/api/v1/shipment-tracking-time-candidates/pending', { query: params })
+  const q: Record<string, string> = {}
+  if (params?.limit != null) q.limit = String(params.limit)
+  if (params?.offset != null) q.offset = String(params.offset)
+  if (params?.carrierCode?.trim()) q.carrierCode = params.carrierCode.trim()
+  return api('/api/v1/shipment-tracking-time-candidates/pending', { query: q })
 }
 
 export async function reviewTrackingTimeCandidate(

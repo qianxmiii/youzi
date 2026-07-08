@@ -25,6 +25,7 @@ from .exception_followup_settings import (
     EXCEPTION_FOLLOWUP_INTERVAL_HOURS,
     get_exception_followup_settings,
 )
+from .shipment_sla_settings import SLA_SCAN_INTERVAL_HOURS, get_sla_scan_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -35,7 +36,8 @@ def build_scheduled_task_config(database: Database) -> dict:
     zipcode = get_zipcode_backfill_settings(database).to_api_dict()
     dps_sync = get_shipment_dps_sync_settings(database).to_api_dict()
     exception_followup = get_exception_followup_settings(database).to_api_dict()
-    out = sync | archive | zipcode | dps_sync | exception_followup | {
+    sla_scan = get_sla_scan_settings(database).to_api_dict()
+    out = sync | archive | zipcode | dps_sync | exception_followup | sla_scan | {
         "scriptPath": str(REPO_ROOT / "youzi_v2" / "scripts" / "sync_all_tracking_scheduled.py"),
         "pollIntervalSec": 60,
     }
@@ -45,6 +47,7 @@ def build_scheduled_task_config(database: Database) -> dict:
         or zipcode.get("zipcodeBackfillEnabled")
         or dps_sync.get("dpsShipmentSyncEnabled")
         or exception_followup.get("exceptionFollowupEnabled")
+        or sla_scan.get("slaScanEnabled")
     )
     return out
 
@@ -83,6 +86,12 @@ def builtin_scheduled_tasks(
         if not exception_settings.enabled
         else f"每 {EXCEPTION_FOLLOWUP_INTERVAL_HOURS:g} 小时（约 1 天）"
     )
+    sla_settings = get_sla_scan_settings(database)
+    sla_schedule = (
+        "已关闭"
+        if not sla_settings.enabled
+        else f"每 {SLA_SCAN_INTERVAL_HOURS:g} 小时（约 1 天）"
+    )
 
     return [
         {
@@ -116,6 +125,16 @@ def builtin_scheduled_tasks(
             "source": "zipcode-backfill",
             "schedule": zipcode_schedule,
             "description": "根据地址库（平台仓库代码、第三方地址）为邮编为空的运单补全 zipcode；默认关闭，可手动立即执行。",
+        },
+        {
+            "id": "sla-scan",
+            "name": "运输时效预警",
+            "source": "sla-scan",
+            "schedule": sla_schedule,
+            "description": (
+                "扫描未签收运单：按渠道运输时效规则生成即将超时/已超时/严重超时预警；"
+                "默认开启，可手动立即执行。"
+            ),
         },
         {
             "id": "exception-followup",

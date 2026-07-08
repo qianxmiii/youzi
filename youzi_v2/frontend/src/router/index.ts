@@ -58,6 +58,12 @@ const router = createRouter({
           meta: { title: '运单管理' },
         },
         {
+          path: 'shipment-exceptions',
+          name: 'shipment-exceptions',
+          component: () => import('@/views/shipment-exceptions/ShipmentExceptionsView.vue'),
+          meta: { title: '异常跟踪' },
+        },
+        {
           path: 'shipment-groups',
           name: 'shipment-groups',
           component: () => import('@/views/shipment-groups/ShipmentGroupsView.vue'),

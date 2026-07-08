@@ -71,6 +71,11 @@ def update_scheduled_tasks_settings(body: ScheduledSyncSettingsUpdate):
             _database,
             enabled=body.exception_followup_enabled,
         )
+    if body.sla_scan_enabled is not None:
+        save_sla_scan_enabled(
+            _database,
+            enabled=body.sla_scan_enabled,
+        )
     return ScheduledTaskConfig(**build_scheduled_task_config(_database))
 
 @router.get("/api/v1/scheduled-tasks/jobs", response_model=TrackingSyncJobListResponse)
@@ -159,6 +164,20 @@ def run_scheduled_tasks_exception_followup():
         trigger="manual",
     )
     return ExceptionFollowupRunResult(**result)
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-sla-scan",
+    response_model=ShipmentSlaScanResult,
+)
+def run_scheduled_tasks_sla_scan():
+    result = scan_shipment_sla_alerts(
+        shipment_sla_alerts_repo,
+        channel_sla_rules_repo,
+        shipment_exception_followup_repo,
+        force=True,
+        trigger="manual",
+    )
+    return ShipmentSlaScanResult(**result)
 
 @router.post("/api/v1/scheduled-tasks/run-tracking-sync", response_model=ScheduledSyncRunResult)
 def run_scheduled_tasks_tracking_sync():

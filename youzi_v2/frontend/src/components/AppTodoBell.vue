@@ -10,6 +10,13 @@ import {
   type ShipmentExceptionFollowupNotification,
 } from '@/api/exceptionFollowup'
 import {
+  followUpShipmentSlaAlert,
+  getShipmentSlaTodoNotifications,
+  resolveShipmentSlaAlert,
+  slaAlertAsCard,
+  type ShipmentSlaAlert,
+} from '@/api/shipmentSla'
+import {
   getShipmentGroupTodoNotifications,
   markShipmentGroupNotificationRead,
   resolveShipmentGroupNotification,
@@ -18,13 +25,16 @@ import type { ShipmentGroupNotification } from '@/types/shipmentGroup'
 import ShipmentGroupAlertCard from '@/components/shipments/ShipmentGroupAlertCard.vue'
 import { ICON_STROKE } from '@/constants/icons'
 import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
+import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
 
 type TodoItem =
   | { kind: 'group'; id: string; triggeredAt: string; group: ShipmentGroupNotification }
   | { kind: 'exception'; id: string; triggeredAt: string; exception: ShipmentExceptionFollowupNotification }
+  | { kind: 'sla'; id: string; triggeredAt: string; sla: ShipmentSlaAlert }
 
 const router = useRouter()
 const message = useMessage()
+const { refreshPendingShipmentSlaAlertCount } = usePendingShipmentSlaAlertCount()
 
 const loading = ref(false)
 const items = ref<TodoItem[]>([])
@@ -38,6 +48,7 @@ const hasPending = computed(() => pendingCount.value > 0)
 function mergeTodos(
   groups: ShipmentGroupNotification[],
   exceptions: ShipmentExceptionFollowupNotification[],
+  slaAlerts: ShipmentSlaAlert[],
   limit: number,
 ): TodoItem[] {
   const merged: TodoItem[] = [
@@ -53,6 +64,12 @@ function mergeTodos(
       triggeredAt: e.triggeredAt,
       exception: e,
     })),
+    ...slaAlerts.map((s) => ({
+      kind: 'sla' as const,
+      id: `sla:${s.id}`,
+      triggeredAt: s.updatedTime || s.createdTime,
+      sla: s,
+    })),
   ]
   merged.sort((a, b) => b.triggeredAt.localeCompare(a.triggeredAt))
   return merged.slice(0, limit)
@@ -61,12 +78,13 @@ function mergeTodos(
 async function load() {
   loading.value = true
   try {
-    const [groupRes, excRes] = await Promise.all([
+    const [groupRes, excRes, slaRes] = await Promise.all([
       getShipmentGroupTodoNotifications(20),
       getExceptionFollowupTodoNotifications(20),
+      getShipmentSlaTodoNotifications(20),
     ])
-    items.value = mergeTodos(groupRes.items, excRes.items, 20)
-    pendingCount.value = groupRes.pendingCount + excRes.pendingCount
+    items.value = mergeTodos(groupRes.items, excRes.items, slaRes.items, 20)
+    pendingCount.value = groupRes.pendingCount + excRes.pendingCount + slaRes.pendingCount
   } catch {
     /* 顶栏静默失败 */
   } finally {
@@ -134,6 +152,34 @@ async function resolveException(n: ShipmentExceptionFollowupNotification) {
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
   }
+}
+
+async function followUpSla(n: ShipmentSlaAlert) {
+  try {
+    await followUpShipmentSlaAlert(n.id)
+    message.success('已记录跟进')
+    void refreshPendingShipmentSlaAlertCount()
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
+async function resolveSla(n: ShipmentSlaAlert) {
+  try {
+    await resolveShipmentSlaAlert(n.id)
+    items.value = items.value.filter((x) => !(x.kind === 'sla' && x.sla.id === n.id))
+    pendingCount.value = Math.max(0, pendingCount.value - 1)
+    void refreshPendingShipmentSlaAlertCount()
+    message.success('已标记解决')
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
+function goExceptionTracking() {
+  popoverShow.value = false
+  router.push({ path: '/shipment-exceptions', query: { status: 'open' } })
 }
 
 function goGroup(groupId: string) {
@@ -229,7 +275,7 @@ onUnmounted(() => {
             </ShipmentGroupAlertCard>
 
             <ShipmentGroupAlertCard
-              v-else
+              v-else-if="n.kind === 'exception'"
               compact
               clickable
               :title="n.exception.title"
@@ -253,6 +299,27 @@ onUnmounted(() => {
                   @click.stop="resolveException(n.exception)"
                 >
                   已跟进
+                </button>
+              </template>
+            </ShipmentGroupAlertCard>
+
+            <ShipmentGroupAlertCard
+              v-else-if="n.kind === 'sla'"
+              compact
+              clickable
+              v-bind="slaAlertAsCard(n.sla)"
+              @click="goShipment(n.sla.shipmentNo)"
+            >
+              <template #aside>
+                <button type="button" class="group-alert-card__btn" @click.stop="followUpSla(n.sla)">
+                  已跟进
+                </button>
+                <button
+                  type="button"
+                  class="group-alert-card__btn group-alert-card__btn--ghost"
+                  @click.stop="resolveSla(n.sla)"
+                >
+                  已解决
                 </button>
               </template>
             </ShipmentGroupAlertCard>

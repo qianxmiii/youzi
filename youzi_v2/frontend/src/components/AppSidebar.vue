@@ -7,6 +7,7 @@ import NavIcon from '@/components/icons/NavIcon.vue'
 import { ICON_STROKE, ICON_STROKE_NAV } from '@/constants/icons'
 import { navGroups } from '@/constants/navigation'
 import { useNavGroupsExpanded } from '@/composables/useNavGroupsExpanded'
+import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
 import { usePendingTrackingTimeReviewCount } from '@/composables/usePendingTrackingTimeReviewCount'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
 
@@ -15,9 +16,12 @@ const { collapsed, toggle } = useSidebarCollapsed()
 const { isGroupExpanded, toggleGroup } = useNavGroupsExpanded()
 const { pendingTrackingTimeReviewCount, refreshPendingTrackingTimeReviewCount } =
   usePendingTrackingTimeReviewCount()
+const { pendingShipmentSlaAlertCount, refreshPendingShipmentSlaAlertCount } =
+  usePendingShipmentSlaAlertCount()
 
 onMounted(() => {
   void refreshPendingTrackingTimeReviewCount()
+  void refreshPendingShipmentSlaAlertCount()
 })
 
 const flatItems = computed(() => navGroups.flatMap((g) => g.items))
@@ -45,9 +49,16 @@ function itemLabel(groupLabel: string, name: string, badge?: string) {
   return badge ? `${text}（${badge}）` : text
 }
 
-function pendingReviewNavCount(path: string) {
-  if (path !== '/approvals/tracking-time') return 0
-  return pendingTrackingTimeReviewCount.value
+function pendingNavCount(path: string) {
+  if (path === '/approvals/tracking-time') return pendingTrackingTimeReviewCount.value
+  if (path === '/shipment-exceptions') return pendingShipmentSlaAlertCount.value
+  return 0
+}
+
+function pendingNavHint(path: string, count: number) {
+  if (path === '/approvals/tracking-time') return `${count} 待审`
+  if (path === '/shipment-exceptions') return `${count} 待办`
+  return `${count}`
 }
 
 function formatNavPendingCount(count: number) {
@@ -55,9 +66,10 @@ function formatNavPendingCount(count: number) {
   return count > 99 ? '99+' : String(count)
 }
 
-function groupPendingReviewCount(groupLabel: string) {
-  if (groupLabel !== '审批管理') return 0
-  return pendingTrackingTimeReviewCount.value
+function groupPendingCount(groupLabel: string) {
+  if (groupLabel === '审批管理') return pendingTrackingTimeReviewCount.value
+  if (groupLabel === '运单中心') return pendingShipmentSlaAlertCount.value
+  return 0
 }
 </script>
 
@@ -108,13 +120,11 @@ function groupPendingReviewCount(groupLabel: string) {
             <NavIcon :name="group.icon" />
             <span class="min-w-0 flex-1 truncate text-left">{{ group.label }}</span>
             <span
-              v-if="groupPendingReviewCount(group.label) > 0"
+              v-if="groupPendingCount(group.label) > 0"
               class="nav-pending-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
             >
               {{
-                groupPendingReviewCount(group.label) > 99
-                  ? '99+'
-                  : groupPendingReviewCount(group.label)
+                groupPendingCount(group.label) > 99 ? '99+' : groupPendingCount(group.label)
               }}
             </span>
             <ChevronDown
@@ -136,10 +146,10 @@ function groupPendingReviewCount(groupLabel: string) {
             >
               <span class="flex-1 truncate">{{ item.name }}</span>
               <span
-                v-if="pendingReviewNavCount(item.to) > 0"
+                v-if="pendingNavCount(item.to) > 0"
                 class="nav-pending-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
               >
-                {{ pendingReviewNavCount(item.to) > 99 ? '99+' : pendingReviewNavCount(item.to) }}
+                {{ pendingNavCount(item.to) > 99 ? '99+' : pendingNavCount(item.to) }}
               </span>
               <span
                 v-else-if="item.badge"
@@ -174,18 +184,18 @@ function groupPendingReviewCount(groupLabel: string) {
                 <span class="relative inline-flex">
                   <NavIcon :name="item.icon" />
                   <span
-                    v-if="pendingReviewNavCount(item.to) > 0"
+                    v-if="pendingNavCount(item.to) > 0"
                     class="nav-pending-count"
-                    :aria-label="`${pendingReviewNavCount(item.to)} 待审批`"
+                    :aria-label="pendingNavHint(item.to, pendingNavCount(item.to))"
                   >
-                    {{ formatNavPendingCount(pendingReviewNavCount(item.to)) }}
+                    {{ formatNavPendingCount(pendingNavCount(item.to)) }}
                   </span>
                 </span>
               </RouterLink>
             </template>
             {{
-              pendingReviewNavCount(item.to) > 0
-                ? `${itemLabel(group.label, item.name)}（${pendingReviewNavCount(item.to)} 待审）`
+              pendingNavCount(item.to) > 0
+                ? `${itemLabel(group.label, item.name)}（${pendingNavHint(item.to, pendingNavCount(item.to))}）`
                 : itemLabel(group.label, item.name, item.badge)
             }}
           </NTooltip>

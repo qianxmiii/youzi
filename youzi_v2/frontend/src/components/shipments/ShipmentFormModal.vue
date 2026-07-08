@@ -12,9 +12,15 @@ import {
   useMessage,
 } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
+import { listCodeTableRows } from '@/api/codeTables'
 import { useDictLabels } from '@/composables/useDictLabels'
+import type { CodeTableRow } from '@/types/codeTable'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
+import {
+  buildCarrierFormSelectOptionsWithCurrent,
+  resolveCarrierFormSelectValue,
+} from '@/utils/carrierFilterOptions'
 import {
   dateOnlyToTimestamp,
   formatDateOnlyForApi,
@@ -40,11 +46,14 @@ const emit = defineEmits<{
 const message = useMessage()
 const form = ref<ShipmentPayload>(emptyShipmentForm())
 const submitting = ref(false)
+const carrierCodeRows = ref<CodeTableRow[]>([])
+const initialCarrierNameZh = ref<string | null>(null)
 const etd = ref<number | null>(null)
 const eta = ref<number | null>(null)
 const atd = ref<number | null>(null)
 const ata = ref<number | null>(null)
 const expectedDeliveryAt = ref<number | null>(null)
+const warehouseEntryAt = ref<number | null>(null)
 const deliveredAt = ref<number | null>(null)
 
 function syncVoyageDatesFromForm() {
@@ -69,14 +78,41 @@ function syncDeliveredTimeFromForm() {
   deliveredAt.value = parsed ? parsed.getTime() : null
 }
 
+function syncWarehouseEntryTimeFromForm() {
+  const parsed = parseDateTimeInput(form.value.warehouseEntryTime)
+  warehouseEntryAt.value = parsed ? parsed.getTime() : null
+}
+
 function applyDeliveredTimeToForm() {
   form.value.deliveredTime =
     deliveredAt.value != null ? formatTimestampForApi(deliveredAt.value) : null
 }
 
+function applyWarehouseEntryTimeToForm() {
+  form.value.warehouseEntryTime =
+    warehouseEntryAt.value != null ? formatTimestampForApi(warehouseEntryAt.value) : null
+}
+
 const title = computed(() => (props.mode === 'create' ? '新增运单' : '编辑运单'))
 
 const addressTypeOptions = dictOptions('address_type')
+
+const carrierSelectOptions = computed(() =>
+  buildCarrierFormSelectOptionsWithCurrent(
+    carrierCodeRows.value,
+    form.value.carrierCode,
+    initialCarrierNameZh.value,
+  ),
+)
+
+async function loadCarrierOptions() {
+  try {
+    const res = await listCodeTableRows('carrier_codes', { limit: 500 })
+    carrierCodeRows.value = res.items
+  } catch {
+    carrierCodeRows.value = []
+  }
+}
 
 const statusOptions = [
   { label: '转运中', value: 'IN_TRANSIT' },
@@ -88,15 +124,19 @@ const statusOptions = [
 watch(
   () => props.show,
   (visible) => {
-    if (visible) void loadDictTypes('address_type')
+    if (visible) {
+      void loadDictTypes('address_type')
+      void loadCarrierOptions()
+    }
   },
 )
 
 watch(
-  () => [props.show, props.mode, props.initial] as const,
+  () => [props.show, props.mode, props.initial, carrierCodeRows.value] as const,
   ([visible]) => {
     if (!visible) return
     if (props.mode === 'edit' && props.initial) {
+      initialCarrierNameZh.value = props.initial.carrierNameZh ?? null
       form.value = {
         shipmentNo: props.initial.shipmentNo,
         customer: props.initial.customer,
@@ -111,7 +151,10 @@ watch(
         productName: props.initial.productName,
         originWarehouseCode: props.initial.originWarehouseCode,
         supplierName: props.initial.supplierName,
-        carrierCode: props.initial.carrierCode,
+        carrierCode: resolveCarrierFormSelectValue(
+          props.initial.carrierCode,
+          carrierCodeRows.value,
+        ),
         carrierId: props.initial.carrierId,
         trackingNumber: props.initial.trackingNumber,
         expressCode: props.initial.expressCode ?? null,
@@ -127,18 +170,22 @@ watch(
         originPortCode: props.initial.originPortCode,
         destinationPortCode: props.initial.destinationPortCode,
         expectedDeliveryTime: props.initial.expectedDeliveryTime,
+        warehouseEntryTime: props.initial.warehouseEntryTime,
         deliveredTime: props.initial.deliveredTime,
         statusCode: props.initial.statusCode || 'UNKNOWN',
       }
       syncVoyageDatesFromForm()
+      syncWarehouseEntryTimeFromForm()
       syncDeliveredTimeFromForm()
     } else {
+      initialCarrierNameZh.value = null
       form.value = emptyShipmentForm()
       etd.value = null
       eta.value = null
       atd.value = null
       ata.value = null
       expectedDeliveryAt.value = null
+      warehouseEntryAt.value = null
       deliveredAt.value = null
     }
   },
@@ -151,14 +198,17 @@ function handleSubmit() {
     return
   }
   applyVoyageDatesToForm()
+  applyWarehouseEntryTimeToForm()
   applyDeliveredTimeToForm()
   submitting.value = true
   const carrierId = normalizeLastMileTrackingNumber(form.value.carrierId) || null
   const trackingNumber = normalizeLastMileTrackingNumber(form.value.trackingNumber) || null
   const expressCode = (form.value.expressCode || '').trim() || null
+  const carrierCode = (form.value.carrierCode || '').trim() || null
   emit('submit', {
     ...form.value,
     shipmentNo: no,
+    carrierCode,
     carrierId,
     trackingNumber,
     expressCode,
@@ -208,7 +258,13 @@ function handleSubmit() {
           <NInput v-model:value="form.channelCode" />
         </NFormItem>
         <NFormItem label="承运商">
-          <NInput v-model:value="form.carrierCode" />
+          <NSelect
+            v-model:value="form.carrierCode"
+            :options="carrierSelectOptions"
+            clearable
+            filterable
+            placeholder="选择承运商"
+          />
         </NFormItem>
         <NFormItem label="承运单号">
           <NInput
@@ -276,6 +332,15 @@ function handleSubmit() {
         </NFormItem>
         <NFormItem label="ATA">
           <NDatePicker v-model:value="ata" type="date" clearable class="w-full" />
+        </NFormItem>
+        <NFormItem label="入仓时间">
+          <NDatePicker
+            v-model:value="warehouseEntryAt"
+            type="datetime"
+            clearable
+            class="w-full"
+            format="yyyy-MM-dd HH:mm:ss"
+          />
         </NFormItem>
         <NFormItem label="预计送仓">
           <NDatePicker v-model:value="expectedDeliveryAt" type="date" clearable class="w-full" />

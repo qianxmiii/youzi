@@ -35,7 +35,7 @@ def test_latest_from_logs_skips_placeholder():
     assert logs == ("2026-05-16 10:00:00", "已出库")
 
 
-def test_logs_from_api_item_skips_placeholder():
+def test_logs_from_api_item_includes_warehouse_placeholder():
     item = {
         "logisticsInfors": [
             {"nodeTime": "2026-05-18", "nodeDesc": INTERNAL_WAREHOUSE_PLACEHOLDER},
@@ -43,8 +43,9 @@ def test_logs_from_api_item_skips_placeholder():
         ]
     }
     logs = logs_from_api_item(item)
-    assert len(logs) == 1
-    assert logs[0][1] == "已出库"
+    assert len(logs) == 2
+    assert logs[0][1] == INTERNAL_WAREHOUSE_PLACEHOLDER
+    assert logs[1][1] == "已出库"
 
 
 def test_status_code_from_api_item():

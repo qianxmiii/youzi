@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Clock, ClipboardCheck, Layers, Package, RefreshCw, Ship } from 'lucide-vue-next'
+import { Clock, ClipboardCheck, Layers, Package, RefreshCw, Ship, TriangleAlert } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { NButton, NSpin, NTag, useMessage } from 'naive-ui'
 import { computed, onMounted, ref } from 'vue'
@@ -20,6 +20,7 @@ import {
   resolveExceptionFollowupNotification,
   type ShipmentExceptionFollowupNotification,
 } from '@/api/exceptionFollowup'
+import { getShipmentSlaSummary, type ShipmentSlaSummary } from '@/api/shipmentSla'
 import {
   getShipmentGroupTodoNotifications,
   markAllShipmentGroupNotificationsRead,
@@ -47,6 +48,7 @@ const markingShipmentRead = ref(false)
 const data = ref<MaritimeAlertsOverview | null>(null)
 const groupNotifications = ref<ShipmentGroupNotification[]>([])
 const exceptionFollowupNotifications = ref<ShipmentExceptionFollowupNotification[]>([])
+const slaSummary = ref<ShipmentSlaSummary | null>(null)
 const todoPendingCount = ref(0)
 const error = ref('')
 
@@ -54,19 +56,22 @@ async function load() {
   loading.value = true
   error.value = ''
   try {
-    const [overview, groupRes, excRes] = await Promise.all([
+    const [overview, groupRes, excRes, slaRes] = await Promise.all([
       getMaritimeAlertsOverview(),
       getShipmentGroupTodoNotifications(20),
       getExceptionFollowupTodoNotifications(20),
+      getShipmentSlaSummary(),
     ])
     data.value = overview
     groupNotifications.value = groupRes.items
     exceptionFollowupNotifications.value = excRes.items
+    slaSummary.value = slaRes
     todoPendingCount.value = groupRes.pendingCount + excRes.pendingCount
   } catch (e) {
     data.value = null
     groupNotifications.value = []
     exceptionFollowupNotifications.value = []
+    slaSummary.value = null
     todoPendingCount.value = 0
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
@@ -188,6 +193,13 @@ const quickLinks = computed(() => [
     badge: pendingTrackingTimeReviewCount.value,
   },
   { key: 'groups', label: '运单分组', path: '/shipment-groups', icon: Layers },
+  {
+    key: 'exceptions',
+    label: '异常跟踪',
+    path: '/shipment-exceptions',
+    icon: TriangleAlert,
+    badge: slaSummary.value?.pendingOpen ?? 0,
+  },
 ])
 
 function goQuickLink(path: string) {
@@ -435,6 +447,46 @@ function onFeedDismiss(item: AlertFeedItem) {
       :loading="loading && !data"
       @navigate="(q) => goVesselSchedules(q)"
     />
+
+    <section v-if="slaSummary" class="panel workbench-sla-summary px-4 py-3">
+      <div class="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 class="workbench-panel-title">异常跟踪</h2>
+          <p class="mt-1 text-xs text-zinc-500">运输时效预警摘要</p>
+        </div>
+        <NButton size="small" quaternary @click="router.push('/shipment-exceptions')">查看全部</NButton>
+      </div>
+      <div class="mt-3 flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="workbench-sla-chip"
+          @click="router.push({ path: '/shipment-exceptions', query: { status: 'open' } })"
+        >
+          待处理 <strong>{{ slaSummary.pendingOpen }}</strong>
+        </button>
+        <button
+          type="button"
+          class="workbench-sla-chip workbench-sla-chip--danger"
+          @click="router.push({ path: '/shipment-exceptions', query: { timelinessStatus: 'severe_overdue', status: 'open' } })"
+        >
+          严重超时 <strong>{{ slaSummary.severeOverdue }}</strong>
+        </button>
+        <button
+          type="button"
+          class="workbench-sla-chip workbench-sla-chip--warn"
+          @click="router.push({ path: '/shipment-exceptions', query: { timelinessStatus: 'overdue', status: 'open' } })"
+        >
+          已超时 <strong>{{ slaSummary.overdue }}</strong>
+        </button>
+        <button
+          type="button"
+          class="workbench-sla-chip"
+          @click="router.push({ path: '/shipment-exceptions', query: { hasException: 'true' } })"
+        >
+          当前人工异常 <strong>{{ slaSummary.currentExceptions }}</strong>
+        </button>
+      </div>
+    </section>
 
     <NSpin :show="loading && !data">
       <div v-if="error" class="panel px-4 py-3 text-sm text-red-400">{{ error }}</div>
@@ -1242,6 +1294,33 @@ function onFeedDismiss(item: AlertFeedItem) {
 
 .workbench-footnote {
   padding: 1rem 1.25rem;
+}
+
+.workbench-sla-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
+  border-radius: 9999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-btn-ghost-bg);
+  font-size: 0.8125rem;
+  color: var(--color-fg-secondary);
+  cursor: pointer;
+}
+
+.workbench-sla-chip strong {
+  color: var(--color-fg-emphasis);
+}
+
+.workbench-sla-chip--warn {
+  border-color: rgb(245 158 11 / 0.35);
+  color: rgb(180 83 9);
+}
+
+.workbench-sla-chip--danger {
+  border-color: rgb(239 68 68 / 0.35);
+  color: rgb(185 28 28);
 }
 
 /* 知道了 等操作按钮 hover */

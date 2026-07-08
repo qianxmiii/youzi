@@ -14,6 +14,11 @@ TABLE_NAME = "channel_codes"
 
 
 def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
+    sla_days: int | None = None
+    sla_enabled: bool | None = None
+    if "_sla_estimated_days" in row.keys() and row["_sla_estimated_days"] is not None:
+        sla_days = int(row["_sla_estimated_days"])
+        sla_enabled = bool(row["_sla_enabled"])
     return {
         "code": row["code"],
         "nameZh": row["name_zh"] or "",
@@ -23,9 +28,25 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "note": row["note"] if "note" in row.keys() else "",
         "sortOrder": row["sort_order"],
         "isActive": bool(row["is_active"]),
+        "slaEstimatedDays": sla_days,
+        "slaEnabled": sla_enabled,
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
     }
+
+
+_SLA_SELECT = """
+    c.*,
+    sla.estimated_days AS _sla_estimated_days,
+    sla.enabled AS _sla_enabled
+"""
+
+_SLA_FROM = f"""
+FROM {TABLE_NAME} c
+LEFT JOIN channel_sla_rules sla ON sla.channel_code = c.code
+    AND TRIM(COALESCE(sla.carrier_code, '')) = ''
+    AND UPPER(COALESCE(sla.start_field, 'ATD')) = 'ATD'
+"""
 
 
 class ChannelsRepository:
@@ -57,29 +78,31 @@ class ChannelsRepository:
         if search and search.strip():
             q = f"%{search.strip()}%"
             conditions.append(
-                "(code LIKE ? OR name_zh LIKE ? OR name_en LIKE ? OR country LIKE ? OR note LIKE ?)"
+                "(c.code LIKE ? OR c.name_zh LIKE ? OR c.name_en LIKE ? OR c.country LIKE ? OR c.note LIKE ?)"
             )
             params.extend([q, q, q, q, q])
         if country and country.strip():
-            conditions.append("country = ?")
+            conditions.append("c.country = ?")
             params.append(country.strip())
         if category and category.strip():
-            conditions.append("category = ?")
+            conditions.append("c.category = ?")
             params.append(category.strip())
         if active_only is True:
-            conditions.append("is_active = 1")
+            conditions.append("c.is_active = 1")
         elif active_only is False:
-            conditions.append("is_active = 0")
+            conditions.append("c.is_active = 0")
         where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
         with self._database.lock:
             total = self._conn.execute(
-                f"SELECT COUNT(*) AS c FROM {TABLE_NAME} {where}",
+                f"SELECT COUNT(*) AS c FROM {TABLE_NAME} c {where}",
                 params,
             ).fetchone()["c"]
             rows = self._conn.execute(
                 f"""
-                SELECT * FROM {TABLE_NAME} {where}
-                ORDER BY sort_order ASC, code ASC
+                SELECT {_SLA_SELECT}
+                {_SLA_FROM}
+                {where}
+                ORDER BY c.sort_order ASC, c.code ASC
                 LIMIT ? OFFSET ?
                 """,
                 [*params, limit, offset],
@@ -95,7 +118,11 @@ class ChannelsRepository:
         c = code.strip()
         with self._database.lock:
             row = self._conn.execute(
-                f"SELECT * FROM {TABLE_NAME} WHERE code = ?",
+                f"""
+                SELECT {_SLA_SELECT}
+                {_SLA_FROM}
+                WHERE c.code = ?
+                """,
                 (c,),
             ).fetchone()
         return _row_to_api(row) if row else None

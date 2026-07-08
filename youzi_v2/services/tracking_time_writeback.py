@@ -21,7 +21,7 @@ from ..tracking_time_parser import (
 LogFn = Callable[[str], None]
 
 AUTO_APPLY_FIELDS = frozenset(
-    {"etd", "eta", "atd", "ata", "expected_delivery_time"},
+    {"etd", "eta", "atd", "ata", "expected_delivery_time", "warehouse_entry_time"},
 )
 
 SHIPMENT_COLUMN_MAP = {
@@ -30,6 +30,7 @@ SHIPMENT_COLUMN_MAP = {
     "atd": "atd",
     "ata": "ata",
     "expected_delivery_time": "expected_delivery_time",
+    "warehouse_entry_time": "warehouse_entry_time",
     "signed_time": "delivered_time",
 }
 
@@ -255,6 +256,16 @@ def recalculate_for_shipment(
         _apply_shipment_fields(database.conn, sid, shipment_updates)
         database.conn.commit()
 
+    if "delivered_time" in shipment_updates and (shipment_updates.get("delivered_time") or "").strip():
+        from .shipment_sla_scan import maybe_resolve_alerts_after_delivery
+
+        maybe_resolve_alerts_after_delivery(
+            database,
+            sid,
+            shipment_no=sn,
+            log=log,
+        )
+
     if log and applied_fields:
         log(f"[时间回写] {sn} 已回写 {', '.join(applied_fields)}")
     if log and pending_review:
@@ -418,4 +429,7 @@ def approve_signed_time_candidate(
             (value, now_str(), shipment_id),
         )
         database.conn.commit()
+        from .shipment_sla_scan import maybe_resolve_alerts_after_delivery
+
+        maybe_resolve_alerts_after_delivery(database, shipment_id)
         return {"action": act, "deliveredTime": value}

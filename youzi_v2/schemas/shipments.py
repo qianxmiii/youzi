@@ -54,6 +54,9 @@ class ShipmentRecordIn(BaseModel):
     carrier_id: str | None = Field(
         default=None, validation_alias=AliasChoices("carrierId", "carrier_id")
     )
+    waybill_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("waybillId", "waybill_id")
+    )
     tracking_number: str | None = Field(
         default=None, validation_alias=AliasChoices("trackingNumber", "tracking_number")
     )
@@ -90,6 +93,10 @@ class ShipmentRecordIn(BaseModel):
     expected_delivery_time: str | None = Field(
         default=None,
         validation_alias=AliasChoices("expectedDeliveryTime", "expected_delivery_time"),
+    )
+    warehouse_entry_time: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("warehouseEntryTime", "warehouse_entry_time"),
     )
     delivered_time: str | None = Field(
         default=None, validation_alias=AliasChoices("deliveredTime", "delivered_time")
@@ -143,6 +150,9 @@ class ShipmentUpdateIn(BaseModel):
     carrier_id: str | None = Field(
         default=None, validation_alias=AliasChoices("carrierId", "carrier_id")
     )
+    waybill_id: str | None = Field(
+        default=None, validation_alias=AliasChoices("waybillId", "waybill_id")
+    )
     tracking_number: str | None = Field(
         default=None, validation_alias=AliasChoices("trackingNumber", "tracking_number")
     )
@@ -179,6 +189,10 @@ class ShipmentUpdateIn(BaseModel):
     expected_delivery_time: str | None = Field(
         default=None,
         validation_alias=AliasChoices("expectedDeliveryTime", "expected_delivery_time"),
+    )
+    warehouse_entry_time: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("warehouseEntryTime", "warehouse_entry_time"),
     )
     delivered_time: str | None = Field(
         default=None, validation_alias=AliasChoices("deliveredTime", "delivered_time")

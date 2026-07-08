@@ -16,6 +16,7 @@ from .carrier_batch_schedule import (
     should_run_scheduled_carrier_batch,
 )
 from .shipment_group_alerts import evaluate_groups_after_tracking_sync
+from .shipment_sla_scan import evaluate_sla_after_tracking_sync
 from .sync_log import make_sync_logger
 from ..carrier_tracking_entry import latest_from_logs
 from ..last_mile_tracking import is_conwest_tracking_number, resolve_conwest_writeback
@@ -36,6 +37,7 @@ from .carrier_vendors import (
     load_vendors_config,
     resolve_vendor_for_row,
     unpack_carrier_fetch,
+    wy_should_update_carrier_order_no,
 )
 
 LogFn = Callable[[str], None]
@@ -175,8 +177,19 @@ def sync_carrier_tracking(
                     tracking_map.get(sn, ([], "未返回", None, None, None))
                 )
                 cid = (carrier_id or "").strip()
-                if cid and not (row.get("carrier_id") or "").strip():
-                    if shipments_repo.set_carrier_id_if_empty(sn, cid):
+                if cid:
+                    existing_cid = (row.get("carrier_id") or "").strip()
+                    if not existing_cid:
+                        if shipments_repo.set_carrier_id_if_empty(sn, cid):
+                            row["carrier_id"] = cid
+                    elif (
+                        platform == "wy"
+                        and wy_should_update_carrier_order_no(existing_cid, cid, sn)
+                        and shipments_repo.set_carrier_id(sn, cid)
+                    ):
+                        out_log(
+                            f"[承运商轨迹] {sn} 更正承运商单号 {existing_cid} → {cid}"
+                        )
                         row["carrier_id"] = cid
                 tn = (outer_tn or "").strip()
                 ctns_raw = row.get("ctns")
@@ -300,6 +313,12 @@ def sync_carrier_tracking(
         out_log,
     )
 
+    sla_alerts = evaluate_sla_after_tracking_sync(
+        shipments_repo._database,
+        updated_shipment_nos,
+        out_log,
+    )
+
     return {
         "jobId": job_id,
         "total": total,
@@ -316,6 +335,7 @@ def sync_carrier_tracking(
         "vendorStats": vendor_stats,
         "logs": log_lines[-200:],
         **group_alerts,
+        **sla_alerts,
     }
 
 

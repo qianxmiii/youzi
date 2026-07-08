@@ -87,6 +87,20 @@ curl http://127.0.0.1:3001/api/v1/health
 | GET | `/api/v1/shipment-group-notifications?scope=unread` | 未读分组提醒（首页批次提醒等，`unreadCount`） |
 | POST | `/api/v1/shipment-group-notifications/{id}/resolve` | 标记已处理（从待办移除） |
 
+**运输时效预警 / 异常跟踪**
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/shipment-sla-alerts` | 预警列表（`scope=todo` 默认待办：未签收且 `open`/`acknowledged`；`scope=all` 含历史；`riskLevel` 为 `warning_soon`/`overdue`/`severe_overdue`；`alertType` 为 `WAREHOUSE_NO_DEPARTURE`/`ARRIVAL_NO_DELIVERY`；另支持 `status`、`hasException` 等） |
+| GET | `/api/v1/shipment-sla-alerts/summary` | 工作台摘要计数 |
+| GET | `/api/v1/shipment-sla-alerts/todo-notifications` | 顶栏待办（已超时/严重超时且 open） |
+| POST | `/api/v1/shipment-sla-alerts/evaluate` | 手动触发扫描 |
+| POST | `/api/v1/shipment-sla-alerts/{id}/acknowledge` | 标记已处理 |
+| POST | `/api/v1/shipment-sla-alerts/{id}/ignore` | 忽略 |
+| POST | `/api/v1/shipment-sla-alerts/{id}/convert` | 转为人工异常（默认 `TRANSIT_TIMEOUT`） |
+| GET | `/api/v1/channels/{code}/sla-rules` | 渠道时效规则 |
+| PUT | `/api/v1/channels/{code}/sla-rules` | 保存渠道时效规则 |
+
 **列表示例**
 
 ```bash

@@ -46,6 +46,7 @@ export interface ShipmentFilterQueryInput {
   filterStaleDays: number | null
   filterNoTracking: boolean
   filterNoZipcode: boolean
+  filterHasTrackingNumber: boolean
   filterException: string | null
   filterHasException: boolean | null
   filterGroupId: string | null
@@ -130,6 +131,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
         ? undefined
         : staleDays,
     noZipcode: input.filterNoZipcode || undefined,
+    hasTrackingNumber: input.filterHasTrackingNumber || undefined,
     groupId: input.filterGroupId || undefined,
     groupNo: input.filterGroupNo || undefined,
     ruleType: input.filterRuleType || undefined,
@@ -271,6 +273,7 @@ export function buildShipmentFilterSummaryTags(
   }
   if (input.filterNoCarrierTracking) tags.push({ key: 'filterNoCarrierTracking', label: '承运商无轨迹' })
   if (input.filterNoZipcode) tags.push({ key: 'filterNoZipcode', label: '无邮编' })
+  if (input.filterHasTrackingNumber) tags.push({ key: 'filterHasTrackingNumber', label: '有转单号' })
   if (input.filterStaleDays) tags.push({ key: 'filterStaleDays', label: `停滞 ≥ ${input.filterStaleDays} 天` })
   if (input.filterCarrierAheadOfInternal) tags.push({ key: 'filterCarrierAheadOfInternal', label: '承新于内' })
   if (input.filterPendingTrackingTimeReview) {

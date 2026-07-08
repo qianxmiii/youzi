@@ -5,7 +5,7 @@ import type { Channel, ChannelPayload } from '@/api/channels'
 
 const props = defineProps<{
   show: boolean
-  mode: 'create' | 'edit'
+  mode: 'create' | 'edit' | 'copy'
   row: Channel | null
   categories: string[]
   countries: string[]
@@ -45,6 +45,15 @@ watch(
       note.value = props.row.note || ''
       sortOrder.value = props.row.sortOrder
       isActive.value = props.row.isActive
+    } else if (props.mode === 'copy' && props.row) {
+      code.value = ''
+      nameZh.value = props.row.nameZh
+      nameEn.value = props.row.nameEn || ''
+      country.value = props.row.country || null
+      category.value = props.row.category || null
+      note.value = props.row.note || ''
+      sortOrder.value = props.row.sortOrder
+      isActive.value = props.row.isActive
     } else {
       code.value = ''
       nameZh.value = ''
@@ -79,7 +88,7 @@ function handleSubmit() {
   <NModal
     :show="show"
     preset="card"
-    :title="mode === 'create' ? '新增渠道' : '编辑渠道'"
+    :title="mode === 'edit' ? '编辑渠道' : mode === 'copy' ? '复制渠道' : '新增渠道'"
     class="max-w-lg"
     @update:show="(v: boolean) => !v && emit('close')"
   >

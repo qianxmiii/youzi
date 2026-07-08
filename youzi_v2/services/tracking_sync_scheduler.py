@@ -10,6 +10,8 @@ from ..db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from ..db.connection import Database
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.shipment_exception_followup_repository import ShipmentExceptionFollowupRepository
+from ..db.channel_sla_rules_repository import ChannelSlaRulesRepository
+from ..db.shipment_sla_alerts_repository import ShipmentSlaAlertsRepository
 from ..db.shipment_groups_repository import ShipmentGroupsRepository
 from ..db.tracking_logs_repository import TrackingLogsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
@@ -20,6 +22,8 @@ from .shipment_group_archive import run_group_auto_archive_batch
 from .shipment_zipcode_backfill import run_zipcode_backfill_batch
 from .shipment_dps_sync import run_shipment_dps_sync_batch
 from .exception_followup_reminders import scan_exception_followup_reminders
+from .shipment_sla_scan import scan_shipment_sla_alerts
+from .shipment_sla_settings import get_sla_scan_settings
 from .zipcode_backfill_settings import get_zipcode_backfill_settings
 from .exception_followup_settings import get_exception_followup_settings
 from .shipment_dps_sync_settings import get_shipment_dps_sync_settings
@@ -151,6 +155,8 @@ def _scheduler_tick(
     jobs_repo: TrackingSyncJobsRepository,
     groups_repo: ShipmentGroupsRepository,
     exception_followup_repo: ShipmentExceptionFollowupRepository,
+    channel_sla_rules_repo: ChannelSlaRulesRepository,
+    shipment_sla_alerts_repo: ShipmentSlaAlertsRepository,
     config_path: Path,
 ) -> None:
     settings = get_scheduled_sync_settings(shipments_repo._database)
@@ -183,6 +189,13 @@ def _scheduler_tick(
         force=False,
         trigger="scheduled",
     )
+    scan_shipment_sla_alerts(
+        shipment_sla_alerts_repo,
+        channel_sla_rules_repo,
+        exception_followup_repo,
+        force=False,
+        trigger="scheduled",
+    )
 
 
 def start_tracking_sync_scheduler(
@@ -192,6 +205,8 @@ def start_tracking_sync_scheduler(
     jobs_repo: TrackingSyncJobsRepository,
     groups_repo: ShipmentGroupsRepository,
     exception_followup_repo: ShipmentExceptionFollowupRepository,
+    channel_sla_rules_repo: ChannelSlaRulesRepository,
+    shipment_sla_alerts_repo: ShipmentSlaAlertsRepository,
     config_path: Path,
 ) -> threading.Event:
     """后台线程：按配置轮询，内部/承运商/分组归档各自判断间隔。"""
@@ -201,6 +216,7 @@ def start_tracking_sync_scheduler(
     zipcode_backfill_enabled = get_zipcode_backfill_settings(database).enabled
     dps_sync_enabled = get_shipment_dps_sync_settings(database).enabled
     exception_followup_enabled = get_exception_followup_settings(database).enabled
+    sla_scan_enabled = get_sla_scan_settings(database).enabled
     stop = threading.Event()
 
     if (
@@ -210,8 +226,9 @@ def start_tracking_sync_scheduler(
         and not zipcode_backfill_enabled
         and not dps_sync_enabled
         and not exception_followup_enabled
+        and not sla_scan_enabled
     ):
-        print("[定时同步] 已关闭（内部、承运商、分组归档、邮编回写、DPS 与异常跟进均未启用）", flush=True)
+        print("[定时同步] 已关闭（内部、承运商、分组归档、邮编回写、DPS、异常跟进与运输时效均未启用）", flush=True)
         return stop
 
     initial_sec = max(0.0, settings.initial_delay_sec)
@@ -228,6 +245,8 @@ def start_tracking_sync_scheduler(
                     jobs_repo,
                     groups_repo,
                     exception_followup_repo,
+                    channel_sla_rules_repo,
+                    shipment_sla_alerts_repo,
                     config_path,
                 )
             except Exception:
@@ -254,6 +273,8 @@ def start_tracking_sync_scheduler(
         f"DPS运单={'开' if dps_sync_enabled else '关'}"
         f"(约24h)、"
         f"异常跟进={'开' if exception_followup_enabled else '关'}"
+        f"(约24h)、"
+        f"运输时效={'开' if sla_scan_enabled else '关'}"
         f"(约24h)；"
         f"{initial_sec:.0f}s 后首次检查，每 {POLL_INTERVAL_SEC:.0f}s 轮询",
         flush=True,

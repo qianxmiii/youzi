@@ -183,6 +183,21 @@ class CoscoElinesProvider:
             raise ValueError(f"{label} 船舶检索响应非 JSON") from exc
         return _parse_vessel_search_rows(payload, label=label)
 
+    def _vessel_code_known(
+        self,
+        code: str,
+        *,
+        timeout: int = _DEFAULT_TIMEOUT,
+    ) -> bool:
+        """用船名前缀检索校验 vesselCode 是否在 COSCO 船名录中。"""
+        if len(code) < _MIN_VESSEL_PREFIX_LEN:
+            return False
+        try:
+            items = self.search_vessels(code, timeout=timeout)
+        except ValueError:
+            return False
+        return any((item.get("vesselCode") or "").strip().upper() == code for item in items)
+
     def fetch(
         self,
         vessel_code: str,
@@ -216,6 +231,14 @@ class CoscoElinesProvider:
         except ValueError as exc:
             raise ValueError(f"{label} 响应非 JSON") from exc
         rows = _extract_rows(payload, label=label)
+        if not rows:
+            if not self._vessel_code_known(code, timeout=timeout):
+                raise ValueError(
+                    f"{label} 未找到船舶代码「{code}」，请通过船名检索选择正确的 vesselCode"
+                )
+            raise ValueError(
+                f"{label} 船舶「{code}」在未来 {period_days} 天内暂无挂靠船期"
+            )
         parsed = parse_elines_purpo_rows(
             rows,
             shipping_company=self.info.shipping_company,

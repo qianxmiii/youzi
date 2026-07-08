@@ -30,6 +30,7 @@ CREATE TABLE {TABLE_NAME} (
     supplier_name TEXT,
     carrier_code TEXT,
     carrier_id TEXT,
+    waybill_id TEXT,
     tracking_number TEXT,
     express_code TEXT,
     customer_shipment_id TEXT,
@@ -44,6 +45,7 @@ CREATE TABLE {TABLE_NAME} (
     origin_port_code TEXT,
     destination_port_code TEXT,
     expected_delivery_time TEXT,
+    warehouse_entry_time TEXT,
     delivered_time TEXT,
     status_code TEXT,
     exception_code TEXT,
@@ -117,6 +119,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         )
     if "carrier_id" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN carrier_id TEXT")
+    if "waybill_id" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN waybill_id TEXT")
     if "tracking_number" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN tracking_number TEXT")
     if "express_code" not in cols:
@@ -127,6 +131,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN exception_opened_time TEXT")
     if "expected_delivery_time" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN expected_delivery_time TEXT")
+    if "warehouse_entry_time" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN warehouse_entry_time TEXT")
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "
         f"ON {TABLE_NAME}(exception_code)"

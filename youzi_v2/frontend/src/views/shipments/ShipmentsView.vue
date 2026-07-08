@@ -93,7 +93,7 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
-import { formatShipmentDetailSummaryCopyText } from '@/utils/shipmentCopyFormat'
+import { formatShipmentDetailSummaryCopyText, formatShipmentDetailSummaryWithCustomerNoCopyText } from '@/utils/shipmentCopyFormat'
 import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
   daysSinceLocalCalendar,
@@ -151,6 +151,7 @@ const filterAddressKeyword = ref<string | null>(null)
 const filterVesselVoyage = ref<string | null>(null)
 const filterStaleDays = ref<number | null>(null)
 const filterNoZipcode = ref(false)
+const filterHasTrackingNumber = ref(false)
 const filterException = ref<string | null>(null)
 const filterHasException = ref<boolean | null>(null)
 const filterGroupId = ref<string | null>(null)
@@ -177,7 +178,7 @@ function loadVisibleColumnKeys(): string[] {
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
       if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) {
-        return parsed
+        return parsed.filter((key) => key !== 'statusCode')
       }
     }
   } catch {
@@ -801,6 +802,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   filterStaleDays: filterStaleDays.value,
   filterNoTracking: filterNoInternalTracking.value,
   filterNoZipcode: filterNoZipcode.value,
+  filterHasTrackingNumber: filterHasTrackingNumber.value,
   filterException: filterException.value,
   filterHasException: filterHasException.value,
   filterGroupId: filterGroupId.value,
@@ -853,6 +855,7 @@ const advancedOnlyActiveCount = computed(() => {
   if (filterNoInternalTracking.value) n++
   if (filterNoCarrierTracking.value) n++
   if (filterNoZipcode.value) n++
+  if (filterHasTrackingNumber.value) n++
   if (filterStaleDays.value) n++
   if (filterGroupId.value) n++
   if (filterGroupNo.value) n++
@@ -1334,6 +1337,7 @@ function resetFilterValues() {
   filterPendingTrackingTimeReview.value = false
   filterStaleDays.value = null
   filterNoZipcode.value = false
+  filterHasTrackingNumber.value = false
   filterGroupId.value = null
   filterGroupNo.value = null
   filterRuleType.value = null
@@ -1440,6 +1444,9 @@ function removeFilterTag(key: string) {
       break
     case 'filterNoZipcode':
       filterNoZipcode.value = false
+      break
+    case 'filterHasTrackingNumber':
+      filterHasTrackingNumber.value = false
       break
     case 'filterStaleDays':
       filterStaleDays.value = null
@@ -1861,14 +1868,35 @@ async function copySelectedShipmentDetailSummary() {
   }
 }
 
+async function copySelectedShipmentDetailSummaryWithCustomerNo() {
+  const rows = selectedRows.value
+  if (!rows.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const text = formatShipmentDetailSummaryWithCustomerNoCopyText(rows)
+  if (!text) {
+    message.warning('无可复制内容')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success(`已复制 ${rows.length} 条运单明细（客户编号）`)
+  } catch {
+    message.error('复制失败，请检查浏览器权限')
+  }
+}
+
 const copyDropdownOptions: DropdownOption[] = [
   { label: '运单明细', key: 'detailSummary' },
+  { label: '运单明细（客户编号）', key: 'detailSummaryCustomerNo' },
   { label: '最新轨迹', key: 'latestTracking' },
   { label: '转单号', key: 'trackingNumbers' },
 ]
 
 function handleCopyMenuSelect(key: string | number) {
   if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
+  else if (key === 'detailSummaryCustomerNo') void copySelectedShipmentDetailSummaryWithCustomerNo()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
 }
@@ -2124,6 +2152,12 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     width: 100,
     render: (row) => formatDateCell(row.etd),
   },
+  warehouseEntryTime: {
+    title: '入仓时间',
+    key: 'warehouseEntryTime',
+    width: 108,
+    render: (row) => formatDateCell(row.warehouseEntryTime),
+  },
   atd: {
     title: 'ATD',
     key: 'atd',
@@ -2229,7 +2263,9 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
 
 const columns = computed<DataTableColumns<Shipment>>(() => {
   const defs = optionalColumnDefs.value
+  const statusCol = defs.statusCode
   const dynamicCols = visibleColumnKeys.value
+    .filter((key) => key !== 'statusCode')
     .map((key) => defs[key])
     .filter((col): col is DataTableColumns<Shipment>[number] => Boolean(col))
 
@@ -2255,6 +2291,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
       cellProps: () => ({ class: 'shipment-td-no' }),
       render: (row) => renderShipmentNo(row),
     },
+    ...(statusCol ? [{ ...statusCol, fixed: 'left' as const }] : []),
     ...dynamicCols,
     {
       title: '操作',
@@ -2664,6 +2701,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:filter-no-internal-tracking="filterNoInternalTracking"
       v-model:filter-no-carrier-tracking="filterNoCarrierTracking"
       v-model:filter-no-zipcode="filterNoZipcode"
+      v-model:filter-has-tracking-number="filterHasTrackingNumber"
       v-model:filter-group-id="filterGroupId"
       v-model:filter-group-no="filterGroupNo"
       v-model:filter-rule-type="filterRuleType"

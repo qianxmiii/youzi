@@ -53,33 +53,26 @@ const PREFIX_WITH_SEP =
   /^(UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)\s*[-#:：]?\s*(.+)$/i
 const PREFIX_COMPACT = /^(UPS|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)(.+)$/i
 
-/** DPD UK 单号规范：15502802948687*21128（parcel*postcode） */
+/** DPD UK 单号：查询仅用 parcel 号，不拼接邮编 */
 export function normalizeDpdUkParcelRef(raw: string | null | undefined): string {
   const text = (raw || '').trim()
   if (!text) return ''
-  return text.replace(/\s*\*\s*/g, '*').replace(/\s+/g, '')
+  const normalized = text.replace(/\s*\*\s*/g, '*').replace(/\s+/g, '')
+  const star = normalized.indexOf('*')
+  return star >= 0 ? normalized.slice(0, star) : normalized
 }
 
-/** 组装 DPD UK 查询用 parcel 引用；无 * 且提供邮编时自动拼接 */
-export function buildDpdUkParcelRef(
-  trackingNumber: string,
-  postcode?: string | null,
-): string | null {
+/** 组装 DPD UK 查询用 parcel 号（不含邮编） */
+export function buildDpdUkParcelRef(trackingNumber: string): string | null {
   const base = normalizeDpdUkParcelRef(normalizeLastMileTrackingNumber(trackingNumber))
-  if (!base) return null
-  if (base.includes('*')) return base
-  const pc = (postcode || '').trim().replace(/\s+/g, '').toUpperCase()
-  return pc ? `${base}*${pc}` : base
+  return base || null
 }
 
-/** https://track.dpd.co.uk/parcels/15502802948687*21128#results */
-export function buildDpdUkTrackUrl(
-  trackingNumber: string,
-  postcode?: string | null,
-): string | null {
-  const ref = buildDpdUkParcelRef(trackingNumber, postcode)
+/** http://www.dpd.co.uk/service/tracking?parcel=15505543519268 */
+export function buildDpdUkTrackUrl(trackingNumber: string): string | null {
+  const ref = buildDpdUkParcelRef(trackingNumber)
   if (!ref) return null
-  return `https://track.dpd.co.uk/parcels/${encodeURIComponent(ref)}#results`
+  return `http://www.dpd.co.uk/service/tracking?parcel=${encodeURIComponent(ref)}`
 }
 
 /** 剥离「UPS 1Z…」类前缀，返回纯单号（展示/提交与库内一致） */
@@ -274,7 +267,7 @@ export function resolveLastMileTracking(shipment: {
   let conwestNumbers: string[] | undefined
   let url =
     carrier === 'dpd'
-      ? buildDpdUkTrackUrl(number, shipment.zipcode)
+      ? buildDpdUkTrackUrl(number)
       : buildLastMileTrackUrl(number, carrier, lang)
   if (carrier === 'conwest') {
     const fromDb = (shipment.trackingNumbers || []).filter(Boolean)

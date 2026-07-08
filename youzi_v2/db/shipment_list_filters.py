@@ -13,6 +13,7 @@ TIME_FIELD_MAP: dict[str, str] = {
     "eta": "eta",
     "ata": "ata",
     "expectedDeliveryTime": "expected_delivery_time",
+    "warehouseEntryTime": "warehouse_entry_time",
     "deliveredTime": "delivered_time",
     "updatedTime": "updated_time",
 }
@@ -23,6 +24,7 @@ MISSING_FIELD_MAP: dict[str, str] = {
     "eta": "eta",
     "ata": "ata",
     "expectedDeliveryTime": "expected_delivery_time",
+    "warehouseEntryTime": "warehouse_entry_time",
     "deliveredTime": "delivered_time",
 }
 
@@ -220,6 +222,20 @@ def append_not_delivered(conditions: list[str]) -> None:
 
 def append_has_ata(conditions: list[str]) -> None:
     conditions.append("s.ata IS NOT NULL AND TRIM(s.ata) != ''")
+
+
+def append_has_tracking_number(conditions: list[str]) -> None:
+    """有转单号（快递派尾程单号）：主字段或子单表任一有值即命中。"""
+    conditions.append(
+        f"""(
+          s.tracking_number IS NOT NULL AND TRIM(s.tracking_number) != ''
+          OR EXISTS (
+            SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
+            WHERE stn.shipment_no = s.shipment_no
+              AND stn.tracking_number IS NOT NULL AND TRIM(stn.tracking_number) != ''
+          )
+        )"""
+    )
 
 
 def append_delivery_risk(

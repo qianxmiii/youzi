@@ -210,3 +210,57 @@ def test_arrived_not_delivered(tmp_path: Path) -> None:
     res = repo.list_rows(has_ata=True, not_delivered=True)
     assert res["total"] == 1
     assert res["items"][0]["shipmentNo"] == "ARR-1"
+
+
+def test_has_tracking_number_filter(tmp_path: Path) -> None:
+    from youzi_v2.db.shipment_tracking_numbers_table import (
+        TABLE_NAME as STN_TABLE,
+        ensure_schema as ensure_stn_schema,
+    )
+
+    db = Database(tmp_path / "tn.db")
+    ensure_shipments_schema(db.conn)
+    ensure_group_schema(db.conn)
+    ensure_stn_schema(db.conn)
+    repo = ShipmentsRepository(db)
+    now = now_str()
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, tracking_number, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "SN-TN-1", "1Z999AA10123456784", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, tracking_number, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "SN-TN-2", "", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, tracking_number, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "SN-TN-3", "", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {STN_TABLE} (
+                id, shipment_no, main_tracking_number, tracking_number,
+                is_main, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "SN-TN-3", "CW-MAIN", "CW-SUB-001", 0, now, now),
+        )
+        db.conn.commit()
+
+    res = repo.list_rows(has_tracking_number=True, limit=50)
+    assert res["total"] == 2
+    nos = {row["shipmentNo"] for row in res["items"]}
+    assert nos == {"SN-TN-1", "SN-TN-3"}

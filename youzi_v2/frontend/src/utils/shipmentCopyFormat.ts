@@ -120,8 +120,25 @@ export function formatShipmentDetailSummaryLine(row: Shipment): string {
   ].join(' = ')
 }
 
+/** 单行：运单号 = 客户编号 = 货件号 = 派送仓库（空则邮编）= 件数ctns */
+export function formatShipmentDetailSummaryWithCustomerNoLine(row: Shipment): string {
+  return [
+    cell(row.shipmentNo),
+    cell(row.customerNo),
+    cell(row.customerShipmentId),
+    warehouseOrZipForCopy(row),
+    formatCtnsForCopy(row.ctns),
+  ].join(' = ')
+}
+
 /** 多行运单明细摘要，每行一条运单 */
 export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
   return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n')
+}
+
+/** 多行运单明细（含客户编号），每行一条运单 */
+export function formatShipmentDetailSummaryWithCustomerNoCopyText(rows: Shipment[]): string {
+  if (!rows.length) return ''
+  return rows.map((row) => formatShipmentDetailSummaryWithCustomerNoLine(row)).join('\n')
 }

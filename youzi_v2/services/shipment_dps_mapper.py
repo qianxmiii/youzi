@@ -111,15 +111,12 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         params.get("countryVo") if isinstance(params.get("countryVo"), dict) else {}
     )
 
-    customer_no = _opt_str(row.get("assOrderNumber")) or _opt_str(
-        row.get("internalOrderNum")
-    )
-    customer_shipment_id = _opt_str(params.get("amazonID")) or _opt_str(
-        row.get("internalOrderNum")
-    )
+    customer_no = _opt_str(row.get("assOrderNumber")) or ""
+    customer_shipment_id = _opt_str(params.get("amazonID"))
     address_code = _opt_str(row.get("deliveryWarehouseCode"))
     payload: dict[str, Any] = {
         "shipment_no": shipment_no,
+        "waybill_id": _opt_str(row.get("id")),
         "customer": _opt_str(row.get("clientUserNickName")),
         "customer_no": customer_no,
         "channel_code": _opt_str(row.get("channelCode")),
@@ -148,4 +145,8 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
             customer_shipment_id=customer_shipment_id,
         ),
     }
-    return {k: v for k, v in payload.items() if v is not None or k == "shipment_no"}
+    return {
+        k: v
+        for k, v in payload.items()
+        if v is not None or k in ("shipment_no", "customer_no")
+    }

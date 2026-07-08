@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { CalendarClock, CircleDollarSign, ShieldAlert, Ship, TriangleAlert } from 'lucide-vue-next'
+import { CalendarClock, CircleDollarSign, Clock3, ShieldAlert, Ship, TriangleAlert } from 'lucide-vue-next'
 import { computed, h } from 'vue'
 import { NTooltip } from 'naive-ui'
 import { ICON_STROKE } from '@/constants/icons'
@@ -42,6 +42,7 @@ const ruleKind = computed(() => shipmentGroupAlertRuleKind(props.ruleType))
 
 const iconComponent = computed(() => {
   if (ruleKind.value === 'exception') return ShieldAlert
+  if (ruleKind.value === 'sla') return Clock3
   if (ruleKind.value === 'delivery') return CalendarClock
   if (ruleKind.value === 'payment') return CircleDollarSign
   if (ruleKind.value === 'arrival') return Ship
@@ -53,6 +54,8 @@ const cardClass = computed(() => {
   let tone = sev === 'urgent' ? 'urgent' : sev === 'info' ? 'info' : 'warning'
   if (ruleKind.value === 'exception') {
     tone = 'exception'
+  } else if (ruleKind.value === 'sla') {
+    tone = 'warning'
   } else if (ruleKind.value === 'payment' && tone === 'warning') {
     tone = 'payment'
   } else if (ruleKind.value === 'arrival' && (tone === 'warning' || tone === 'info')) {

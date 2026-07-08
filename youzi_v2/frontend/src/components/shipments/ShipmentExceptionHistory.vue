@@ -35,6 +35,14 @@ const openException = computed(() => {
   }
 })
 
+const closedEvents = computed(() =>
+  items.value.filter((ev) => Boolean(ev.closedTime?.trim())),
+)
+
+const hasDrawerContent = computed(
+  () => Boolean(openException.value) || closedEvents.value.length > 0,
+)
+
 async function load() {
   loading.value = true
   try {
@@ -50,13 +58,13 @@ watch(() => props.shipmentId, load)
 </script>
 
 <template>
-  <!-- Drawer：设计稿异常卡片 -->
-  <div v-if="mode === 'drawer' && openException" class="abnormal-section">
+  <!-- Drawer：当前异常 + 历史记录 -->
+  <div v-if="mode === 'drawer' && hasDrawerContent" class="abnormal-section">
     <h3 class="section-label">
       Abnormal Status <span class="section-label-zh">（异常信息）</span>
     </h3>
     <NSpin :show="loading">
-      <div class="abnormal-card">
+      <div v-if="openException" class="abnormal-card">
         <div class="flex gap-3">
           <div class="abnormal-icon shrink-0" aria-hidden="true">
             <TriangleAlert class="h-5 w-5" :stroke-width="ICON_STROKE" />
@@ -71,6 +79,26 @@ watch(() => props.shipmentId, load)
             <p v-else class="abnormal-desc">该运单存在未关闭异常，请及时跟进。</p>
           </div>
         </div>
+      </div>
+
+      <div
+        v-if="closedEvents.length"
+        class="abnormal-history"
+        :class="{ 'abnormal-history--with-open': openException }"
+      >
+        <p v-if="openException" class="abnormal-history-title">历史异常</p>
+        <ul class="abnormal-history-list">
+          <li v-for="ev in closedEvents" :key="ev.id" class="abnormal-history-item">
+            <div class="abnormal-history-item__head">
+              <span class="abnormal-history-item__label">{{ codeLabel(ev.exceptionCode) }}</span>
+              <span class="abnormal-history-item__duration">{{ ev.durationLabel }}</span>
+            </div>
+            <p class="abnormal-history-item__time">
+              {{ ev.openedTime }} → {{ ev.closedTime }}
+            </p>
+            <p v-if="ev.note" class="abnormal-history-item__note">{{ ev.note }}</p>
+          </li>
+        </ul>
       </div>
     </NSpin>
   </div>
@@ -104,8 +132,8 @@ watch(() => props.shipmentId, load)
 
 <style scoped>
 .abnormal-section {
-  border-top: 1px solid var(--color-border);
-  padding-top: 1.125rem;
+  border-bottom: 1px solid var(--color-border);
+  padding: 0 0 1.125rem;
   margin-top: 0;
 }
 
@@ -151,6 +179,68 @@ watch(() => props.shipmentId, load)
   margin-top: 0.375rem;
   font-size: 0.8125rem;
   line-height: 1.55;
+  color: var(--color-fg-secondary);
+}
+
+.abnormal-history--with-open {
+  margin-top: 0.875rem;
+}
+
+.abnormal-history-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.abnormal-history-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.abnormal-history-item {
+  border-radius: 0.5rem;
+  border: 1px solid var(--color-border);
+  background: var(--color-btn-ghost-bg);
+  padding: 0.625rem 0.75rem;
+}
+
+.abnormal-history-item__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem 0.625rem;
+}
+
+.abnormal-history-item__label {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: var(--color-fg-emphasis);
+}
+
+.abnormal-history-item__duration {
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-muted);
+}
+
+.abnormal-history-item__time {
+  margin: 0.25rem 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.45;
+  color: var(--color-muted);
+}
+
+.abnormal-history-item__note {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  line-height: 1.45;
   color: var(--color-fg-secondary);
 }
 

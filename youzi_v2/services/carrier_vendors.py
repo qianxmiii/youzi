@@ -705,8 +705,9 @@ def fetch_txfba_batch_for_rows(
 
 def _wy_api_url(vendor: dict[str, Any]) -> str:
     return (
-        vendor.get("detailApiUrl")
-        or vendor.get("apiUrl")
+        vendor.get("apiUrl")
+        or vendor.get("detailApiUrl")
+        or vendor.get("trackApiUrl")
         or "https://www.wy-express.com/root-api/c/order/getPublicLogisticsTrackList"
     ).strip()
 
@@ -748,8 +749,8 @@ def _wy_event_id(node: dict[str, Any]) -> str | None:
 
 
 def parse_wy_track_group(item: dict[str, Any]) -> tuple[list[CarrierTrackingLogEntry], str | None, str | None]:
-    """WY单条 trackList：customerOrderNumber=查询键，systemOrderNumber=carrier_id。"""
-    carrier_id = (str(item.get("systemOrderNumber") or "")).strip() or None
+    """WY trackList 单项：systemOrderNumber=承运商单号，customerOrderNumber=运单号。"""
+    carrier_order_no = (str(item.get("systemOrderNumber") or "")).strip() or None
     logs: list[CarrierTrackingLogEntry] = []
     for group in item.get("list") or []:
         if not isinstance(group, dict):
@@ -762,7 +763,33 @@ def parse_wy_track_group(item: dict[str, Any]) -> tuple[list[CarrierTrackingLogE
             if not t or not d:
                 continue
             logs.append(CarrierTrackingLogEntry.from_row(t, d, _wy_event_id(node)))
-    return sort_logs_desc(logs), carrier_id, None
+    return sort_logs_desc(logs), carrier_order_no, None
+
+
+def wy_should_update_carrier_order_no(
+    existing: str,
+    carrier_order_no: str,
+    shipment_no: str,
+) -> bool:
+    new_no = (carrier_order_no or "").strip()
+    old_no = (existing or "").strip()
+    sn = (shipment_no or "").strip()
+    if not new_no or new_no == sn:
+        return False
+    if not old_no:
+        return True
+    return old_no == sn
+
+
+def _wy_extract_track_groups(data: Any) -> list[dict[str, Any]]:
+    if isinstance(data, dict):
+        for key in ("nodeList", "trackList"):
+            lst = data.get(key)
+            if isinstance(lst, list):
+                return [x for x in lst if isinstance(x, dict)]
+    if isinstance(data, list):
+        return [x for x in data if isinstance(x, dict)]
+    return []
 
 
 def _wy_format_http_error(resp: requests.Response) -> str:
@@ -814,14 +841,8 @@ def _wy_post_track(
     if code not in (200, "200"):
         msg = _maybe_repair_text(str(payload.get("msg") or payload.get("message") or ""))
         return [], msg or f"code={code}"
-    data = payload.get("data")
-    if isinstance(data, dict):
-        track_list = data.get("trackList")
-        if isinstance(track_list, list):
-            return [x for x in track_list if isinstance(x, dict)], None
-    if isinstance(data, list):
-        return [x for x in data if isinstance(x, dict)], None
-    return [], None
+    groups = _wy_extract_track_groups(payload.get("data"))
+    return groups, None
 
 
 def _wy_order_no_for_row(row: dict[str, str], vendor: dict[str, Any] | None = None) -> str:
@@ -856,7 +877,7 @@ def fetch_wy_batch_for_rows(
     timeout: int = DEFAULT_TIMEOUT,
     log: LogFn | None = None,
 ) -> dict[str, CarrierFetch]:
-    """WY批量：POST customerOrderNumberList（默认运单号）。"""
+    """WY 批量：POST customerOrderNumberList，回写 systemOrderNumber 为承运商单号。"""
     out: dict[str, CarrierFetch] = {}
     order_to_sns: dict[str, set[str]] = {}
     for row in rows:
@@ -888,9 +909,9 @@ def fetch_wy_batch_for_rows(
             targets = _wy_target_shipments(item, order_to_sns, pending)
             if not targets:
                 continue
-            logs, cid, tn = parse_wy_track_group(item)
+            logs, carrier_order_no, tn = parse_wy_track_group(item)
             for sn in targets:
-                out[sn] = (logs, None, cid, tn)
+                out[sn] = (logs, None, carrier_order_no, tn)
                 matched.add(sn)
                 if log is not None:
                     log(

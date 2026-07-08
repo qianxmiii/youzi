@@ -35,6 +35,7 @@ const filterStaleDays = defineModel<number | null>('filterStaleDays', { default:
 const filterNoInternalTracking = defineModel<boolean>('filterNoInternalTracking', { default: false })
 const filterNoCarrierTracking = defineModel<boolean>('filterNoCarrierTracking', { default: false })
 const filterNoZipcode = defineModel<boolean>('filterNoZipcode', { default: false })
+const filterHasTrackingNumber = defineModel<boolean>('filterHasTrackingNumber', { default: false })
 const filterGroupId = defineModel<string | null>('filterGroupId', { default: null })
 const filterGroupNo = defineModel<string | null>('filterGroupNo', { default: null })
 const filterRuleType = defineModel<string | null>('filterRuleType', { default: null })
@@ -193,6 +194,7 @@ function apply() {
             <NCheckbox v-model:checked="missingExpectedDelivery" size="small">缺预计送仓</NCheckbox>
             <NCheckbox v-model:checked="missingDelivered" size="small">缺签收时间</NCheckbox>
             <NCheckbox v-model:checked="filterNoZipcode" size="small">无邮编</NCheckbox>
+            <NCheckbox v-model:checked="filterHasTrackingNumber" size="small">有转单号（快递派）</NCheckbox>
           </NSpace>
         </section>
 

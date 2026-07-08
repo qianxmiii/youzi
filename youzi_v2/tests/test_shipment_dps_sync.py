@@ -23,6 +23,7 @@ from youzi_v2.services.shipment_dps_sync_fields import (
 from youzi_v2.services.shipment_dps_sync import run_shipment_dps_sync_batch
 
 SAMPLE_DELIVERED = {
+    "id": "2069113725203427329",
     "odd": "DPSECO260610178",
     "clientUserNickName": "422GS",
     "assOrderNumber": "SP-GS260601-AMZ-US-Air",
@@ -58,6 +59,8 @@ class ShipmentDpsMapperTest(unittest.TestCase):
         payload = dps_row_to_shipment(SAMPLE_DELIVERED)
         assert payload is not None
         self.assertEqual(payload["shipment_no"], "DPSECO260610178")
+        self.assertEqual(payload["waybill_id"], "2069113725203427329")
+        self.assertEqual(payload["customer_no"], "SP-GS260601-AMZ-US-Air")
         self.assertEqual(payload["customer"], "422GS")
         self.assertEqual(payload["country_code"], "US")
         self.assertEqual(payload["status_code"], "DELIVERED")
@@ -81,6 +84,24 @@ class ShipmentDpsMapperTest(unittest.TestCase):
         payload = dps_row_to_shipment(row)
         assert payload is not None
         self.assertEqual(payload["address_type"], "WFS")
+
+    def test_customer_no_only_ass_order_number(self) -> None:
+        row = {**SAMPLE_DELIVERED}
+        row.pop("assOrderNumber", None)
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload["customer_no"], "")
+        self.assertEqual(payload["customer_shipment_id"], "FBA19FN8FN6C")
+
+    def test_customer_shipment_id_skips_internal_order_num(self) -> None:
+        row = {
+            **SAMPLE_DELIVERED,
+            "internalOrderNum": "FBA19FN8FN6C",
+            "params": {**SAMPLE_DELIVERED["params"], "amazonID": ""},
+        }
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertNotIn("customer_shipment_id", payload)
 
     def test_map_address_type_direct(self) -> None:
         self.assertEqual(map_dps_address_type("0"), "AMZ")
@@ -179,6 +200,7 @@ class ShipmentDpsSyncTest(unittest.TestCase):
         assert row is not None
         self.assertEqual(row["customer"], "422GS")
         self.assertEqual(row["carrierCode"], "UPS")
+        self.assertEqual(row["waybillId"], "2069113725203427329")
         self.assertFalse(row.get("carrierId"))
         db.conn.close()
         tmp.cleanup()
@@ -274,6 +296,8 @@ class ShipmentDpsSyncTest(unittest.TestCase):
         self.assertTrue(captured[0][1].is_file())
         row = repo.get_by_shipment_no("DPSECO260610178")
         self.assertIsNotNone(row)
+        assert row is not None
+        self.assertEqual(row["waybillId"], "2069113725203427329")
         db.conn.close()
         tmp.cleanup()
 

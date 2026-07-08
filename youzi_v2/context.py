@@ -30,6 +30,8 @@ from .db.dict_repository import DictRepository
 from .db.quote_history_table import QuoteHistoryRepository
 from .db.shipment_exception_events_repository import ShipmentExceptionEventsRepository
 from .db.shipment_exception_followup_repository import ShipmentExceptionFollowupRepository
+from .db.channel_sla_rules_repository import ChannelSlaRulesRepository
+from .db.shipment_sla_alerts_repository import ShipmentSlaAlertsRepository
 from .db.shipments_repository import ShipmentsRepository
 from .db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from .db.tracking_logs_repository import TrackingLogsRepository
@@ -78,6 +80,12 @@ from .schemas.shipment_groups import (
     ShipmentGroupSuggestionItem,
 )
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
+from .schemas.shipment_sla import (
+    ChannelSlaRuleIn,
+    ShipmentSlaAlertConvertIn,
+    ShipmentSlaAlertNoteIn,
+    ShipmentSlaScanResult,
+)
 from .schemas.vessel_schedules import (
     VesselScheduleFetchIn,
     VesselScheduleSyncAllIn,
@@ -169,6 +177,8 @@ from .services.tracking_sync_scheduler import (
     start_tracking_sync_scheduler,
 )
 from .services.exception_followup_reminders import scan_exception_followup_reminders
+from .services.shipment_sla_scan import scan_shipment_sla_alerts
+from .services.shipment_sla_settings import save_sla_scan_enabled
 
 BASE_DIR = Path(__file__).resolve().parent
 REPO_ROOT = BASE_DIR.parent
@@ -289,6 +299,8 @@ addresses_warehouse_repo = AddressesWarehouseRepository(_database)
 shipments_repo = ShipmentsRepository(_database)
 shipment_exceptions_repo = ShipmentExceptionEventsRepository(_database)
 shipment_exception_followup_repo = ShipmentExceptionFollowupRepository(_database)
+channel_sla_rules_repo = ChannelSlaRulesRepository(_database)
+shipment_sla_alerts_repo = ShipmentSlaAlertsRepository(_database)
 internal_tracking_repo = TrackingLogsRepository(_database)
 carrier_tracking_repo = CarrierTrackingLogsRepository(_database)
 tracking_jobs_repo = TrackingSyncJobsRepository(_database)

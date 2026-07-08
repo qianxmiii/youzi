@@ -39,6 +39,7 @@ _EXCEPTION_SEEDS: list[tuple[str, str, str, int]] = [
     ("LOST", "掉件", "Lost", 20),
     ("HOLD", "暂扣", "Hold", 30),
     ("DAMAGED", "破损", "Damaged", 40),
+    ("TRANSIT_TIMEOUT", "运输超时", "Transit timeout", 50),
 ]
 
 
@@ -86,6 +87,7 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
 def seed_if_empty(conn: sqlite3.Connection) -> None:
     _seed_status_codes(conn)
     _seed_exception_codes(conn)
+    _sync_exception_codes(conn)
     _seed_channel_codes(conn)
 
 
@@ -124,6 +126,21 @@ def _seed_status_codes(conn: sqlite3.Connection) -> None:
         """,
         [(code, zh, en, order, now, now) for code, zh, en, order in _STATUS_SEEDS],
     )
+
+
+def _sync_exception_codes(conn: sqlite3.Connection) -> None:
+    """补齐新增异常类型（不覆盖已有记录）。"""
+    table = "shipment_exception_codes"
+    now = now_str()
+    for code, zh, en, order in _EXCEPTION_SEEDS:
+        conn.execute(
+            f"""
+            INSERT OR IGNORE INTO {table} (
+                code, name_zh, name_en, sort_order, is_active, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, 1, ?, ?)
+            """,
+            (code, zh, en, order, now, now),
+        )
 
 
 def _seed_exception_codes(conn: sqlite3.Connection) -> None:

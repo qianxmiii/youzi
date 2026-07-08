@@ -141,6 +141,26 @@ ata = candidate_ata
 - 不使用“进口清关放行”节点反推 ATA。
 - 若轨迹没有可靠事件时间，可生成候选值但标记低置信度，是否自动写正式字段由后续实现策略决定。
 
+### 入仓时间
+
+匹配占位轨迹（与内部摘要「无有效轨迹」判定一致）：
+
+```text
+Your goods are in the warehouse
+```
+
+回写规则：
+
+```text
+candidate_warehouse_entry_time = 最早匹配入仓节点的 track_event_time
+warehouse_entry_time = candidate_warehouse_entry_time
+```
+
+说明：
+
+- 该节点在列表摘要中视为占位、不展示为最新轨迹，但仍保留在 `internal_tracking_logs` 供时间回写。
+- 若存在多条入仓轨迹，取事件时间最早的一条作为正式入仓时间。
+
 ### 预计送仓时间
 
 匹配英文主体：
@@ -278,6 +298,7 @@ signed_time_review_reason
 | `ETA` | 最新显式 `ETA` | 是 | 否 |
 | `ATD` | 最新显式 `ATD` | 是 | 否 |
 | `ATA` | 最新到港节点事件时间 | 是 | 异常时可扩展 |
+| `warehouse_entry_time` | 最早入仓占位节点事件时间 | 是 | 否 |
 | `expected_delivery_time` | 最新预计送仓节点解析日期 | 是 | 否 |
 | `signed_time` | 预计送仓时间或签收节点事件时间 | 条件自动 | 冲突时需要 |
 

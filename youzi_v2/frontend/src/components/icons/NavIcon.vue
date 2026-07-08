@@ -19,6 +19,7 @@ import {
   Ship,
   Star,
   Truck,
+  TriangleAlert,
   Users,
 } from 'lucide-vue-next'
 import type { LucideProps } from 'lucide-vue-next'
@@ -43,6 +44,7 @@ const ICONS: Record<string, FunctionalComponent<LucideProps>> = {
   book: BookOpen,
   pin: MapPin,
   truck: Truck,
+  alert: TriangleAlert,
   ship: Ship,
   chart: BarChart3,
   users: Users,

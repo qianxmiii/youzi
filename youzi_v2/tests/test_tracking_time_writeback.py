@@ -93,6 +93,58 @@ def test_parse_explicit_voyage_dates() -> None:
     assert candidates["eta"].candidate_value == "2026-06-10 00:00:00"
 
 
+def test_parse_explicit_voyage_dates_with_full_year() -> None:
+    tracks = tracks_from_rows(
+        [
+            {
+                "id": "t1",
+                "tracking_time": "2026-05-26 12:42:00",
+                "tracking_desc": "Loaded ETD:2026/05/28,ETA:2026/06/11",
+                "created_time": "2026-05-26 12:42:00",
+            },
+        ]
+    )
+    candidates = build_time_candidates(tracks, shipment_created_time="2026-05-01 08:00:00")
+    assert candidates["etd"] is not None
+    assert candidates["etd"].candidate_value == "2026-05-28 00:00:00"
+    assert candidates["eta"] is not None
+    assert candidates["eta"].candidate_value == "2026-06-11 00:00:00"
+
+
+def test_parse_atd_from_goods_shipped_track_when_no_explicit_atd() -> None:
+    tracks = tracks_from_rows(
+        [
+            {
+                "id": "t1",
+                "tracking_time": "2026-05-18 10:51:00",
+                "tracking_desc": (
+                    "The goods have been shipped，2026/05/18已开船，"
+                    "ETA:2026/06/02,实际到港时间以官网更新为准。"
+                ),
+                "created_time": "2026-05-18 10:51:00",
+            },
+            {
+                "id": "t2",
+                "tracking_time": "2026-05-20 10:00:00",
+                "tracking_desc": "LURLINE/100E ETD:5/28 ETA:6/10",
+                "created_time": "2026-05-20 10:00:00",
+            },
+        ]
+    )
+    candidates = build_time_candidates(tracks, shipment_created_time="2026-05-01 08:00:00")
+    assert candidates["atd"] is not None
+    assert candidates["atd"].candidate_value == "2026-05-18 10:51:00"
+    assert candidates["atd"].source_track_id == "t1"
+
+
+def test_goods_shipped_does_not_match_waiting_to_be_shipped() -> None:
+    from youzi_v2.tracking_time_parser import is_goods_shipped_track
+
+    assert not is_goods_shipped_track(
+        "The container has been extracted and is waiting to be shipped to Canada"
+    )
+
+
 def test_parse_ata_from_arrival_node() -> None:
     tracks = tracks_from_rows(
         [
@@ -178,6 +230,45 @@ def test_manual_approve_use_signed_track(env) -> None:
     approve_signed_time_candidate(db, signed["id"], action="use_signed_track")
     row = shipments.get_by_id(sid)
     assert row["deliveredTime"] == "2026-06-28 18:00:00"
+
+
+def test_parse_warehouse_entry_from_in_warehouse_node() -> None:
+    from youzi_v2.internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER
+
+    tracks = tracks_from_rows(
+        [
+            {
+                "id": "t1",
+                "tracking_time": "2026-05-18 14:20:00",
+                "tracking_desc": INTERNAL_WAREHOUSE_PLACEHOLDER,
+                "created_time": "2026-05-19 09:00:00",
+            },
+            {
+                "id": "t2",
+                "tracking_time": "2026-05-20 10:00:00",
+                "tracking_desc": INTERNAL_WAREHOUSE_PLACEHOLDER,
+                "created_time": "2026-05-20 10:00:00",
+            },
+        ]
+    )
+    candidates = build_time_candidates(tracks)
+    assert candidates["warehouse_entry_time"] is not None
+    assert candidates["warehouse_entry_time"].candidate_value == "2026-05-18 14:20:00"
+
+
+def test_writeback_warehouse_entry_time(env) -> None:
+    from youzi_v2.internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER
+
+    db, shipments, tracks, _ = env
+    sid = _insert_shipment(shipments)
+    _insert_track(tracks, "SH001", "2026-05-18 14:20:00", INTERNAL_WAREHOUSE_PLACEHOLDER)
+    _insert_track(tracks, "SH001", "2026-05-28 10:00:00", "LURLINE/100E ATD:5/28 ETA:6/10")
+
+    result = recalculate_for_shipment(db, shipment_id=sid)
+    row = shipments.get_by_id(sid)
+    assert "warehouse_entry_time" in result["applied"]
+    assert row["warehouseEntryTime"] == "2026-05-18 14:20:00"
+    assert row["atd"] == "2026-05-28 00:00:00"
 
 
 def test_delivered_node_case_sensitive() -> None:

@@ -130,14 +130,18 @@ def latest_from_logs(logs: list[tuple[str, str]]) -> tuple[str, str]:
 
 
 def logs_from_api_item(item: dict[str, Any]) -> list[tuple[str, str]]:
-    """将 API 单条结果的 logisticsInfors 转为 (tracking_time, tracking_desc)。"""
+    """将 API 单条结果的 logisticsInfors 转为 (tracking_time, tracking_desc)。
+
+    含入仓占位节点（Your goods are in the warehouse），供轨迹列表展示与入仓时间回写；
+    运单摘要最新轨迹仍由 latest_from_logs 跳过占位文案。
+    """
     from ..db.datetime_util import normalize_tracking_time
 
     out: list[tuple[str, str]] = []
     for log in item.get("logisticsInfors") or []:
         node_time = normalize_tracking_time(log.get("nodeTime") or "")
         node_desc = (log.get("nodeDesc") or "").strip()
-        if node_time and not is_internal_no_tracking_desc(node_desc):
+        if node_time and node_desc:
             out.append((node_time, node_desc))
     return out
 

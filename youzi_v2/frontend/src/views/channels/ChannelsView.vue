@@ -13,6 +13,7 @@ import {
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import ChannelFormModal from '@/components/channels/ChannelFormModal.vue'
+import ChannelSlaModal from '@/components/channels/ChannelSlaModal.vue'
 import {
   createChannel,
   deleteChannel,
@@ -23,6 +24,7 @@ import {
   type Channel,
   type ChannelPayload,
 } from '@/api/channels'
+import { listChannelSlaRules, upsertChannelSlaRule } from '@/api/shipmentSla'
 
 const message = useMessage()
 const loading = ref(false)
@@ -38,8 +40,11 @@ const categories = ref<string[]>(['快船', '普船', '卡航', '铁路', '空�
 const COMMON_COUNTRIES = ['美国', '加拿大', '英国', '欧洲', '澳大利亚', '墨西哥']
 
 const modalShow = ref(false)
-const modalMode = ref<'create' | 'edit'>('create')
+const modalMode = ref<'create' | 'edit' | 'copy'>('create')
 const editingRow = ref<Channel | null>(null)
+const copySourceCode = ref<string | null>(null)
+const slaModalShow = ref(false)
+const slaChannel = ref<Channel | null>(null)
 
 const countryOptions = computed(() => {
   const set = new Set([...COMMON_COUNTRIES, ...items.value.map((x) => x.country).filter(Boolean)])
@@ -100,25 +105,59 @@ async function handleSeed() {
 function openCreate() {
   modalMode.value = 'create'
   editingRow.value = null
+  copySourceCode.value = null
   modalShow.value = true
 }
 
 function openEdit(row: Channel) {
   modalMode.value = 'edit'
   editingRow.value = row
+  copySourceCode.value = null
   modalShow.value = true
+}
+
+function openCopy(row: Channel) {
+  modalMode.value = 'copy'
+  editingRow.value = row
+  copySourceCode.value = row.code
+  modalShow.value = true
+}
+
+async function copySlaRules(fromCode: string, toCode: string) {
+  const res = await listChannelSlaRules(fromCode)
+  const rule =
+    res.items.find((r) => !r.carrierCode && r.startField === 'ATD') || res.items[0]
+  if (!rule?.estimatedDays) return
+  await upsertChannelSlaRule(toCode, {
+    estimatedDays: rule.estimatedDays,
+    warningDays: rule.warningDays,
+    severeOverdueDays: rule.severeOverdueDays,
+    enabled: rule.enabled,
+    note: rule.note,
+    startField: rule.startField || 'ATD',
+    carrierCode: rule.carrierCode || '',
+  })
+}
+
+function openSla(row: Channel) {
+  slaChannel.value = row
+  slaModalShow.value = true
 }
 
 async function handleFormSubmit(payload: ChannelPayload) {
   try {
-    if (modalMode.value === 'create') {
+    if (modalMode.value === 'create' || modalMode.value === 'copy') {
       await createChannel(payload)
-      message.success('已新增渠道')
+      if (modalMode.value === 'copy' && copySourceCode.value) {
+        await copySlaRules(copySourceCode.value, payload.code)
+      }
+      message.success(modalMode.value === 'copy' ? '已复制渠道' : '已新增渠道')
     } else {
       await updateChannel(editingRow.value!.code, payload)
       message.success('已更新')
     }
     modalShow.value = false
+    copySourceCode.value = null
     await load()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '保存失败')
@@ -170,6 +209,27 @@ const columns: DataTableColumns<Channel> = [
         : h('span', { class: 'text-zinc-500' }, '—'),
   },
   {
+    title: '时效',
+    key: 'slaEstimatedDays',
+    width: 88,
+    align: 'center',
+    render: (row) => {
+      if (row.slaEstimatedDays == null || row.slaEstimatedDays <= 0) {
+        return h(
+          NButton,
+          { size: 'tiny', quaternary: true, class: 'text-zinc-500', onClick: () => openSla(row) },
+          () => '—',
+        )
+      }
+      const label = row.slaEnabled === false ? `${row.slaEstimatedDays} 天(停)` : `${row.slaEstimatedDays} 天`
+      return h(
+        NButton,
+        { size: 'tiny', quaternary: true, onClick: () => openSla(row) },
+        () => label,
+      )
+    },
+  },
+  {
     title: '备注',
     key: 'note',
     minWidth: 100,
@@ -197,11 +257,13 @@ const columns: DataTableColumns<Channel> = [
   {
     title: '操作',
     key: 'actions',
-    width: 120,
+    width: 208,
     fixed: 'right',
     render: (row) =>
       h(NSpace, { size: 4 }, () => [
         h(NButton, { size: 'tiny', quaternary: true, onClick: () => openEdit(row) }, () => '编辑'),
+        h(NButton, { size: 'tiny', quaternary: true, onClick: () => openCopy(row) }, () => '复制'),
+        h(NButton, { size: 'tiny', quaternary: true, onClick: () => openSla(row) }, () => '时效'),
         h(
           NPopconfirm,
           { onPositiveClick: () => handleDelete(row) },
@@ -287,7 +349,7 @@ onMounted(async () => {
         size="small"
         flex-height
         class="h-full"
-        :scroll-x="1080"
+        :scroll-x="1208"
       />
     </div>
 
@@ -311,5 +373,6 @@ onMounted(async () => {
       @close="modalShow = false"
       @submit="handleFormSubmit"
     />
+    <ChannelSlaModal v-model:show="slaModalShow" :channel="slaChannel" @saved="load" />
   </div>
 </template>

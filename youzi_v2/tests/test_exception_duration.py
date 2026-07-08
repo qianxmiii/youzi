@@ -7,17 +7,17 @@ def test_format_duration_days_only() -> None:
     assert format_duration(3 * 86400, opened_time="2026-01-01 10:00:00", closed_time="2026-01-04 10:00:00") == "3天"
 
 
-def test_format_duration_months_and_days() -> None:
+def test_format_duration_long_span_uses_calendar_days() -> None:
     assert (
         format_duration(None, opened_time="2026-01-15 08:00:00", closed_time="2026-03-20 08:00:00")
-        == "2月5天"
+        == "64天"
     )
 
 
-def test_format_duration_months_only() -> None:
+def test_format_duration_two_month_span() -> None:
     assert (
         format_duration(None, opened_time="2026-01-01 00:00:00", closed_time="2026-03-01 00:00:00")
-        == "2月"
+        == "59天"
     )
 
 

@@ -15,6 +15,7 @@ from .internal_batch_schedule import (
     should_run_scheduled_internal_batch,
 )
 from .shipment_group_alerts import evaluate_groups_after_tracking_sync
+from .shipment_sla_scan import evaluate_sla_after_tracking_sync
 from .tracking_time_writeback import recalculate_for_shipment_nos
 from .sync_log import make_sync_logger
 from .logistics_tracking import (
@@ -189,17 +190,17 @@ def _sync_all_tracking_body(
                 shipments_repo.update_internal_tracking_summary(sn, "", "", log_count=0)
             continue
 
+        inserted = tracking_repo.merge_logs_for_shipment(sn, logs)
+        log_count += inserted
         latest_time, latest_desc = latest_from_logs(logs)
         stored_time = row.get("latest_tracking_time") or ""
         stored_desc = row.get("latest_tracking_desc") or ""
         summary_same = latest_time == stored_time and latest_desc == stored_desc
         status_same = not api_status or api_status == stored_status
-        if summary_same and status_same:
+        if inserted == 0 and summary_same and status_same:
             skipped += 1
             continue
 
-        inserted = tracking_repo.merge_logs_for_shipment(sn, logs)
-        log_count += inserted
         count = tracking_repo.count_by_shipment_no(sn)
         shipments_repo.update_internal_tracking_summary(
             sn,
@@ -259,9 +260,20 @@ def _sync_all_tracking_body(
         out_log,
     )
 
-    writeback = recalculate_for_shipment_nos(
+    sla_alerts = evaluate_sla_after_tracking_sync(
         shipments_repo._database,
         updated_shipment_nos,
+        out_log,
+    )
+
+    writeback_nos = (
+        [str(row["tracking_number"]).strip() for row in tracking_list if row.get("tracking_number")]
+        if manual_scope
+        else updated_shipment_nos
+    )
+    writeback = recalculate_for_shipment_nos(
+        shipments_repo._database,
+        writeback_nos,
         log=out_log,
     )
 
@@ -279,6 +291,7 @@ def _sync_all_tracking_body(
         "batches": total_batches,
         "logs": log_lines[-200:],
         **group_alerts,
+        **sla_alerts,
         "timeWritebackProcessed": writeback.get("processed", 0),
         "timeWritebackApplied": writeback.get("appliedTotal", 0),
         "timeWritebackPendingReview": writeback.get("pendingReviewTotal", 0),

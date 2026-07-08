@@ -40,6 +40,9 @@ class Database:
         from . import shipments_table
         from . import shipment_exception_events_table
         from . import shipment_exception_followup_table
+        from . import channel_sla_rules_table
+        from . import shipment_sla_alert_followups_table
+        from . import shipment_sla_alerts_table
         from . import carrier_tracking_logs_table
         from . import internal_tracking_logs_table
         from . import tracking_sync_jobs_table
@@ -61,6 +64,9 @@ class Database:
             shipments_table.ensure_schema(self._conn)
             shipment_exception_events_table.ensure_schema(self._conn)
             shipment_exception_followup_table.ensure_schema(self._conn)
+            channel_sla_rules_table.ensure_schema(self._conn)
+            shipment_sla_alerts_table.ensure_schema(self._conn)
+            shipment_sla_alert_followups_table.ensure_schema(self._conn)
             internal_tracking_logs_table.ensure_schema(self._conn)
             carrier_tracking_logs_table.ensure_schema(self._conn)
             tracking_sync_jobs_table.ensure_schema(self._conn)

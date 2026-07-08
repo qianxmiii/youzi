@@ -24,6 +24,8 @@ export interface Shipment {
   carrierCode: string | null
   carrierNameZh?: string | null
   carrierId: string | null
+  /** DPS 运单主键 id（更新选中运单从 shipment_queryByOrder 回写） */
+  waybillId: string | null
   trackingNumber: string | null
   /** 尾程快递：UPS/FEDEX/DPD/CWE 等，优先于单号自动识别跳转 */
   expressCode?: string | null
@@ -39,6 +41,7 @@ export interface Shipment {
   originPortCode: string | null
   destinationPortCode: string | null
   expectedDeliveryTime: string | null
+  warehouseEntryTime: string | null
   deliveredTime: string | null
   statusCode: string | null
   exceptionCode: string | null
@@ -176,6 +179,7 @@ export function emptyShipmentForm(): ShipmentPayload {
     originPortCode: null,
     destinationPortCode: null,
     expectedDeliveryTime: null,
+    warehouseEntryTime: null,
     deliveredTime: null,
     statusCode: 'IN_TRANSIT',
   }
@@ -212,6 +216,7 @@ export function shipmentToForm(row: Shipment): ShipmentPayload {
     originPortCode: row.originPortCode,
     destinationPortCode: row.destinationPortCode,
     expectedDeliveryTime: row.expectedDeliveryTime,
+    warehouseEntryTime: row.warehouseEntryTime,
     deliveredTime: row.deliveredTime,
     statusCode: row.statusCode,
   }

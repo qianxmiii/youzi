@@ -45,6 +45,8 @@ class ScheduledTaskConfig(BaseModel):
     exception_followup_last_finished: str | None = Field(
         default=None, alias="exceptionFollowupLastFinished"
     )
+    sla_scan_enabled: bool = Field(default=True, alias="slaScanEnabled")
+    sla_scan_last_finished: str | None = Field(default=None, alias="slaScanLastFinished")
     scheduler_active: bool = Field(alias="schedulerActive")
     script_path: str | None = Field(default=None, alias="scriptPath")
     poll_interval_sec: float | None = Field(default=None, alias="pollIntervalSec")
@@ -80,6 +82,7 @@ class ScheduledSyncSettingsUpdate(BaseModel):
     exception_followup_enabled: bool | None = Field(
         default=None, alias="exceptionFollowupEnabled"
     )
+    sla_scan_enabled: bool | None = Field(default=None, alias="slaScanEnabled")
 
 
 class ExceptionFollowupRunResult(BaseModel):

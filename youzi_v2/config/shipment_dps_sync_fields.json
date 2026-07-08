@@ -73,6 +73,12 @@
       "onInsert": true,
       "onUpdate": true
     },
+    "waybill_id": {
+      "label": "DPS 运单 ID",
+      "dpsSource": "id",
+      "onInsert": true,
+      "onUpdate": true
+    },
     "customer_shipment_id": {
       "label": "货件号",
       "dpsSource": "params.amazonID",

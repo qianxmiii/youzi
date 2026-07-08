@@ -29,7 +29,7 @@
 
 三种方式：
 
-1. **单条表单**：`POST /api/v1/shipments`（`ShipmentFormModal.vue`）
+1. **单条表单**：`POST /api/v1/shipments`（`ShipmentFormModal.vue`）；承运商从码表 `carrier_codes` 下拉选择，界面显示中文名，提交时写入 DPS `carrier_id`（字段 `carrier_code`）
 2. **Excel 批量导入**：`POST /api/v1/shipments/import`（列映射见 `config/shipment_excel_columns.json`；可选分组列：分组编号、分组名称、批次号、是否最后一批，按 `group_no` 自动建组/加成员）
 3. **推荐分组**：勾选运单后「分组 → 推荐分组」，或 `POST /api/v1/shipment-groups/suggestions/preview` 预览、`/apply` 确认落库
 3. **批量编辑**：`PATCH /api/v1/shipments/batch-update`
@@ -47,7 +47,7 @@
 
 **自动同步**：Uvicorn 启动后 `tracking_sync_scheduler` 每 N 小时全量同步（默认 2 小时，仅 `IN_TRANSIT`）。配置见 [deployment.md](./deployment.md)。
 
-同步后更新 `latest_tracking_time`、`latest_tracking_desc`、`tracking_log_count`，并可能推进 `status_code`（含写入 `delivered_time`）。
+同步后更新 `latest_tracking_time`、`latest_tracking_desc`、`tracking_log_count`，并可能推进 `status_code`。关键时间字段（ETD/ATD/ETA/ATA、入仓时间、预计送仓、签收时间）由 `tracking_time_writeback` 根据内部轨迹节点自动回写（签收时间冲突时需人工审批）。
 
 **分组提醒联动**：本次同步中摘要或状态有变化的运单，会自动对其所在分组执行规则评估（签收期限、整组到港催款等）；响应字段 `groupAlertsEvaluated`、`groupAlertsCreated`。日志含 `[分组提醒]` 行。手动「重新计算」仍可用于全量补跑。
 
@@ -59,6 +59,16 @@ curl -X POST "http://127.0.0.1:3001/api/v1/shipments/sync-tracking" \
 ```
 
 承运商配置在根目录 `config/config.json` 的 `vendors` 数组。
+
+**WY（wy-express）**
+
+| 配置项 | 说明 |
+|--------|------|
+| `apiUrl` | 轨迹查询 `getPublicLogisticsTrackList`，POST `{"customerOrderNumberList":["运单号"]}` |
+| `authorization` | 请求头鉴权 |
+| `sslVerify` | 可选，`false` 跳过证书校验 |
+
+响应 `data.trackList[].systemOrderNumber`（如 `WYNVWFPS7SS`）回写运单 `carrier_id`（承运商单号）；轨迹节点取自 `list[].childNodeList[]`。
 
 ## 异常管理
 

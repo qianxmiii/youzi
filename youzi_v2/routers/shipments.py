@@ -309,9 +309,19 @@ def create_shipment(payload: ShipmentRecordIn):
 @router.put("/api/v1/shipments/{item_id}")
 def update_shipment(item_id: str, payload: ShipmentUpdateIn):
     try:
-        return shipments_repo.update_row(item_id, payload.to_payload())
+        data = payload.to_payload()
+        row = shipments_repo.update_row(item_id, data)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="运单不存在") from exc
+    if "delivered_time" in data and (data.get("delivered_time") or "").strip():
+        from ..services.shipment_sla_scan import maybe_resolve_alerts_after_delivery
+
+        maybe_resolve_alerts_after_delivery(
+            shipments_repo._database,
+            item_id,
+            shipment_no=row.get("shipmentNo"),
+        )
+    return row
 
 @router.delete("/api/v1/shipments/{item_id}")
 def delete_shipment(item_id: str):
@@ -372,8 +382,16 @@ def batch_update_shipments(body: ShipmentBatchUpdateIn):
             skipped.append({"id": item_id, "shipmentNo": "", "message": "运单不存在"})
             continue
         try:
-            shipments_repo.update_row(item_id, payload)
+            updated_row = shipments_repo.update_row(item_id, payload)
             updated += 1
+            if "delivered_time" in payload and (payload.get("delivered_time") or "").strip():
+                from ..services.shipment_sla_scan import maybe_resolve_alerts_after_delivery
+
+                maybe_resolve_alerts_after_delivery(
+                    shipments_repo._database,
+                    item_id,
+                    shipment_no=updated_row.get("shipmentNo"),
+                )
         except KeyError:
             skipped.append(
                 {

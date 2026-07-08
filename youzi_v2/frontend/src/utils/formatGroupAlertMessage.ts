@@ -26,7 +26,7 @@ export function normalizeGroupAlertMessage(message: string): string {
 
 /** 日期、组号、运单号、数字、收款状态等「值」片段 */
 const VALUE_PATTERN =
-  /\d{4}-\d{2}-\d{2}|G\d[\dA-Z]*|（[^）]+）|未付|部分|已付|\d+/g
+  /\d{4}-\d{2}-\d{2}|G\d[\dA-Z]*|[A-Za-z]{2,}\d[A-Za-z0-9]*|（[^）]+）|未付|部分|已付|\d+/g
 
 export function splitGroupAlertMessage(message: string): GroupAlertMessagePart[] {
   const text = normalizeGroupAlertMessage(message.trim())

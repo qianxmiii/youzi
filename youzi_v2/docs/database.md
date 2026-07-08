@@ -77,6 +77,8 @@ erDiagram
 | vessel_name, voyage_no, vessel_voyage | TEXT | 船名 / 航次 / 组合键 |
 | etd, eta, atd, ata | TEXT | 海运时间节点 |
 | origin_port_code, destination_port_code | TEXT | 起运港 / 目的港 |
+| expected_delivery_time | TEXT | 预计送仓时间 |
+| warehouse_entry_time | TEXT | 入仓时间（内部轨迹 `Your goods are in the warehouse` 回写） |
 | delivered_time | TEXT | 签收时间 |
 | status_code | TEXT | 状态码 |
 | exception_code | TEXT | 当前异常码 |
@@ -194,6 +196,35 @@ erDiagram
 | read_at, resolved_at | TEXT | 已读 / 已处理 |
 
 定义：`db/shipment_group_alerts_repository.py`；评估逻辑：`services/shipment_group_alerts.py`。
+
+**channel_sla_rules** — 渠道运输时效规则
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| channel_code | TEXT | → channel_codes.code |
+| carrier_code | TEXT | 承运商细分，空字符串为渠道默认 |
+| start_field | TEXT | 起算字段，首版 `ATD` |
+| estimated_days | INTEGER | 预估运输天数 |
+| warning_days | INTEGER | 提前提醒天数（默认 3） |
+| severe_overdue_days | INTEGER | 严重超时天数（默认 7） |
+| enabled | INTEGER | 1/0 |
+
+唯一约束：`(channel_code, carrier_code, start_field)`。配置入口：渠道管理 →「时效」。
+
+**shipment_sla_alerts** — 运输时效预警
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| shipment_id, shipment_no | TEXT | 运单 |
+| alert_type | TEXT | `DELIVERY_TIME` / `WAREHOUSE_NO_DEPARTURE` / `ARRIVAL_NO_DELIVERY` |
+| risk_level | TEXT | `warning_soon` / `overdue` / `severe_overdue` |
+| status | TEXT | `open` / `acknowledged` / `converted` / `resolved` / `ignored` |
+| due_date, warning_date | TEXT | 截止日 / 提醒日 |
+| event_key | TEXT UNIQUE | 防重复：全程超时 `shipment_id\|DELIVERY_TIME\|rule_id\|due_date`；入库未开船 `shipment_id\|WAREHOUSE_NO_DEPARTURE\|warehouse_entry_date`；到港未送仓 `shipment_id\|ARRIVAL_NO_DELIVERY\|ata_date` |
+
+定义：`db/shipment_sla_alerts_repository.py`；扫描：`services/shipment_sla_scan.py`。
 
 ## 辅助与日志表
 

@@ -62,8 +62,11 @@ const packageCountText = computed(() => {
 })
 
 const carrierText = computed(() => {
-  const code = props.shipment?.carrierCode?.trim()
-  return code || '—'
+  const s = props.shipment
+  if (!s) return '—'
+  const zh = s.carrierNameZh?.trim()
+  if (zh) return zh
+  return s.carrierCode?.trim() || '—'
 })
 
 const statusCode = computed(() => props.shipment?.statusCode?.trim().toUpperCase() || '')
@@ -153,6 +156,13 @@ function openTrackUrl() {
         </dl>
       </section>
 
+      <ShipmentExceptionHistory
+        :shipment-id="shipment.id"
+        :shipment="shipment"
+        :label-by-code="exceptionLabelByCode"
+        mode="drawer"
+      />
+
       <section class="drawer-section timeline-section">
         <ShipmentTrackingTimeReview
           :key="shipment.id + '-' + shipment.updatedTime"
@@ -168,13 +178,6 @@ function openTrackUrl() {
           @shipment-updated="(row) => emit('shipment-updated', row)"
         />
       </section>
-
-      <ShipmentExceptionHistory
-        :shipment-id="shipment.id"
-        :shipment="shipment"
-        :label-by-code="exceptionLabelByCode"
-        mode="drawer"
-      />
     </div>
   </NDrawer>
 </template>

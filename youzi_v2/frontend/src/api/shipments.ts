@@ -114,6 +114,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   }
   if (params.noTracking) q.noTracking = 'true'
   if (params.noZipcode) q.noZipcode = 'true'
+  if (params.hasTrackingNumber) q.hasTrackingNumber = 'true'
   if (params.groupId?.trim()) q.groupId = params.groupId.trim()
   if (params.groupNo?.trim()) q.groupNo = params.groupNo.trim()
   if (params.ruleType?.trim()) q.ruleType = params.ruleType.trim()
@@ -192,6 +193,7 @@ export interface ListShipmentsParams {
   minStaleDays?: number
   noTracking?: boolean
   noZipcode?: boolean
+  hasTrackingNumber?: boolean
   groupId?: string
   groupNo?: string
   ruleType?: string

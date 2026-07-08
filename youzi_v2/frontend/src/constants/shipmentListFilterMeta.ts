@@ -7,6 +7,7 @@ export const SHIPMENT_TIME_FIELD_OPTIONS = [
   { label: 'ATD', value: 'atd' },
   { label: 'ETA', value: 'eta' },
   { label: 'ATA', value: 'ata' },
+  { label: '入仓时间', value: 'warehouseEntryTime' },
   { label: '预计送仓', value: 'expectedDeliveryTime' },
   { label: '签收时间', value: 'deliveredTime' },
   { label: '更新时间', value: 'updatedTime' },
@@ -18,7 +19,6 @@ export const SHIPMENT_LIST_COLUMN_GROUPS = [
   {
     group: '基础信息',
     keys: [
-      'statusCode',
       'customer',
       'channelCode',
       'addressCode',
@@ -38,7 +38,7 @@ export const SHIPMENT_LIST_COLUMN_GROUPS = [
   },
   {
     group: '时间节点',
-    keys: ['etd', 'atd', 'eta', 'ata', 'expectedDeliveryTime', 'deliveredTime', 'createdTime'],
+    keys: ['warehouseEntryTime', 'etd', 'atd', 'eta', 'ata', 'expectedDeliveryTime', 'deliveredTime', 'createdTime'],
   },
   {
     group: '轨迹状态',
@@ -71,6 +71,7 @@ export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
   atd: 'ATD',
   eta: 'ETA',
   ata: 'ATA',
+  warehouseEntryTime: '入仓时间',
   expectedDeliveryTime: '预计送仓',
   deliveredTime: '签收时间',
   createdTime: '创建时间',
@@ -82,7 +83,7 @@ export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
   exceptionDurationLabel: '异常时长',
 }
 
-/** 与 shipment-list-filter-design.md 默认列一致（不含固定列运单号/操作） */
+/** 与 shipment-list-filter-design.md 默认列一致（不含固定列运单号/状态/操作） */
 export const DEFAULT_SHIPMENT_VISIBLE_COLUMNS = [
   'customer',
   'groups',

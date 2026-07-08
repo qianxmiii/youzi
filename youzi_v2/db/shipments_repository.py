@@ -20,6 +20,7 @@ from .shipment_list_filters import (
     append_delivery_risk,
     append_exact_in_column,
     append_has_ata,
+    append_has_tracking_number,
     append_keyword_search,
     append_missing_field,
     append_not_delivered,
@@ -111,6 +112,7 @@ _UPDATABLE = (
     "supplier_name",
     "carrier_code",
     "carrier_id",
+    "waybill_id",
     "tracking_number",
     "express_code",
     "customer_shipment_id",
@@ -125,6 +127,7 @@ _UPDATABLE = (
     "origin_port_code",
     "destination_port_code",
     "expected_delivery_time",
+    "warehouse_entry_time",
     "delivered_time",
     "status_code",
     "latest_tracking_time",
@@ -187,6 +190,7 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         )
         or None,
         "carrierId": row["carrier_id"],
+        "waybillId": row["waybill_id"] if "waybill_id" in row.keys() else None,
         "trackingNumber": row["tracking_number"],
         "expressCode": row["express_code"] if "express_code" in row.keys() else None,
         "customerLang": (
@@ -211,6 +215,11 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "expectedDeliveryTime": (
             row["expected_delivery_time"]
             if "expected_delivery_time" in row.keys()
+            else None
+        ),
+        "warehouseEntryTime": (
+            row["warehouse_entry_time"]
+            if "warehouse_entry_time" in row.keys()
             else None
         ),
         "deliveredTime": row["delivered_time"],
@@ -251,6 +260,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "supplierName": "supplier_name",
         "carrierCode": "carrier_code",
         "carrierId": "carrier_id",
+        "waybillId": "waybill_id",
         "trackingNumber": "tracking_number",
         "expressCode": "express_code",
         "customerShipmentId": "customer_shipment_id",
@@ -261,6 +271,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "originPortCode": "origin_port_code",
         "destinationPortCode": "destination_port_code",
         "expectedDeliveryTime": "expected_delivery_time",
+        "warehouseEntryTime": "warehouse_entry_time",
         "deliveredTime": "delivered_time",
         "statusCode": "status_code",
         "latestTrackingTime": "latest_tracking_time",
@@ -366,6 +377,7 @@ class ShipmentsRepository:
         min_stale_days: int | None = None,
         no_tracking: bool | None = None,
         no_zipcode: bool | None = None,
+        has_tracking_number: bool | None = None,
         group_id: str | None = None,
         group_no: str | None = None,
         rule_type: str | None = None,
@@ -550,6 +562,8 @@ class ShipmentsRepository:
             params.append(f"-{int(min_stale_days)} days")
         if no_zipcode:
             conditions.append("(s.zipcode IS NULL OR TRIM(s.zipcode) = '')")
+        if has_tracking_number is True:
+            append_has_tracking_number(conditions)
         if group_id and group_id.strip():
             conditions.append(
                 f"""
@@ -982,6 +996,25 @@ class ShipmentsRepository:
                   AND (carrier_id IS NULL OR TRIM(carrier_id) = '')
                 """,
                 (cid, sn),
+            )
+            self._conn.commit()
+            return cur.rowcount > 0
+
+    def set_carrier_id(self, shipment_no: str, carrier_id: str) -> bool:
+        """写入承运商侧单号/工作号（覆盖已有值）。"""
+        sn = shipment_no.strip()
+        cid = (carrier_id or "").strip()
+        if not sn or not cid:
+            return False
+        now = now_str()
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {TABLE_NAME}
+                SET carrier_id = ?, updated_time = ?
+                WHERE shipment_no = ?
+                """,
+                (cid, now, sn),
             )
             self._conn.commit()
             return cur.rowcount > 0

@@ -178,6 +178,29 @@ class ShipmentExceptionFollowupRepository:
             self._conn.commit()
             return int(cur.rowcount or 0)
 
+    def resolve_pending_for_delivered_shipments(self) -> int:
+        """扫描兜底：已签收运单上未完成的跟进待办批量关闭。"""
+        now = now_str()
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {TABLE_NAME}
+                SET resolved_at = ?, read_at = CASE
+                      WHEN read_at IS NULL OR TRIM(read_at) = '' THEN ?
+                      ELSE read_at END,
+                    updated_time = ?
+                WHERE (resolved_at IS NULL OR TRIM(resolved_at) = '')
+                  AND shipment_id IN (
+                    SELECT id FROM {SHIPMENTS_TABLE}
+                    WHERE (delivered_time IS NOT NULL AND TRIM(delivered_time) != '')
+                       OR UPPER(COALESCE(status_code, '')) = 'DELIVERED'
+                  )
+                """,
+                (now, now, now),
+            )
+            self._conn.commit()
+            return int(cur.rowcount or 0)
+
     def list_pending_notifications(self, *, limit: int = 20) -> list[dict[str, Any]]:
         lim = max(1, min(limit, 50))
         with self._database.lock:

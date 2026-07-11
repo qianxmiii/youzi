@@ -16,7 +16,7 @@ ALERT_WAREHOUSE_NO_DEPARTURE = "WAREHOUSE_NO_DEPARTURE"
 ALERT_ARRIVAL_NO_DELIVERY = "ARRIVAL_NO_DELIVERY"
 
 WAREHOUSE_NO_DEPARTURE_DAYS = 7
-ARRIVAL_NO_DELIVERY_DAYS = 10
+ARRIVAL_NO_DELIVERY_DAYS = 12
 
 STATUS_OPEN = "open"
 STATUS_ACKNOWLEDGED = "acknowledged"
@@ -29,6 +29,27 @@ TERMINAL_STATUSES = frozenset({STATUS_CONVERTED, STATUS_IGNORED, STATUS_RESOLVED
 
 DEFAULT_WARNING_DAYS = 3
 DEFAULT_SEVERE_OVERDUE_DAYS = 7
+
+# 不参与异常跟踪扫描/待办/列表的渠道（与 shipments.channel_code 一致）
+SLA_EXCLUDED_CHANNEL_CODES = frozenset({"FC-整柜"})
+
+
+def is_sla_excluded_channel(channel_code: str | None) -> bool:
+    return (channel_code or "").strip() in SLA_EXCLUDED_CHANNEL_CODES
+
+
+def sla_excluded_channels_sql(column: str) -> str:
+    placeholders = ", ".join("?" for _ in SLA_EXCLUDED_CHANNEL_CODES)
+    return f"TRIM(COALESCE({column}, '')) NOT IN ({placeholders})"
+
+
+def sla_excluded_channels_params() -> list[str]:
+    return sorted(SLA_EXCLUDED_CHANNEL_CODES)
+
+
+def sla_excluded_channels_in_sql(column: str) -> str:
+    placeholders = ", ".join("?" for _ in SLA_EXCLUDED_CHANNEL_CODES)
+    return f"TRIM(COALESCE({column}, '')) IN ({placeholders})"
 
 
 def parse_date(value: str | None) -> date | None:
@@ -116,7 +137,7 @@ def compute_arrival_no_delivery_context(
     *,
     today: date | None = None,
 ) -> dict[str, Any] | None:
-    """ATA 后 10 天仍未签收时生成到港未送仓预警。"""
+    """ATA 后 12 天仍未签收时生成到港未送仓预警。"""
     ata_raw = (row.get("ata") or "").strip()
     ata_day = parse_date(ata_raw)
     if not ata_day:

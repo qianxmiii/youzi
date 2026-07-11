@@ -59,10 +59,13 @@ export interface ShipmentSlaAlert {
   daysUntilDue: number | null
   overdueDays: number
   daysInTransit: number | null
+  totalDaysInTransit?: number | null
+  netDaysInTransit?: number | null
   estimatedDays: number | null
   customer?: string | null
   destinationPort?: string | null
   atd?: string | null
+  ata?: string | null
   warehouseEntryTime?: string | null
   expectedDeliveryTime?: string | null
   deliveredTime?: string | null

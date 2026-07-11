@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 from .shipment_tracking_numbers_table import TABLE_NAME as TRACKING_NUMBERS_TABLE
@@ -48,6 +49,19 @@ _KEYWORD_SHIPMENT_COLUMNS = (
 )
 
 
+def tracking_search_like_pattern(keyword: str) -> str:
+    """轨迹搜索 LIKE 模式：多词按顺序模糊匹配，兼容词间不可断行空格（\\xa0）等。"""
+    text = (keyword or "").strip()
+    if not text:
+        return ""
+    tokens = [t for t in re.split(r"\s+", text) if t]
+    if not tokens:
+        return ""
+    if len(tokens) == 1:
+        return f"%{tokens[0]}%"
+    return "%" + "%".join(tokens) + "%"
+
+
 def _dedupe_tokens(values: list[str] | None) -> list[str]:
     return list(dict.fromkeys(s.strip() for s in (values or []) if s and s.strip()))
 
@@ -70,6 +84,8 @@ def append_unified_batch_number_search(
               OR s.customer_shipment_id = ?
               OR s.tracking_number = ?
               OR s.carrier_id = ?
+              OR s.bill_of_lading_no = ?
+              OR s.container_no = ?
               OR s.amazon_ref_id = ?
               OR EXISTS (
                 SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
@@ -78,7 +94,7 @@ def append_unified_batch_number_search(
               )
             )"""
         )
-        params.extend([token] * 8)
+        params.extend([token] * 10)
     conditions.append(f"({' OR '.join(token_clauses)})")
 
 
@@ -108,7 +124,8 @@ def append_container_nos_exact(
     placeholders = ", ".join("?" * len(cleaned))
     conditions.append(
         f"""(
-          s.tracking_number IN ({placeholders})
+          s.container_no IN ({placeholders})
+          OR s.tracking_number IN ({placeholders})
           OR EXISTS (
             SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
             WHERE stn.shipment_no = s.shipment_no
@@ -116,7 +133,7 @@ def append_container_nos_exact(
           )
         )"""
     )
-    params.extend(cleaned + cleaned)
+    params.extend(cleaned + cleaned + cleaned)
 
 
 def append_bill_nos_exact(
@@ -130,7 +147,8 @@ def append_bill_nos_exact(
     placeholders = ", ".join("?" * len(cleaned))
     conditions.append(
         f"""(
-          s.carrier_id IN ({placeholders})
+          s.bill_of_lading_no IN ({placeholders})
+          OR s.carrier_id IN ({placeholders})
           OR EXISTS (
             SELECT 1 FROM {TRACKING_NUMBERS_TABLE} stn
             WHERE stn.shipment_no = s.shipment_no
@@ -138,7 +156,7 @@ def append_bill_nos_exact(
           )
         )"""
     )
-    params.extend(cleaned + cleaned)
+    params.extend(cleaned + cleaned + cleaned)
 
 
 def validate_time_field(field: str | None) -> str | None:

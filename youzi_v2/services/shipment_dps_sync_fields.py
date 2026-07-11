@@ -30,9 +30,12 @@ KNOWN_SYNC_FIELDS = frozenset(
         "tracking_number",
         "customer_shipment_id",
         "amazon_ref_id",
+        "bill_of_lading_no",
+        "container_no",
         "expected_delivery_time",
         "delivered_time",
         "status_code",
+        "payment_status",
         "latest_tracking_time",
         "latest_tracking_desc",
     }

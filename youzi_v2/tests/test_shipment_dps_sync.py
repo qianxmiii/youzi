@@ -14,6 +14,7 @@ from youzi_v2.db.shipments_repository import ShipmentsRepository
 from youzi_v2.services.shipment_dps_mapper import (
     dps_row_to_shipment,
     map_dps_address_type,
+    map_dps_payment_status,
     map_dps_status,
 )
 from youzi_v2.services.shipment_dps_sync_fields import (
@@ -67,13 +68,54 @@ class ShipmentDpsMapperTest(unittest.TestCase):
         self.assertEqual(payload["zipcode"], "64163")
         self.assertEqual(payload["address_type"], "AMZ")
         self.assertNotIn("carrier_id", payload)
-        self.assertEqual(payload.get("carrier_code"), "UPS")
+        self.assertEqual(payload.get("carrier_code"), "1724258253196189697")
+
+    def test_map_bill_of_lading_no_from_params(self) -> None:
+        row = {
+            **SAMPLE_DELIVERED,
+            "params": {
+                **SAMPLE_DELIVERED["params"],
+                "ladingBillNum": "OOLU2169890590",
+            },
+        }
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload.get("bill_of_lading_no"), "OOLU2169890590")
+
+    def test_map_carrier_code_uses_carrier_id_only(self) -> None:
+        payload = dps_row_to_shipment(SAMPLE_DELIVERED)
+        assert payload is not None
+        self.assertEqual(payload.get("carrier_code"), "1724258253196189697")
+        row = {
+            **SAMPLE_DELIVERED,
+            "carrierId": "999",
+            "endCarrier": "FedEx",
+            "carrierName": "UPS",
+        }
+        payload2 = dps_row_to_shipment(row)
+        assert payload2 is not None
+        self.assertEqual(payload2.get("carrier_code"), "999")
 
     def test_map_address_type_private(self) -> None:
         row = {**SAMPLE_DELIVERED, "deliveryAddressType": "2"}
         payload = dps_row_to_shipment(row)
         assert payload is not None
         self.assertEqual(payload["address_type"], "3PL")
+
+    def test_map_payment_status(self) -> None:
+        self.assertEqual(map_dps_payment_status(0), "UNPAID")
+        self.assertEqual(map_dps_payment_status(1), "PAID")
+        self.assertEqual(map_dps_payment_status("0"), "UNPAID")
+        self.assertEqual(map_dps_payment_status("1"), "PAID")
+        self.assertIsNone(map_dps_payment_status(None))
+        self.assertIsNone(map_dps_payment_status(""))
+
+    def test_map_payment_status_from_row(self) -> None:
+        unpaid = dps_row_to_shipment({**SAMPLE_DELIVERED, "clientVerifyStatus": 0})
+        paid = dps_row_to_shipment({**SAMPLE_DELIVERED, "clientVerifyStatus": 1})
+        assert unpaid is not None and paid is not None
+        self.assertEqual(unpaid["payment_status"], "UNPAID")
+        self.assertEqual(paid["payment_status"], "PAID")
 
     def test_map_address_type_wfs(self) -> None:
         row = {
@@ -199,7 +241,7 @@ class ShipmentDpsSyncTest(unittest.TestCase):
         self.assertIsNotNone(row)
         assert row is not None
         self.assertEqual(row["customer"], "422GS")
-        self.assertEqual(row["carrierCode"], "UPS")
+        self.assertEqual(row["carrierCode"], "1724258253196189697")
         self.assertEqual(row["waybillId"], "2069113725203427329")
         self.assertFalse(row.get("carrierId"))
         db.conn.close()

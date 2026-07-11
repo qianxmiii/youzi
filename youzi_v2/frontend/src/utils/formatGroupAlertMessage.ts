@@ -16,6 +16,14 @@ export function paymentStatusLabel(code: string | null | undefined): string {
   return PAYMENT_STATUS_LABELS[key] ?? (code || '').trim()
 }
 
+/** 运单 DPS 付款状态（clientVerifyStatus） */
+export function shipmentPaymentStatusLabel(code: string | null | undefined): string {
+  const key = (code || '').trim().toUpperCase()
+  if (key === 'PAID') return '已付款'
+  if (key === 'UNPAID') return '未付款'
+  return '—'
+}
+
 /** 将消息中的英文收款状态替换为中文（兼容历史提醒） */
 export function normalizeGroupAlertMessage(message: string): string {
   return message

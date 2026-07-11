@@ -25,3 +25,13 @@ class TrackingFreshnessStats(BaseModel):
         alias="pendingTrackingTimeReview",
         description="签收时间待轨迹审批的运单数",
     )
+    internal_stale_7d: int = Field(
+        0,
+        alias="internalStale7d",
+        description="转运中且有效内部轨迹 ≥7 天未更新",
+    )
+    internal_stale_14d: int = Field(
+        0,
+        alias="internalStale14d",
+        description="转运中且有效内部轨迹 ≥14 天未更新",
+    )

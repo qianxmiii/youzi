@@ -1,4 +1,8 @@
-"""首页海运预警聚合。"""
+"""首页海运预警聚合。
+
+挂靠港相关预警（三天内到/离港、紧急挂靠列表）仅统计已订阅的 port_call。
+运单侧海运状态（三天内到港等）仍按运单 ETA/ATA 字段计算，与港口订阅无关。
+"""
 
 from __future__ import annotations
 
@@ -79,10 +83,16 @@ def build_maritime_alerts_overview(database: Database) -> dict[str, Any]:
     counts["portArrivingSoon"] = 0
     counts["portDepartingSoon"] = 0
 
+    subscribed_port_call_ids = PortSubscriptionsRepository(
+        database
+    ).subscribed_port_call_ids()
+
     urgent_port_calls: list[dict[str, Any]] = []
     voyage_alert_map: dict[str, dict[str, Any]] = {}
 
     for row in port_rows:
+        if str(row["id"]) not in subscribed_port_call_ids:
+            continue
         pc = enrich_port_call(
             {
                 "id": row["id"],

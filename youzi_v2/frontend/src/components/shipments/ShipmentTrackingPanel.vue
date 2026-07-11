@@ -182,6 +182,7 @@ async function handleSyncCarrier() {
         class="flex-1"
         :loading="syncingInternal"
         :disabled="syncingCarrier"
+        title="以 DPS 接口全量覆盖本地轨迹（删除源端已删节点）"
         @click="handleSyncInternal"
       >
         更新内部轨迹

@@ -91,8 +91,8 @@ const alertCards = computed(() => {
     { key: 'arriving_soon', label: '三天内到港', count: c.arrivingSoon, query: { maritimeStatus: 'arriving_soon' } },
     { key: 'departing_soon', label: '三天内离港', count: c.departingSoon, query: { maritimeStatus: 'departing_soon' } },
     { key: 'in_transit', label: '在途', count: c.inTransit, query: { maritimeStatus: 'in_transit' } },
-    { key: 'port_arriving', label: '挂靠将到港', count: c.portArrivingSoon, query: {} },
-    { key: 'port_departing', label: '挂靠将离港', count: c.portDepartingSoon, query: {} },
+    { key: 'port_arriving', label: '订阅港将到港', count: c.portArrivingSoon, query: {} },
+    { key: 'port_departing', label: '订阅港将离港', count: c.portDepartingSoon, query: {} },
     { key: 'arrived', label: '已到港', count: c.arrived, query: { maritimeStatus: 'arrived' } },
   ]
 })
@@ -761,7 +761,7 @@ function onFeedDismiss(item: AlertFeedItem) {
           <article class="panel workbench-column">
             <div class="workbench-panel-head">
               <h3 class="workbench-panel-title">
-                挂靠预警
+                订阅港预警
                 <span v-if="urgentPortCalls.length" class="workbench-panel-count">{{
                   urgentPortCalls.length
                 }}</span>
@@ -792,7 +792,7 @@ function onFeedDismiss(item: AlertFeedItem) {
               </li>
             </ul>
             <p v-else class="workbench-list-empty">
-              暂无挂靠预警
+              暂无订阅港预警
               <NButton size="tiny" quaternary class="mt-2" @click="goVesselSchedules()">打开船期监控</NButton>
             </p>
           </article>

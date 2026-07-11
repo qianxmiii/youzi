@@ -31,6 +31,10 @@ export interface Shipment {
   expressCode?: string | null
   customerShipmentId: string | null
   amazonRefId: string | null
+  /** 海运提单号（DPS params.ladingBillNum） */
+  billOfLadingNo: string | null
+  /** 柜号 */
+  containerNo: string | null
   vesselName: string | null
   voyageNo: string | null
   vesselVoyage: string | null
@@ -44,6 +48,8 @@ export interface Shipment {
   warehouseEntryTime: string | null
   deliveredTime: string | null
   statusCode: string | null
+  /** DPS clientVerifyStatus：UNPAID=未付款，PAID=已付款 */
+  paymentStatus?: 'UNPAID' | 'PAID' | null
   exceptionCode: string | null
   exceptionOpenedTime: string | null
   exceptionDurationSeconds: number | null
@@ -169,6 +175,8 @@ export function emptyShipmentForm(): ShipmentPayload {
     expressCode: null,
     customerShipmentId: null,
     amazonRefId: null,
+    billOfLadingNo: null,
+    containerNo: null,
     vesselName: null,
     voyageNo: null,
     vesselVoyage: null,
@@ -182,6 +190,7 @@ export function emptyShipmentForm(): ShipmentPayload {
     warehouseEntryTime: null,
     deliveredTime: null,
     statusCode: 'IN_TRANSIT',
+    paymentStatus: null,
   }
 }
 
@@ -206,6 +215,8 @@ export function shipmentToForm(row: Shipment): ShipmentPayload {
     expressCode: row.expressCode ?? null,
     customerShipmentId: row.customerShipmentId,
     amazonRefId: row.amazonRefId,
+    billOfLadingNo: row.billOfLadingNo,
+    containerNo: row.containerNo,
     vesselName: row.vesselName,
     voyageNo: row.voyageNo,
     vesselVoyage: row.vesselVoyage,
@@ -219,5 +230,6 @@ export function shipmentToForm(row: Shipment): ShipmentPayload {
     warehouseEntryTime: row.warehouseEntryTime,
     deliveredTime: row.deliveredTime,
     statusCode: row.statusCode,
+    paymentStatus: row.paymentStatus ?? null,
   }
 }

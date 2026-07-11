@@ -10,6 +10,7 @@ import {
   NSpace,
 } from 'naive-ui'
 import type { ShipmentFilterOptions } from '@/api/shipments'
+import { PAYMENT_STATUS_FILTER_OPTIONS } from '@/constants/shipmentFilters'
 import type { ShipmentAdvancedTimeRanges } from '@/constants/shipmentListFilterMeta'
 
 const show = defineModel<boolean>('show', { default: false })
@@ -29,6 +30,7 @@ const filterAddressKeyword = defineModel<string | null>('filterAddressKeyword', 
 const filterVesselVoyage = defineModel<string | null>('filterVesselVoyage', { default: null })
 const filterVipOnly = defineModel<boolean>('filterVipOnly', { default: false })
 const filterException = defineModel<string | null>('filterException', { default: null })
+const filterPaymentStatus = defineModel<string | null>('filterPaymentStatus', { default: null })
 const hasAta = defineModel<boolean>('hasAta', { default: false })
 const filterHasException = defineModel<boolean | null>('filterHasException', { default: null })
 const filterStaleDays = defineModel<number | null>('filterStaleDays', { default: null })
@@ -149,6 +151,13 @@ function apply() {
             <NSelect v-model:value="filterChannelNameZh" :options="channelNameZhOptions" placeholder="渠道（中文名）" clearable filterable size="small" />
             <NSelect v-model:value="filterChannelCategory" :options="channelCategoryOptions" placeholder="渠道大类" clearable size="small" />
             <NSelect v-model:value="filterCarrier" :options="carrierOptions" placeholder="承运商" clearable filterable size="small" />
+            <NSelect
+              v-model:value="filterPaymentStatus"
+              :options="[...PAYMENT_STATUS_FILTER_OPTIONS]"
+              placeholder="付款状态"
+              clearable
+              size="small"
+            />
             <NInput v-model:value="filterVesselVoyage" placeholder="船名航次" clearable size="small" />
             <NCheckbox v-model:checked="filterVipOnly" size="small">仅 VIP</NCheckbox>
           </NSpace>

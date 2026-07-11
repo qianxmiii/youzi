@@ -1,4 +1,8 @@
-"""从物流 API 拉取运单轨迹并增量写入 internal_tracking_logs，更新运单内部摘要。"""
+"""从物流 API 拉取运单轨迹并写入 internal_tracking_logs，更新运单内部摘要。
+
+手动指定运单号：以接口返回全量覆盖本地轨迹（删除 DPS 已删节点）。
+定时/全库同步：增量合并，只增不删。
+"""
 
 from __future__ import annotations
 
@@ -153,7 +157,11 @@ def _sync_all_tracking_body(
     by_odd = {shipment_no_from_api_item(item): item for item in api_items}
     by_odd = {k: v for k, v in by_odd.items() if k}
 
-    out_log("[轨迹同步] 开始增量写入…")
+    out_log(
+        "[轨迹同步] 开始全量覆盖写入（以接口为准）…"
+        if manual_scope
+        else "[轨迹同步] 开始增量写入…"
+    )
 
     updated = 0
     skipped = 0
@@ -176,7 +184,20 @@ def _sync_all_tracking_body(
         logs = logs_from_api_item(item)
         if not logs:
             empty += 1
-            if api_status and api_status != stored_status:
+            if manual_scope:
+                tracking_repo.replace_for_shipment(sn, [])
+                shipments_repo.update_internal_tracking_summary(
+                    sn,
+                    "",
+                    "",
+                    log_count=0,
+                    status_code=api_status,
+                    delivered_time=_delivered_time_for_status(api_status, ""),
+                )
+                out_log(f"[轨迹同步] {sn} 接口无轨迹节点，已清空本地轨迹")
+                updated += 1
+                updated_shipment_nos.append(sn)
+            elif api_status and api_status != stored_status:
                 shipments_repo.update_internal_tracking_summary(
                     sn,
                     row.get("latest_tracking_time") or "",
@@ -188,6 +209,27 @@ def _sync_all_tracking_body(
                 updated_shipment_nos.append(sn)
             elif is_internal_no_tracking_desc(row.get("latest_tracking_desc")):
                 shipments_repo.update_internal_tracking_summary(sn, "", "", log_count=0)
+            continue
+
+        if manual_scope:
+            written = tracking_repo.replace_for_shipment(sn, logs)
+            log_count += written
+            latest_time, latest_desc = latest_from_logs(logs)
+            shipments_repo.update_internal_tracking_summary(
+                sn,
+                latest_time,
+                latest_desc,
+                log_count=written,
+                status_code=api_status,
+                delivered_time=_delivered_time_for_status(api_status, latest_time),
+            )
+            updated += 1
+            updated_shipment_nos.append(sn)
+            if api_status:
+                out_log(
+                    f"[轨迹同步] {sn} 全量覆盖 {written} 条，报文 {status_label} -> {api_status}，"
+                    f"最新 {latest_time}"
+                )
             continue
 
         inserted = tracking_repo.merge_logs_for_shipment(sn, logs)

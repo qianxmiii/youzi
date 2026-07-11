@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   NButton,
+  NCheckbox,
   NDataTable,
   NDatePicker,
   NDropdown,
@@ -91,6 +92,7 @@ import {
 } from '@/utils/shipmentListFilterQuery'
 import { useDictLabels } from '@/composables/useDictLabels'
 import { formatRelativeTime } from '@/utils/formatDateTime'
+import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 import { formatShipmentDetailSummaryCopyText, formatShipmentDetailSummaryWithCustomerNoCopyText } from '@/utils/shipmentCopyFormat'
@@ -141,6 +143,7 @@ const filterChannelCode = ref<string | null>(null)
 const timeField = ref<ShipmentTimeField | null>(null)
 const timeRange = ref<[number, number] | null>(null)
 const filterVipOnly = ref(false)
+const filterFclOnly = ref(true)
 const filterCarrier = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannelNameZh = ref<string | null>(null)
@@ -153,6 +156,7 @@ const filterStaleDays = ref<number | null>(null)
 const filterNoZipcode = ref(false)
 const filterHasTrackingNumber = ref(false)
 const filterException = ref<string | null>(null)
+const filterPaymentStatus = ref<string | null>(null)
 const filterHasException = ref<boolean | null>(null)
 const filterGroupId = ref<string | null>(null)
 const filterGroupNo = ref<string | null>(null)
@@ -422,6 +426,25 @@ function toggleCarrierAheadFilter() {
 function togglePendingReviewFilter() {
   filterPendingTrackingTimeReview.value = !filterPendingTrackingTimeReview.value
   onFiltersChanged()
+}
+
+function toggleStaleDaysFilter(days: 7 | 14) {
+  if (filterStaleDays.value === days) {
+    filterStaleDays.value = null
+  } else {
+    filterStaleDays.value = days
+    filterNoInternalTracking.value = false
+    filterStatus.value = DEFAULT_STATUS_FILTER
+  }
+  onFiltersChanged()
+}
+
+function toggleStale7Filter() {
+  toggleStaleDaysFilter(7)
+}
+
+function toggleStale14Filter() {
+  toggleStaleDaysFilter(14)
 }
 
 const statusLabel: Record<string, string> = {
@@ -795,6 +818,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   filterAddressKeyword: filterAddressKeyword.value,
   filterVesselVoyage: filterVesselVoyage.value,
   filterVipOnly: filterVipOnly.value,
+  filterFclOnly: filterFclOnly.value,
   filterNoInternalTracking: filterNoInternalTracking.value,
   filterNoCarrierTracking: filterNoCarrierTracking.value,
   filterCarrierAheadOfInternal: filterCarrierAheadOfInternal.value,
@@ -804,6 +828,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   filterNoZipcode: filterNoZipcode.value,
   filterHasTrackingNumber: filterHasTrackingNumber.value,
   filterException: filterException.value,
+  filterPaymentStatus: filterPaymentStatus.value,
   filterHasException: filterHasException.value,
   filterGroupId: filterGroupId.value,
   filterGroupNo: filterGroupNo.value,
@@ -850,8 +875,10 @@ const advancedOnlyActiveCount = computed(() => {
   if (filterAddressKeyword.value) n++
   if (filterVesselVoyage.value) n++
   if (filterVipOnly.value) n++
+  if (!filterFclOnly.value) n++
   if (filterHasException.value != null) n++
   if (filterException.value) n++
+  if (filterPaymentStatus.value) n++
   if (filterNoInternalTracking.value) n++
   if (filterNoCarrierTracking.value) n++
   if (filterNoZipcode.value) n++
@@ -1317,12 +1344,14 @@ function resetFilterValues() {
   selectedSystemView.value = null
   filterStatus.value = DEFAULT_STATUS_FILTER
   filterException.value = null
+  filterPaymentStatus.value = null
   filterHasException.value = null
   filterCustomer.value = null
   filterChannelCode.value = null
   timeField.value = null
   timeRange.value = null
   filterVipOnly.value = false
+  filterFclOnly.value = true
   filterCarrier.value = null
   filterCountry.value = null
   filterChannelNameZh.value = null
@@ -1430,11 +1459,17 @@ function removeFilterTag(key: string) {
     case 'filterVipOnly':
       filterVipOnly.value = false
       break
+    case 'filterFclOnly':
+      filterFclOnly.value = true
+      break
     case 'filterHasException':
       filterHasException.value = null
       break
     case 'filterException':
       filterException.value = null
+      break
+    case 'filterPaymentStatus':
+      filterPaymentStatus.value = null
       break
     case 'filterNoInternalTracking':
       filterNoInternalTracking.value = false
@@ -2026,6 +2061,24 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     },
   },
   ctns: { title: '件数', key: 'ctns', width: 64, align: 'center' },
+  paymentStatus: {
+    title: '付款状态',
+    key: 'paymentStatus',
+    width: 88,
+    align: 'center',
+    render: (row) => {
+      const code = (row.paymentStatus || '').trim().toUpperCase()
+      const label = shipmentPaymentStatusLabel(row.paymentStatus)
+      if (!code) return '—'
+      const tone =
+        code === 'PAID'
+          ? 'shipment-status-badge--success'
+          : code === 'UNPAID'
+            ? 'shipment-status-badge--warning'
+            : 'shipment-status-badge--default'
+      return h('span', { class: ['shipment-status-badge', tone] }, label)
+    },
+  },
   groups: {
     title: '分组',
     key: 'groups',
@@ -2380,37 +2433,43 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :no-carrier-active="filterNoCarrierTracking"
       :carrier-ahead-active="filterCarrierAheadOfInternal"
       :pending-review-active="filterPendingTrackingTimeReview"
-      :filtered-no-internal-count="filterNoInternalTracking ? total : null"
-      :filtered-no-carrier-count="filterNoCarrierTracking ? total : null"
-      :filtered-pending-review-count="filterPendingTrackingTimeReview ? total : null"
-      :filtered-carrier-ahead-count="filterCarrierAheadOfInternal ? total : null"
+      :stale7-active="filterStaleDays === 7"
+      :stale14-active="filterStaleDays === 14"
+      :filtered-no-internal-count="filterNoInternalTracking && !loading ? total : null"
+      :filtered-no-carrier-count="filterNoCarrierTracking && !loading ? total : null"
+      :filtered-pending-review-count="filterPendingTrackingTimeReview && !loading ? total : null"
+      :filtered-carrier-ahead-count="filterCarrierAheadOfInternal && !loading ? total : null"
+      :filtered-stale7-count="filterStaleDays === 7 && !loading ? total : null"
+      :filtered-stale14-count="filterStaleDays === 14 && !loading ? total : null"
       :carrier-sync-hint="carrierSyncHint"
       @toggle-no-internal="toggleNoInternalTrackingFilter"
       @toggle-no-carrier="toggleNoCarrierTrackingFilter"
       @toggle-carrier-ahead="toggleCarrierAheadFilter"
       @toggle-pending-review="togglePendingReviewFilter"
+      @toggle-stale7="toggleStale7Filter"
+      @toggle-stale14="toggleStale14Filter"
     />
 
     <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
       <div class="flex min-w-0 flex-col gap-2">
-        <div class="flex min-w-0 flex-wrap items-start gap-2">
-          <NInput
-            v-model:value="searchShipmentNo"
-            type="textarea"
-            placeholder="多号精确搜索：运单号、柜号、提单号、货件号、客户编号（逗号/空格/换行分隔，最多 200 个）"
-            :autosize="{ minRows: 1, maxRows: 4 }"
-            clearable
-            size="small"
-            class="shipments-filter-shipment-no"
-          />
-          <span
-            v-if="shipmentNoTokens.length > 0"
-            class="mt-1 shrink-0 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-200"
-          >
-            {{ shipmentNoTokens.length }} 个单号
-          </span>
-        </div>
-        <div class="shipments-filter-row flex min-w-0 flex-wrap items-center gap-2">
+        <div class="shipments-filter-search-row">
+          <div class="shipments-filter-search-half">
+            <NInput
+              v-model:value="searchShipmentNo"
+              type="textarea"
+              placeholder="多号精确搜索：运单号、柜号、提单号、货件号、客户编号（逗号/空格/换行分隔，最多 200 个）"
+              :autosize="{ minRows: 1, maxRows: 4 }"
+              clearable
+              size="small"
+              class="shipments-filter-shipment-no"
+            />
+            <span
+              v-if="shipmentNoTokens.length > 0"
+              class="mt-1 shrink-0 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-200"
+            >
+              {{ shipmentNoTokens.length }} 个单号
+            </span>
+          </div>
           <NInput
             v-model:value="searchTrackingContent"
             placeholder="轨迹搜索"
@@ -2419,6 +2478,8 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             class="shipments-filter-tracking"
             @keyup.enter="onFiltersChanged"
           />
+        </div>
+        <div class="shipments-filter-row flex min-w-0 flex-wrap items-center gap-2">
           <NSelect
             v-model:value="filterStatus"
             :options="statusOptions"
@@ -2465,6 +2526,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             class="shipments-filter-daterange"
             @update:value="onFiltersChanged"
           />
+          <NCheckbox
+            v-model:checked="filterFclOnly"
+            size="small"
+            class="shrink-0"
+            @update:checked="onFiltersChanged"
+          >
+            整柜
+          </NCheckbox>
           <NButton size="small" quaternary class="shrink-0" @click="advancedFilterShow = true">
             高级筛选
             <span
@@ -2566,7 +2635,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         <NButton
           size="small"
           :loading="syncingTracking"
-          title="含已签收；按勾选运单号同步"
+          title="含已签收；以 DPS 接口全量覆盖本地轨迹（删除源端已删节点）"
           @click="handleSyncSelectedInternal"
         >
           更新选中内部轨迹
@@ -2696,6 +2765,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:filter-vip-only="filterVipOnly"
       v-model:has-ata="hasAta"
       v-model:filter-exception="filterException"
+      v-model:filter-payment-status="filterPaymentStatus"
       v-model:filter-has-exception="filterHasException"
       v-model:filter-stale-days="filterStaleDays"
       v-model:filter-no-internal-tracking="filterNoInternalTracking"
@@ -2746,15 +2816,30 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   flex: 0 0 auto;
 }
 
+.shipments-filter-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0.5rem;
+  align-items: start;
+  min-width: 0;
+}
+
+.shipments-filter-search-half {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
 .shipments-filters-bar .shipments-filter-shipment-no {
-  flex: 1 1 280px;
-  min-width: 220px;
-  max-width: 100%;
+  flex: 1 1 auto;
+  min-width: 0;
+  width: 100%;
 }
 
 .shipments-filters-bar .shipments-filter-tracking {
-  width: 10rem;
-  min-width: 8rem;
+  min-width: 0;
+  width: 100%;
 }
 
 .shipments-filters-bar .shipments-filter-keyword {

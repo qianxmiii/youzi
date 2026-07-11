@@ -419,7 +419,7 @@ def batch_update_shipments(body: ShipmentBatchUpdateIn):
 def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(None)):
     """
     从 config/config.json 的 base_url 拉取内部路由轨迹，
-    写入 internal_tracking_logs。全库同步不含已签收；body.shipmentNos 指定单号时可含已签收。
+    写入 internal_tracking_logs。全库同步为增量合并；指定 shipmentNos 时以接口全量覆盖本地轨迹（含已签收）。
     """
     shipment_nos: list[str] | None = None
     if body and body.shipment_nos:

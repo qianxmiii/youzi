@@ -15,6 +15,7 @@ import { ref, watch } from 'vue'
 import { useDictLabels } from '@/composables/useDictLabels'
 import type { ShipmentPayload } from '@/types/shipment'
 import { EXPRESS_CODE_BATCH_OPTIONS } from '@/constants/expressCodes'
+import { PAYMENT_STATUS_EDIT_OPTIONS } from '@/constants/shipmentFilters'
 import { formatDateOnlyForApi } from '@/utils/formatDateTime'
 
 const props = defineProps<{
@@ -36,6 +37,7 @@ const { loadDictTypes, dictOptions } = useDictLabels()
 const addressTypeOptions = dictOptions('address_type')
 
 const statusCode = ref<string | null>(null)
+const paymentStatus = ref<string | null>(null)
 const customer = ref('')
 const customerNo = ref('')
 const channelCode = ref<string | null>(null)
@@ -61,6 +63,7 @@ watch(
     if (!visible) return
     void loadDictTypes('address_type')
     statusCode.value = null
+    paymentStatus.value = null
     customer.value = ''
     customerNo.value = ''
     channelCode.value = null
@@ -93,6 +96,7 @@ function applyDateField(
 function buildUpdates(): Partial<ShipmentPayload> | null {
   const updates: Partial<ShipmentPayload> = {}
   if (statusCode.value) updates.statusCode = statusCode.value
+  if (paymentStatus.value) updates.paymentStatus = paymentStatus.value
   if (customer.value.trim()) updates.customer = customer.value.trim()
   if (customerNo.value.trim()) updates.customerNo = customerNo.value.trim()
   if (channelCode.value) updates.channelCode = channelCode.value
@@ -134,19 +138,29 @@ function handleSubmit() {
     :show="show"
     preset="card"
     :title="`批量修改（${count} 条）`"
-    class="max-w-2xl"
+    class="shipment-batch-edit-modal max-w-2xl"
+    style="width: min(672px, 96vw); max-height: 90vh"
     :mask-closable="false"
     @update:show="(v: boolean) => !v && emit('close')"
   >
-    <p class="mb-3 text-xs leading-relaxed text-zinc-500">
-      仅更新下方已填写的字段，留空项保持各运单原值不变。运单号不可批量修改。
-    </p>
-    <NForm label-placement="top" size="small">
+    <div class="batch-edit-modal__body">
+      <p class="mb-3 text-xs leading-relaxed text-zinc-500">
+        仅更新下方已填写的字段，留空项保持各运单原值不变。运单号不可批量修改。
+      </p>
+      <NForm label-placement="top" size="small">
       <div class="grid grid-cols-1 gap-x-3 sm:grid-cols-2">
         <NFormItem label="状态">
           <NSelect
             v-model:value="statusCode"
             :options="statusOptions"
+            clearable
+            placeholder="不修改"
+          />
+        </NFormItem>
+        <NFormItem label="付款状态">
+          <NSelect
+            v-model:value="paymentStatus"
+            :options="[...PAYMENT_STATUS_EDIT_OPTIONS]"
             clearable
             placeholder="不修改"
           />
@@ -269,6 +283,7 @@ function handleSubmit() {
         </NFormItem>
       </div>
     </NForm>
+    </div>
     <template #footer>
       <NSpace justify="end">
         <NButton @click="emit('close')">取消</NButton>
@@ -277,3 +292,11 @@ function handleSubmit() {
     </template>
   </NModal>
 </template>
+
+<style scoped>
+.batch-edit-modal__body {
+  max-height: min(65vh, 520px);
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+</style>

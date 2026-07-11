@@ -67,6 +67,21 @@ def map_dps_address_type(
     return None
 
 
+def map_dps_payment_status(value: Any) -> str | None:
+    """DPS clientVerifyStatus：0=未付款，1=已付款。"""
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        n = int(float(str(value).strip()))
+    except (TypeError, ValueError):
+        return None
+    if n == 1:
+        return "PAID"
+    if n == 0:
+        return "UNPAID"
+    return None
+
+
 def map_dps_status(
     row: dict[str, Any],
     route: dict[str, Any],
@@ -127,17 +142,19 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         "product_name": _opt_str(params.get("productName")),
         "origin_warehouse_code": _opt_str(row.get("receiveWarehouseName")),
         "supplier_name": _opt_str(row.get("shipperCompanyName")),
-        "carrier_code": _opt_str(row.get("endCarrier")) or _opt_str(row.get("carrierName")),
+        "carrier_code": _opt_str(row.get("carrierId")),
         "tracking_number": _opt_str(row.get("endOrderNumber"))
         or _opt_str(row.get("carrierNumber")),
         "customer_shipment_id": customer_shipment_id,
         "amazon_ref_id": _opt_str(params.get("amazonReferenceID")),
+        "bill_of_lading_no": _opt_str(params.get("ladingBillNum")),
         "expected_delivery_time": _opt_str(route.get("estimatedDeliveryDate")),
         "delivered_time": _opt_str(row.get("signingTime")),
         "latest_tracking_time": _opt_str(route.get("nodeTime"))
         or _opt_str(row.get("warehouseEntryTime")),
         "latest_tracking_desc": _opt_str(route.get("nodeDesc")),
         "status_code": map_dps_status(row, route, params),
+        "payment_status": map_dps_payment_status(row.get("clientVerifyStatus")),
         "address_type": map_dps_address_type(
             row.get("deliveryAddressType"),
             customer_no=customer_no,

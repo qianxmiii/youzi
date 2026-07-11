@@ -69,7 +69,7 @@
     },
     "carrier_code": {
       "label": "承运商",
-      "dpsSource": "endCarrier / carrierName；无名称时按 carrierId 查承运商码表",
+      "dpsSource": "carrierId（DPS 承运商主键，写入运单 carrier_code）",
       "onInsert": true,
       "onUpdate": true
     },
@@ -91,6 +91,12 @@
       "onInsert": true,
       "onUpdate": true
     },
+    "bill_of_lading_no": {
+      "label": "提单号",
+      "dpsSource": "params.ladingBillNum",
+      "onInsert": true,
+      "onUpdate": true
+    },
     "delivered_time": {
       "label": "签收时间",
       "dpsSource": "signingTime",
@@ -102,6 +108,12 @@
       "dpsSource": "status",
       "onInsert": true,
       "onUpdate": false
+    },
+    "payment_status": {
+      "label": "付款状态",
+      "dpsSource": "clientVerifyStatus：0→未付款，1→已付款",
+      "onInsert": true,
+      "onUpdate": true
     }
   }
 }

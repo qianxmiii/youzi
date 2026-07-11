@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 from youzi_v2.db.connection import Database
 from youzi_v2.db.datetime_util import now_str
@@ -26,11 +28,11 @@ def test_list_alerts_includes_exception_duration(tmp_path: Path) -> None:
         db.conn.execute(
             f"""
             INSERT INTO {SHIPMENTS_TABLE} (
-                id, shipment_no, exception_code, exception_opened_time,
+                id, shipment_no, atd, exception_code, exception_opened_time,
                 created_time, updated_time
-            ) VALUES (?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
-            (ship_id, "SN-SLA-EXC", "INSPECTION", "2026-06-01 08:00:00", now, now),
+            (ship_id, "SN-SLA-EXC", "2026-04-21", "INSPECTION", "2026-06-01 08:00:00", now, now),
         )
         db.conn.execute(
             """
@@ -62,6 +64,9 @@ def test_list_alerts_includes_exception_duration(tmp_path: Path) -> None:
     assert item["exceptionCode"] == "INSPECTION"
     assert item["exceptionDurationLabel"]
     assert item["exceptionDurationSeconds"] is not None
+    assert item["totalDaysInTransit"] == item["daysInTransit"]
+    assert item["netDaysInTransit"] is not None
+    assert item["netDaysInTransit"] <= item["totalDaysInTransit"]
 
     res_none = repo.list_alerts(has_exception=False, limit=10)
     assert res_none["total"] == 0
@@ -125,12 +130,75 @@ def test_list_alerts_includes_resolved_exception_duration(tmp_path: Path) -> Non
         db.conn.commit()
 
     repo = ShipmentSlaAlertsRepository(db)
-    res = repo.list_alerts(scope="all", limit=10)
+    fixed_today = date(2026, 7, 10)
+    with patch("youzi_v2.db.shipment_sla_alerts_repository.date") as mock_date:
+        mock_date.today.return_value = fixed_today
+        res = repo.list_alerts(scope="all", limit=10)
     assert res["total"] == 1
     item = res["items"][0]
     assert not item["exceptionCode"]
     assert item["exceptionDurationLabel"] == "9天"
     assert item["exceptionDurationSeconds"] is not None
+    assert item["totalDaysInTransit"] == 80
+    assert item["netDaysInTransit"] == 71
+
+
+def test_net_days_in_transit_subtracts_open_exception(tmp_path: Path) -> None:
+    db = Database(tmp_path / "sla_net_days.db")
+    ensure_shipments_schema(db.conn)
+    ensure_alerts_schema(db.conn)
+    now = now_str()
+    ship_id = str(uuid.uuid4())
+    alert_id = str(uuid.uuid4())
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {SHIPMENTS_TABLE} (
+                id, shipment_no, atd, exception_code, exception_opened_time,
+                created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                ship_id,
+                "SN-NET-DAYS",
+                "2026-04-21",
+                "INSPECTION",
+                "2026-06-01 08:00:00",
+                now,
+                now,
+            ),
+        )
+        db.conn.execute(
+            """
+            INSERT INTO shipment_sla_alerts (
+                id, shipment_id, shipment_no, alert_type, risk_level, status, severity,
+                due_date, event_key, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                alert_id,
+                ship_id,
+                "SN-NET-DAYS",
+                "sla_transit",
+                "overdue",
+                "open",
+                "warning",
+                "2026-06-20",
+                "k-net",
+                now,
+                now,
+            ),
+        )
+        db.conn.commit()
+
+    repo = ShipmentSlaAlertsRepository(db)
+    fixed_today = date(2026, 7, 10)
+    with patch("youzi_v2.db.shipment_sla_alerts_repository.date") as mock_date:
+        mock_date.today.return_value = fixed_today
+        item = repo.list_alerts(has_exception=True, limit=10)["items"][0]
+    assert item["totalDaysInTransit"] == 80
+    assert item["netDaysInTransit"] == 41
+    assert item["daysInTransit"] == item["totalDaysInTransit"]
 
 
 def _insert_shipment_alert(

@@ -51,10 +51,6 @@ def _upsert_dps_rows(
         if not payload:
             failed += 1
             continue
-        if not (payload.get("carrier_code") or "").strip():
-            dps_carrier_id = str(row.get("carrierId") or "").strip()
-            if dps_carrier_id:
-                payload["carrier_code"] = dps_carrier_id
         shipment_no = str(payload.get("shipment_no") or "").strip()
         try:
             existing = shipments_repo.get_by_shipment_no(shipment_no)

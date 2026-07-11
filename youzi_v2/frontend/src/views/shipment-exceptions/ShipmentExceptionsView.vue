@@ -602,6 +602,46 @@ function renderShipmentNoCell(row: ShipmentSlaAlert) {
   return h('span', { class: 'inline-flex flex-nowrap items-center gap-1.5' }, children)
 }
 
+function renderDaysInTransitCell(row: ShipmentSlaAlert) {
+  const total = row.totalDaysInTransit ?? row.daysInTransit
+  const net = row.netDaysInTransit ?? total
+  if (net == null && total == null) return '—'
+
+  const exc = row.exceptionDurationLabel?.trim()
+  const hadPastException = !row.exceptionCode?.trim() && exc && exc !== '—'
+  const displayDays = net ?? total
+
+  const body =
+    exc && exc !== '—'
+      ? h('span', { class: 'tabular-nums' }, [
+          `${displayDays} 天 `,
+          hadPastException
+            ? h(
+                NTooltip,
+                { trigger: 'hover', showArrow: false },
+                {
+                  trigger: () =>
+                    h('span', { class: 'cursor-default text-xs text-zinc-400' }, `(${exc})`),
+                  default: () => '曾发生异常',
+                },
+              )
+            : h('span', { class: 'text-xs text-zinc-400' }, `(${exc})`),
+        ])
+      : h('span', { class: 'tabular-nums' }, `${displayDays} 天`)
+
+  if (total != null && exc && exc !== '—') {
+    return h(
+      NTooltip,
+      { placement: 'top' },
+      {
+        trigger: () => h('span', { class: 'inline-flex cursor-default' }, [body]),
+        default: () => `总运输天数 ${total} 天`,
+      },
+    )
+  }
+  return body
+}
+
 const shipmentNoColWidth = computed(() => {
   let maxLen = 10
   let hasException = false
@@ -651,34 +691,14 @@ const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
   },
   { title: '入库时间', key: 'warehouseEntryTime', width: 108, render: (row) => (row.warehouseEntryTime || '—').slice(0, 10) },
   { title: 'ATD', key: 'atd', width: 108, render: (row) => (row.atd || '—').slice(0, 10) },
+  { title: 'ATA', key: 'ata', width: 108, render: (row) => (row.ata || '—').slice(0, 10) },
   { title: '截止日', key: 'dueDate', width: 108 },
   {
     title: '已运输天数(异常天数)',
     key: 'daysInTransit',
     width: 108,
     align: 'center',
-    render: (row) => {
-      if (row.daysInTransit == null) return '—'
-      const exc = row.exceptionDurationLabel?.trim()
-      if (!exc || exc === '—') {
-        return `${row.daysInTransit} 天`
-      }
-      const excEl = h('span', { class: 'text-xs text-zinc-400' }, `(${exc})`)
-      const hadPastException = !row.exceptionCode?.trim()
-      return h('span', { class: 'tabular-nums' }, [
-        `${row.daysInTransit} 天 `,
-        hadPastException
-          ? h(
-              NTooltip,
-              { trigger: 'hover', showArrow: false },
-              {
-                trigger: () => excEl,
-                default: () => '曾发生异常',
-              },
-            )
-          : excEl,
-      ])
-    },
+    render: (row) => renderDaysInTransitCell(row),
   },
   {
     title: '预估时效',
@@ -873,7 +893,7 @@ onMounted(() => {
         flex-height
         class="sla-exceptions-table h-full"
         size="small"
-        :scroll-x="1740"
+        :scroll-x="1848"
       />
     </div>
 

@@ -7,6 +7,7 @@ from youzi_v2.db.tracking_freshness import (
     carrier_freshness_sql,
     freshness_stats_sql,
     internal_freshness_sql,
+    internal_stale_days_sql,
     validate_freshness,
 )
 from youzi_v2.internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER
@@ -41,11 +42,21 @@ class TrackingFreshnessTest(unittest.TestCase):
         self.assertIn("整柜", params[0])
         self.assertEqual(len(params), 2)
 
+    def test_internal_stale_days_sql(self) -> None:
+        sql, params = internal_stale_days_sql(7)
+        self.assertIn("latest_tracking_time", sql)
+        self.assertIn("localtime", sql)
+        self.assertIn("IN_TRANSIT", sql)
+        self.assertEqual(params[1], "-7 days")
+        self.assertEqual(params[0], INTERNAL_WAREHOUSE_PLACEHOLDER)
+
     def test_freshness_stats_sql_binding_count(self) -> None:
         sql, params = freshness_stats_sql()
         self.assertEqual(sql.count("?"), len(params))
         self.assertIn("carrier_codes", sql)
-        self.assertEqual(params.count(INTERNAL_WAREHOUSE_PLACEHOLDER), 5)
+        self.assertIn("internal_stale_7d", sql)
+        self.assertIn("internal_stale_14d", sql)
+        self.assertEqual(params.count(INTERNAL_WAREHOUSE_PLACEHOLDER), 7)
         self.assertEqual(params.count("整柜"), 2)
 
 

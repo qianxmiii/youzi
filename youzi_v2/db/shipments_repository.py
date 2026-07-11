@@ -26,6 +26,7 @@ from .shipment_list_filters import (
     append_not_delivered,
     append_time_range,
     append_unified_batch_number_search,
+    tracking_search_like_pattern,
 )
 from .shipment_groups_table import GROUPS_TABLE, MEMBERS_TABLE, RULES_TABLE
 from .channels_repository import TABLE_NAME as CHANNEL_CODES_TABLE
@@ -45,13 +46,16 @@ from ..tracking_sync_eligibility import (
 from .tracking_freshness import (
     carrier_ahead_of_internal_sql,
     carrier_freshness_sql,
+    fcl_only_filter_sql,
     freshness_stats_sql,
     internal_freshness_sql,
+    internal_stale_days_sql,
     validate_freshness,
 )
 
 # 与前端承运商筛选「（未填写）」选项值一致
 CARRIER_CODE_FILTER_EMPTY = "__EMPTY__"
+PAYMENT_STATUS_FILTER_EMPTY = "__EMPTY__"
 CARRIER_CODES_TABLE = "carrier_codes"
 
 _LIST_SORT_COLUMNS = {
@@ -117,6 +121,8 @@ _UPDATABLE = (
     "express_code",
     "customer_shipment_id",
     "amazon_ref_id",
+    "bill_of_lading_no",
+    "container_no",
     "vessel_name",
     "voyage_no",
     "vessel_voyage",
@@ -130,6 +136,7 @@ _UPDATABLE = (
     "warehouse_entry_time",
     "delivered_time",
     "status_code",
+    "payment_status",
     "latest_tracking_time",
     "latest_tracking_desc",
 )
@@ -203,6 +210,12 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         ),
         "customerShipmentId": row["customer_shipment_id"],
         "amazonRefId": row["amazon_ref_id"],
+        "billOfLadingNo": (
+            row["bill_of_lading_no"] if "bill_of_lading_no" in row.keys() else None
+        ),
+        "containerNo": (
+            row["container_no"] if "container_no" in row.keys() else None
+        ),
         "vesselName": row["vessel_name"],
         "voyageNo": row["voyage_no"],
         "vesselVoyage": row["vessel_voyage"],
@@ -224,6 +237,9 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         ),
         "deliveredTime": row["delivered_time"],
         "statusCode": row["status_code"],
+        "paymentStatus": (
+            row["payment_status"] if "payment_status" in row.keys() else None
+        ),
         "exceptionCode": row["exception_code"],
         "exceptionOpenedTime": row["exception_opened_time"],
         "exceptionDurationSeconds": _exception_duration_seconds(row),
@@ -265,6 +281,8 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "expressCode": "express_code",
         "customerShipmentId": "customer_shipment_id",
         "amazonRefId": "amazon_ref_id",
+        "billOfLadingNo": "bill_of_lading_no",
+        "containerNo": "container_no",
         "vesselName": "vessel_name",
         "voyageNo": "voyage_no",
         "vesselVoyage": "vessel_voyage",
@@ -274,6 +292,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "warehouseEntryTime": "warehouse_entry_time",
         "deliveredTime": "delivered_time",
         "statusCode": "status_code",
+        "paymentStatus": "payment_status",
         "latestTrackingTime": "latest_tracking_time",
         "latestTrackingDesc": "latest_tracking_desc",
         "createdTime": "created_time",
@@ -357,10 +376,12 @@ class ShipmentsRepository:
         customer_shipment_ids: list[str] | None = None,
         customer_nos: list[str] | None = None,
         status_code: str | None = None,
+        payment_status: str | None = None,
         exception_code: str | None = None,
         has_exception: bool | None = None,
         customer: str | None = None,
         vip_only: bool | None = None,
+        fcl_only: bool | None = None,
         carrier_code: str | None = None,
         country_code: str | None = None,
         channel_code: str | None = None,
@@ -442,9 +463,12 @@ class ShipmentsRepository:
         if search and search.strip():
             append_keyword_search(conditions, params, search.strip())
         if tracking_search and tracking_search.strip():
-            tq = f"%{tracking_search.strip()}%"
-            conditions.append(
-                f"""
+            tq = tracking_search_like_pattern(tracking_search)
+            if not tq:
+                pass
+            else:
+                conditions.append(
+                    f"""
                 (
                   s.shipment_no IN (
                     SELECT shipment_no FROM {INTERNAL_TRACKING_TABLE}
@@ -457,11 +481,20 @@ class ShipmentsRepository:
                   OR s.latest_carrier_desc LIKE ?
                 )
                 """
-            )
-            params.extend([tq, tq, tq, tq])
+                )
+                params.extend([tq, tq, tq, tq])
         if status_code and status_code.strip():
             conditions.append("s.status_code = ?")
             params.append(status_code.strip())
+        if payment_status and payment_status.strip():
+            ps = payment_status.strip().upper()
+            if ps == PAYMENT_STATUS_FILTER_EMPTY:
+                conditions.append(
+                    "(s.payment_status IS NULL OR TRIM(COALESCE(s.payment_status, '')) = '')"
+                )
+            elif ps in ("PAID", "UNPAID"):
+                conditions.append("s.payment_status = ?")
+                params.append(ps)
         if exception_code and exception_code.strip():
             conditions.append("s.exception_code = ?")
             params.append(exception_code.strip())
@@ -492,6 +525,14 @@ class ShipmentsRepository:
             conditions.append("cu.is_vip = 1")
         elif vip_only is False:
             conditions.append("(cu.id IS NULL OR cu.is_vip = 0)")
+        if fcl_only is True:
+            frag, frag_params = fcl_only_filter_sql(include_fcl=True)
+            conditions.append(frag)
+            params.extend(frag_params)
+        elif fcl_only is False:
+            frag, frag_params = fcl_only_filter_sql(include_fcl=False)
+            conditions.append(frag)
+            params.extend(frag_params)
         if carrier_code and carrier_code.strip():
             cc = carrier_code.strip()
             if cc == CARRIER_CODE_FILTER_EMPTY:
@@ -553,13 +594,9 @@ class ShipmentsRepository:
             )
             params.append(INTERNAL_WAREHOUSE_PLACEHOLDER)
         elif min_stale_days is not None and min_stale_days > 0:
-            conditions.append(
-                """
-                s.latest_tracking_time IS NOT NULL AND TRIM(s.latest_tracking_time) != ''
-                AND datetime(s.latest_tracking_time) <= datetime('now', ?)
-                """
-            )
-            params.append(f"-{int(min_stale_days)} days")
+            frag, frag_params = internal_stale_days_sql(int(min_stale_days))
+            conditions.append(frag)
+            params.extend(frag_params)
         if no_zipcode:
             conditions.append("(s.zipcode IS NULL OR TRIM(s.zipcode) = '')")
         if has_tracking_number is True:
@@ -777,6 +814,8 @@ class ShipmentsRepository:
             },
             "carrierAheadOfInternal": int(row["carrier_ahead_of_internal"] or 0),
             "pendingTrackingTimeReview": int(pending or 0),
+            "internalStale7d": int(row["internal_stale_7d"] or 0),
+            "internalStale14d": int(row["internal_stale_14d"] or 0),
         }
 
     def list_filter_options(self) -> dict[str, Any]:

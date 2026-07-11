@@ -17,6 +17,7 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import type { CodeTableRow } from '@/types/codeTable'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
+import { PAYMENT_STATUS_EDIT_OPTIONS } from '@/constants/shipmentFilters'
 import {
   buildCarrierFormSelectOptionsWithCurrent,
   resolveCarrierFormSelectValue,
@@ -160,6 +161,8 @@ watch(
         expressCode: props.initial.expressCode ?? null,
         customerShipmentId: props.initial.customerShipmentId,
         amazonRefId: props.initial.amazonRefId,
+        billOfLadingNo: props.initial.billOfLadingNo,
+        containerNo: props.initial.containerNo,
         vesselName: props.initial.vesselName,
         voyageNo: props.initial.voyageNo,
         vesselVoyage: props.initial.vesselVoyage,
@@ -173,6 +176,7 @@ watch(
         warehouseEntryTime: props.initial.warehouseEntryTime,
         deliveredTime: props.initial.deliveredTime,
         statusCode: props.initial.statusCode || 'UNKNOWN',
+        paymentStatus: props.initial.paymentStatus ?? null,
       }
       syncVoyageDatesFromForm()
       syncWarehouseEntryTimeFromForm()
@@ -205,6 +209,8 @@ function handleSubmit() {
   const trackingNumber = normalizeLastMileTrackingNumber(form.value.trackingNumber) || null
   const expressCode = (form.value.expressCode || '').trim() || null
   const carrierCode = (form.value.carrierCode || '').trim() || null
+  const billOfLadingNo = (form.value.billOfLadingNo || '').trim() || null
+  const containerNo = (form.value.containerNo || '').trim() || null
   emit('submit', {
     ...form.value,
     shipmentNo: no,
@@ -212,6 +218,8 @@ function handleSubmit() {
     carrierId,
     trackingNumber,
     expressCode,
+    billOfLadingNo,
+    containerNo,
   })
   submitting.value = false
 }
@@ -238,6 +246,14 @@ function handleSubmit() {
         </NFormItem>
         <NFormItem label="状态">
           <NSelect v-model:value="form.statusCode" :options="statusOptions" />
+        </NFormItem>
+        <NFormItem label="付款状态">
+          <NSelect
+            v-model:value="form.paymentStatus"
+            :options="[...PAYMENT_STATUS_EDIT_OPTIONS]"
+            clearable
+            placeholder="未设置"
+          />
         </NFormItem>
         <NFormItem label="客户">
           <NInput v-model:value="form.customer" placeholder="用户名/客户名" />
@@ -311,6 +327,12 @@ function handleSubmit() {
         </NFormItem>
         <NFormItem label="亚马逊预约号">
           <NInput v-model:value="form.amazonRefId" />
+        </NFormItem>
+        <NFormItem label="提单号">
+          <NInput v-model:value="form.billOfLadingNo" placeholder="海运提单号" clearable />
+        </NFormItem>
+        <NFormItem label="柜号">
+          <NInput v-model:value="form.containerNo" placeholder="集装箱号" clearable />
         </NFormItem>
         <NFormItem label="船名">
           <NInput v-model:value="form.vesselName" />

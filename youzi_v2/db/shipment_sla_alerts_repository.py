@@ -24,6 +24,9 @@ from .shipment_sla import (
     match_channel_rule,
     parse_date,
     risk_to_severity,
+    sla_excluded_channels_in_sql,
+    sla_excluded_channels_params,
+    sla_excluded_channels_sql,
 )
 from .exception_duration import duration_seconds, format_duration
 from .shipment_sla_alerts_table import TABLE_NAME
@@ -142,6 +145,39 @@ def _exception_duration_fields(row: sqlite3.Row) -> dict[str, Any]:
     return {"exceptionDurationSeconds": None, "exceptionDurationLabel": None}
 
 
+def _exception_calendar_days(row: sqlite3.Row, *, today: date | None = None) -> int:
+    """异常占用日历天数，与 exceptionDurationLabel 口径一致。"""
+    check_day = today or date.today()
+    code = (row["exception_code"] or "").strip() if "exception_code" in row.keys() else ""
+    opened = (
+        (row["exception_opened_time"] or "").strip()
+        if "exception_opened_time" in row.keys()
+        else ""
+    )
+    if code and opened:
+        start = parse_date(opened)
+        if start is None:
+            return 0
+        return max(0, (check_day - start).days)
+    closed_opened = (
+        (row["last_exc_opened_time"] or "").strip()
+        if "last_exc_opened_time" in row.keys()
+        else ""
+    )
+    closed_at = (
+        (row["last_exc_closed_time"] or "").strip()
+        if "last_exc_closed_time" in row.keys()
+        else ""
+    )
+    if closed_opened and closed_at:
+        start = parse_date(closed_opened)
+        end = parse_date(closed_at)
+        if start is None or end is None:
+            return 0
+        return max(0, (end - start).days)
+    return 0
+
+
 def _alert_to_api(
     row: sqlite3.Row,
     *,
@@ -202,10 +238,19 @@ def _alert_to_api(
     else:
         out["daysInTransit"] = compute_days_in_transit(transit_start, today=today)
     out["estimatedDays"] = _resolve_estimated_days(row, rules_by_channel=rules_by_channel)
+    out.update(_exception_duration_fields(row))
+    total_days = out.get("daysInTransit")
+    exc_days = _exception_calendar_days(row, today=today)
+    out["totalDaysInTransit"] = total_days
+    if total_days is None:
+        out["netDaysInTransit"] = None
+    else:
+        out["netDaysInTransit"] = max(0, int(total_days) - exc_days)
     for key in (
         "customer",
         "destinationPort",
         "atd",
+        "ata",
         "expectedDeliveryTime",
         "warehouseEntryTime",
         "deliveredTime",
@@ -220,6 +265,7 @@ def _alert_to_api(
             "customer": "customer",
             "destinationPort": "destination_port_code",
             "atd": "atd",
+            "ata": "ata",
             "warehouseEntryTime": "warehouse_entry_time",
             "expectedDeliveryTime": "expected_delivery_time",
             "deliveredTime": "delivered_time",
@@ -233,7 +279,6 @@ def _alert_to_api(
         if col in row.keys():
             val = row[col]
             out[key] = (val or "").strip() if isinstance(val, str) else val
-    out.update(_exception_duration_fields(row))
     out.update(_follow_up_fields(row, today=today))
     return out
 
@@ -286,8 +331,10 @@ class ShipmentSlaAlertsRepository:
                 FROM {SHIPMENTS_TABLE}
                 WHERE (delivered_time IS NULL OR TRIM(delivered_time) = '')
                   AND UPPER(COALESCE(status_code, '')) != 'DELIVERED'
+                  AND {sla_excluded_channels_sql("channel_code")}
                 ORDER BY shipment_no
-                """
+                """,
+                sla_excluded_channels_params(),
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -471,6 +518,27 @@ class ShipmentSlaAlertsRepository:
             self._conn.commit()
             return int(cur.rowcount or 0)
 
+    def resolve_excluded_channel_alerts(self) -> int:
+        """关闭排除渠道运单上仍挂起的时效预警。"""
+        now = now_str()
+        status_placeholders = ",".join("?" for _ in RESOLVE_ON_DELIVERY_STATUSES)
+        excl = sla_excluded_channels_params()
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {TABLE_NAME}
+                SET status = ?, resolved_time = ?, updated_time = ?
+                WHERE status IN ({status_placeholders})
+                  AND shipment_id IN (
+                    SELECT id FROM {SHIPMENTS_TABLE}
+                    WHERE {sla_excluded_channels_in_sql("channel_code")}
+                  )
+                """,
+                (STATUS_RESOLVED, now, now, *RESOLVE_ON_DELIVERY_STATUSES, *excl),
+            )
+            self._conn.commit()
+            return int(cur.rowcount or 0)
+
     def list_alerts(
         self,
         *,
@@ -490,7 +558,8 @@ class ShipmentSlaAlertsRepository:
         limit = max(1, min(limit, 200))
         offset = max(0, offset)
         conditions = ["1=1"]
-        params: list[Any] = []
+        params: list[Any] = list(sla_excluded_channels_params())
+        conditions.append(sla_excluded_channels_sql("s.channel_code"))
 
         if (scope or "todo").strip().lower() != "all":
             conditions.append("a.status IN (?, ?)")
@@ -542,7 +611,7 @@ class ShipmentSlaAlertsRepository:
             ).fetchone()["c"]
             rows = self._conn.execute(
                 f"""
-                SELECT a.*, s.customer, s.destination_port_code, s.atd, s.warehouse_entry_time,
+                SELECT a.*, s.customer, s.destination_port_code, s.atd, s.ata, s.warehouse_entry_time,
                        s.expected_delivery_time,
                        s.delivered_time, s.status_code, s.exception_code, s.exception_opened_time,
                        s.latest_tracking_desc,
@@ -591,13 +660,17 @@ class ShipmentSlaAlertsRepository:
         }
 
     def summary_counts(self) -> dict[str, int]:
+        excl = sla_excluded_channels_params()
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
-                SELECT risk_level, status, COUNT(*) AS c
-                FROM {TABLE_NAME}
-                GROUP BY risk_level, status
-                """
+                SELECT a.risk_level, a.status, COUNT(*) AS c
+                FROM {TABLE_NAME} a
+                INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
+                WHERE {sla_excluded_channels_sql("s.channel_code")}
+                GROUP BY a.risk_level, a.status
+                """,
+                excl,
             ).fetchall()
             exc_row = self._conn.execute(
                 f"""
@@ -645,6 +718,7 @@ class ShipmentSlaAlertsRepository:
                 LEFT JOIN {RULES_TABLE} csr ON csr.id = a.rule_id
                 WHERE a.status = ?
                   AND a.risk_level IN (?, ?)
+                  AND {sla_excluded_channels_sql("s.channel_code")}
                 ORDER BY
                   CASE a.risk_level WHEN ? THEN 0 ELSE 1 END,
                   a.due_date ASC,
@@ -656,6 +730,7 @@ class ShipmentSlaAlertsRepository:
                     RISK_OVERDUE,
                     RISK_SEVERE_OVERDUE,
                     RISK_SEVERE_OVERDUE,
+                    *sla_excluded_channels_params(),
                     lim,
                 ),
             ).fetchall()
@@ -666,10 +741,13 @@ class ShipmentSlaAlertsRepository:
         with self._database.lock:
             row = self._conn.execute(
                 f"""
-                SELECT COUNT(*) AS c FROM {TABLE_NAME}
-                WHERE status = ? AND risk_level IN (?, ?)
+                SELECT COUNT(*) AS c
+                FROM {TABLE_NAME} a
+                INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
+                WHERE a.status = ? AND a.risk_level IN (?, ?)
+                  AND {sla_excluded_channels_sql("s.channel_code")}
                 """,
-                (STATUS_OPEN, RISK_OVERDUE, RISK_SEVERE_OVERDUE),
+                (STATUS_OPEN, RISK_OVERDUE, RISK_SEVERE_OVERDUE, *sla_excluded_channels_params()),
             ).fetchone()
         return int(row["c"] or 0)
 
@@ -785,7 +863,7 @@ class ShipmentSlaAlertsRepository:
         with self._database.lock:
             row = self._conn.execute(
                 f"""
-                SELECT a.*, s.customer, s.destination_port_code, s.atd, s.warehouse_entry_time,
+                SELECT a.*, s.customer, s.destination_port_code, s.atd, s.ata, s.warehouse_entry_time,
                        s.expected_delivery_time,
                        s.delivered_time, s.status_code, s.exception_code, s.exception_opened_time,
                        s.latest_tracking_desc,

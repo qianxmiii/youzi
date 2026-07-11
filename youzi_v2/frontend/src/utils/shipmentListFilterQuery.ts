@@ -1,5 +1,5 @@
 import type { ListShipmentsParams } from '@/api/shipments'
-import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
+import { CARRIER_FILTER_EMPTY, PAYMENT_FILTER_EMPTY } from '@/constants/shipmentFilters'
 import type { ShipmentAdvancedTimeRanges, ShipmentTimeField } from '@/constants/shipmentListFilterMeta'
 import { SHIPMENT_TIME_FIELD_OPTIONS } from '@/constants/shipmentListFilterMeta'
 import { formatDateOnlyForApi } from '@/utils/formatDateTime'
@@ -39,6 +39,7 @@ export interface ShipmentFilterQueryInput {
   filterAddressKeyword: string | null
   filterVesselVoyage: string | null
   filterVipOnly: boolean
+  filterFclOnly: boolean
   filterNoInternalTracking: boolean
   filterNoCarrierTracking: boolean
   filterCarrierAheadOfInternal: boolean
@@ -48,6 +49,7 @@ export interface ShipmentFilterQueryInput {
   filterNoZipcode: boolean
   filterHasTrackingNumber: boolean
   filterException: string | null
+  filterPaymentStatus: string | null
   filterHasException: boolean | null
   filterGroupId: string | null
   filterGroupNo: string | null
@@ -107,6 +109,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
       ? { trackingSearch: input.searchTrackingContent.trim() }
       : {}),
     statusCode: input.shipmentNoSearchActive ? undefined : input.filterStatus || undefined,
+    paymentStatus: input.filterPaymentStatus || undefined,
     exceptionCode: input.filterException || undefined,
     hasException:
       input.filterHasException === true ? true
@@ -114,6 +117,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
       : undefined,
     customer: input.filterCustomer || undefined,
     vipOnly: input.filterVipOnly ? true : undefined,
+    fclOnly: input.filterFclOnly,
     carrierCode: input.filterCarrier || undefined,
     countryCode: input.filterCountry || undefined,
     channelCode: input.filterChannelCode || undefined,
@@ -263,6 +267,18 @@ export function buildShipmentFilterSummaryTags(
     tags.push({ key: 'filterVesselVoyage', label: `船名航次 = ${input.filterVesselVoyage}` })
   }
   if (input.filterVipOnly) tags.push({ key: 'filterVipOnly', label: '仅 VIP' })
+  if (input.filterFclOnly === false) tags.push({ key: 'filterFclOnly', label: '非整柜' })
+  if (input.filterPaymentStatus) {
+    const label =
+      input.filterPaymentStatus === PAYMENT_FILTER_EMPTY
+        ? '未设置'
+        : input.filterPaymentStatus === 'PAID'
+          ? '已付款'
+          : input.filterPaymentStatus === 'UNPAID'
+            ? '未付款'
+            : input.filterPaymentStatus
+    tags.push({ key: 'filterPaymentStatus', label: `付款状态 = ${label}` })
+  }
   if (input.filterHasException === true) tags.push({ key: 'filterHasException', label: '有异常' })
   if (input.filterHasException === false) tags.push({ key: 'filterHasException', label: '无异常' })
   if (input.filterException) {

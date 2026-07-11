@@ -34,6 +34,7 @@ export const SHIPMENT_LIST_COLUMN_GROUPS = [
       'deliveryAddress',
       'productName',
       'originWarehouseCode',
+      'paymentStatus',
     ],
   },
   {
@@ -67,6 +68,7 @@ export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
   deliveryAddress: '派送地址',
   productName: '品名',
   originWarehouseCode: '起运仓',
+  paymentStatus: '付款状态',
   etd: 'ETD',
   atd: 'ATD',
   eta: 'ETA',
@@ -89,6 +91,7 @@ export const DEFAULT_SHIPMENT_VISIBLE_COLUMNS = [
   'groups',
   'channelCode',
   'ctns',
+  'paymentStatus',
   'addressCode',
   'zipcode',
   'carrierCode',

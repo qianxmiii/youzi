@@ -48,6 +48,9 @@ CREATE TABLE {TABLE_NAME} (
     warehouse_entry_time TEXT,
     delivered_time TEXT,
     status_code TEXT,
+    payment_status TEXT CHECK (
+        payment_status IS NULL OR payment_status IN ('UNPAID', 'PAID')
+    ),
     exception_code TEXT,
     exception_opened_time TEXT,
     latest_tracking_time TEXT,
@@ -133,6 +136,31 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN expected_delivery_time TEXT")
     if "warehouse_entry_time" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN warehouse_entry_time TEXT")
+    if "payment_status" not in cols:
+        conn.execute(
+            f"""
+            ALTER TABLE {TABLE_NAME}
+            ADD COLUMN payment_status TEXT CHECK (
+                payment_status IS NULL OR payment_status IN ('UNPAID', 'PAID')
+            )
+            """
+        )
+        conn.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_payment_status "
+            f"ON {TABLE_NAME}(payment_status)"
+        )
+    if "bill_of_lading_no" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN bill_of_lading_no TEXT")
+        conn.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_bill_of_lading_no "
+            f"ON {TABLE_NAME}(bill_of_lading_no)"
+        )
+    if "container_no" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN container_no TEXT")
+        conn.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_container_no "
+            f"ON {TABLE_NAME}(container_no)"
+        )
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "
         f"ON {TABLE_NAME}(exception_code)"

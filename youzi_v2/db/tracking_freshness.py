@@ -8,9 +8,12 @@ FRESHNESS_BUCKETS = frozenset({"today", "within3d", "older", "none"})
 
 # 承运商无轨迹统计/筛选：整柜不走 API 轨迹，不计入「无轨迹」
 FCL_CARRIER_NAME_ZH = "整柜"
+FCL_CHANNEL_CODE = "FC-整柜"
 
 # 承新于内：承运时间须晚于内部至少该分钟数（双方均有有效内部轨迹时）
 CARRIER_AHEAD_MIN_MINUTES = 1
+
+IN_TRANSIT_STATUS = "IN_TRANSIT"
 
 
 def validate_freshness(value: str | None) -> str | None:
@@ -52,9 +55,52 @@ def _fcl_carrier_match_sql(alias: str = "s") -> str:
     )"""
 
 
+def fcl_shipment_match_sql(alias: str = "s") -> str:
+    """整柜运单：承运商为整柜，或渠道为 FC-整柜。"""
+    p = f"{alias}." if alias else ""
+    return f"""(
+      {_fcl_carrier_match_sql(alias)}
+      OR TRIM(COALESCE({p}channel_code, '')) = ? COLLATE NOCASE
+    )"""
+
+
+def fcl_shipment_match_params() -> list:
+    return [FCL_CARRIER_NAME_ZH, FCL_CARRIER_NAME_ZH, FCL_CHANNEL_CODE]
+
+
+def fcl_only_filter_sql(*, include_fcl: bool, alias: str = "s") -> tuple[str, list]:
+    """include_fcl=True 仅整柜；False 排除整柜。"""
+    match = fcl_shipment_match_sql(alias)
+    params = fcl_shipment_match_params()
+    if include_fcl:
+        return match, params
+    return f"NOT ({match})", params
+
+
 def carrier_no_tracking_eligible_sql(alias: str = "s") -> tuple[str, list]:
     """承运商「无轨迹」筛选/统计的排除条件（排除整柜）。"""
     return f"NOT {_fcl_carrier_match_sql(alias)}", [FCL_CARRIER_NAME_ZH, FCL_CARRIER_NAME_ZH]
+
+
+def _in_transit_sql(alias: str = "s") -> str:
+    p = f"{alias}." if alias else ""
+    return f"TRIM(COALESCE({p}status_code, '')) = '{IN_TRANSIT_STATUS}'"
+
+
+def internal_stale_days_sql(min_days: int, alias: str = "s") -> tuple[str, list]:
+    """有效内部轨迹、转运中，且最新节点距今不少于 min_days 自然日（localtime）。"""
+    days = int(min_days)
+    if days <= 0:
+        raise ValueError("min_days must be positive")
+    eff = _internal_effective_sql(alias)
+    p = f"{alias}." if alias else ""
+    ph = INTERNAL_WAREHOUSE_PLACEHOLDER
+    in_transit = _in_transit_sql(alias)
+    return (
+        f"{eff} AND {in_transit} "
+        f"AND datetime({p}latest_tracking_time) <= datetime('now', 'localtime', ?)",
+        [ph, f"-{days} days"],
+    )
 
 
 def internal_freshness_sql(bucket: str, alias: str = "s") -> tuple[str, list]:
@@ -126,6 +172,7 @@ def freshness_stats_sql() -> tuple[str, list]:
     ce = _carrier_effective_sql("s")
     ahead = carrier_ahead_of_internal_sql("s")[0]
     no_carrier_exclude, _ = carrier_no_tracking_eligible_sql("s")
+    in_transit = _in_transit_sql("s")
     ph = INTERNAL_WAREHOUSE_PLACEHOLDER
     sql = f"""
     SELECT
@@ -136,6 +183,10 @@ def freshness_stats_sql() -> tuple[str, list]:
       SUM(CASE WHEN {ie}
           AND date(s.latest_tracking_time) < date('now', 'localtime', '-2 days') THEN 1 ELSE 0 END) AS internal_older,
       SUM(CASE WHEN NOT {ie} THEN 1 ELSE 0 END) AS internal_none,
+      SUM(CASE WHEN {ie} AND {in_transit}
+          AND datetime(s.latest_tracking_time) <= datetime('now', 'localtime', '-7 days') THEN 1 ELSE 0 END) AS internal_stale_7d,
+      SUM(CASE WHEN {ie} AND {in_transit}
+          AND datetime(s.latest_tracking_time) <= datetime('now', 'localtime', '-14 days') THEN 1 ELSE 0 END) AS internal_stale_14d,
       SUM(CASE WHEN {ce}
           AND date(s.latest_carrier_time) = date('now', 'localtime') THEN 1 ELSE 0 END) AS carrier_today,
       SUM(CASE WHEN {ce}
@@ -147,6 +198,6 @@ def freshness_stats_sql() -> tuple[str, list]:
     FROM shipments s
     """
     fcl = FCL_CARRIER_NAME_ZH
-    params = [ph, ph, ph, ph, fcl, fcl, ph]
+    params = [ph, ph, ph, ph, ph, ph, fcl, fcl, ph]
     assert len(params) == sql.count("?")
     return sql, params

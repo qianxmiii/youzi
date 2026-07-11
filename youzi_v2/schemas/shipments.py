@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+
+SHIPMENT_PAYMENT_STATUSES = frozenset({"UNPAID", "PAID"})
 
 
 class ShipmentRecordIn(BaseModel):
@@ -70,6 +72,13 @@ class ShipmentRecordIn(BaseModel):
     amazon_ref_id: str | None = Field(
         default=None, validation_alias=AliasChoices("amazonRefId", "amazon_ref_id")
     )
+    bill_of_lading_no: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("billOfLadingNo", "bill_of_lading_no"),
+    )
+    container_no: str | None = Field(
+        default=None, validation_alias=AliasChoices("containerNo", "container_no"),
+    )
     vessel_name: str | None = Field(
         default=None, validation_alias=AliasChoices("vesselName", "vessel_name")
     )
@@ -104,6 +113,21 @@ class ShipmentRecordIn(BaseModel):
     status_code: str | None = Field(
         default="UNKNOWN", validation_alias=AliasChoices("statusCode", "status_code")
     )
+    payment_status: str | None = Field(
+        default=None, validation_alias=AliasChoices("paymentStatus", "payment_status")
+    )
+
+    @field_validator("payment_status")
+    @classmethod
+    def _payment_status(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        text = v.strip().upper()
+        if not text:
+            return None
+        if text not in SHIPMENT_PAYMENT_STATUSES:
+            raise ValueError("paymentStatus 须为 UNPAID 或 PAID")
+        return text
 
 
 class ShipmentUpdateIn(BaseModel):
@@ -166,6 +190,13 @@ class ShipmentUpdateIn(BaseModel):
     amazon_ref_id: str | None = Field(
         default=None, validation_alias=AliasChoices("amazonRefId", "amazon_ref_id")
     )
+    bill_of_lading_no: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("billOfLadingNo", "bill_of_lading_no"),
+    )
+    container_no: str | None = Field(
+        default=None, validation_alias=AliasChoices("containerNo", "container_no"),
+    )
     vessel_name: str | None = Field(
         default=None, validation_alias=AliasChoices("vesselName", "vessel_name")
     )
@@ -200,6 +231,21 @@ class ShipmentUpdateIn(BaseModel):
     status_code: str | None = Field(
         default=None, validation_alias=AliasChoices("statusCode", "status_code")
     )
+    payment_status: str | None = Field(
+        default=None, validation_alias=AliasChoices("paymentStatus", "payment_status")
+    )
+
+    @field_validator("payment_status")
+    @classmethod
+    def _payment_status_update(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        text = v.strip().upper()
+        if not text:
+            return None
+        if text not in SHIPMENT_PAYMENT_STATUSES:
+            raise ValueError("paymentStatus 须为 UNPAID 或 PAID")
+        return text
 
     def to_payload(self) -> dict[str, Any]:
         out = self.model_dump(exclude_none=True)

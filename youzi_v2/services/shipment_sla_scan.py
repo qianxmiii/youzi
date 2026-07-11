@@ -19,6 +19,7 @@ from ..db.shipment_sla import (
     compute_warehouse_no_departure_context,
     has_departure_schedule,
     is_delivered,
+    is_sla_excluded_channel,
     match_channel_rule,
     parse_date,
 )
@@ -272,6 +273,10 @@ def scan_shipment_sla_alerts(
         if stale_resolved:
             out(f"[运输时效] 兜底清理已签收预警 {stale_resolved} 条")
 
+        excluded_resolved = alerts_repo.resolve_excluded_channel_alerts()
+        if excluded_resolved:
+            out(f"[运输时效] 关闭排除渠道预警 {excluded_resolved} 条")
+
         rows = alerts_repo.list_undelivered_shipments()
         if shipment_ids:
             wanted = {i.strip() for i in shipment_ids if i and i.strip()}
@@ -279,7 +284,7 @@ def scan_shipment_sla_alerts(
 
         created = 0
         updated = 0
-        resolved = 0
+        resolved = excluded_resolved
         scanned = len(rows)
 
         for row in rows:
@@ -297,6 +302,13 @@ def scan_shipment_sla_alerts(
 
             channel_code = (row.get("channel_code") or "").strip()
             carrier_code = (row.get("carrier_code") or "").strip()
+
+            if is_sla_excluded_channel(channel_code):
+                n = alerts_repo.resolve_open_for_shipment(shipment_id)
+                if n and followup_repo:
+                    followup_repo.resolve_all_pending_for_shipment(shipment_no)
+                resolved += n
+                continue
 
             wh_c, wh_u, wh_r = _scan_warehouse_no_departure(
                 alerts_repo,

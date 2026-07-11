@@ -70,9 +70,9 @@ def test_keyword_search_matches_supplier_only(tmp_path: Path) -> None:
             f"""
             INSERT INTO {TABLE_NAME} (
                 id, shipment_no, supplier_name, customer_shipment_id,
-                customer_no, carrier_id, tracking_number,
+                customer_no, bill_of_lading_no, container_no, carrier_id, tracking_number,
                 created_time, updated_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 str(uuid.uuid4()),
@@ -82,6 +82,8 @@ def test_keyword_search_matches_supplier_only(tmp_path: Path) -> None:
                 "PO-9988",
                 "BL-2026001",
                 "CONT9876543",
+                "LEGACY-BL",
+                "LEGACY-CONT",
                 now,
                 now,
             ),
@@ -264,3 +266,138 @@ def test_has_tracking_number_filter(tmp_path: Path) -> None:
     assert res["total"] == 2
     nos = {row["shipmentNo"] for row in res["items"]}
     assert nos == {"SN-TN-1", "SN-TN-3"}
+
+
+def test_tracking_search_matches_tokens_across_nbsp(tmp_path: Path) -> None:
+    from youzi_v2.db.internal_tracking_logs_table import ensure_schema as ensure_logs_schema
+    from youzi_v2.db.shipment_list_filters import tracking_search_like_pattern
+
+    assert tracking_search_like_pattern("COSCO THAILAND") == "%COSCO%THAILAND%"
+
+    db = Database(tmp_path / "track_search.db")
+    ensure_shipments_schema(db.conn)
+    ensure_logs_schema(db.conn)
+    now = now_str()
+    ship_no = "DPSECO260617048"
+    desc = (
+        "Loaded into container（已装柜配载，ETD:2026-06-25,ETA:2026-07-24,"
+        "船名航次：COSCO\xa0THAILAND/115E）"
+    )
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, status_code, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), ship_no, "IN_TRANSIT", now, now),
+        )
+        db.conn.execute(
+            """
+            INSERT INTO internal_tracking_logs (
+                id, shipment_no, tracking_time, tracking_desc, created_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), ship_no, "2026-06-20 10:00:00", desc, now),
+        )
+        db.conn.commit()
+
+    repo = ShipmentsRepository(db)
+    res = repo.list_rows(
+        tracking_search="COSCO THAILAND",
+        status_code="IN_TRANSIT",
+        limit=20,
+    )
+    assert res["total"] == 1
+    assert res["items"][0]["shipmentNo"] == ship_no
+
+
+def test_fcl_only_filter(tmp_path: Path) -> None:
+    db = Database(tmp_path / "fcl.db")
+    ensure_shipments_schema(db.conn)
+    ensure_group_schema(db.conn)
+    now = now_str()
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, carrier_code, channel_code, status_code,
+                created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "FCL-1", "整柜", "", "IN_TRANSIT", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, carrier_code, channel_code, status_code,
+                created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "FCL-2", "", "FC-整柜", "IN_TRANSIT", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, carrier_code, channel_code, status_code,
+                created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "EXP-1", "FedEx", "SER-LAX", "IN_TRANSIT", now, now),
+        )
+        db.conn.commit()
+
+    repo = ShipmentsRepository(db)
+    only_fcl = repo.list_rows(fcl_only=True, limit=20)
+    assert only_fcl["total"] == 2
+    assert {i["shipmentNo"] for i in only_fcl["items"]} == {"FCL-1", "FCL-2"}
+
+    exclude_fcl = repo.list_rows(fcl_only=False, limit=20)
+    assert exclude_fcl["total"] == 1
+    assert exclude_fcl["items"][0]["shipmentNo"] == "EXP-1"
+
+
+def test_payment_status_filter(tmp_path: Path) -> None:
+    db = Database(tmp_path / "payment.db")
+    ensure_shipments_schema(db.conn)
+    ensure_group_schema(db.conn)
+    repo = ShipmentsRepository(db)
+    now = now_str()
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, payment_status, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "PAY-PAID", "PAID", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, payment_status, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "PAY-UNPAID", "UNPAID", now, now),
+        )
+        db.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, created_time, updated_time
+            ) VALUES (?, ?, ?, ?)
+            """,
+            (str(uuid.uuid4()), "PAY-EMPTY", now, now),
+        )
+        db.conn.commit()
+
+    paid = repo.list_rows(payment_status="PAID", limit=10)
+    assert paid["total"] == 1
+    assert paid["items"][0]["shipmentNo"] == "PAY-PAID"
+
+    unpaid = repo.list_rows(payment_status="UNPAID", limit=10)
+    assert unpaid["total"] == 1
+    assert unpaid["items"][0]["shipmentNo"] == "PAY-UNPAID"
+
+    empty = repo.list_rows(payment_status="__EMPTY__", limit=10)
+    assert empty["total"] == 1
+    assert empty["items"][0]["shipmentNo"] == "PAY-EMPTY"

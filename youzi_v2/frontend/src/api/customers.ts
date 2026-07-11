@@ -9,6 +9,8 @@ export interface Customer {
   isVip: boolean
   note: string
   shipmentCount: number
+  settlementMethod?: string | null
+  settlementDay?: number | null
   createdTime: string
   updatedTime: string
 }
@@ -32,6 +34,8 @@ export type CustomerPatch = {
   isVip?: boolean
   note?: string
   customerLang?: CustomerLang
+  settlementMethod?: string | null
+  settlementDay?: number | null
 }
 
 export type CustomerUpdateResult = Customer & {

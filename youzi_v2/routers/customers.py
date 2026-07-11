@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from ..context import *
+from ..services.payment_reminder_rules import SETTLEMENT_MONTHLY
 
 router = APIRouter()
 
@@ -47,6 +48,11 @@ def update_customer(item_id: str, body: CustomerUpdateIn):
                 is_vip=body.is_vip,
                 note=body.note,
                 customer_lang=body.customer_lang,
+                settlement_method=body.settlement_method,
+                settlement_day=body.settlement_day,
+                clear_settlement_day=body.settlement_method is not None
+                and body.settlement_method != SETTLEMENT_MONTHLY
+                and body.settlement_day is None,
             )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc

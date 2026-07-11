@@ -343,6 +343,136 @@ class ShipmentDpsSyncTest(unittest.TestCase):
         db.conn.close()
         tmp.cleanup()
 
+    def test_sync_backfills_payment_status_when_local_empty(self) -> None:
+        from youzi_v2.services.shipment_dps_sync import _upsert_dps_rows
+
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "t.db")
+        repo = ShipmentsRepository(db)
+        now = "2026-05-17 23:31:55"
+        repo.insert_row(
+            {
+                "shipment_no": "DPSECO260327063",
+                "customer": "老客户",
+                "created_time": now,
+                "updated_time": now,
+            }
+        )
+        row = repo.get_by_shipment_no("DPSECO260327063")
+        self.assertIsNotNone(row)
+        assert row is not None
+        self.assertIsNone(row.get("paymentStatus"))
+
+        dps_row = {**SAMPLE_DELIVERED, "odd": "DPSECO260327063", "clientVerifyStatus": 0}
+        stats = _upsert_dps_rows(repo, [dps_row])
+        self.assertEqual(stats["failed"], 0)
+
+        saved = repo.get_by_shipment_no("DPSECO260327063")
+        self.assertIsNotNone(saved)
+        assert saved is not None
+        self.assertEqual(saved["paymentStatus"], "UNPAID")
+        self.assertEqual(saved["customer"], "422GS")
+        db.conn.close()
+        tmp.cleanup()
+
+    def test_sync_does_not_overwrite_paid_payment_status(self) -> None:
+        from youzi_v2.services.shipment_dps_sync import _upsert_dps_rows
+
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "t.db")
+        repo = ShipmentsRepository(db)
+        now = "2026-07-11 12:00:00"
+        repo.insert_row(
+            {
+                "shipment_no": "PAID-KEEP-001",
+                "customer": "客户A",
+                "payment_status": "PAID",
+                "created_time": now,
+                "updated_time": now,
+            }
+        )
+
+        dps_row = {
+            **SAMPLE_DELIVERED,
+            "odd": "PAID-KEEP-001",
+            "clientUserNickName": "DPS客户",
+            "clientVerifyStatus": 0,
+        }
+        stats = _upsert_dps_rows(repo, [dps_row])
+        self.assertEqual(stats["unchanged"], 1)
+
+        saved = repo.get_by_shipment_no("PAID-KEEP-001")
+        self.assertIsNotNone(saved)
+        assert saved is not None
+        self.assertEqual(saved["paymentStatus"], "PAID")
+        self.assertEqual(saved["customer"], "客户A")
+        db.conn.close()
+        tmp.cleanup()
+
+    def test_sync_upgrades_unpaid_to_paid_when_dps_paid(self) -> None:
+        from youzi_v2.services.shipment_dps_sync import _upsert_dps_rows
+
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "t.db")
+        repo = ShipmentsRepository(db)
+        now = "2026-07-11 12:00:00"
+        repo.insert_row(
+            {
+                "shipment_no": "UNPAID-UPGRADE-001",
+                "customer": "客户B",
+                "payment_status": "UNPAID",
+                "created_time": now,
+                "updated_time": now,
+            }
+        )
+
+        dps_row = {
+            **SAMPLE_DELIVERED,
+            "odd": "UNPAID-UPGRADE-001",
+            "clientVerifyStatus": 1,
+        }
+        stats = _upsert_dps_rows(repo, [dps_row])
+        self.assertEqual(stats["failed"], 0)
+
+        saved = repo.get_by_shipment_no("UNPAID-UPGRADE-001")
+        self.assertIsNotNone(saved)
+        assert saved is not None
+        self.assertEqual(saved["paymentStatus"], "PAID")
+        db.conn.close()
+        tmp.cleanup()
+
+    def test_sync_keeps_unpaid_when_dps_unpaid(self) -> None:
+        from youzi_v2.services.shipment_dps_sync import _upsert_dps_rows
+
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "t.db")
+        repo = ShipmentsRepository(db)
+        now = "2026-07-11 12:00:00"
+        repo.insert_row(
+            {
+                "shipment_no": "UNPAID-KEEP-001",
+                "customer": "客户B",
+                "payment_status": "UNPAID",
+                "created_time": now,
+                "updated_time": now,
+            }
+        )
+
+        dps_row = {
+            **SAMPLE_DELIVERED,
+            "odd": "UNPAID-KEEP-001",
+            "clientVerifyStatus": 0,
+        }
+        stats = _upsert_dps_rows(repo, [dps_row])
+        self.assertEqual(stats["failed"], 0)
+
+        saved = repo.get_by_shipment_no("UNPAID-KEEP-001")
+        self.assertIsNotNone(saved)
+        assert saved is not None
+        self.assertEqual(saved["paymentStatus"], "UNPAID")
+        db.conn.close()
+        tmp.cleanup()
+
 
 if __name__ == "__main__":
     unittest.main()

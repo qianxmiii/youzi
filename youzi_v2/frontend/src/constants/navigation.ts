@@ -42,6 +42,7 @@ export const navGroups: NavGroup[] = [
     items: [
       { name: '运单管理', to: '/shipments', icon: 'truck' },
       { name: '异常跟踪', to: '/shipment-exceptions', icon: 'alert' },
+      { name: '催款管理', to: '/shipments/payment-reminders', icon: 'wallet' },
       { name: '运单分组', to: '/shipment-groups', icon: 'layers' },
       { name: '船期监控', to: '/vessel-schedules', icon: 'ship' },
     ],

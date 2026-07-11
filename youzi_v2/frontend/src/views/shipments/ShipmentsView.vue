@@ -143,7 +143,7 @@ const filterChannelCode = ref<string | null>(null)
 const timeField = ref<ShipmentTimeField | null>(null)
 const timeRange = ref<[number, number] | null>(null)
 const filterVipOnly = ref(false)
-const filterFclOnly = ref(true)
+const filterFclOnly = ref(false)
 const filterCarrier = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannelNameZh = ref<string | null>(null)
@@ -1351,7 +1351,7 @@ function resetFilterValues() {
   timeField.value = null
   timeRange.value = null
   filterVipOnly.value = false
-  filterFclOnly.value = true
+  filterFclOnly.value = false
   filterCarrier.value = null
   filterCountry.value = null
   filterChannelNameZh.value = null
@@ -1460,7 +1460,7 @@ function removeFilterTag(key: string) {
       filterVipOnly.value = false
       break
     case 'filterFclOnly':
-      filterFclOnly.value = true
+      filterFclOnly.value = false
       break
     case 'filterHasException':
       filterHasException.value = null

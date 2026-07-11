@@ -26,9 +26,17 @@ onMounted(() => {
 
 const flatItems = computed(() => navGroups.flatMap((g) => g.items))
 
+function navPathMatchesRoute(navPath: string, currentPath: string) {
+  if (navPath === '/') return currentPath === '/'
+  return currentPath === navPath || currentPath.startsWith(`${navPath}/`)
+}
+
 function isActive(path: string) {
-  if (path === '/') return route.path === '/'
-  return route.path === path || route.path.startsWith(`${path}/`)
+  const currentPath = route.path
+  const bestMatch = flatItems.value
+    .filter((item) => navPathMatchesRoute(item.to, currentPath))
+    .sort((a, b) => b.to.length - a.to.length)[0]
+  return bestMatch?.to === path
 }
 
 function groupHasActiveItem(groupLabel: string) {

@@ -29,6 +29,7 @@ from .routers import (
     pages,
     settings_tasks,
     shipment_groups,
+    payment_reminders,
     shipment_sla,
     shipments,
     statistics,
@@ -84,6 +85,7 @@ def _stop_scheduled_tracking_sync() -> None:
 for route_module in (
     pages,
     code_tables,
+    payment_reminders,
     shipments,
     statistics,
     customers,

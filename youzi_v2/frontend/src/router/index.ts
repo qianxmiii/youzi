@@ -64,6 +64,12 @@ const router = createRouter({
           meta: { title: '异常跟踪' },
         },
         {
+          path: 'shipments/payment-reminders',
+          name: 'payment-reminders',
+          component: () => import('@/views/payment-reminders/PaymentRemindersView.vue'),
+          meta: { title: '催款管理' },
+        },
+        {
           path: 'shipment-groups',
           name: 'shipment-groups',
           component: () => import('@/views/shipment-groups/ShipmentGroupsView.vue'),

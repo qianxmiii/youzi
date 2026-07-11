@@ -1,4 +1,6 @@
-from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
+from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator, model_validator
+
+from ..services.payment_reminder_rules import SETTLEMENT_METHODS, SETTLEMENT_MONTHLY
 
 
 def _normalize_customer_lang(v: str | None) -> str:
@@ -74,6 +76,43 @@ class CustomerUpdateIn(BaseModel):
         if v is None:
             return None
         return _normalize_customer_lang(str(v))
+
+    settlement_method: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("settlementMethod", "settlement_method"),
+    )
+    settlement_day: int | None = Field(
+        default=None,
+        validation_alias=AliasChoices("settlementDay", "settlement_day"),
+    )
+
+    @field_validator("settlement_method", mode="before")
+    @classmethod
+    def _settlement_method(cls, v: object) -> str | None:
+        if v is None:
+            return None
+        text = str(v).strip().upper()
+        if not text:
+            return None
+        if text not in SETTLEMENT_METHODS:
+            raise ValueError("settlementMethod 无效")
+        return text
+
+    @field_validator("settlement_day", mode="before")
+    @classmethod
+    def _settlement_day(cls, v: object) -> int | None:
+        if v is None or v == "":
+            return None
+        n = int(v)
+        if n < 1 or n > 31:
+            raise ValueError("settlementDay 须在 1-31 之间")
+        return n
+
+    @model_validator(mode="after")
+    def _monthly_requires_day(self) -> "CustomerUpdateIn":
+        if self.settlement_method == SETTLEMENT_MONTHLY and self.settlement_day is None:
+            raise ValueError("月结客户须填写 settlementDay")
+        return self
 
 
 class CustomerSyncResult(BaseModel):

@@ -113,7 +113,7 @@
       "label": "付款状态",
       "dpsSource": "clientVerifyStatus：0→未付款，1→已付款",
       "onInsert": true,
-      "onUpdate": true
+      "onUpdate": false
     }
   }
 }

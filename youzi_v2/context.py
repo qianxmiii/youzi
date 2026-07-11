@@ -42,6 +42,7 @@ from .db.shipment_performance_statistics_repository import ShipmentPerformanceSt
 from .db.shipment_statistics_repository import ShipmentStatisticsRepository
 from .db.port_subscriptions_table import PortSubscriptionsRepository
 from .db.shipment_subscriptions_table import ShipmentSubscriptionsRepository
+from .db.shipment_payment_followups_repository import ShipmentPaymentFollowupsRepository
 from .db.shipment_groups_repository import ShipmentGroupsRepository
 from .db.shipment_group_alerts_repository import ShipmentGroupAlertsRepository
 from .db.shipment_tracking_time_candidates_repository import (
@@ -313,6 +314,7 @@ performance_statistics_repo = ShipmentPerformanceStatisticsRepository(_database)
 vessel_schedules_repo = VesselSchedulesRepository(_database)
 port_subscriptions_repo = PortSubscriptionsRepository(_database)
 shipment_subscriptions_repo = ShipmentSubscriptionsRepository(_database)
+shipment_payment_followups_repo = ShipmentPaymentFollowupsRepository(_database)
 shipment_groups_repo = ShipmentGroupsRepository(_database)
 shipment_group_alerts_repo = ShipmentGroupAlertsRepository(_database)
 tracking_time_candidates_repo = ShipmentTrackingTimeCandidatesRepository(_database)

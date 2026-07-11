@@ -29,6 +29,14 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "isVip": bool(row["is_vip"]),
         "note": row["note"] or "",
         "shipmentCount": int(row["shipment_count"] or 0),
+        "settlementMethod": (
+            row["settlement_method"] if "settlement_method" in row.keys() else None
+        ),
+        "settlementDay": (
+            int(row["settlement_day"])
+            if "settlement_day" in row.keys() and row["settlement_day"] is not None
+            else None
+        ),
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
     }
@@ -167,6 +175,9 @@ class CustomersRepository:
         is_vip: bool | None = None,
         note: str | None = None,
         customer_lang: str | None = None,
+        settlement_method: str | None = None,
+        settlement_day: int | None = None,
+        clear_settlement_day: bool = False,
     ) -> dict[str, Any] | None:
         sets: list[str] = []
         params: list[Any] = []
@@ -180,6 +191,16 @@ class CustomersRepository:
             lang = (customer_lang or "zh").strip().lower()
             sets.append("track_query_lang = ?")
             params.append("en" if lang == "en" else "zh")
+        if settlement_method is not None:
+            sm = (settlement_method or "").strip().upper()
+            sets.append("settlement_method = ?")
+            params.append(sm or None)
+        if settlement_day is not None:
+            sets.append("settlement_day = ?")
+            params.append(settlement_day)
+        elif clear_settlement_day:
+            sets.append("settlement_day = ?")
+            params.append(None)
         if not sets:
             with self._database.lock:
                 row = self._conn.execute(

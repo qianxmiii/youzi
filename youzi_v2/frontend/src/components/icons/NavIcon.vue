@@ -53,6 +53,7 @@ const ICONS: Record<string, FunctionalComponent<LucideProps>> = {
   globe: Globe,
   settings: Settings,
   star: Star,
+  wallet: CircleDollarSign,
 }
 
 const Icon = computed(() => ICONS[props.name] ?? Star)

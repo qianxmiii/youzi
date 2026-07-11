@@ -29,6 +29,27 @@ _BY_ORDER_CHUNK_SIZE = 50
 _MAX_BY_ORDER_NOS = 200
 
 
+def _maybe_backfill_payment_status(
+    filtered: dict[str, Any],
+    *,
+    payload: dict[str, Any],
+    existing: dict[str, Any] | None,
+    is_new: bool,
+) -> dict[str, Any]:
+    """DPS 付款状态：空值回填；本地未付款时允许升为已付款；本地已付款不覆盖。"""
+    if is_new or existing is None:
+        return filtered
+    dps_ps = (payload.get("payment_status") or "").strip().upper()
+    if dps_ps not in ("PAID", "UNPAID"):
+        return filtered
+    local_ps = (existing.get("paymentStatus") or "").strip().upper()
+    if local_ps == "PAID":
+        return filtered
+    if not local_ps or (local_ps == "UNPAID" and dps_ps == "PAID"):
+        return {**filtered, "payment_status": dps_ps}
+    return filtered
+
+
 def _upsert_dps_rows(
     shipments_repo: ShipmentsRepository,
     rows: list[Any],
@@ -56,6 +77,12 @@ def _upsert_dps_rows(
             existing = shipments_repo.get_by_shipment_no(shipment_no)
             is_new = existing is None
             filtered = filter_dps_payload(payload, is_new=is_new, config=field_cfg)
+            filtered = _maybe_backfill_payment_status(
+                filtered,
+                payload=payload,
+                existing=existing,
+                is_new=is_new,
+            )
             before_id = None if is_new else existing["id"]
             result_row, was_created = shipments_repo.upsert_by_shipment_no(filtered)
             if was_created:

@@ -24,6 +24,10 @@ import {
   type CustomerLang,
 } from '@/api/customers'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
+import {
+  SETTLEMENT_METHOD_OPTIONS,
+  settlementMethodLabel,
+} from '@/constants/paymentReminders'
 
 const message = useMessage()
 const dialog = useDialog()
@@ -255,6 +259,63 @@ const columns: DataTableColumns<Customer> = [
     align: 'center',
   },
   {
+    title: '结算方式',
+    key: 'settlementMethod',
+    width: 148,
+    render: (row) =>
+      h(NSelect, {
+        size: 'small',
+        value: row.settlementMethod || null,
+        options: [...SETTLEMENT_METHOD_OPTIONS],
+        clearable: true,
+        placeholder: '未设置',
+        onUpdateValue: (v: string | null) => {
+          const method = v || null
+          row.settlementMethod = method
+          if (method !== 'MONTHLY') {
+            row.settlementDay = null
+            void patchRow(row, { settlementMethod: method, settlementDay: null })
+          } else if (row.settlementDay) {
+            void patchRow(row, {
+              settlementMethod: method,
+              settlementDay: row.settlementDay,
+            })
+          }
+        },
+      }),
+  },
+  {
+    title: '月结日',
+    key: 'settlementDay',
+    width: 88,
+    align: 'center',
+    render: (row) =>
+      row.settlementMethod === 'MONTHLY'
+        ? h(NInput, {
+            size: 'small',
+            value: row.settlementDay != null ? String(row.settlementDay) : '',
+            placeholder: '1-31',
+            onUpdateValue: (v: string) => {
+              const n = parseInt(v, 10)
+              row.settlementDay = Number.isFinite(n) ? n : null
+            },
+            onBlur: () => {
+              const day = row.settlementDay
+              if (!day || day < 1 || day > 31) {
+                message.warning('月结日须在 1-31 之间')
+                return
+              }
+              void patchRow(row, {
+                settlementMethod: 'MONTHLY',
+                settlementDay: day,
+              })
+            },
+          })
+        : settlementMethodLabel(row.settlementMethod) === '月结'
+          ? '—'
+          : '—',
+  },
+  {
     title: '备注',
     key: 'note',
     minWidth: 120,
@@ -373,7 +434,7 @@ onMounted(async () => {
         flex-height
         class="min-h-0 flex-1"
         :bordered="false"
-        :scroll-x="720"
+        :scroll-x="756"
       />
       <div class="flex justify-end border-t border-[var(--color-border)] pt-2">
         <NPagination

@@ -75,4 +75,4 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(sql)
     _migrate_legacy_vip_table(conn)
     _migrate_columns(conn)
-
+

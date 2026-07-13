@@ -433,9 +433,9 @@ today > delivered_time:
 
 | 列 | 说明 |
 | --- | --- |
-| 运单号 | 可点击跳转运单列表或运单详情 |
+| 运单号 | 默认可点击跳转运单列表；**整柜**（渠道 `FC-整柜` 或承运商整柜）时展示提单号 `bill_of_lading_no`（空则回退运单号） |
 | 客户 | `shipments.customer` |
-| 客户单号 | `customer_no` |
+| 客户单号 | 默认 `customer_no`；**整柜**时展示柜号 `container_no` |
 | 渠道 | `channel_code` / 渠道中文名 |
 | 付款状态 | `payment_status` |
 | 结算方式 | 来自 `customers.settlement_method` |
@@ -537,6 +537,9 @@ GET /api/v1/shipments/payment-reminders
       "shipmentNo": "string",
       "customer": "string",
       "customerNo": "string",
+      "billOfLadingNo": "string",
+      "containerNo": "string",
+      "isFcl": false,
       "channelCode": "string",
       "channelNameZh": "string",
       "paymentStatus": "UNPAID",

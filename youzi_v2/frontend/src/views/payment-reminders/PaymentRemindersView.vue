@@ -83,10 +83,32 @@ const selectedRows = computed(() =>
   items.value.filter((row) => checkedRowKeys.value.includes(row.shipmentId)),
 )
 const selectedCount = computed(() => selectedRows.value.length)
-const selectedShipmentNos = computed(() => selectedRows.value.map((r) => r.shipmentNo))
+const selectedShipmentNos = computed(() =>
+  selectedRows.value.map((r) => displayShipmentNo(r)).filter(Boolean),
+)
 
 function rowKey(row: PaymentReminderItem) {
   return row.shipmentId
+}
+
+function isFclRow(row: PaymentReminderItem) {
+  return Boolean(row.isFcl)
+}
+
+/** 整柜：运单号列展示提单号；否则运单号 */
+function displayShipmentNo(row: PaymentReminderItem) {
+  if (isFclRow(row)) {
+    return (row.billOfLadingNo || '').trim() || (row.shipmentNo || '').trim()
+  }
+  return (row.shipmentNo || '').trim()
+}
+
+/** 整柜：客户单号列展示柜号；否则客户单号 */
+function displayCustomerNo(row: PaymentReminderItem) {
+  if (isFclRow(row)) {
+    return (row.containerNo || '').trim()
+  }
+  return (row.customerNo || '').trim()
 }
 
 function syncSelectionWithItems() {
@@ -251,18 +273,18 @@ async function copySelectedShipmentNos() {
   }
   try {
     await navigator.clipboard.writeText(nos.join('\n'))
-    message.success(`已复制 ${nos.length} 个运单号`)
+    message.success(`已复制 ${nos.length} 个号码`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
 }
 
 async function copyRowShipmentNo(row: PaymentReminderItem) {
-  const sn = row.shipmentNo?.trim()
+  const sn = displayShipmentNo(row)
   if (!sn) return
   try {
     await navigator.clipboard.writeText(sn)
-    message.success('已复制运单号')
+    message.success(isFclRow(row) ? '已复制提单号' : '已复制运单号')
   } catch {
     message.error('复制失败')
   }
@@ -471,7 +493,8 @@ function renderFollowUpStatusCell(row: PaymentReminderItem) {
 }
 
 function renderShipmentNoCell(row: PaymentReminderItem) {
-  const sn = row.shipmentNo || '—'
+  const sn = displayShipmentNo(row) || '—'
+  const copyLabel = isFclRow(row) ? '复制提单号' : '复制运单号'
   return h('span', { class: 'payment-reminders-shipment-no-cell' }, [
     h(
       'button',
@@ -482,7 +505,7 @@ function renderShipmentNoCell(row: PaymentReminderItem) {
       },
       sn,
     ),
-    row.shipmentNo
+    displayShipmentNo(row)
       ? h(
           NTooltip,
           { trigger: 'hover', showArrow: false },
@@ -493,7 +516,7 @@ function renderShipmentNoCell(row: PaymentReminderItem) {
                 {
                   type: 'button',
                   class: 'payment-reminders-shipment-no-copy-btn',
-                  'aria-label': '复制运单号',
+                  'aria-label': copyLabel,
                   onClick: (e: MouseEvent) => {
                     e.stopPropagation()
                     void copyRowShipmentNo(row)
@@ -507,7 +530,7 @@ function renderShipmentNoCell(row: PaymentReminderItem) {
                   }),
                 ],
               ),
-            default: () => '复制运单号',
+            default: () => copyLabel,
           },
         )
       : null,
@@ -517,7 +540,7 @@ function renderShipmentNoCell(row: PaymentReminderItem) {
 const shipmentNoColWidth = computed(() => {
   let maxLen = 10
   for (const row of items.value) {
-    maxLen = Math.max(maxLen, (row.shipmentNo || '').length)
+    maxLen = Math.max(maxLen, displayShipmentNo(row).length)
   }
   const textW = Math.ceil(maxLen * 7.5) + 21
   return Math.min(280, Math.max(148, textW + 26))
@@ -536,7 +559,7 @@ const columns = computed<DataTableColumns<PaymentReminderItem>>(() => [
     key: 'customerNo',
     width: 120,
     ellipsis: { tooltip: true },
-    render: (row) => row.customerNo?.trim() || '—',
+    render: (row) => displayCustomerNo(row) || '—',
   },
   { title: '客户', key: 'customer', width: 132, ellipsis: { tooltip: true } },
   {

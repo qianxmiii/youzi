@@ -12,6 +12,7 @@ from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
 from .datetime_util import now_str
 from .shipment_payment_followups_table import TABLE_NAME as FOLLOWUPS_TABLE
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
+from .tracking_freshness import FCL_CARRIER_NAME_ZH, FCL_CHANNEL_CODE
 from ..services.payment_reminder_rules import (
     SETTLEMENT_METHODS,
     compute_payment_reminder,
@@ -49,6 +50,22 @@ class ShipmentPaymentFollowupsRepository:
     def _shipment_row_dict(self, row: sqlite3.Row) -> dict[str, Any]:
         return {k: row[k] for k in row.keys()}
 
+    def _is_fcl_shipment(self, row: sqlite3.Row) -> bool:
+        channel = (row["channel_code"] or "").strip() if "channel_code" in row.keys() else ""
+        if channel.casefold() == FCL_CHANNEL_CODE.casefold():
+            return True
+        carrier = (row["carrier_code"] or "").strip() if "carrier_code" in row.keys() else ""
+        if carrier.casefold() == FCL_CARRIER_NAME_ZH.casefold():
+            return True
+        channel_name = (
+            (row["_channel_name_zh"] or "").strip()
+            if "_channel_name_zh" in row.keys()
+            else ""
+        )
+        if channel_name.casefold() == FCL_CARRIER_NAME_ZH.casefold():
+            return True
+        return False
+
     def _build_reminder_item(
         self,
         row: sqlite3.Row,
@@ -77,11 +94,23 @@ class ShipmentPaymentFollowupsRepository:
         if payment_status not in ("PAID", "UNPAID"):
             payment_status = "UNPAID" if is_unpaid_payment_status(payment_status) else None
 
+        bill_of_lading_no = (
+            (row["bill_of_lading_no"] or "").strip()
+            if "bill_of_lading_no" in row.keys()
+            else ""
+        )
+        container_no = (
+            (row["container_no"] or "").strip() if "container_no" in row.keys() else ""
+        )
+
         return {
             "shipmentId": row["id"],
             "shipmentNo": row["shipment_no"],
             "customer": row["customer"] or "",
-            "customerNo": row["customer_no"] or "" if "customer_no" in row.keys() else "",
+            "customerNo": (row["customer_no"] or "") if "customer_no" in row.keys() else "",
+            "billOfLadingNo": bill_of_lading_no,
+            "containerNo": container_no,
+            "isFcl": self._is_fcl_shipment(row),
             "channelCode": row["channel_code"] or "",
             "channelNameZh": (
                 row["_channel_name_zh"] if "_channel_name_zh" in row.keys() else ""

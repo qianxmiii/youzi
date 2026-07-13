@@ -14,6 +14,9 @@ export interface PaymentReminderItem {
   shipmentNo: string
   customer: string
   customerNo: string
+  billOfLadingNo?: string
+  containerNo?: string
+  isFcl?: boolean
   channelCode: string
   channelNameZh: string
   statusCode: string

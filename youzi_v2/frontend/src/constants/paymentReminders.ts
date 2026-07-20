@@ -30,6 +30,11 @@ export const PAYMENT_REMINDER_TYPE_OPTIONS = [
   { label: '缺少时间字段', value: 'missing_date' },
 ] as const
 
+export const PAYMENT_FOLLOWUP_STATUS_OPTIONS = [
+  { label: '未跟进', value: 'unfollowed' },
+  { label: '已跟进', value: 'followed' },
+] as const
+
 const SETTLEMENT_LABEL: Record<string, string> = Object.fromEntries(
   SETTLEMENT_METHOD_OPTIONS.map((o) => [o.value, o.label]),
 )

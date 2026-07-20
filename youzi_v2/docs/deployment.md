@@ -102,7 +102,7 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
   - **`shipment_queryByOrder`**：按运单号查，拼接 `odds`（多单空格 → `%20`）+ `pageNum`
   - 响应 `{ code, msg, total, rows }`，按 `total` 与 `pageSize`（默认 10）自动翻页。见 `services/shipment_query_config.py`
   - **DPS 运单同步批处理**（计划任务页）：从 `shipment_queryByPerson` 拉取并 upsert 至本地 `shipments`；`transitTimeStart` / `transitTimeEnd` 可配置，默认当月；**默认关闭**，约 24 小时执行一次。见 `services/shipment_dps_sync.py`
-  - **同步哪些字段**：`youzi_v2/config/shipment_dps_sync_fields.json`（`onInsert` / `onUpdate`）；映射逻辑见 `services/shipment_dps_mapper.py`
+  - **同步哪些字段**：`youzi_v2/config/shipment_dps_sync_fields.json`（`onInsert` / `onUpdate`）；映射逻辑见 `services/shipment_dps_mapper.py`（客户单号优先 `assOrderNumber`，空则回退 `internalOrderNum`）
 
 ```json
 "shipment_queryByPerson": {

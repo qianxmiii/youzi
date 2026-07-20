@@ -15,6 +15,9 @@
 | [SCHEMA.md](./SCHEMA.md) | 码表与字段详细说明（历史文档，与 database.md 互补） |
 | [cost-calculation.md](./cost-calculation.md) | 成本计算（DDU/DDP） |
 | [design/shipment-groups-design.md](./design/shipment-groups-design.md) | 运单分组与组提醒设计 |
+| [design/quote-followup-management-design.md](./design/quote-followup-management-design.md) | 报价跟进管理设计 |
+| [design/payment-reminder-list-design.md](./design/payment-reminder-list-design.md) | 催款列表设计 |
+| [design/logistics-workbench-home-redesign.md](./design/logistics-workbench-home-redesign.md) | 物流工作台首页改版（阶段一～三已落地） |
 | [MIGRATION.md](./MIGRATION.md) | Legacy → v2 迁移指南 |
 
 ## 模块 README

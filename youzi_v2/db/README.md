@@ -31,6 +31,8 @@ Youzi v2 数据层 — SQLite 仓储
 - `vessel_voyages` / `voyage_port_calls` — 船期
 - `internal_tracking_logs` / `carrier_tracking_logs` — 轨迹
 - `customers`、`channels` — 主数据
+- `quote_opportunities` / `quote_versions` / `quote_followups` — 报价跟进
+- `shipment_payment_followups` — 催款跟进（列表实时计算；见 `shipment_payment_followups_repository.py`）
 - `addresses`、`addresses_warehouse` — 地址簿
 
 完整表说明见 [docs/database.md](../docs/database.md)。

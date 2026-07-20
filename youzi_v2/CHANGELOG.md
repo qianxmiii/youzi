@@ -2,11 +2,61 @@
 
 按日期倒序记录 youzi_v2 的代码与文档变更。
 
-## 2026-07-13
+## 2026-07-18
+
+### 新增
+
+- **工作台首页改版（阶段一～三）**：紧凑页头 → 今日重点 → 待处理事项+近期到港 → 运输概览
+  - API：`GET /api/v1/workbench/overview`（`focus` / `todos` / `arrivals` / `overview`，模块级容错）
+  - 前端：`HomeView` 拆分为 `WorkbenchHeader` / `FocusMetrics` / `TodoList` / `ArrivalTimeline` / `TransportOverview`
+  - 深链：催款 `?scope=todo`；运单 `hasAta`/`notDelivered`、`deliveredFrom`/`deliveredTo`、`vesselVoyage`
 
 ### 修改
 
+- 侧栏：将「显示设置」从系统管理移入「后台管理」分组（与码表并列）
+- 工作台 KPI 卡片新增「查验中」：按运单当前异常 `exception_code=INSPECTION`（查验中）计数，点击跳转运单列表
+
+## 2026-07-17
+
+### 修复
+
+- 内部轨迹手动同步：接口返回重复节点时不再因 UNIQUE 约束 500；`replace_for_shipment` 按 (时间, 描述) 去重后再写入
+
+## 2026-07-15
+
+### 新增
+
+- 催款管理：侧栏「催款管理」待催数量角标；标题下展示待催 / 全部未付款 / 逾期 / 当前列表条数；支持按当前筛选导出 Excel
+- API：`GET /api/v1/shipments/payment-reminders/summary`、`GET /api/v1/shipments/payment-reminders/export`
+
+### 修改
+
+- 运单导出 Excel：新增「签收时间」「ATD」列（仅导出不导入）；导出值只保留日期（`YYYY-MM-DD`）
+
+## 2026-07-13
+
+### 新增
+
+- **报价跟进（首版）**：按 `quote-followup-management-design.md` 实现
+  - 表 `quote_opportunities` / `quote_versions` / `quote_followups`；API `/api/v1/quote-opportunities*`
+  - 页面 `/quote-center/followups`（报价中心菜单）；支持新增、跟进、调价版本、成单/丢单/取消/延期
+  - 顶部待办铃铛聚合「今日 / 逾期 / 即将过期」数量
+
+### 修改
+
+- DPS 同步：客户单号 `customer_no` 优先 `assOrderNumber`，为空时回退 `internalOrderNum`
+- 催款管理：筛选增加「未跟进 / 已跟进」（API `followupStatus=unfollowed|followed`）
 - 催款管理：整柜渠道运单「运单号」列展示提单号、「客户单号」列展示柜号；API 增加 `billOfLadingNo` / `containerNo` / `isFcl`
+
+### 修复
+
+- 运单编辑：已付款改为未付款时，编辑表单提交全部字段会 400；现允许在请求中仅生效「改回未付款」，表单对已付款单锁定其它字段
+
+## 2026-07-14
+
+### 修复
+
+- 已付款运单：允许同步内部轨迹摘要、状态（含 DELIVERED）及轨迹时间回写（签收时间等）；手工编辑与 DPS 覆盖仍锁定
 
 ## 2026-06-18
 

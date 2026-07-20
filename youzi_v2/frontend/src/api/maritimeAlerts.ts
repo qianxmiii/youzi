@@ -10,6 +10,8 @@ export interface MaritimeAlertCounts {
   unknown: number
   portArrivingSoon: number
   portDepartingSoon: number
+  /** 当前标记异常且类型为查验中（exception_code=INSPECTION） */
+  inspection: number
 }
 
 export interface MaritimeAlertShipment {

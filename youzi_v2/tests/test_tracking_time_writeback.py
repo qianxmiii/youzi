@@ -283,6 +283,33 @@ def test_delivered_goods_unpacking_not_signed() -> None:
     )
 
 
+def test_writeback_applies_on_paid_shipment(env) -> None:
+    db, shipments, tracks, _ = env
+    sid = str(uuid.uuid4())
+    now = now_str()
+    with shipments._database.lock:
+        shipments._conn.execute(
+            """
+            INSERT INTO shipments (
+                id, shipment_no, status_code, payment_status, created_time, updated_time,
+                tracking_log_count
+            ) VALUES (?, 'PAID-WB-001', 'UNKNOWN', 'PAID', ?, ?, 0)
+            """,
+            (sid, now, now),
+        )
+        shipments._conn.commit()
+    _insert_track(
+        tracks,
+        "PAID-WB-001",
+        "2026-06-28 18:00:00",
+        "Your goods have been signed for",
+    )
+    result = recalculate_for_shipment(db, shipment_id=sid)
+    row = shipments.get_by_id(sid)
+    assert "signed_time" in result["applied"] or "expected_delivery_time" in result["applied"]
+    assert (row.get("deliveredTime") or "").strip()
+
+
 def test_cross_year_eta(env) -> None:
     db, shipments, tracks, _ = env
     sid = _insert_shipment(shipments)

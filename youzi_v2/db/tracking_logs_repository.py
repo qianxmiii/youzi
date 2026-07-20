@@ -121,24 +121,33 @@ class TrackingLogsRepository:
         shipment_no: str,
         logs: list[tuple[str, str]],
     ) -> int:
-        """清空该运单旧轨迹后批量写入（保留供兼容；同步请用 merge_logs_for_shipment）。"""
+        """清空该运单旧轨迹后批量写入；同一 (时间, 描述) 去重后再插入。"""
         sn = shipment_no.strip()
         now = now_str()
+        seen: set[tuple[str, str]] = set()
+        unique_logs: list[tuple[str, str]] = []
+        for tracking_time, tracking_desc in logs:
+            key = (tracking_time, tracking_desc or "")
+            if key in seen:
+                continue
+            seen.add(key)
+            unique_logs.append(key)
         with self._database.lock:
             self._conn.execute(
                 f"DELETE FROM {TABLE_NAME} WHERE shipment_no = ?",
                 (sn,),
             )
-            for tracking_time, tracking_desc in logs:
+            for tracking_time, tracking_desc in unique_logs:
                 self._conn.execute(
                     f"""
-                    INSERT INTO {TABLE_NAME} (id, shipment_no, tracking_time, tracking_desc, created_time)
+                    INSERT OR IGNORE INTO {TABLE_NAME}
+                    (id, shipment_no, tracking_time, tracking_desc, created_time)
                     VALUES (?, ?, ?, ?, ?)
                     """,
-                    (str(uuid.uuid4()), sn, tracking_time, tracking_desc or "", now),
+                    (str(uuid.uuid4()), sn, tracking_time, tracking_desc, now),
                 )
             self._conn.commit()
-            return len(logs)
+            return len(unique_logs)
 
     def count_by_shipment_no(self, shipment_no: str) -> int:
         with self._database.lock:

@@ -17,7 +17,9 @@
     "承运商": "carrier_code",
     "交货仓库": "origin_warehouse_code",
     "内部轨迹时间": "latest_tracking_time",
-    "内部最新轨迹": "latest_tracking_desc"
+    "内部最新轨迹": "latest_tracking_desc",
+    "ATD": "atd",
+    "签收时间": "delivered_time"
   },
   "column_aliases": {
     "Amazon ID": "customer_shipment_id",
@@ -25,7 +27,7 @@
     "仓库代码": "address_code",
     "收件人邮编": "zipcode"
   },
-  "export_only_fields": ["latest_tracking_time", "latest_tracking_desc"],
+  "export_only_fields": ["latest_tracking_time", "latest_tracking_desc", "atd", "delivered_time"],
   "group_import_columns": {
     "分组编号": "group_no",
     "分组名称": "group_name",

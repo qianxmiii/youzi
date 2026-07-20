@@ -126,7 +126,11 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         params.get("countryVo") if isinstance(params.get("countryVo"), dict) else {}
     )
 
-    customer_no = _opt_str(row.get("assOrderNumber")) or ""
+    customer_no = (
+        _opt_str(row.get("assOrderNumber"))
+        or _opt_str(row.get("internalOrderNum"))
+        or ""
+    )
     customer_shipment_id = _opt_str(params.get("amazonID"))
     address_code = _opt_str(row.get("deliveryWarehouseCode"))
     payload: dict[str, Any] = {

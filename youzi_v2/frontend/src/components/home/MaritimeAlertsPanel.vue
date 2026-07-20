@@ -91,6 +91,7 @@ const alertCards = computed(() => {
     { key: 'arriving_soon', label: '三天内到港', count: c.arrivingSoon, query: { maritimeStatus: 'arriving_soon' } },
     { key: 'departing_soon', label: '三天内离港', count: c.departingSoon, query: { maritimeStatus: 'departing_soon' } },
     { key: 'in_transit', label: '在途', count: c.inTransit, query: { maritimeStatus: 'in_transit' } },
+    { key: 'inspection', label: '查验中', count: c.inspection ?? 0, query: { exceptionCode: 'INSPECTION' } },
     { key: 'port_arriving', label: '订阅港将到港', count: c.portArrivingSoon, query: {} },
     { key: 'port_departing', label: '订阅港将离港', count: c.portDepartingSoon, query: {} },
     { key: 'arrived', label: '已到港', count: c.arrived, query: { maritimeStatus: 'arrived' } },
@@ -360,6 +361,14 @@ function goVesselSchedules(query?: Record<string, string>) {
   router.push({ path: '/vessel-schedules', query })
 }
 
+function onStatCardNavigate(query: Record<string, string>) {
+  if (query.exceptionCode || query.statusCode) {
+    router.push({ path: '/shipments', query })
+    return
+  }
+  goVesselSchedules(query)
+}
+
 function goVoyage(voyageId: string) {
   router.push({ path: '/vessel-schedules', query: { voyageId } })
 }
@@ -445,7 +454,7 @@ function onFeedDismiss(item: AlertFeedItem) {
     <MaritimeAlertStatCards
       :cards="alertCards"
       :loading="loading && !data"
-      @navigate="(q) => goVesselSchedules(q)"
+      @navigate="onStatCardNavigate"
     />
 
     <section v-if="slaSummary" class="panel workbench-sla-summary px-4 py-3">

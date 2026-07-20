@@ -91,7 +91,7 @@ import {
   type ShipmentFilterQueryInput,
 } from '@/utils/shipmentListFilterQuery'
 import { useDictLabels } from '@/composables/useDictLabels'
-import { formatRelativeTime } from '@/utils/formatDateTime'
+import { dateOnlyToTimestamp, formatRelativeTime } from '@/utils/formatDateTime'
 import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
@@ -107,6 +107,7 @@ import {
   type TrackingFreshnessStats,
 } from '@/utils/trackingFreshness'
 import { notifyTrackingSyncResult } from '@/utils/trackingSyncNotify'
+import { apiErrorMessage } from '@/utils/apiError'
 
 const route = useRoute()
 const router = useRouter()
@@ -1087,6 +1088,82 @@ function applyRouteShipmentNoToSearch() {
   }
 }
 
+function readRouteStatusCode(): string | null {
+  const q = route.query.statusCode
+  const raw = Array.isArray(q) ? q[0] : q
+  const code = (raw || '').trim().toUpperCase()
+  return code || null
+}
+
+function applyRouteStatusFilter() {
+  const code = readRouteStatusCode()
+  if (!code) return
+  filterStatus.value = code
+}
+
+function readRouteExceptionCode(): string | null {
+  const q = route.query.exceptionCode
+  const raw = Array.isArray(q) ? q[0] : q
+  const code = (raw || '').trim().toUpperCase()
+  return code || null
+}
+
+function applyRouteExceptionFilter() {
+  const code = readRouteExceptionCode()
+  if (!code) return
+  filterException.value = code
+  // 按异常跳转时勿再套默认「转运中」状态，否则易筛空
+  filterStatus.value = null
+}
+
+function readRouteBool(key: string): boolean {
+  const q = route.query[key]
+  const raw = Array.isArray(q) ? q[0] : q
+  const text = String(raw || '')
+    .trim()
+    .toLowerCase()
+  return text === '1' || text === 'true' || text === 'yes'
+}
+
+function readRouteQueryString(key: string): string | null {
+  const q = route.query[key]
+  const raw = Array.isArray(q) ? q[0] : q
+  const text = (raw || '').trim()
+  return text || null
+}
+
+/** 工作台深链：已到港未签收 / 本周签收 / 船名航次 */
+function applyRouteWorkbenchFilters() {
+  if (readRouteBool('hasAta')) hasAta.value = true
+  if (readRouteBool('notDelivered')) notDelivered.value = true
+
+  const vessel = readRouteQueryString('vesselVoyage')
+  if (vessel) {
+    filterVesselVoyage.value = vessel
+    filterStatus.value = null
+  }
+
+  const deliveredFrom = readRouteQueryString('deliveredFrom')
+  const deliveredTo = readRouteQueryString('deliveredTo')
+  if (deliveredFrom || deliveredTo) {
+    const fromTs = dateOnlyToTimestamp(deliveredFrom)
+    const toTs = dateOnlyToTimestamp(deliveredTo)
+    if (fromTs != null && toTs != null) {
+      advancedTimes.value = {
+        ...advancedTimes.value,
+        delivered: [fromTs, toTs],
+      }
+      filterStatus.value = null
+    } else if (fromTs != null) {
+      advancedTimes.value = {
+        ...advancedTimes.value,
+        delivered: [fromTs, fromTs],
+      }
+      filterStatus.value = null
+    }
+  }
+}
+
 watch(
   () => [readRouteShipmentNo(), route.query.fromNotify, route.query.fromGroup] as const,
   () => {
@@ -1094,8 +1171,48 @@ watch(
   },
 )
 
+watch(
+  () => route.query.statusCode,
+  () => {
+    const before = filterStatus.value
+    applyRouteStatusFilter()
+    if (filterStatus.value !== before) {
+      onFiltersChanged()
+    }
+  },
+)
+
+watch(
+  () => route.query.exceptionCode,
+  () => {
+    const before = filterException.value
+    applyRouteExceptionFilter()
+    if (filterException.value !== before) {
+      onFiltersChanged()
+    }
+  },
+)
+
+watch(
+  () =>
+    [
+      route.query.hasAta,
+      route.query.notDelivered,
+      route.query.deliveredFrom,
+      route.query.deliveredTo,
+      route.query.vesselVoyage,
+    ] as const,
+  () => {
+    applyRouteWorkbenchFilters()
+    onFiltersChanged()
+  },
+)
+
 onMounted(async () => {
   applyRouteShipmentNoToSearch()
+  applyRouteStatusFilter()
+  applyRouteExceptionFilter()
+  applyRouteWorkbenchFilters()
   await Promise.all([
     loadDictTypes('country_code'),
     loadFilterOptions(),
@@ -1117,10 +1234,10 @@ function openEdit(row: Shipment) {
   modalShow.value = true
 }
 
-async function handleFormSubmit(payload: ShipmentPayload) {
+async function handleFormSubmit(payload: Partial<ShipmentPayload> & { shipmentNo: string }) {
   try {
     if (modalMode.value === 'create') {
-      await createShipment(payload)
+      await createShipment(payload as ShipmentPayload)
       message.success('运单已创建')
       modalShow.value = false
       searchShipmentNo.value = payload.shipmentNo
@@ -1143,7 +1260,7 @@ async function handleFormSubmit(payload: ShipmentPayload) {
       }
     }
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '保存失败')
+    message.error(apiErrorMessage(e, '保存失败'))
   }
 }
 
@@ -2090,7 +2207,7 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
   channelCode: {
     title: '渠道',
     key: 'channelCode',
-    width: 120,
+    width: 160,
     ellipsis: { tooltip: true },
     render: (row) => {
       const label = channelDisplayLabel(row)

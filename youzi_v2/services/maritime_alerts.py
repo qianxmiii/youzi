@@ -53,6 +53,17 @@ def build_maritime_alerts_overview(database: Database) -> dict[str, Any]:
             """
         ).fetchall()
 
+        inspection_cnt = int(
+            conn.execute(
+                f"""
+                SELECT COUNT(*) AS c FROM {SHIPMENTS_TABLE}
+                WHERE exception_code IS NOT NULL
+                  AND TRIM(exception_code) != ''
+                  AND UPPER(TRIM(exception_code)) = 'INSPECTION'
+                """
+            ).fetchone()["c"]
+        )
+
         port_rows = conn.execute(
             f"""
             SELECT p.*, v.vessel_voyage AS voyage_vessel_voyage, v.id AS voyage_id
@@ -82,6 +93,7 @@ def build_maritime_alerts_overview(database: Database) -> dict[str, Any]:
     counts = summarize_shipment_statuses(enriched_shipments)
     counts["portArrivingSoon"] = 0
     counts["portDepartingSoon"] = 0
+    counts["inspection"] = inspection_cnt
 
     subscribed_port_call_ids = PortSubscriptionsRepository(
         database

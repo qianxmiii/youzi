@@ -5,6 +5,7 @@ import {
   ArrowRight,
   Calendar,
   CheckCircle2,
+  Search,
   Ship,
   Truck,
 } from 'lucide-vue-next'
@@ -36,11 +37,16 @@ function sparklinePoints(count: number, variant: string): string {
 
 const cardMeta: Record<
   string,
-  { theme: string; spark: string; icon: 'calendar' | 'ship' | 'truck' | 'anchor' | 'depart' | 'check' }
+  {
+    theme: string
+    spark: string
+    icon: 'calendar' | 'ship' | 'truck' | 'anchor' | 'depart' | 'check' | 'search'
+  }
 > = {
   arriving_soon: { theme: 'indigo', spark: 'flat', icon: 'calendar' },
   departing_soon: { theme: 'indigo', spark: 'flat', icon: 'ship' },
   in_transit: { theme: 'blue', spark: 'up', icon: 'truck' },
+  inspection: { theme: 'rose', spark: 'peak', icon: 'search' },
   port_arriving: { theme: 'amber', spark: 'peak', icon: 'anchor' },
   port_departing: { theme: 'slate', spark: 'flat', icon: 'depart' },
   arrived: { theme: 'green', spark: 'up', icon: 'check' },
@@ -53,13 +59,14 @@ const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
   anchor: Anchor,
   depart: ArrowRight,
   check: CheckCircle2,
+  search: Search,
 }
 </script>
 
 <template>
   <div class="stat-cards">
     <template v-if="loading">
-      <div v-for="i in 6" :key="i" class="stat-card stat-card--skeleton" />
+      <div v-for="i in 7" :key="i" class="stat-card stat-card--skeleton" />
     </template>
     <button
       v-for="card in cards"
@@ -121,7 +128,13 @@ const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
 
 @media (min-width: 1024px) {
   .stat-cards {
-    grid-template-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .stat-cards {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 }
 
@@ -283,6 +296,15 @@ const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
   color: rgb(22 163 74);
 }
 
+.stat-card--rose .stat-card__icon,
+.stat-card--rose .stat-card__sparkline {
+  color: rgb(244 63 94);
+}
+
+.stat-card--rose .stat-card__value {
+  color: rgb(225 29 72);
+}
+
 [data-theme='dark'] .stat-card--indigo .stat-card__value {
   color: rgb(165 180 252);
 }
@@ -301,6 +323,10 @@ const statIcons: Record<string, FunctionalComponent<LucideProps>> = {
 
 [data-theme='dark'] .stat-card--green .stat-card__value {
   color: rgb(134 239 172);
+}
+
+[data-theme='dark'] .stat-card--rose .stat-card__value {
+  color: rgb(253 164 175);
 }
 
 @keyframes pulse {

@@ -20,6 +20,8 @@ Youzi v2 前端 — Vue 3 SPA
 | `src/api/` | API 客户端封装 |
 | `src/views/` | 页面级组件 |
 | `src/components/` | 可复用组件 |
+| `src/components/home/Workbench*.vue` | 工作台首页模块（Header / Focus / Todo / Arrival / TransportOverview） |
+| `src/api/workbench.ts` | 工作台聚合 API |
 | `src/types/` | TypeScript 类型 |
 | `src/domain/costCalculation/` | 成本计算纯函数（DDU/DDP、货物识别） |
 | `vite.config.ts` | 构建与 `/api` 代理 |
@@ -28,7 +30,7 @@ Youzi v2 前端 — Vue 3 SPA
 
 | 路径 | 页面 | 状态 |
 |------|------|------|
-| `/` | 工作台（海运预警） | ✅ |
+| `/` | 工作台（今日重点 / 待办 / 近期到港 / 运输概览） | ✅ |
 | `/shipments` | 运单管理 | ✅ |
 | `/vessel-schedules` | 船期监控 | ✅ |
 | `/addresses` | 地址簿 | ✅ |
@@ -36,8 +38,11 @@ Youzi v2 前端 — Vue 3 SPA
 | `/customers` | 客户管理 | ✅ |
 | `/channels` | 渠道管理 | ✅ |
 | `/scheduled-tasks` | 计划任务 | ✅ |
-| `/admin` | 码表管理 | ✅ |
+| `/admin` | 后台管理 · 码表 | ✅ |
+| `/display-settings` | 后台管理 · 显示设置 | ✅ |
 | `/cost` | 成本计算（自税/包税） | ✅ |
+| `/quote-center/followups` | 报价跟进 | ✅ |
+| `/shipments/payment-reminders` | 催款管理（侧栏待催角标、导出） | ✅ |
 | `/box`、`/quote` 等 | 占位（待迁移） | 待迁 |
 
 ## 开发命令

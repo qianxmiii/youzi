@@ -30,10 +30,12 @@ from .routers import (
     settings_tasks,
     shipment_groups,
     payment_reminders,
+    quote_opportunities,
     shipment_sla,
     shipments,
     statistics,
     vessel_schedules,
+    workbench,
 )
 
 app = FastAPI(title="youzi_v2 Admin")
@@ -86,6 +88,7 @@ for route_module in (
     pages,
     code_tables,
     payment_reminders,
+    quote_opportunities,
     shipments,
     statistics,
     customers,
@@ -94,6 +97,7 @@ for route_module in (
     shipment_sla,
     maritime_alerts,
     vessel_schedules,
+    workbench,
     settings_tasks,
     addresses,
     legacy,

@@ -40,6 +40,12 @@ const router = createRouter({
           meta: { title: '成本计算' },
         },
         {
+          path: 'quote-center/followups',
+          name: 'quote-followups',
+          component: () => import('@/views/quote-followup/QuoteFollowupView.vue'),
+          meta: { title: '报价跟进' },
+        },
+        {
           path: 'library',
           name: 'library',
           component: () => import('@/views/PlaceholderView.vue'),

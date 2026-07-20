@@ -1,4 +1,8 @@
+from datetime import datetime
+from urllib.parse import quote
+
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import Response
 
 from ..context import *
 from ..schemas.payment_reminders import (
@@ -6,8 +10,56 @@ from ..schemas.payment_reminders import (
     PaymentReminderFollowupBatchResult,
     PaymentReminderFollowupIn,
 )
+from ..services.payment_reminder_excel import build_payment_reminder_export_bytes
 
 router = APIRouter()
+
+_EXPORT_MAX = 10_000
+
+
+@router.get("/api/v1/shipments/payment-reminders/summary")
+def payment_reminder_summary():
+    """待催 / 全部未付款数量（侧栏角标与页面标题统计）。"""
+    return shipment_payment_followups_repo.reminder_summary()
+
+
+@router.get("/api/v1/shipments/payment-reminders/export")
+def export_payment_reminders_excel(
+    scope: str = Query("todo"),
+    customer: str | None = None,
+    settlement_method: str | None = Query(None, alias="settlementMethod"),
+    reminder_type: str | None = Query(None, alias="reminderType"),
+    followup_status: str | None = Query(None, alias="followupStatus"),
+    search: str | None = None,
+    limit: int = Query(_EXPORT_MAX, le=_EXPORT_MAX),
+    offset: int = 0,
+):
+    """导出当前筛选条件下的催款列表（Excel）。"""
+    result = shipment_payment_followups_repo.list_reminders(
+        scope=scope,
+        customer=customer,
+        settlement_method=settlement_method,
+        reminder_type=reminder_type,
+        followup_status=followup_status,
+        search=search,
+        limit=limit,
+        offset=offset,
+    )
+    total = int(result.get("total") or 0)
+    if total > _EXPORT_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=f"当前筛选共 {total} 条，超过导出上限 {_EXPORT_MAX}，请缩小筛选范围",
+        )
+    data = build_payment_reminder_export_bytes(result.get("items") or [])
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"催款列表导出_{ts}.xlsx"
+    encoded = quote(filename)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
 
 
 @router.get("/api/v1/shipments/payment-reminders")
@@ -16,6 +68,7 @@ def list_payment_reminders(
     customer: str | None = None,
     settlement_method: str | None = Query(None, alias="settlementMethod"),
     reminder_type: str | None = Query(None, alias="reminderType"),
+    followup_status: str | None = Query(None, alias="followupStatus"),
     search: str | None = None,
     limit: int = 50,
     offset: int = 0,
@@ -25,6 +78,7 @@ def list_payment_reminders(
         customer=customer,
         settlement_method=settlement_method,
         reminder_type=reminder_type,
+        followup_status=followup_status,
         search=search,
         limit=limit,
         offset=offset,

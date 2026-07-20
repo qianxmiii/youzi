@@ -12,6 +12,7 @@ class MaritimeAlertCounts(BaseModel):
     unknown: int = Field(0, validation_alias="unknown")
     port_arriving_soon: int = Field(0, validation_alias="portArrivingSoon")
     port_departing_soon: int = Field(0, validation_alias="portDepartingSoon")
+    inspection: int = Field(0, validation_alias="inspection")
 
 
 class MaritimeAlertShipment(BaseModel):

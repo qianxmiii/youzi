@@ -108,3 +108,46 @@ def test_list_reminders_fcl_exposes_bill_and_container(tmp_path: Path) -> None:
     assert row["billOfLadingNo"] == "OOLU2169890590"
     assert row["containerNo"] == "CONT9876543"
     assert row["customerNo"] == "PO-FCL"
+
+def test_list_reminders_followup_status_filter(tmp_path: Path) -> None:
+    repo, db = _prepare_repo(tmp_path)
+    sid = _seed(db)
+
+    unfollowed = repo.list_reminders(
+        scope="overdue", followup_status="unfollowed", limit=20, offset=0
+    )
+    assert any(i["shipmentNo"] == "PAY-R-001" for i in unfollowed["items"])
+    followed = repo.list_reminders(
+        scope="overdue", followup_status="followed", limit=20, offset=0
+    )
+    assert not any(i["shipmentNo"] == "PAY-R-001" for i in followed["items"])
+
+    repo.create_followup(sid, note="已催")
+    unfollowed2 = repo.list_reminders(
+        scope="overdue", followup_status="unfollowed", limit=20, offset=0
+    )
+    followed2 = repo.list_reminders(
+        scope="overdue", followup_status="followed", limit=20, offset=0
+    )
+    assert not any(i["shipmentNo"] == "PAY-R-001" for i in unfollowed2["items"])
+    assert any(i["shipmentNo"] == "PAY-R-001" for i in followed2["items"])
+
+
+def test_reminder_summary_counts(tmp_path: Path) -> None:
+    repo, db = _prepare_repo(tmp_path)
+    _seed(db)
+    summary = repo.reminder_summary()
+    assert summary["allUnpaidCount"] >= 1
+    assert summary["todoCount"] >= 1
+    assert "overdueCount" in summary
+
+
+def test_build_payment_reminder_export_bytes(tmp_path: Path) -> None:
+    from youzi_v2.services.payment_reminder_excel import build_payment_reminder_export_bytes
+
+    repo, db = _prepare_repo(tmp_path)
+    _seed(db)
+    listed = repo.list_reminders(scope="all_unpaid", limit=20, offset=0)
+    data = build_payment_reminder_export_bytes(listed["items"])
+    assert data[:2] == b"PK"
+

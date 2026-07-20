@@ -7,6 +7,7 @@ import NavIcon from '@/components/icons/NavIcon.vue'
 import { ICON_STROKE, ICON_STROKE_NAV } from '@/constants/icons'
 import { navGroups } from '@/constants/navigation'
 import { useNavGroupsExpanded } from '@/composables/useNavGroupsExpanded'
+import { usePendingPaymentReminderCount } from '@/composables/usePendingPaymentReminderCount'
 import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
 import { usePendingTrackingTimeReviewCount } from '@/composables/usePendingTrackingTimeReviewCount'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
@@ -18,10 +19,13 @@ const { pendingTrackingTimeReviewCount, refreshPendingTrackingTimeReviewCount } 
   usePendingTrackingTimeReviewCount()
 const { pendingShipmentSlaAlertCount, refreshPendingShipmentSlaAlertCount } =
   usePendingShipmentSlaAlertCount()
+const { pendingPaymentReminderCount, refreshPendingPaymentReminderCount } =
+  usePendingPaymentReminderCount()
 
 onMounted(() => {
   void refreshPendingTrackingTimeReviewCount()
   void refreshPendingShipmentSlaAlertCount()
+  void refreshPendingPaymentReminderCount()
 })
 
 const flatItems = computed(() => navGroups.flatMap((g) => g.items))
@@ -60,12 +64,14 @@ function itemLabel(groupLabel: string, name: string, badge?: string) {
 function pendingNavCount(path: string) {
   if (path === '/approvals/tracking-time') return pendingTrackingTimeReviewCount.value
   if (path === '/shipment-exceptions') return pendingShipmentSlaAlertCount.value
+  if (path === '/shipments/payment-reminders') return pendingPaymentReminderCount.value
   return 0
 }
 
 function pendingNavHint(path: string, count: number) {
   if (path === '/approvals/tracking-time') return `${count} 待审`
   if (path === '/shipment-exceptions') return `${count} 待办`
+  if (path === '/shipments/payment-reminders') return `${count} 待催`
   return `${count}`
 }
 
@@ -76,7 +82,9 @@ function formatNavPendingCount(count: number) {
 
 function groupPendingCount(groupLabel: string) {
   if (groupLabel === '审批管理') return pendingTrackingTimeReviewCount.value
-  if (groupLabel === '运单中心') return pendingShipmentSlaAlertCount.value
+  if (groupLabel === '运单中心') {
+    return pendingShipmentSlaAlertCount.value + pendingPaymentReminderCount.value
+  }
   return 0
 }
 </script>

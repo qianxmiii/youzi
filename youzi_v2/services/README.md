@@ -18,14 +18,17 @@ Youzi v2 业务服务层
 | `carrier_vendors.py` | 读取 config.json 承运商配置 |
 | `shipment_query_config.py` | DPS 运单查询：`queryByPerson` 全量 / `queryByOrder` 按 odd，自动翻页 |
 | `shipment_dps_sync.py` | DPS 运单全量同步至本地表（计划任务，默认关） |
-| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射 |
+| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（`customer_no`：`assOrderNumber`，空则 `internalOrderNum`） |
 | `shipment_dps_sync_fields.py` | 同步字段白名单（`config/shipment_dps_sync_fields.json`） |
 | `logistics_tracking.py` | 物流轨迹解析 |
 | `shipment_excel.py` | 运单 Excel 导入导出 |
+| `payment_reminder_rules.py` | 催款结算/应催日期计算 |
+| `payment_reminder_excel.py` | 催款列表 Excel 导出 |
 | `vessel_schedule_excel.py` | 船期 Excel |
 | `address_excel.py` | 仓库地址 Excel |
 | `vessel_schedule_sync.py` | 外部船期同步 |
 | `maritime_alerts.py` | 海运预警聚合 |
+| `workbench_overview.py` | 工作台首页聚合（今日重点 / 待办 / 近期到港 / 运输概览） |
 | `maritime_schedule/` | 船期数据源（如 COSCO eLines） |
 | `port_code_resolve.py` | 港口码解析 |
 | `scheduled_sync_settings.py` | 计划任务配置 |

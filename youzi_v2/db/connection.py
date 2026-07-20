@@ -53,6 +53,9 @@ class Database:
         from . import shipment_groups_table
         from . import shipment_tracking_time_candidates_table
         from . import shipment_payment_followups_table
+        from . import quote_opportunities_table
+        from . import quote_versions_table
+        from . import quote_followups_table
         from . import vessel_voyages_table
 
         with self._lock:
@@ -69,6 +72,9 @@ class Database:
             shipment_sla_alerts_table.ensure_schema(self._conn)
             shipment_sla_alert_followups_table.ensure_schema(self._conn)
             shipment_payment_followups_table.ensure_schema(self._conn)
+            quote_opportunities_table.ensure_schema(self._conn)
+            quote_versions_table.ensure_schema(self._conn)
+            quote_followups_table.ensure_schema(self._conn)
             internal_tracking_logs_table.ensure_schema(self._conn)
             carrier_tracking_logs_table.ensure_schema(self._conn)
             tracking_sync_jobs_table.ensure_schema(self._conn)

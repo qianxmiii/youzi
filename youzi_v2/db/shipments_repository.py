@@ -312,7 +312,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-PAID_SHIPMENT_LOCKED_MSG = "已付款运单不可修改，请先在运单列表改为未付款"
+PAID_SHIPMENT_LOCKED_MSG = "已付款运单不可修改其它字段，请先改为未付款"
 
 
 class PaidShipmentLockedError(ValueError):
@@ -337,17 +337,12 @@ def _filter_paid_shipment_update(
     *,
     allow_paid_unpay: bool,
 ) -> dict[str, Any]:
-    """已付款运单：仅 allow_paid_unpay 且仅改为 UNPAID 时放行，否则返回空 dict。"""
+    """已付款运单：仅 allow_paid_unpay 且改为 UNPAID 时放行；其它字段一律忽略。"""
     if not _is_paid_shipment_row(existing):
         return payload
     if allow_paid_unpay:
         new_ps = payload.get("payment_status")
-        other_keys = {k for k in payload if k != "payment_status"}
-        if (
-            new_ps is not None
-            and str(new_ps).strip().upper() == "UNPAID"
-            and not other_keys
-        ):
+        if new_ps is not None and str(new_ps).strip().upper() == "UNPAID":
             return {"payment_status": "UNPAID"}
     return {}
 
@@ -995,7 +990,7 @@ class ShipmentsRepository:
         delivered_time: str | None = None,
     ) -> None:
         sn = shipment_no.strip()
-        if not sn or self._shipment_no_is_paid(sn):
+        if not sn:
             return
         old_row: sqlite3.Row | None = None
         with self._database.lock:

@@ -53,16 +53,17 @@ def test_paid_shipment_allows_unpay_from_shipment_list(tmp_path: Path) -> None:
     assert row["paymentStatus"] == "UNPAID"
 
 
-def test_paid_shipment_blocks_mixed_unpay_and_other_fields(tmp_path: Path) -> None:
+def test_paid_shipment_unpay_ignores_other_fields(tmp_path: Path) -> None:
     db = Database(tmp_path / "paid3.db")
     ensure_schema(db.conn)
     repo, sid, _ = _seed_paid(db)
-    with pytest.raises(PaidShipmentLockedError):
-        repo.update_row(
-            sid,
-            {"payment_status": "UNPAID", "customer": "新客户"},
-            allow_paid_unpay=True,
-        )
+    row = repo.update_row(
+        sid,
+        {"payment_status": "UNPAID", "customer": "新客户"},
+        allow_paid_unpay=True,
+    )
+    assert row["paymentStatus"] == "UNPAID"
+    assert row["customer"] == "客户A"
 
 
 def test_dps_upsert_skips_paid_shipment(tmp_path: Path) -> None:
@@ -85,11 +86,17 @@ def test_dps_upsert_skips_paid_shipment(tmp_path: Path) -> None:
     assert row["paymentStatus"] == "PAID"
 
 
-def test_tracking_summary_skips_paid_shipment(tmp_path: Path) -> None:
+def test_paid_shipment_allows_internal_tracking_summary(tmp_path: Path) -> None:
     db = Database(tmp_path / "paid5.db")
     ensure_schema(db.conn)
     repo, _, sn = _seed_paid(db)
-    repo.update_internal_tracking_summary(sn, "2026-07-11 10:00:00", "测试轨迹")
+    repo.update_internal_tracking_summary(
+        sn,
+        "2026-07-11 10:00:00",
+        "Your goods have been signed for",
+        status_code="DELIVERED",
+    )
     row = repo.get_by_shipment_no(sn)
     assert row is not None
-    assert not (row.get("latestTrackingDesc") or "").strip()
+    assert row["latestTrackingDesc"] == "Your goods have been signed for"
+    assert row["statusCode"] == "DELIVERED"

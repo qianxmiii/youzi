@@ -145,20 +145,18 @@ class ShipmentPaymentFollowupsRepository:
             **calc,
         }
 
-    def list_reminders(
+    def _collect_reminder_items(
         self,
         *,
         scope: str = "todo",
         customer: str | None = None,
         settlement_method: str | None = None,
         reminder_type: str | None = None,
+        followup_status: str | None = None,
         search: str | None = None,
-        limit: int = 50,
-        offset: int = 0,
-    ) -> dict[str, Any]:
-        limit = max(1, min(limit, 500))
-        offset = max(0, offset)
-        today = date.today()
+        today: date | None = None,
+    ) -> list[dict[str, Any]]:
+        today = today or date.today()
 
         conditions = [
             "(s.payment_status IS NULL OR TRIM(s.payment_status) = '' OR UPPER(s.payment_status) != 'PAID')"
@@ -185,6 +183,12 @@ class ShipmentPaymentFollowupsRepository:
                 "(s.shipment_no LIKE ? OR s.customer_no LIKE ? OR s.customer_shipment_id LIKE ?)"
             )
             params.extend([q, q, q])
+
+        fu_status = (followup_status or "").strip().lower()
+        if fu_status in ("unfollowed", "none", "pending"):
+            conditions.append("COALESCE(fu.followup_count, 0) = 0")
+        elif fu_status in ("followed", "done"):
+            conditions.append("COALESCE(fu.followup_count, 0) > 0")
 
         where = f"WHERE {' AND '.join(conditions)}"
 
@@ -230,6 +234,30 @@ class ShipmentPaymentFollowupsRepository:
             items.append(item)
 
         items.sort(key=reminder_sort_key)
+        return items
+
+    def list_reminders(
+        self,
+        *,
+        scope: str = "todo",
+        customer: str | None = None,
+        settlement_method: str | None = None,
+        reminder_type: str | None = None,
+        followup_status: str | None = None,
+        search: str | None = None,
+        limit: int = 50,
+        offset: int = 0,
+    ) -> dict[str, Any]:
+        limit = max(1, min(limit, 10_000))
+        offset = max(0, offset)
+        items = self._collect_reminder_items(
+            scope=scope,
+            customer=customer,
+            settlement_method=settlement_method,
+            reminder_type=reminder_type,
+            followup_status=followup_status,
+            search=search,
+        )
         total = len(items)
         page = items[offset : offset + limit]
         return {
@@ -237,6 +265,21 @@ class ShipmentPaymentFollowupsRepository:
             "total": total,
             "limit": limit,
             "offset": offset,
+        }
+
+    def reminder_summary(self) -> dict[str, Any]:
+        """侧栏/标题用：待催与全部未付款数量（无筛选）。"""
+        unpaid = self._collect_reminder_items(scope="all_unpaid")
+        todo_count = sum(
+            1 for item in unpaid if matches_scope(item.get("reminderType") or "", "todo")
+        )
+        overdue_count = sum(
+            1 for item in unpaid if (item.get("reminderType") or "") == "overdue"
+        )
+        return {
+            "todoCount": todo_count,
+            "allUnpaidCount": len(unpaid),
+            "overdueCount": overdue_count,
         }
 
     def list_followups(self, shipment_id: str) -> list[dict[str, Any]]:

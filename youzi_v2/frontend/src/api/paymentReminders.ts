@@ -45,6 +45,12 @@ export interface PaymentReminderListResponse {
   offset: number
 }
 
+export interface PaymentReminderSummary {
+  todoCount: number
+  allUnpaidCount: number
+  overdueCount: number
+}
+
 export interface PaymentReminderFollowup {
   id: string
   shipmentId: string
@@ -67,24 +73,55 @@ export interface PaymentReminderFollowupBatchResult {
   errors: { id?: string; message?: string }[]
 }
 
-export async function listPaymentReminders(params?: {
+export type PaymentReminderListParams = {
   scope?: PaymentReminderScope
   customer?: string
   settlementMethod?: string
   reminderType?: string
+  followupStatus?: 'unfollowed' | 'followed'
   search?: string
   limit?: number
   offset?: number
-}): Promise<PaymentReminderListResponse> {
+}
+
+function buildReminderQuery(params?: PaymentReminderListParams): Record<string, string> {
   const q: Record<string, string> = {}
   if (params?.scope) q.scope = params.scope
   if (params?.customer?.trim()) q.customer = params.customer.trim()
   if (params?.settlementMethod?.trim()) q.settlementMethod = params.settlementMethod.trim()
   if (params?.reminderType?.trim()) q.reminderType = params.reminderType.trim()
+  if (params?.followupStatus) q.followupStatus = params.followupStatus
   if (params?.search?.trim()) q.search = params.search.trim()
   if (params?.limit != null) q.limit = String(params.limit)
   if (params?.offset != null) q.offset = String(params.offset)
-  return api<PaymentReminderListResponse>('/api/v1/shipments/payment-reminders', { query: q })
+  return q
+}
+
+export async function listPaymentReminders(
+  params?: PaymentReminderListParams,
+): Promise<PaymentReminderListResponse> {
+  return api<PaymentReminderListResponse>('/api/v1/shipments/payment-reminders', {
+    query: buildReminderQuery(params),
+  })
+}
+
+export async function getPaymentReminderSummary(): Promise<PaymentReminderSummary> {
+  return api<PaymentReminderSummary>('/api/v1/shipments/payment-reminders/summary')
+}
+
+const REMINDER_EXPORT_MAX = 10_000
+
+export async function exportPaymentRemindersExcel(
+  params?: PaymentReminderListParams,
+): Promise<Blob> {
+  return api<Blob>('/api/v1/shipments/payment-reminders/export', {
+    query: buildReminderQuery({
+      ...params,
+      limit: Math.min(params?.limit ?? REMINDER_EXPORT_MAX, REMINDER_EXPORT_MAX),
+      offset: 0,
+    }),
+    responseType: 'blob',
+  })
 }
 
 export async function listPaymentReminderFollowups(

@@ -21,6 +21,7 @@ import {
   markShipmentGroupNotificationRead,
   resolveShipmentGroupNotification,
 } from '@/api/shipmentGroups'
+import { getQuoteNotificationSummary, type QuoteNotificationSummary } from '@/api/quoteOpportunities'
 import type { ShipmentGroupNotification } from '@/types/shipmentGroup'
 import ShipmentGroupAlertCard from '@/components/shipments/ShipmentGroupAlertCard.vue'
 import { ICON_STROKE } from '@/constants/icons'
@@ -39,6 +40,7 @@ const { refreshPendingShipmentSlaAlertCount } = usePendingShipmentSlaAlertCount(
 const loading = ref(false)
 const items = ref<TodoItem[]>([])
 const pendingCount = ref(0)
+const quoteSummary = ref<QuoteNotificationSummary | null>(null)
 const popoverShow = ref(false)
 
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -78,13 +80,19 @@ function mergeTodos(
 async function load() {
   loading.value = true
   try {
-    const [groupRes, excRes, slaRes] = await Promise.all([
+    const [groupRes, excRes, slaRes, quoteRes] = await Promise.all([
       getShipmentGroupTodoNotifications(20),
       getExceptionFollowupTodoNotifications(20),
       getShipmentSlaTodoNotifications(20),
+      getQuoteNotificationSummary().catch(() => null),
     ])
     items.value = mergeTodos(groupRes.items, excRes.items, slaRes.items, 20)
-    pendingCount.value = groupRes.pendingCount + excRes.pendingCount + slaRes.pendingCount
+    quoteSummary.value = quoteRes
+    pendingCount.value =
+      groupRes.pendingCount +
+      excRes.pendingCount +
+      slaRes.pendingCount +
+      (quoteRes?.pendingCount || 0)
   } catch {
     /* 顶栏静默失败 */
   } finally {
@@ -182,6 +190,11 @@ function goExceptionTracking() {
   router.push({ path: '/shipment-exceptions', query: { status: 'open' } })
 }
 
+function goQuoteFollowups() {
+  popoverShow.value = false
+  router.push({ path: '/quote-center/followups', query: { scope: 'todo' } })
+}
+
 function goGroup(groupId: string) {
   if (!groupId) return
   popoverShow.value = false
@@ -240,10 +253,22 @@ onUnmounted(() => {
       </div>
 
       <NSpin :show="loading" size="small">
-        <p v-if="!loading && items.length === 0" class="header-notify-popover__empty">
+        <button
+          v-if="quoteSummary && quoteSummary.pendingCount > 0"
+          type="button"
+          class="quote-todo-summary"
+          @click="goQuoteFollowups"
+        >
+          <span class="quote-todo-summary__title">报价跟进</span>
+          <span class="quote-todo-summary__text">
+            今日 {{ quoteSummary.todayCount }}，逾期 {{ quoteSummary.overdueCount }}，即将过期
+            {{ quoteSummary.expiringSoonCount }}
+          </span>
+        </button>
+        <p v-if="!loading && items.length === 0 && !(quoteSummary && quoteSummary.pendingCount)" class="header-notify-popover__empty">
           暂无待办
         </p>
-        <ul v-else class="header-notify-popover__list header-notify-popover__list--alerts">
+        <ul v-else-if="items.length > 0" class="header-notify-popover__list header-notify-popover__list--alerts">
           <li v-for="n in items" :key="n.id">
             <ShipmentGroupAlertCard
               v-if="n.kind === 'group'"
@@ -331,6 +356,35 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
+.quote-todo-summary {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid rgb(251 191 36 / 0.45);
+  border-radius: 0.5rem;
+  padding: 0.625rem 0.75rem;
+  background: rgb(254 243 199 / 0.55);
+  text-align: left;
+  cursor: pointer;
+}
+
+.quote-todo-summary:hover {
+  background: rgb(254 243 199 / 0.85);
+}
+
+.quote-todo-summary__title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  color: rgb(146 64 14);
+}
+
+.quote-todo-summary__text {
+  font-size: 0.75rem;
+  color: rgb(120 53 15);
+}
+
 .header-notify-trigger {
   position: relative;
   display: inline-flex;

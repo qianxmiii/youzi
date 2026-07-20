@@ -22,7 +22,30 @@ def _eta_in_days(days: int) -> str:
     return (datetime.now() + timedelta(days=days)).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def test_port_alerts_only_count_subscribed_ports(database: Database) -> None:
+def test_inspection_count_uses_active_exception(database: Database) -> None:
+    from youzi_v2.db.datetime_util import now_str
+    from youzi_v2.db.shipments_table import TABLE_NAME, ensure_schema
+
+    ensure_schema(database.conn)
+    now = now_str()
+    with database.lock:
+        database.conn.execute(
+            f"""
+            INSERT INTO {TABLE_NAME} (
+                id, shipment_no, status_code, exception_code, created_time, updated_time
+            ) VALUES
+              ('i1', 'INSP-001', 'IN_TRANSIT', 'INSPECTION', ?, ?),
+              ('i2', 'INSP-002', 'IN_TRANSIT', 'INSPECTION', ?, ?),
+              ('i3', 'INSP-003', 'INSPECTION', NULL, ?, ?),
+              ('h1', 'HOLD-001', 'IN_TRANSIT', 'HOLD', ?, ?)
+            """,
+            (now, now, now, now, now, now, now, now),
+        )
+        database.conn.commit()
+
+    overview = build_maritime_alerts_overview(database)
+    assert overview["counts"]["inspection"] == 2
+
     repo = VesselSchedulesRepository(database)
     detail = repo.create(
         {

@@ -18,11 +18,13 @@ import {
 } from 'naive-ui'
 import { Copy } from 'lucide-vue-next'
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import {
   batchCreatePaymentReminderFollowups,
   createPaymentReminderFollowup,
+  exportPaymentRemindersExcel,
+  getPaymentReminderSummary,
   listPaymentReminderFollowups,
   listPaymentReminders,
   type PaymentReminderFollowup,
@@ -31,6 +33,7 @@ import {
 } from '@/api/paymentReminders'
 import { batchUpdateShipments, getShipment, getShipmentFilterOptions } from '@/api/shipments'
 import {
+  PAYMENT_FOLLOWUP_STATUS_OPTIONS,
   PAYMENT_REMINDER_TYPE_OPTIONS,
   SETTLEMENT_METHOD_FILTER_OPTIONS,
   paymentReminderDueHint,
@@ -38,6 +41,7 @@ import {
   settlementMethodLabel,
 } from '@/constants/paymentReminders'
 import { ICON_STROKE } from '@/constants/icons'
+import { usePendingPaymentReminderCount } from '@/composables/usePendingPaymentReminderCount'
 import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { formatAbsoluteDateTime, formatRelativeTime } from '@/utils/formatDateTime'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
@@ -45,20 +49,46 @@ import type { Shipment } from '@/types/shipment'
 
 const message = useMessage()
 const dialog = useDialog()
+const route = useRoute()
 const router = useRouter()
+const { refreshPendingPaymentReminderCount } = usePendingPaymentReminderCount()
+
+const SCOPE_VALUES: PaymentReminderScope[] = [
+  'todo',
+  'all_unpaid',
+  'upcoming_7_days',
+  'today',
+  'overdue',
+  'missing_rule',
+  'missing_date',
+]
+
+function applyRouteScope() {
+  const q = route.query.scope
+  const raw = Array.isArray(q) ? q[0] : q
+  const text = String(raw || '').trim() as PaymentReminderScope
+  if (SCOPE_VALUES.includes(text)) {
+    scope.value = text
+  }
+}
 
 const loading = ref(false)
+const exporting = ref(false)
 const batchSubmitting = ref(false)
 const items = ref<PaymentReminderItem[]>([])
 const total = ref(0)
 const page = ref(1)
 const pageSize = ref(50)
 const checkedRowKeys = ref<string[]>([])
+const todoCount = ref(0)
+const allUnpaidCount = ref(0)
+const overdueCount = ref(0)
 
 const scope = ref<PaymentReminderScope>('todo')
 const filterCustomer = ref<string | null>(null)
 const filterSettlementMethod = ref<string | null>(null)
 const filterReminderType = ref<string | null>(null)
+const filterFollowupStatus = ref<'unfollowed' | 'followed' | null>(null)
 const search = ref('')
 
 const customerOptions = ref<{ label: string; value: string }[]>([])
@@ -128,6 +158,7 @@ async function load() {
       customer: filterCustomer.value || undefined,
       settlementMethod: filterSettlementMethod.value || undefined,
       reminderType: filterReminderType.value || undefined,
+      followupStatus: filterFollowupStatus.value || undefined,
       search: search.value.trim() || undefined,
       limit: pageSize.value,
       offset: (page.value - 1) * pageSize.value,
@@ -139,6 +170,54 @@ async function load() {
     message.error(e instanceof Error ? e.message : '加载失败')
   } finally {
     loading.value = false
+  }
+}
+
+async function loadSummary() {
+  try {
+    const summary = await getPaymentReminderSummary()
+    todoCount.value = summary.todoCount ?? 0
+    allUnpaidCount.value = summary.allUnpaidCount ?? 0
+    overdueCount.value = summary.overdueCount ?? 0
+    await refreshPendingPaymentReminderCount()
+  } catch {
+    /* 保留上次统计 */
+  }
+}
+
+async function reloadAfterMutation() {
+  await Promise.all([load(), loadSummary()])
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    const blob = await exportPaymentRemindersExcel({
+      scope: scope.value,
+      customer: filterCustomer.value || undefined,
+      settlementMethod: filterSettlementMethod.value || undefined,
+      reminderType: filterReminderType.value || undefined,
+      followupStatus: filterFollowupStatus.value || undefined,
+      search: search.value.trim() || undefined,
+      limit: Math.min(total.value || 10_000, 10_000),
+      offset: 0,
+    })
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').slice(0, 14)
+    downloadBlob(blob, `催款列表导出_${ts}.xlsx`)
+    message.success(`已导出 ${total.value} 条（当前筛选）`)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '导出失败')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -181,7 +260,7 @@ async function handleFollowup(row: PaymentReminderItem) {
   promptNote(`已跟进 · ${row.shipmentNo}`, async (note) => {
     await createPaymentReminderFollowup(row.shipmentId, note)
     message.success('已记录跟进')
-    await load()
+    await reloadAfterMutation()
   })
 }
 
@@ -200,7 +279,7 @@ async function handleBatchFollowup() {
       )
       message.success(`已跟进 ${res.created} 条${res.failed ? `，失败 ${res.failed} 条` : ''}`)
       clearSelection()
-      await load()
+      await reloadAfterMutation()
     } catch (e) {
       message.error(e instanceof Error ? e.message : '批量跟进失败')
     } finally {
@@ -217,7 +296,7 @@ async function markPaid(ids: string[]) {
     const failCount = res.skipped.length + res.errors.length
     message.success(`已标记付款 ${res.updated ?? 0} 条${failCount ? `，失败 ${failCount} 条` : ''}`)
     clearSelection()
-    await load()
+    await reloadAfterMutation()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '标记已付款失败')
   } finally {
@@ -640,7 +719,7 @@ const columns = computed<DataTableColumns<PaymentReminderItem>>(() => [
   },
 ])
 
-watch([scope, filterCustomer, filterSettlementMethod, filterReminderType], () => {
+watch([scope, filterCustomer, filterSettlementMethod, filterReminderType, filterFollowupStatus], () => {
   page.value = 1
   clearSelection()
   void load()
@@ -655,9 +734,23 @@ watch(search, () => {
   searchTimer = setTimeout(() => void load(), 300)
 })
 
+watch(
+  () => route.query.scope,
+  () => {
+    const before = scope.value
+    applyRouteScope()
+    if (scope.value !== before) {
+      page.value = 1
+      void load()
+    }
+  },
+)
+
 onMounted(() => {
+  applyRouteScope()
   void loadFilterOptions()
   void load()
+  void loadSummary()
 })
 </script>
 
@@ -666,8 +759,15 @@ onMounted(() => {
     <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="page-h2">催款管理</h1>
-        <p class="mt-1 text-sm text-zinc-500">按客户结算方式与运单时间节点，展示待催款未付款运单</p>
+        <p class="page-subtitle mt-1">
+          待催 {{ todoCount }} 条 · 全部未付款 {{ allUnpaidCount }} 条
+          <span v-if="overdueCount > 0"> · 逾期 {{ overdueCount }} 条</span>
+          · 当前列表 {{ total }} 条
+        </p>
       </div>
+      <NButton size="small" :loading="exporting" :disabled="total <= 0" @click="handleExport">
+        导出
+      </NButton>
     </div>
 
     <div class="payment-reminders-filters panel shrink-0 px-3 py-2">
@@ -704,6 +804,14 @@ onMounted(() => {
           clearable
           placeholder="提醒类型"
           class="payment-reminders-filter-select payment-reminders-filter-select--wide"
+          size="small"
+        />
+        <NSelect
+          v-model:value="filterFollowupStatus"
+          :options="[...PAYMENT_FOLLOWUP_STATUS_OPTIONS]"
+          clearable
+          placeholder="跟进状态"
+          class="payment-reminders-filter-select"
           size="small"
         />
         <NInput

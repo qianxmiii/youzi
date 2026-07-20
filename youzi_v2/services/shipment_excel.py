@@ -212,6 +212,8 @@ _API_TO_SNAKE: dict[str, str] = {
     "originWarehouseCode": "origin_warehouse_code",
     "latestTrackingTime": "latest_tracking_time",
     "latestTrackingDesc": "latest_tracking_desc",
+    "atd": "atd",
+    "deliveredTime": "delivered_time",
 }
 
 _STATUS_EXPORT_LABELS: dict[str, str] = {
@@ -250,6 +252,9 @@ def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any])
             return int(val)
         except (TypeError, ValueError):
             return val
+    if field in ("delivered_time", "atd"):
+        text = str(val).strip()
+        return text[:10] if len(text) >= 10 else text
     return val
 
 

@@ -15,6 +15,7 @@ Pydantic Schemas
 | `shipments.py` | 运单 CRUD、批量、同步 |
 | `vessel_schedules.py` | 航次、挂靠、导入 |
 | `maritime_alerts.py` | 海运预警 |
+| `workbench.py` | 工作台首页聚合 |
 | `tracking.py` | 轨迹日志 |
 | `shipment_exceptions.py` | 异常开/关 |
 | `customers.py` | 客户 |

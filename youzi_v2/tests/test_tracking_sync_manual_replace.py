@@ -91,6 +91,63 @@ def test_manual_sync_replaces_stale_local_logs(tmp_path: Path) -> None:
     assert "Ghost" not in (rows[0]["tracking_desc"] or "")
 
 
+def test_manual_sync_dedupes_duplicate_api_nodes(tmp_path: Path) -> None:
+    db = Database(tmp_path / "manual_dedupe.db")
+    ensure_shipments_schema(db.conn)
+    ensure_logs_schema(db.conn)
+    sn = "SN-DEDUP-1"
+    _seed_shipment(db, sn)
+    logs_repo = TrackingLogsRepository(db)
+
+    api_item = {
+        "odd": sn,
+        "status": "2",
+        "logisticsInfors": [
+            {"nodeTime": "2026-07-15 10:00:00", "nodeDesc": "Same node twice"},
+            {"nodeTime": "2026-07-15 10:00:00", "nodeDesc": "Same node twice"},
+            {"nodeTime": "2026-07-14 09:00:00", "nodeDesc": "Earlier node"},
+        ],
+    }
+
+    with (
+        patch(
+            "youzi_v2.services.tracking_sync.load_logistics_config",
+            return_value={"base_url": "http://test.local"},
+        ),
+        patch(
+            "youzi_v2.services.tracking_sync.query_logistics_api",
+            return_value=([api_item], []),
+        ),
+        patch(
+            "youzi_v2.services.tracking_sync.evaluate_groups_after_tracking_sync",
+            return_value={},
+        ),
+        patch(
+            "youzi_v2.services.tracking_sync.evaluate_sla_after_tracking_sync",
+            return_value={},
+        ),
+        patch(
+            "youzi_v2.services.tracking_sync.recalculate_for_shipment_nos",
+            return_value={"processed": 0, "appliedTotal": 0, "pendingReviewTotal": 0},
+        ),
+    ):
+        result = sync_all_tracking(
+            ShipmentsRepository(db),
+            logs_repo,
+            tmp_path / "config.json",
+            shipment_nos=[sn],
+            trigger="manual",
+        )
+
+    assert result["updated"] == 1
+    assert result["logCount"] == 2
+    rows = db.conn.execute(
+        "SELECT tracking_time, tracking_desc FROM internal_tracking_logs WHERE shipment_no = ?",
+        (sn,),
+    ).fetchall()
+    assert len(rows) == 2
+
+
 def test_scheduled_sync_keeps_stale_local_logs(tmp_path: Path) -> None:
     db = Database(tmp_path / "scheduled_merge.db")
     ensure_shipments_schema(db.conn)

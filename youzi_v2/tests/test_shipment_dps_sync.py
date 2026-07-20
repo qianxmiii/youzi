@@ -127,13 +127,32 @@ class ShipmentDpsMapperTest(unittest.TestCase):
         assert payload is not None
         self.assertEqual(payload["address_type"], "WFS")
 
-    def test_customer_no_only_ass_order_number(self) -> None:
+    def test_customer_no_falls_back_to_internal_order_num(self) -> None:
         row = {**SAMPLE_DELIVERED}
         row.pop("assOrderNumber", None)
+        row["internalOrderNum"] = "MFDPS88"
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload["customer_no"], "MFDPS88")
+        self.assertEqual(payload["customer_shipment_id"], "FBA19FN8FN6C")
+
+    def test_customer_no_prefers_ass_order_number(self) -> None:
+        row = {
+            **SAMPLE_DELIVERED,
+            "assOrderNumber": "CUST-PO-001",
+            "internalOrderNum": "MFDPS88",
+        }
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload["customer_no"], "CUST-PO-001")
+
+    def test_customer_no_empty_when_both_missing(self) -> None:
+        row = {**SAMPLE_DELIVERED}
+        row.pop("assOrderNumber", None)
+        row.pop("internalOrderNum", None)
         payload = dps_row_to_shipment(row)
         assert payload is not None
         self.assertEqual(payload["customer_no"], "")
-        self.assertEqual(payload["customer_shipment_id"], "FBA19FN8FN6C")
 
     def test_customer_shipment_id_skips_internal_order_num(self) -> None:
         row = {
@@ -144,6 +163,8 @@ class ShipmentDpsMapperTest(unittest.TestCase):
         payload = dps_row_to_shipment(row)
         assert payload is not None
         self.assertNotIn("customer_shipment_id", payload)
+        # amazonID 空时 internalOrderNum 只回填客户单号，不写入货件号
+        self.assertEqual(payload["customer_no"], "SP-GS260601-AMZ-US-Air")
 
     def test_map_address_type_direct(self) -> None:
         self.assertEqual(map_dps_address_type("0"), "AMZ")

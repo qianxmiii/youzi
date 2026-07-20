@@ -58,7 +58,7 @@ erDiagram
 | id | TEXT PK | UUID |
 | shipment_no | TEXT UNIQUE | 运单号 |
 | customer | TEXT | 客户名 |
-| customer_no | TEXT | 客户订单号 |
+| customer_no | TEXT | 客户订单号（DPS：`assOrderNumber`，空则 `internalOrderNum`） |
 | channel_code | TEXT | 渠道码 |
 | country_code | TEXT | 目的国 |
 | address_type | TEXT | AMZ / WFS / 3PL |
@@ -113,6 +113,29 @@ erDiagram
 ### customers（客户）
 
 定义：`db/customers_table.py` — 客户主数据，可从运单同步。
+
+### quote_opportunities / quote_versions / quote_followups（报价跟进）
+
+定义：`db/quote_opportunities_table.py`、`quote_versions_table.py`、`quote_followups_table.py`  
+设计说明：[design/quote-followup-management-design.md](./design/quote-followup-management-design.md)
+
+**quote_opportunities** — 报价机会主表（客户、有效期、跟进规则、当前报价摘要）
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| id | TEXT PK | UUID |
+| quote_no | TEXT UNIQUE | 系统编号，如 `QT202607130001` |
+| customer_id / customer_name | TEXT | 客户 ID 与名称快照 |
+| is_new_customer | INTEGER | 1=尚未进入客户管理 |
+| quote_date / deadline_date | TEXT | 报价日 / 有效期截止日 |
+| followup_interval_days | INTEGER | 跟进间隔天数 |
+| next_followup_date | TEXT | 下次跟进日 |
+| status | TEXT | `QUOTED` / `FOLLOWING` / `WON` / `LOST` / `EXPIRED` / `CANCELLED` |
+| current_* | | 当前有效报价版本摘要（金额/币种/利润/利润率） |
+
+**quote_versions** — 报价版本历史（初次报价、降价、涨价等）；不覆盖、不删除。
+
+**quote_followups** — 每次跟进记录，可关联 `quote_version_id`。
 
 ### channels（渠道）
 

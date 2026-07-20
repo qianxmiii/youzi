@@ -22,6 +22,7 @@ export const navGroups: NavGroup[] = [
     label: '报价中心',
     icon: 'group-quote',
     items: [
+      { name: '报价跟进', to: '/quote-center/followups', icon: 'quote' },
       { name: '箱规计算', to: '/box', icon: 'box', badge: '待迁' },
       { name: '单地址报价', to: '/quote', icon: 'quote', badge: '待迁' },
       { name: '批量报价', to: '/quote/batch', icon: 'layers', badge: '待迁' },
@@ -68,8 +69,14 @@ export const navGroups: NavGroup[] = [
     items: [
       { name: '渠道管理', to: '/channels', icon: 'layers' },
       { name: '计划任务', to: '/scheduled-tasks', icon: 'clock' },
+    ],
+  },
+  {
+    label: '后台管理',
+    icon: 'settings',
+    items: [
+      { name: '码表', to: '/admin', icon: 'settings' },
       { name: '显示设置', to: '/display-settings', icon: 'globe' },
-      { name: '后台管理', to: '/admin', icon: 'settings' },
     ],
   },
 ]

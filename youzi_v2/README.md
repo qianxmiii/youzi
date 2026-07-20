@@ -107,7 +107,7 @@ SQLite 单文件，表在启动时自动初始化。核心表：`shipments`、`v
 
 | 路由 | 状态 | 旧代码 |
 |------|------|--------|
-| `/` | ✅ 工作台 | — |
+| `/` | ✅ 工作台（今日重点 / 待办 / 到港 / 概览） | — |
 | `/shipments` | ✅ 运单管理 | `stales.html` |
 | `/vessel-schedules` | ✅ 船期监控 | — |
 | `/addresses` | ✅ 地址簿 | `/api/addresses` |
@@ -116,6 +116,8 @@ SQLite 单文件，表在启动时自动初始化。核心表：`shipments`、`v
 | `/scheduled-tasks` | ✅ 计划任务 | — |
 | `/admin` | ✅ 码表 | `templates/admin.html` |
 | `/cost` | 成本计算（DDU/DDP） | ✅ |
+| `/quote-center/followups` | ✅ 报价跟进 | — |
+| `/shipments/payment-reminders` | ✅ 催款管理 | — |
 | `/box`、`/quote`、`/library` | 待迁 | Legacy JS |
 
 ## API 文档入口
@@ -128,6 +130,7 @@ SQLite 单文件，表在启动时自动初始化。核心表：`shipments`、`v
 
 ```bash
 curl http://127.0.0.1:3001/api/v1/health
+curl "http://127.0.0.1:3001/api/v1/workbench/overview"
 curl "http://127.0.0.1:3001/api/v1/shipments?page=1&page_size=20"
 curl -X POST "http://127.0.0.1:3001/api/v1/shipments/import" -F "file=@运单数据.xlsx"
 curl -O "http://127.0.0.1:3001/api/v1/vessel-schedules/template"

@@ -103,7 +103,6 @@ def _apply_shipment_fields(
         f"""
         UPDATE {SHIPMENTS_TABLE} SET {', '.join(sets)}
         WHERE id = ?
-          AND (payment_status IS NULL OR UPPER(TRIM(payment_status)) != 'PAID')
         """,
         params,
     )
@@ -429,7 +428,6 @@ def approve_signed_time_candidate(
             UPDATE {SHIPMENTS_TABLE}
             SET delivered_time = ?, updated_time = ?
             WHERE id = ?
-              AND (payment_status IS NULL OR UPPER(TRIM(payment_status)) != 'PAID')
             """,
             (value, now_str(), shipment_id),
         )

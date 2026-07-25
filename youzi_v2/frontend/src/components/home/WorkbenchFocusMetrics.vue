@@ -30,7 +30,7 @@ type FocusCard = {
 
 const cards = computed<FocusCard[]>(() => {
   const f = props.focus
-  return [
+  const items: FocusCard[] = [
     {
       key: 'exceptions',
       label: '待处理异常',
@@ -64,6 +64,7 @@ const cards = computed<FocusCard[]>(() => {
       to: { path: '/vessel-schedules', query: { maritimeStatus: 'arriving_soon' } },
     },
   ]
+  return items
 })
 
 function displayCount(n: number) {

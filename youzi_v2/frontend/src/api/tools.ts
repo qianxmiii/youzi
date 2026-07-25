@@ -81,7 +81,7 @@ export async function getImageLinkZipJob(jobId: string): Promise<ImageZipJob> {
 
 export async function downloadImageLinkZipJob(jobId: string): Promise<ImageLinkZipResult> {
   try {
-    const response = await api.raw<Blob>(
+    const response = await api.raw<Blob, 'blob'>(
       `/api/v1/tools/image-link-zip/jobs/${encodeURIComponent(jobId)}/download`,
       {
         responseType: 'blob',

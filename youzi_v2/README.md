@@ -118,6 +118,9 @@ SQLite 单文件，表在启动时自动初始化。核心表：`shipments`、`v
 | `/cost` | 成本计算（DDU/DDP） | ✅ |
 | `/quote-center/followups` | ✅ 报价跟进 | — |
 | `/shipments/payment-reminders` | ✅ 催款管理 | — |
+| `/tools` | ✅ 工具中心 | — |
+| `/tools/image-link-zip` | ✅ 标签图片打包 | — |
+| `/approvals/tracking-time` | ✅ 轨迹审批 | — |
 | `/box`、`/quote`、`/library` | 待迁 | Legacy JS |
 
 ## API 文档入口

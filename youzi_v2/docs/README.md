@@ -18,6 +18,8 @@
 | [design/quote-followup-management-design.md](./design/quote-followup-management-design.md) | 报价跟进管理设计 |
 | [design/payment-reminder-list-design.md](./design/payment-reminder-list-design.md) | 催款列表设计 |
 | [design/logistics-workbench-home-redesign.md](./design/logistics-workbench-home-redesign.md) | 物流工作台首页改版（阶段一～三已落地） |
+| [design/tools/tools-center-design.md](./design/tools/tools-center-design.md) | 工具中心主设计 |
+| [design/tools/image-link-zip-design.md](./design/tools/image-link-zip-design.md) | 标签图片打包工具设计 |
 | [MIGRATION.md](./MIGRATION.md) | Legacy → v2 迁移指南 |
 
 ## 模块 README

@@ -8,6 +8,7 @@ import {
   CircleDollarSign,
   ClipboardCheck,
   Clock,
+  Download,
   FileText,
   Globe,
   Layers,
@@ -21,6 +22,7 @@ import {
   Truck,
   TriangleAlert,
   Users,
+  Wrench,
 } from 'lucide-vue-next'
 import type { LucideProps } from 'lucide-vue-next'
 import { ICON_STROKE_NAV } from '@/constants/icons'
@@ -35,6 +37,7 @@ const ICONS: Record<string, FunctionalComponent<LucideProps>> = {
   'group-customer': Users,
   'group-data': BarChart3,
   'group-approval': ClipboardCheck,
+  'group-tools': Wrench,
   'group-system': Settings,
   grid: LayoutGrid,
   box: Package,
@@ -54,6 +57,8 @@ const ICONS: Record<string, FunctionalComponent<LucideProps>> = {
   settings: Settings,
   star: Star,
   wallet: CircleDollarSign,
+  download: Download,
+  wrench: Wrench,
 }
 
 const Icon = computed(() => ICONS[props.name] ?? Star)

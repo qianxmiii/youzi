@@ -129,6 +129,18 @@ const router = createRouter({
           component: () => import('@/views/settings/DisplaySettingsView.vue'),
           meta: { title: '显示设置' },
         },
+        {
+          path: 'tools',
+          name: 'tools-center',
+          component: () => import('@/views/tools/ToolsCenterView.vue'),
+          meta: { title: '工具中心' },
+        },
+        {
+          path: 'tools/image-link-zip',
+          name: 'tools-image-link-zip',
+          component: () => import('@/views/tools/ImageLinkZipView.vue'),
+          meta: { title: '标签图片打包' },
+        },
       ],
     },
   ],

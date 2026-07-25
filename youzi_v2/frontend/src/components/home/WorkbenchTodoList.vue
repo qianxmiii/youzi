@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { ChevronRight } from 'lucide-vue-next'
 import { NButton, NTabs, NTabPane } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ICON_STROKE } from '@/constants/icons'
 import type { WorkbenchTodoItem, WorkbenchTodoKind } from '@/api/workbench'
 
 const props = defineProps<{
@@ -49,18 +51,29 @@ function openAll() {
 </script>
 
 <template>
-  <section class="panel todo-panel">
-    <div class="todo-panel__head">
-      <h2 class="todo-panel__title">待处理事项</h2>
-      <NButton text size="tiny" type="primary" @click="openAll">查看全部</NButton>
+  <section class="panel flex min-h-[16rem] flex-col p-4">
+    <div class="mb-2.5 flex items-center justify-between gap-2">
+      <h2 class="section-h2 !text-[var(--color-fg-emphasis)]">待处理事项</h2>
+      <NButton text size="tiny" type="primary" class="cursor-pointer" @click="openAll">
+        查看全部
+      </NButton>
     </div>
 
-    <div v-if="error && available === false" class="todo-panel__error">
+    <div
+      v-if="error && available === false"
+      class="mb-2 flex items-center justify-between gap-2 text-xs text-red-500"
+    >
       <span>{{ error }}</span>
-      <button type="button" @click="emit('retry')">重试</button>
+      <button
+        type="button"
+        class="cursor-pointer border-0 bg-transparent text-[var(--color-accent-text)] hover:underline"
+        @click="emit('retry')"
+      >
+        重试
+      </button>
     </div>
 
-    <NTabs v-model:value="tab" type="segment" size="small" class="todo-tabs">
+    <NTabs v-model:value="tab" type="segment" size="small" class="mb-2.5">
       <NTabPane name="all" tab="全部" />
       <NTabPane name="exception" tab="异常" />
       <NTabPane name="payment" tab="催款" />
@@ -69,7 +82,7 @@ function openAll() {
 
     <div v-if="loading && !items.length" class="todo-empty">加载中…</div>
     <div v-else-if="!filtered.length" class="todo-empty">暂无待处理事项</div>
-    <ul v-else class="todo-list">
+    <ul v-else class="flex flex-col gap-1">
       <li v-for="item in filtered" :key="item.id">
         <button
           type="button"
@@ -77,15 +90,26 @@ function openAll() {
           :class="severityClass(item.severity)"
           @click="openItem(item)"
         >
-          <div class="todo-row__main">
-            <span class="todo-row__no">{{ item.shipmentNo || '—' }}</span>
-            <span class="todo-row__title">{{ item.title }}</span>
+          <div class="min-w-0 flex-1">
+            <div class="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span class="text-[0.85rem] font-semibold text-[var(--color-fg-emphasis)]">
+                {{ item.shipmentNo || '—' }}
+              </span>
+              <span class="text-[0.8rem] text-[var(--color-fg-secondary)]">{{ item.title }}</span>
+            </div>
+            <div class="mt-0.5 flex flex-wrap gap-x-2 gap-y-0.5 text-[0.72rem] text-[var(--color-muted)]">
+              <span v-if="item.customer">{{ item.customer }}</span>
+              <span v-if="item.summary" class="max-w-full truncate">{{ item.summary }}</span>
+              <span v-if="item.overdueDays > 0" class="font-medium text-amber-600 dark:text-amber-400">
+                逾期 {{ item.overdueDays }} 天
+              </span>
+            </div>
           </div>
-          <div class="todo-row__meta">
-            <span v-if="item.customer">{{ item.customer }}</span>
-            <span v-if="item.summary" class="todo-row__summary">{{ item.summary }}</span>
-            <span v-if="item.overdueDays > 0">逾期 {{ item.overdueDays }} 天</span>
-          </div>
+          <ChevronRight
+            class="todo-row__chevron h-4 w-4 shrink-0 text-[var(--color-muted)]"
+            :stroke-width="ICON_STROKE"
+            aria-hidden="true"
+          />
         </button>
       </li>
     </ul>
@@ -93,66 +117,41 @@ function openAll() {
 </template>
 
 <style scoped>
-.todo-panel {
-  padding: 0.9rem 1rem 0.75rem;
-  min-height: 16rem;
-}
-
-.todo-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.55rem;
-}
-
-.todo-panel__title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.todo-panel__error {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.8rem;
-  color: #e11d48;
-}
-
-.todo-panel__error button {
-  border: 0;
-  background: transparent;
-  color: var(--yz-primary, #2563eb);
-  cursor: pointer;
-}
-
-.todo-tabs {
-  margin-bottom: 0.55rem;
-}
-
-.todo-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.35rem;
-}
-
 .todo-row {
+  display: flex;
   width: 100%;
+  align-items: center;
+  gap: 0.5rem;
   border: 1px solid transparent;
-  border-radius: 0.5rem;
-  background: color-mix(in srgb, var(--yz-bg, #f8fafc) 80%, transparent);
+  border-radius: 0.55rem;
+  background: var(--color-btn-ghost-bg);
   padding: 0.55rem 0.65rem;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .todo-row:hover {
-  border-color: var(--yz-border, #e5e7eb);
-  background: #fff;
+  border-color: var(--color-border);
+  background: var(--color-btn-ghost-hover);
+}
+
+.todo-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
+}
+
+.todo-row:hover .todo-row__chevron {
+  color: var(--color-fg-secondary);
+  transform: translateX(1px);
+}
+
+.todo-row__chevron {
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .todo-row--severe {
@@ -163,44 +162,17 @@ function openAll() {
   border-left: 3px solid #d97706;
 }
 
-.todo-row__main {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  align-items: baseline;
-}
-
-.todo-row__no {
-  font-weight: 600;
-  font-size: 0.85rem;
-  color: var(--yz-text, #111827);
-}
-
-.todo-row__title {
-  font-size: 0.82rem;
-  color: var(--yz-muted, #4b5563);
-}
-
-.todo-row__meta {
-  margin-top: 0.2rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.45rem;
-  font-size: 0.75rem;
-  color: var(--yz-muted, #6b7280);
-}
-
-.todo-row__summary {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .todo-empty {
-  padding: 1.75rem 0.5rem;
+  padding: 2rem 0.5rem;
   text-align: center;
   font-size: 0.85rem;
-  color: var(--yz-muted, #9ca3af);
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo-row,
+  .todo-row__chevron {
+    transition: none;
+  }
 }
 </style>

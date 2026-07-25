@@ -29,6 +29,7 @@ Youzi v2 业务服务层
 | `vessel_schedule_sync.py` | 外部船期同步 |
 | `maritime_alerts.py` | 海运预警聚合 |
 | `workbench_overview.py` | 工作台首页聚合（今日重点 / 待办 / 近期到港 / 运输概览） |
+| `image_link_zip.py` | Excel 图片链接批量下载并打 zip |
 | `maritime_schedule/` | 船期数据源（如 COSCO eLines） |
 | `port_code_resolve.py` | 港口码解析 |
 | `scheduled_sync_settings.py` | 计划任务配置 |

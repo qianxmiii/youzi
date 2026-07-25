@@ -36,71 +36,59 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="scrollbar-subtle flex h-full min-h-0 w-full flex-col overflow-y-auto">
-    <div class="workbench-home">
-      <WorkbenchHeader
-        :generated-at="data?.generatedAt"
-        :loading="loading"
-        @refresh="load({ silent: true })"
-      />
+  <div class="scrollbar-subtle flex h-full min-h-0 w-full flex-col gap-4 overflow-y-auto">
+    <WorkbenchHeader
+      :generated-at="data?.generatedAt"
+      :loading="loading"
+      @refresh="load({ silent: true })"
+    />
 
-      <WorkbenchFocusMetrics
-        :focus="data?.focus ?? null"
+    <WorkbenchFocusMetrics
+      :focus="data?.focus ?? null"
+      :loading="loading"
+      :error="data?.focus?.available === false ? data?.focus?.error : loadError || null"
+      @retry="load()"
+    />
+
+    <div class="workbench-main">
+      <WorkbenchTodoList
+        :items="data?.todos?.items ?? []"
         :loading="loading"
-        :error="data?.focus?.available === false ? data?.focus?.error : loadError || null"
+        :available="data?.todos?.available"
+        :error="data?.todos?.error"
         @retry="load()"
       />
-
-      <div class="workbench-home__main">
-        <WorkbenchTodoList
-          class="workbench-home__todos"
-          :items="data?.todos?.items ?? []"
-          :loading="loading"
-          :available="data?.todos?.available"
-          :error="data?.todos?.error"
-          @retry="load()"
-        />
-        <WorkbenchArrivalTimeline
-          class="workbench-home__arrivals"
-          :items="data?.arrivals?.items ?? []"
-          :loading="loading"
-          :available="data?.arrivals?.available"
-          :error="data?.arrivals?.error"
-          @retry="load()"
-        />
-      </div>
-
-      <WorkbenchTransportOverview
-        :overview="data?.overview ?? null"
+      <WorkbenchArrivalTimeline
+        :items="data?.arrivals?.items ?? []"
         :loading="loading"
-        :error="data?.overview?.available === false ? data?.overview?.error : null"
+        :available="data?.arrivals?.available"
+        :error="data?.arrivals?.error"
         @retry="load()"
       />
     </div>
+
+    <WorkbenchTransportOverview
+      :overview="data?.overview ?? null"
+      :loading="loading"
+      :error="data?.overview?.available === false ? data?.overview?.error : null"
+      @retry="load()"
+    />
   </div>
 </template>
 
 <style scoped>
-.workbench-home {
+.workbench-main {
   display: flex;
   flex-direction: column;
-  gap: 1.15rem;
-  padding: 0;
-  width: 100%;
-}
-
-.workbench-home__main {
-  display: flex;
-  flex-direction: column;
-  gap: 0.85rem;
+  gap: 1rem;
 }
 
 @media (min-width: 960px) {
-  .workbench-home__main {
+  .workbench-main {
     display: grid;
     grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: 0.85rem;
-    align-items: start;
+    gap: 1rem;
+    align-items: stretch;
   }
 }
 </style>

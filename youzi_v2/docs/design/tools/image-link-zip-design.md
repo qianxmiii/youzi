@@ -1,7 +1,7 @@
 # 标签图片打包设计
 
-> 归属：[tools-center-design.md](./tools-center-design.md)  
-> 路由：`/tools/image-link-zip`  
+> 归属：[tools-center-design.md](./tools-center-design.md)
+> 路由：`/tools/image-link-zip`
 > 入口：工具中心卡片「标签图片打包」
 
 ## 1. 业务目标与非目标

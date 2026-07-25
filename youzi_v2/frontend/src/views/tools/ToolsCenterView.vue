@@ -7,7 +7,6 @@ import type { LucideProps } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import {
   TOOL_CATEGORIES,
-  TOOL_REGISTRY,
   toolStatusLabel,
   toolsByCategory,
   type ToolDefinition,

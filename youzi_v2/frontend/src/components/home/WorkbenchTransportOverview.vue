@@ -16,6 +16,13 @@ const emit = defineEmits<{
 
 const router = useRouter()
 
+type TransportCard = {
+  key: string
+  label: string
+  count: number
+  to: { path: string; query: Record<string, string> }
+}
+
 function weekBounds() {
   const now = new Date()
   const day = now.getDay()
@@ -28,10 +35,10 @@ function weekBounds() {
   }
 }
 
-const cards = computed(() => {
+const cards = computed<TransportCard[]>(() => {
   const o = props.overview
   const week = weekBounds()
-  return [
+  const items: TransportCard[] = [
     {
       key: 'inTransit',
       label: '在途',
@@ -60,6 +67,7 @@ const cards = computed(() => {
       },
     },
   ]
+  return items
 })
 
 function go(to: { path: string; query?: Record<string, string> }) {

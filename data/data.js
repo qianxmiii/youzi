@@ -615,11 +615,14 @@ const boxRules = {
 // 全承运商统一泡比重优惠（货重比减，单价扣减；取满足泡比的最高一档）
 const UNIFIED_VOLUME_RATIO_DISCOUNTS = [
     { ratio: 200, discount: 0.5 },
-    { ratio: 250, discount: 1 },
-    { ratio: 300, discount: 1.5 },
+    { ratio: 250, discount: 0.8 },
+    { ratio: 300, discount: 1.1 },
+    { ratio: 350, discount: 1.3 },
+    { ratio: 400, discount: 1.5 },
+    { ratio: 450, discount: 1.8 },
     { ratio: 500, discount: 2 }
 ];
-const UNIFIED_VOLUME_RATIO_DISCOUNT_DESC = "货重比减：1:200减0.5，1:250减1，1:300减1.5，1:500减2";
+const UNIFIED_VOLUME_RATIO_DISCOUNT_DESC = "比重优惠：1:200-0.5 1:250-0.8 1:300-1.1 1:350-1.3 1:400-1.5 1:450-1.8 1:500-2.0（封顶）";
 
 /** 全系统统一泡比重优惠（与承运商无关） */
 const unifiedWeightRatioDiscountConfig = {

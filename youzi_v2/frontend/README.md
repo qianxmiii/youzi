@@ -42,6 +42,8 @@ Youzi v2 前端 — Vue 3 SPA
 | `/display-settings` | 后台管理 · 显示设置 | ✅ |
 | `/cost` | 成本计算（自税/包税） | ✅ |
 | `/quote-center/followups` | 报价跟进 | ✅ |
+| `/tools` | 工具中心（分类卡片入口） | ✅ |
+| `/tools/image-link-zip` | 标签图片打包 | ✅ |
 | `/shipments/payment-reminders` | 催款管理（侧栏待催角标、导出） | ✅ |
 | `/box`、`/quote` 等 | 占位（待迁移） | 待迁 |
 

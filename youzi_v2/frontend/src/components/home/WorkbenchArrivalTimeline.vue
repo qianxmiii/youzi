@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { Anchor, ChevronRight } from 'lucide-vue-next'
 import { NButton } from 'naive-ui'
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { ICON_STROKE } from '@/constants/icons'
 import type { WorkbenchArrivalDayGroup, WorkbenchArrivalItem } from '@/api/workbench'
 
 const props = defineProps<{
@@ -37,7 +39,6 @@ const grouped = computed(() => {
 function formatEta(eta: string | null) {
   const raw = (eta || '').trim()
   if (!raw) return '—'
-  // MM-DD HH:mm
   const m = raw.match(/(\d{2})-(\d{2})[ T](\d{2}:\d{2})/)
   if (m) return `${m[1]}-${m[2]} ${m[3]}`
   return raw.slice(5, 16)
@@ -57,32 +58,64 @@ function openAll() {
 </script>
 
 <template>
-  <section class="panel arrival-panel">
-    <div class="arrival-panel__head">
-      <h2 class="arrival-panel__title">近期到港</h2>
-      <NButton text size="tiny" type="primary" @click="openAll">查看全部</NButton>
+  <section class="panel flex min-h-[16rem] flex-col p-4">
+    <div class="mb-2.5 flex items-center justify-between gap-2">
+      <h2 class="section-h2 !text-[var(--color-fg-emphasis)]">近期到港</h2>
+      <NButton text size="tiny" type="primary" class="cursor-pointer" @click="openAll">
+        查看全部
+      </NButton>
     </div>
 
-    <div v-if="error && available === false" class="arrival-panel__error">
+    <div
+      v-if="error && available === false"
+      class="mb-2 flex items-center justify-between gap-2 text-xs text-red-500"
+    >
       <span>{{ error }}</span>
-      <button type="button" @click="emit('retry')">重试</button>
+      <button
+        type="button"
+        class="cursor-pointer border-0 bg-transparent text-[var(--color-accent-text)] hover:underline"
+        @click="emit('retry')"
+      >
+        重试
+      </button>
     </div>
 
     <div v-if="loading && !items.length" class="arrival-empty">加载中…</div>
     <div v-else-if="!items.length" class="arrival-empty">未来三天暂无到港</div>
-    <div v-else class="arrival-groups">
-      <div v-for="group in grouped" :key="group.key" class="arrival-group">
-        <h3 class="arrival-group__label">{{ group.label }}</h3>
-        <ul>
+    <div v-else class="flex flex-col gap-3">
+      <div v-for="group in grouped" :key="group.key">
+        <h3 class="mb-1.5 text-[0.72rem] font-semibold tracking-wide text-[var(--color-muted)]">
+          {{ group.label }}
+        </h3>
+        <ul class="flex flex-col gap-1">
           <li v-for="(item, idx) in group.items" :key="`${item.vesselVoyage}-${item.eta}-${idx}`">
             <button type="button" class="arrival-row" @click="openItem(item)">
-              <div class="arrival-row__voyage">{{ item.vesselVoyage || '—' }}</div>
-              <div class="arrival-row__meta">
-                <span>{{ item.destinationPortCode || '目的港待定' }}</span>
-                <span v-if="item.isSubscribedPort" class="arrival-row__tag">订阅港</span>
-                <span>· ETA {{ formatEta(item.eta) }}</span>
-                <span>· {{ item.shipmentCount }} 票</span>
-              </div>
+              <span class="arrival-row__icon" aria-hidden="true">
+                <Anchor class="h-3.5 w-3.5" :stroke-width="ICON_STROKE" />
+              </span>
+              <span class="min-w-0 flex-1">
+                <span class="block truncate text-[0.85rem] font-semibold text-[var(--color-fg-emphasis)]">
+                  {{ item.vesselVoyage || '—' }}
+                </span>
+                <span class="mt-0.5 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[0.72rem] text-[var(--color-muted)]">
+                  <span>{{ item.destinationPortCode || '目的港待定' }}</span>
+                  <span
+                    v-if="item.isSubscribedPort"
+                    class="rounded px-1 py-px text-[0.68rem] font-semibold text-sky-600 dark:text-sky-400"
+                  >
+                    订阅港
+                  </span>
+                  <span>· ETA {{ formatEta(item.eta) }}</span>
+                  <span class="font-medium text-[var(--color-fg-secondary)]">
+                    · {{ item.shipmentCount }} 票
+                  </span>
+                </span>
+              </span>
+              <ChevronRight
+                class="arrival-row__chevron h-4 w-4 shrink-0 text-[var(--color-muted)]"
+                :stroke-width="ICON_STROKE"
+                aria-hidden="true"
+              />
             </button>
           </li>
         </ul>
@@ -92,99 +125,66 @@ function openAll() {
 </template>
 
 <style scoped>
-.arrival-panel {
-  padding: 0.9rem 1rem 0.75rem;
-  min-height: 16rem;
-}
-
-.arrival-panel__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.65rem;
-}
-
-.arrival-panel__title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-}
-
-.arrival-panel__error {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-size: 0.8rem;
-  color: #e11d48;
-}
-
-.arrival-panel__error button {
-  border: 0;
-  background: transparent;
-  color: var(--yz-primary, #2563eb);
-  cursor: pointer;
-}
-
-.arrival-group {
-  margin-bottom: 0.75rem;
-}
-
-.arrival-group__label {
-  margin: 0 0 0.35rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--yz-muted, #6b7280);
-  text-transform: none;
-}
-
-.arrival-group ul {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-}
-
 .arrival-row {
+  display: flex;
   width: 100%;
-  border: 0;
-  border-radius: 0.45rem;
+  align-items: center;
+  gap: 0.55rem;
+  border: 1px solid transparent;
+  border-radius: 0.55rem;
   background: transparent;
-  padding: 0.4rem 0.25rem;
+  padding: 0.45rem 0.4rem;
   text-align: left;
   cursor: pointer;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .arrival-row:hover {
-  background: color-mix(in srgb, var(--yz-bg, #f8fafc) 90%, #fff);
+  border-color: var(--color-border);
+  background: var(--color-btn-ghost-bg);
 }
 
-.arrival-row__voyage {
-  font-size: 0.85rem;
-  font-weight: 600;
-  color: var(--yz-text, #111827);
+.arrival-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
-.arrival-row__meta {
-  margin-top: 0.15rem;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  font-size: 0.75rem;
-  color: var(--yz-muted, #6b7280);
-}
-
-.arrival-row__tag {
+.arrival-row__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex-shrink: 0;
+  border-radius: 0.45rem;
   color: #0284c7;
-  font-weight: 600;
+  background: color-mix(in srgb, #0284c7 12%, transparent);
+}
+
+.arrival-row:hover .arrival-row__chevron {
+  color: var(--color-fg-secondary);
+  transform: translateX(1px);
+}
+
+.arrival-row__chevron {
+  transition:
+    color 0.15s ease,
+    transform 0.15s ease;
 }
 
 .arrival-empty {
-  padding: 1.75rem 0.5rem;
+  padding: 2rem 0.5rem;
   text-align: center;
   font-size: 0.85rem;
-  color: var(--yz-muted, #9ca3af);
+  color: var(--color-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .arrival-row,
+  .arrival-row__chevron {
+    transition: none;
+  }
 }
 </style>

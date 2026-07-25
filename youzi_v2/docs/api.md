@@ -6,6 +6,7 @@
 - [通用约定](#通用约定)
 - [健康检查](#健康检查)
 - [工作台 workbench](#工作台-workbench)
+- [常用工具 tools](#常用工具-tools)
 - [运单 shipments](#运单-shipments)
 - [船期 vessel-schedules](#船期-vessel-schedules)
 - [海运预警 maritime-alerts](#海运预警-maritime-alerts)
@@ -67,6 +68,28 @@ curl http://127.0.0.1:3001/api/v1/health
 
 ```bash
 curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6"
+```
+
+## 常用工具 tools
+
+前缀：`/api/v1/tools`
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| POST | `/api/v1/tools/image-link-zip/jobs` | 上传 Excel，启动后台下载任务，返回 `jobId` |
+| GET | `/api/v1/tools/image-link-zip/jobs/{jobId}` | 查询进度（`done`/`total`/`status`） |
+| GET | `/api/v1/tools/image-link-zip/jobs/{jobId}/download` | 完成后下载 zip |
+
+查询参数：`column`（默认 `P`，创建任务时）。表单字段：`file`（`.xls` / `.xlsx`）。
+
+```bash
+# 1) 创建任务
+curl -X POST "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs?column=P" \
+  -F "file=@youzi_v2/tools/temp/datapic.xls"
+# 2) 轮询进度
+curl "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}"
+# 3) 下载
+curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/download"
 ```
 
 ## 运单 shipments

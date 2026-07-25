@@ -2,6 +2,26 @@
 
 按日期倒序记录 youzi_v2 的代码与文档变更。
 
+## 2026-07-21
+
+### 新增
+
+- **工具中心**：按 `docs/design/tools/tools-center-design.md` 落地
+  - 路由 `/tools`；侧栏「常用工具」仅保留「工具中心」入口
+  - 工具注册表 `constants/toolsRegistry.ts`；卡片分类进入各工具页
+  - 首期工具「标签图片打包」仍走 `/tools/image-link-zip`（异步任务 + 进度）
+  - 设计文档：`design/tools/image-link-zip-design.md`
+
+## 2026-07-20
+
+### 新增
+
+- **常用工具 · 标签图片打包**：上传 Excel，读取 P 列（可改）图片链接批量下载并打 zip；侧栏「常用工具」入口 `/tools/image-link-zip`；异步任务 API（进度轮询 + 下载）`/api/v1/tools/image-link-zip/jobs*`
+
+### 修改
+
+- 工作台首页 UI：对齐全局 `--color-*` token 与其它页面布局（全宽、`gap-4`、`section-h2`）；强化今日重点卡 / 待办行 / 到港行 hover·focus，数字 tabular-nums，兼容暗色与 `prefers-reduced-motion`
+
 ## 2026-07-18
 
 ### 新增

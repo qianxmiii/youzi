@@ -64,6 +64,11 @@ export const navGroups: NavGroup[] = [
     items: [{ name: '统计管理', to: '/statistics', icon: 'chart' }],
   },
   {
+    label: '常用工具',
+    icon: 'group-tools',
+    items: [{ name: '工具中心', to: '/tools', icon: 'wrench' }],
+  },
+  {
     label: '系统管理',
     icon: 'group-system',
     items: [

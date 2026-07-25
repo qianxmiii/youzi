@@ -18,7 +18,7 @@ const router = useRouter()
 
 function weekBounds() {
   const now = new Date()
-  const day = now.getDay() // 0 Sun
+  const day = now.getDay()
   const mondayOffset = day === 0 ? -6 : 1 - day
   const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayOffset)
   const sunday = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 6)
@@ -68,22 +68,26 @@ function go(to: { path: string; query?: Record<string, string> }) {
 </script>
 
 <template>
-  <section class="overview-section">
-    <div class="overview-section__head">
-      <h2 class="overview-section__title">运输概览</h2>
+  <section>
+    <div class="mb-2.5 flex items-center justify-between gap-2">
+      <h2 class="section-h2">运输概览</h2>
       <button
         v-if="error && !loading"
         type="button"
-        class="overview-section__retry"
+        class="cursor-pointer border-0 bg-transparent text-xs text-[var(--color-accent-text)] hover:underline"
         @click="emit('retry')"
       >
         重试
       </button>
     </div>
-    <p v-if="error && !overview" class="overview-section__error">{{ error }}</p>
-    <div class="overview-row">
+    <p v-if="error && !overview" class="mb-2 text-xs text-red-500">{{ error }}</p>
+    <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
       <template v-if="loading && !overview">
-        <div v-for="i in 4" :key="i" class="overview-item overview-item--skeleton" />
+        <div
+          v-for="i in 4"
+          :key="i"
+          class="h-11 rounded-lg border border-[var(--color-border)] bg-[var(--color-btn-ghost-bg)]"
+        />
       </template>
       <button
         v-for="card in cards"
@@ -93,7 +97,7 @@ function go(to: { path: string; query?: Record<string, string> }) {
         class="overview-item"
         @click="go(card.to)"
       >
-        <span class="overview-item__label">{{ card.label }}</span>
+        <span class="text-[0.8rem] text-[var(--color-muted)]">{{ card.label }}</span>
         <span class="overview-item__value">{{ card.count }}</span>
       </button>
     </div>
@@ -101,78 +105,42 @@ function go(to: { path: string; query?: Record<string, string> }) {
 </template>
 
 <style scoped>
-.overview-section__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.55rem;
-}
-
-.overview-section__title {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: var(--yz-muted, #4b5563);
-}
-
-.overview-section__retry {
-  border: 0;
-  background: transparent;
-  color: var(--yz-primary, #2563eb);
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.overview-section__error {
-  margin: 0 0 0.45rem;
-  font-size: 0.8rem;
-  color: #e11d48;
-}
-
-.overview-row {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-@media (min-width: 768px) {
-  .overview-row {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
 .overview-item {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0.65rem 0.8rem;
-  border: 1px solid var(--yz-border, #e5e7eb);
-  border-radius: 0.5rem;
+  padding: 0.7rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.55rem;
   background: transparent;
   cursor: pointer;
   text-align: left;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease;
 }
 
 .overview-item:hover {
-  background: #fff;
+  border-color: var(--color-border);
+  background: var(--color-btn-ghost-bg);
 }
 
-.overview-item--skeleton {
-  min-height: 2.6rem;
-  background: #f3f4f6;
-  border: 0;
-  cursor: default;
-}
-
-.overview-item__label {
-  font-size: 0.8rem;
-  color: var(--yz-muted, #6b7280);
+.overview-item:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 1px;
 }
 
 .overview-item__value {
-  font-size: 1.1rem;
+  font-size: 1.05rem;
   font-weight: 600;
-  color: var(--yz-text, #374151);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-secondary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .overview-item {
+    transition: none;
+  }
 }
 </style>

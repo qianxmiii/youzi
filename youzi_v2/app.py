@@ -36,6 +36,7 @@ from .routers import (
     statistics,
     vessel_schedules,
     workbench,
+    tools,
 )
 
 app = FastAPI(title="youzi_v2 Admin")
@@ -98,6 +99,7 @@ for route_module in (
     maritime_alerts,
     vessel_schedules,
     workbench,
+    tools,
     settings_tasks,
     addresses,
     legacy,

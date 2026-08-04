@@ -125,7 +125,7 @@ function openTrackUrl() {
         <dl class="meta-list">
           <div class="meta-item">
             <dt class="section-label">Shipment No</dt>
-            <dd class="section-value meta-mono">{{ shipment.shipmentNo || '—' }}</dd>
+            <dd class="section-value drawer-yahei-bold">{{ shipment.shipmentNo || '—' }}</dd>
           </div>
           <div class="meta-item">
             <dt class="section-label">Tracking Number</dt>
@@ -151,6 +151,16 @@ function openTrackUrl() {
             <div class="meta-split-cell">
               <dt class="section-label">承运商</dt>
               <dd class="section-value meta-carrier">{{ carrierText }}</dd>
+            </div>
+          </div>
+          <div class="meta-item meta-item--split">
+            <div class="meta-split-cell">
+              <dt class="section-label">派送仓库</dt>
+              <dd class="section-value">{{ shipment.addressCode?.trim() || '—' }}</dd>
+            </div>
+            <div class="meta-split-cell">
+              <dt class="section-label">邮编</dt>
+              <dd class="section-value drawer-yahei-bold">{{ shipment.zipcode?.trim() || '—' }}</dd>
             </div>
           </div>
         </dl>
@@ -215,7 +225,7 @@ function openTrackUrl() {
 }
 
 .shipment-no {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: "Microsoft YaHei UI Bold", "MicrosoftYaHeiUI-Bold", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   font-size: 1.375rem;
   font-weight: 700;
   letter-spacing: -0.02em;
@@ -379,6 +389,12 @@ function openTrackUrl() {
 .meta-mono {
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   letter-spacing: -0.01em;
+}
+
+.drawer-yahei-bold {
+  font-family: "Microsoft YaHei UI Bold", "MicrosoftYaHeiUI-Bold", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
 }
 
 .meta-empty {

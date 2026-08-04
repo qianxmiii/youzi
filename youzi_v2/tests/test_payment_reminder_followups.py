@@ -193,11 +193,30 @@ def test_reminder_summary_counts(tmp_path: Path) -> None:
 
 
 def test_build_payment_reminder_export_bytes(tmp_path: Path) -> None:
+    from io import BytesIO
+
+    from openpyxl import load_workbook
+
     from youzi_v2.services.payment_reminder_excel import build_payment_reminder_export_bytes
 
     repo, db = _prepare_repo(tmp_path)
     _seed(db)
     listed = repo.list_reminders(scope="all_unpaid", limit=20, offset=0)
-    data = build_payment_reminder_export_bytes(listed["items"])
+    # 补一条带 ATA / 签收时间的明细用于导出断言
+    items = list(listed["items"])
+    if items:
+        items[0] = {
+            **items[0],
+            "ata": "2026-06-20 08:00:00",
+            "deliveredTime": "2026-06-25 19:30:00",
+        }
+    data = build_payment_reminder_export_bytes(items)
     assert data[:2] == b"PK"
+    wb = load_workbook(BytesIO(data))
+    headers = [c.value for c in wb.active[1]]
+    assert "ATA" in headers
+    assert "签收日期" in headers
+    row = {headers[i]: wb.active[2][i].value for i in range(len(headers))}
+    assert row["ATA"] == "2026-06-20"
+    assert row["签收日期"] == "2026-06-25"
 

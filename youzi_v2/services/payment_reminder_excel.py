@@ -24,6 +24,8 @@ _EXPORT_COLUMNS: list[tuple[str, str]] = [
     ("channelNameZh", "渠道"),
     ("channelCode", "渠道编码"),
     ("statusCode", "状态"),
+    ("ata", "ATA"),
+    ("deliveredTime", "签收日期"),
     ("latestTrackingTime", "最新轨迹时间"),
     ("latestTrackingDesc", "最新轨迹"),
     ("paymentStatus", "付款状态"),
@@ -37,6 +39,13 @@ _EXPORT_COLUMNS: list[tuple[str, str]] = [
     ("lastFollowupTime", "最近跟进时间"),
     ("lastFollowupNote", "最近跟进备注"),
 ]
+
+
+def _date_only(val: Any) -> str:
+    text = str(val or "").strip()
+    if not text:
+        return ""
+    return text[:10] if len(text) >= 10 else text
 
 
 def _cell(item: dict[str, Any], key: str) -> Any:
@@ -54,6 +63,8 @@ def _cell(item: dict[str, Any], key: str) -> Any:
         return code or "—"
     if key == "channelNameZh":
         return (item.get("channelNameZh") or item.get("channelCode") or "").strip()
+    if key in ("ata", "deliveredTime"):
+        return _date_only(item.get(key))
     val = item.get(key)
     if val is None:
         return ""

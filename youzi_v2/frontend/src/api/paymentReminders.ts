@@ -20,6 +20,8 @@ export interface PaymentReminderItem {
   channelCode: string
   channelNameZh: string
   statusCode: string
+  ata?: string | null
+  deliveredTime?: string | null
   latestTrackingTime: string | null
   latestTrackingDesc: string
   paymentStatus: string

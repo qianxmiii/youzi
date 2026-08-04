@@ -126,6 +126,12 @@ class ShipmentPaymentFollowupsRepository:
                 else ""
             )
             or "UNKNOWN",
+            "ata": (row["ata"] or "").strip() if "ata" in row.keys() else "",
+            "deliveredTime": (
+                (row["delivered_time"] or "").strip()
+                if "delivered_time" in row.keys()
+                else ""
+            ),
             "latestTrackingTime": (
                 row["latest_tracking_time"]
                 if "latest_tracking_time" in row.keys()

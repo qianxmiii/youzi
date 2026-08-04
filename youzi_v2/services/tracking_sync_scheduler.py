@@ -15,6 +15,7 @@ from ..db.shipment_sla_alerts_repository import ShipmentSlaAlertsRepository
 from ..db.shipment_groups_repository import ShipmentGroupsRepository
 from ..db.tracking_logs_repository import TrackingLogsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
+from ..db.shipment_subscriptions_table import ShipmentSubscriptionsRepository
 from .carrier_tracking_sync import sync_carrier_tracking
 from .group_archive_settings import get_group_archive_settings
 from .scheduled_sync_settings import get_scheduled_sync_settings
@@ -34,8 +35,36 @@ LogFn = Callable[[str], None]
 
 _internal_lock = threading.Lock()
 _carrier_lock = threading.Lock()
+_eta_reminder_lock = threading.Lock()
 
 POLL_INTERVAL_SEC = 60.0
+
+
+def run_subscription_eta_reminders(
+    database: Database,
+    *,
+    log: LogFn | None = None,
+) -> dict[str, Any]:
+    """扫描已订阅运单的 ETA 到港提醒（按日去重）。"""
+
+    def out(msg: str) -> None:
+        if log:
+            log(msg)
+
+    if not _eta_reminder_lock.acquire(blocking=False):
+        out("[订阅ETA提醒] 跳过：上一轮仍在进行")
+        return {"skipped": True, "reason": "进行中"}
+    try:
+        result = ShipmentSubscriptionsRepository(database).evaluate_eta_reminders()
+        created = int(result.get("created") or 0)
+        if created:
+            out(
+                f"[订阅ETA提醒] scanned={result.get('scanned')} "
+                f"created={created} skipped={result.get('skipped')}"
+            )
+        return {"skipped": False, **result}
+    finally:
+        _eta_reminder_lock.release()
 
 
 def run_scheduled_internal_sync(
@@ -196,6 +225,7 @@ def _scheduler_tick(
         force=False,
         trigger="scheduled",
     )
+    run_subscription_eta_reminders(shipments_repo._database)
 
 
 def start_tracking_sync_scheduler(
@@ -219,18 +249,7 @@ def start_tracking_sync_scheduler(
     sla_scan_enabled = get_sla_scan_settings(database).enabled
     stop = threading.Event()
 
-    if (
-        not settings.internal_enabled
-        and not settings.carrier_enabled
-        and not group_archive_enabled
-        and not zipcode_backfill_enabled
-        and not dps_sync_enabled
-        and not exception_followup_enabled
-        and not sla_scan_enabled
-    ):
-        print("[定时同步] 已关闭（内部、承运商、分组归档、邮编回写、DPS、异常跟进与运输时效均未启用）", flush=True)
-        return stop
-
+    # 订阅 ETA 提醒始终启用；其它任务按各自开关
     initial_sec = max(0.0, settings.initial_delay_sec)
 
     def worker() -> None:
@@ -275,7 +294,8 @@ def start_tracking_sync_scheduler(
         f"异常跟进={'开' if exception_followup_enabled else '关'}"
         f"(约24h)、"
         f"运输时效={'开' if sla_scan_enabled else '关'}"
-        f"(约24h)；"
+        f"(约24h)、"
+        f"订阅ETA提醒=开；"
         f"{initial_sec:.0f}s 后首次检查，每 {POLL_INTERVAL_SEC:.0f}s 轮询",
         flush=True,
     )

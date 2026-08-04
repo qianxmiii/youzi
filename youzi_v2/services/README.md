@@ -13,12 +13,12 @@ Youzi v2 业务服务层
 | 文件 | 作用 |
 |------|------|
 | `tracking_sync.py` | 轨迹同步编排 |
-| `tracking_sync_scheduler.py` | 定时任务调度 |
+| `tracking_sync_scheduler.py` | 定时任务调度（含订阅 ETA 到港每日提醒） |
 | `carrier_tracking_sync.py` | 承运商轨迹拉取 |
 | `carrier_vendors.py` | 读取 config.json 承运商配置 |
 | `shipment_query_config.py` | DPS 运单查询：`queryByPerson` 全量 / `queryByOrder` 按 odd，自动翻页 |
 | `shipment_dps_sync.py` | DPS 运单全量同步至本地表（计划任务，默认关） |
-| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（`customer_no`：`assOrderNumber`，空则 `internalOrderNum`） |
+| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`） |
 | `shipment_dps_sync_fields.py` | 同步字段白名单（`config/shipment_dps_sync_fields.json`） |
 | `logistics_tracking.py` | 物流轨迹解析 |
 | `shipment_excel.py` | 运单 Excel 导入导出 |

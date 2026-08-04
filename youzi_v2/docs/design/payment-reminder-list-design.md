@@ -399,9 +399,9 @@ today > delivered_time:
 客户
 结算方式
 提醒类型
-付款状态
-是否缺少时间字段
+跟进状态
 搜索运单号 / 客户单号 / 货件号
+整柜（checkbox，默认不选中 = 排除整柜；勾选 = 仅整柜，与运单管理一致）
 ```
 
 催款范围：
@@ -523,7 +523,9 @@ GET /api/v1/shipments/payment-reminders
 | `customer` | 客户 |
 | `settlementMethod` | 结算方式 |
 | `reminderType` | 提醒类型 |
+| `followupStatus` | `unfollowed` / `followed` |
 | `search` | 运单号、客户单号、货件号 |
+| `fclOnly` | 默认 `false` 排除整柜；`true` 仅整柜（渠道 `FC-整柜` 或承运商整柜） |
 | `limit` | 分页 |
 | `offset` | 分页 |
 
@@ -697,10 +699,10 @@ body:
 
 ```text
 标题：催款列表
-筛选栏：范围、结算方式、客户、提醒类型、搜索
+筛选栏：范围、结算方式、客户、提醒类型、跟进状态、搜索、整柜 checkbox（默认排除整柜）
 表格：待催款运单
 底部：分页
-批量选择栏：复制运单号、批量已跟进、批量标记已付款
+批量选择栏：复制运单号、更新选中运单（DPS）、批量已跟进、批量标记已付款
 跟进记录弹窗/抽屉：展示单票催款历史
 ```
 

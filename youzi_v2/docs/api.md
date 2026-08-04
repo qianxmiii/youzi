@@ -101,14 +101,14 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | GET | `/` | 列表（筛选、分页；含 `groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应 `groups` 数组） |
 | GET | `/{item_id}` | 单条详情 |
 | POST | `/` | 新建 |
-| PUT | `/{item_id}` | 更新（已付款运单仅允许改为未付款；其它字段须先改回未付款） |
+| PUT | `/{item_id}` | 更新运单字段 |
 | DELETE | `/{item_id}` | 删除 |
 | POST | `/batch-delete` | 批量删除 |
-| PATCH | `/batch-update` | 批量更新（同上：已付款仅可改回未付款） |
+| PATCH | `/batch-update` | 批量更新字段 |
 | GET | `/filter-options` | 筛选项（含 `groups` 分组下拉） |
 | GET | `/export` | Excel 导出 |
 | POST | `/import` | Excel 导入 |
-| POST | `/sync-tracking` | 同步内部轨迹（含已付款运单；完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
+| POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
 | POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
 | POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200） |
 | GET | `/tracking-freshness-stats` | 轨迹新鲜度统计 |
@@ -118,7 +118,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | GET | `/{item_id}/exception-events` | 异常历史 |
 | GET | `/{item_id}/tracking-logs` | 内部轨迹 |
 | GET | `/{item_id}/carrier-tracking-logs` | 承运商轨迹 |
-| POST | `/{item_id}/subscribe` | 订阅轨迹更新提醒 |
+| POST | `/{item_id}/subscribe` | 订阅轨迹更新 + ETA 到港前每日提醒 |
 | DELETE | `/{item_id}/subscribe` | 取消订阅 |
 | POST | `/batch-subscribe` | 批量订阅 |
 | POST | `/batch-unsubscribe` | 批量取消订阅 |
@@ -127,9 +127,9 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/payment-reminders` | 催款列表（`scope` / `customer` / `settlementMethod` / `reminderType` / `followupStatus` / `search`） |
-| GET | `/payment-reminders/summary` | 数量统计：`todoCount` / `allUnpaidCount` / `overdueCount`（侧栏角标、页面标题） |
-| GET | `/payment-reminders/export` | 导出当前筛选为 Excel（上限 10000） |
+| GET | `/payment-reminders` | 催款列表（`scope` / `customer` / `settlementMethod` / `reminderType` / `followupStatus` / `search` / `fclOnly`；`fclOnly` 默认 `false` 排除整柜，`true` 仅整柜） |
+| GET | `/payment-reminders/summary` | 数量统计：`todoCount` / `allUnpaidCount` / `overdueCount`（侧栏角标、页面标题；`fclOnly` 默认排除整柜） |
+| GET | `/payment-reminders/export` | 导出当前筛选为 Excel（上限 10000；含 `fclOnly`） |
 | GET | `/payment-reminders/{shipment_id}/followups` | 跟进记录 |
 | POST | `/payment-reminders/{shipment_id}/followups` | 新增跟进 |
 | POST | `/payment-reminders/followups/batch` | 批量跟进 |

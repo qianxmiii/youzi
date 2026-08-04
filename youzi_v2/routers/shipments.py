@@ -1,7 +1,6 @@
 from fastapi import APIRouter
 
 from ..context import *
-from ..db.shipments_repository import PaidShipmentLockedError
 from .shipment_list_query import ShipmentListFilters
 
 router = APIRouter()
@@ -311,11 +310,9 @@ def create_shipment(payload: ShipmentRecordIn):
 def update_shipment(item_id: str, payload: ShipmentUpdateIn):
     try:
         data = payload.to_payload()
-        row = shipments_repo.update_row(item_id, data, allow_paid_unpay=True)
+        row = shipments_repo.update_row(item_id, data)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="运单不存在") from exc
-    except PaidShipmentLockedError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
     if "delivered_time" in data and (data.get("delivered_time") or "").strip():
         from ..services.shipment_sla_scan import maybe_resolve_alerts_after_delivery
 
@@ -385,9 +382,7 @@ def batch_update_shipments(body: ShipmentBatchUpdateIn):
             skipped.append({"id": item_id, "shipmentNo": "", "message": "运单不存在"})
             continue
         try:
-            updated_row = shipments_repo.update_row(
-                item_id, payload, allow_paid_unpay=True
-            )
+            updated_row = shipments_repo.update_row(item_id, payload)
             updated += 1
             if "delivered_time" in payload and (payload.get("delivered_time") or "").strip():
                 from ..services.shipment_sla_scan import maybe_resolve_alerts_after_delivery
@@ -397,14 +392,6 @@ def batch_update_shipments(body: ShipmentBatchUpdateIn):
                     item_id,
                     shipment_no=updated_row.get("shipmentNo"),
                 )
-        except PaidShipmentLockedError as exc:
-            errors.append(
-                {
-                    "id": item_id,
-                    "shipmentNo": row.get("shipmentNo", ""),
-                    "message": str(exc),
-                }
-            )
         except KeyError:
             skipped.append(
                 {

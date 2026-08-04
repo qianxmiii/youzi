@@ -261,6 +261,10 @@ function displayQty(value: number): string {
             <span class="cost-metric__value cost-metric__value--computed">{{ dduResult.chargeVolume }}</span>
           </div>
           <div class="cost-metric">
+            <span class="cost-metric__label">计费重 (kg)</span>
+            <span class="cost-metric__value cost-metric__value--computed">{{ dduResult.chargeWeight }}</span>
+          </div>
+          <div class="cost-metric">
             <span class="cost-metric__label">泡比</span>
             <span class="cost-metric__value cost-metric__value--computed">{{ dduResult.volumeRatio }}</span>
           </div>
@@ -302,8 +306,9 @@ function displayQty(value: number): string {
           <div class="min-w-0">
             <h2 class="cost-card__title">自税 (DDU)</h2>
             <p class="cost-card__subtitle">
-              汇率 {{ COST_EXCHANGE_RATE }} · 计费方 {{ dduResult.chargeVolume }} cbm · 泡比
-              {{ dduResult.volumeRatio }} · 税金按实际体积 · 含基础关税 20%
+              汇率 {{ COST_EXCHANGE_RATE }} · 计费重 {{ dduResult.chargeWeight }} kg · 计费方
+              {{ dduResult.chargeVolume }} cbm · 泡比 {{ dduResult.volumeRatio }} · 税金按实际体积 ·
+              含基础关税 20% · 单价/kg 按计费重
             </p>
           </div>
         </header>

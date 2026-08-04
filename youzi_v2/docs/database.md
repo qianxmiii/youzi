@@ -58,7 +58,8 @@ erDiagram
 | id | TEXT PK | UUID |
 | shipment_no | TEXT UNIQUE | 运单号 |
 | customer | TEXT | 客户名 |
-| customer_no | TEXT | 客户订单号（DPS：`assOrderNumber`，空则 `internalOrderNum`） |
+| customer_no | TEXT | 客户订单号（DPS：`internalOrderNum`） |
+| ref_shipment_no | TEXT | 关联单号（DPS：`assOrderNumber`） |
 | channel_code | TEXT | 渠道码 |
 | country_code | TEXT | 目的国 |
 | address_type | TEXT | AMZ / WFS / 3PL |
@@ -259,7 +260,7 @@ erDiagram
 | shipment_tracking_numbers | shipment_tracking_numbers_table.py | 多跟踪号 |
 | tracking_sync_jobs | tracking_sync_jobs_table.py | 同步任务记录 |
 | port_subscriptions | port_subscriptions_table.py | 港口到港订阅 |
-| shipment_subscriptions | shipment_subscriptions_table.py | 运单到港订阅 |
+| shipment_subscriptions | shipment_subscriptions_table.py | 运单轨迹/到港订阅（含 `last_notified_eta_day` 按日去重） |
 
 ## 码表与配置
 

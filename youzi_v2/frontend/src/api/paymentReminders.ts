@@ -80,6 +80,8 @@ export type PaymentReminderListParams = {
   reminderType?: string
   followupStatus?: 'unfollowed' | 'followed'
   search?: string
+  /** true=仅整柜；false=排除整柜；与运单列表一致，前端默认 false */
+  fclOnly?: boolean
   limit?: number
   offset?: number
 }
@@ -92,6 +94,8 @@ function buildReminderQuery(params?: PaymentReminderListParams): Record<string, 
   if (params?.reminderType?.trim()) q.reminderType = params.reminderType.trim()
   if (params?.followupStatus) q.followupStatus = params.followupStatus
   if (params?.search?.trim()) q.search = params.search.trim()
+  if (params?.fclOnly === true) q.fclOnly = 'true'
+  if (params?.fclOnly === false) q.fclOnly = 'false'
   if (params?.limit != null) q.limit = String(params.limit)
   if (params?.offset != null) q.offset = String(params.offset)
   return q
@@ -105,8 +109,12 @@ export async function listPaymentReminders(
   })
 }
 
-export async function getPaymentReminderSummary(): Promise<PaymentReminderSummary> {
-  return api<PaymentReminderSummary>('/api/v1/shipments/payment-reminders/summary')
+export async function getPaymentReminderSummary(params?: {
+  fclOnly?: boolean
+}): Promise<PaymentReminderSummary> {
+  return api<PaymentReminderSummary>('/api/v1/shipments/payment-reminders/summary', {
+    query: buildReminderQuery({ fclOnly: params?.fclOnly }),
+  })
 }
 
 const REMINDER_EXPORT_MAX = 10_000

@@ -9,7 +9,7 @@ export function usePendingPaymentReminderCount() {
     if (inflight) return inflight
     inflight = (async () => {
       try {
-        const summary = await getPaymentReminderSummary()
+        const summary = await getPaymentReminderSummary({ fclOnly: false })
         pendingPaymentReminderCount.value = summary.todoCount ?? 0
       } catch {
         /* 保留上次计数 */

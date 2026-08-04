@@ -95,7 +95,7 @@ import { dateOnlyToTimestamp, formatRelativeTime } from '@/utils/formatDateTime'
 import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
-import { formatShipmentDetailSummaryCopyText, formatShipmentDetailSummaryWithCustomerNoCopyText } from '@/utils/shipmentCopyFormat'
+import { formatShipmentDetailSummaryCopyText, formatShipmentDetailSummaryWithCustomerNoCopyText, joinEqualsParts } from '@/utils/shipmentCopyFormat'
 import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
   daysSinceLocalCalendar,
@@ -668,7 +668,7 @@ function renderActionWithTooltip(
 
 function renderSubscribeAction(row: Shipment) {
   const subscribed = Boolean(row.subscribed)
-  const tooltip = subscribed ? '已订阅，点击取消' : '订阅轨迹更新'
+  const tooltip = subscribed ? '已订阅，点击取消' : '订阅轨迹更新与到港提醒'
   return renderActionWithTooltip('subscribe', tooltip, {
     active: subscribed,
     loading: subscriptionTogglingId.value === row.id,
@@ -1898,6 +1898,32 @@ async function copySelectedShipmentNos() {
   }
 }
 
+async function copySelectedRefShipmentNos() {
+  const rows = selectedRows.value
+  if (!rows.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const nos = rows
+    .map((row) => displayField(row.refShipmentNo).trim())
+    .filter(Boolean)
+  if (!nos.length) {
+    message.warning('所选运单无关联单号')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(nos.join('\n'))
+    const skipped = rows.length - nos.length
+    message.success(
+      skipped > 0
+        ? `已复制 ${nos.length} 个关联单号（${skipped} 条无关联单号已跳过）`
+        : `已复制 ${nos.length} 个关联单号`,
+    )
+  } catch {
+    message.error('复制失败，请检查浏览器权限')
+  }
+}
+
 function displayField(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return ''
   return String(value)
@@ -1914,19 +1940,19 @@ function formatCtnsField(ctns: number | null | undefined): string {
   return `${ctns}ctns`
 }
 
-/** 复制格式：运单号 = 客户订单号 [= 货件号] = 地址代码 = 件数ctns → 物流时间 → 物流轨迹 */
+/** 复制格式：运单号 [= 关联单号] [= 客户订单号] [= 货件号] [= 地址代码] [= 件数ctns] → 物流时间 → 物流轨迹 */
 function formatTrackingCopyBlock(
   row: Shipment,
   tracking: { desc: string; time: string },
 ): string {
-  const headParts = [
-    displayField(row.shipmentNo),
-    displayField(row.customerNo),
-  ]
-  const shipmentId = displayField(row.customerShipmentId)
-  if (shipmentId) headParts.push(shipmentId)
-  headParts.push(displayField(row.addressCode), formatCtnsField(row.ctns))
-  const head = headParts.join(' = ')
+  const head = joinEqualsParts([
+    row.shipmentNo,
+    row.refShipmentNo,
+    row.customerNo,
+    row.customerShipmentId,
+    row.addressCode,
+    formatCtnsField(row.ctns),
+  ])
   return `${head}\n${tracking.time}\n${tracking.desc}`
 }
 
@@ -2033,21 +2059,25 @@ async function copySelectedShipmentDetailSummaryWithCustomerNo() {
   }
   try {
     await navigator.clipboard.writeText(text)
-    message.success(`已复制 ${rows.length} 条运单明细（客户编号）`)
+    message.success(`已复制 ${rows.length} 条运单明细（关联单号）`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
 }
 
 const copyDropdownOptions: DropdownOption[] = [
+  { label: '运单号', key: 'shipmentNos' },
+  { label: '关联单号', key: 'refShipmentNos' },
   { label: '运单明细', key: 'detailSummary' },
-  { label: '运单明细（客户编号）', key: 'detailSummaryCustomerNo' },
+  { label: '运单明细（关联单号）', key: 'detailSummaryCustomerNo' },
   { label: '最新轨迹', key: 'latestTracking' },
   { label: '转单号', key: 'trackingNumbers' },
 ]
 
 function handleCopyMenuSelect(key: string | number) {
-  if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
+  if (key === 'shipmentNos') void copySelectedShipmentNos()
+  else if (key === 'refShipmentNos') void copySelectedRefShipmentNos()
+  else if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
   else if (key === 'detailSummaryCustomerNo') void copySelectedShipmentDetailSummaryWithCustomerNo()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
@@ -2287,6 +2317,13 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     width: 108,
     ellipsis: { tooltip: true },
     render: (row) => displayField(row.customerNo) || '—',
+  },
+  refShipmentNo: {
+    title: '关联单号',
+    key: 'refShipmentNo',
+    width: 140,
+    ellipsis: { tooltip: true },
+    render: (row) => displayField(row.refShipmentNo) || '—',
   },
   countryCode: {
     title: '国家',

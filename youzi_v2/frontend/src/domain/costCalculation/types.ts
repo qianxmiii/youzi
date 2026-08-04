@@ -21,6 +21,8 @@ export interface DduInput {
 
 export interface DduOutput {
   chargeVolume: string
+  /** 计费重 kg：max(实重, 材积重) 向上取整；单价/kg 用此值 */
+  chargeWeight: string
   volumeRatio: string
   forwardingCost: string
   deliveryFeeRmb: string

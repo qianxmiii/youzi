@@ -27,6 +27,7 @@ import {
   convertShipmentSlaAlert,
   evaluateShipmentSlaAlerts,
   listShipmentSlaAlerts,
+  getShipmentSlaSummary,
   resolveShipmentSlaAlert,
   type ShipmentSlaAlert,
   type SlaAlertStatus,
@@ -53,6 +54,10 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(50)
 const checkedRowKeys = ref<string[]>([])
+const pendingOpenCount = ref(0)
+const severeOverdueCount = ref(0)
+const overdueCount = ref(0)
+const warningSoonCount = ref(0)
 
 const filterTimelinessStatus = ref<string | null>(null)
 const filterStatus = ref<string | null>(null)
@@ -176,7 +181,7 @@ async function runBatchAction(
     if (fail) message.warning(`${label}成功 ${ok} 条，失败 ${fail} 条`)
     else message.success(`已${label} ${ok} 条`)
     clearSelection()
-    await load()
+    await Promise.all([load(), loadSummary()])
   } catch (e) {
     message.error(e instanceof Error ? e.message : `${label}失败`)
   } finally {
@@ -340,6 +345,19 @@ function applyRouteQuery() {
   filterChannelCode.value = typeof q.channelCode === 'string' ? q.channelCode : null
 }
 
+async function loadSummary() {
+  try {
+    const summary = await getShipmentSlaSummary()
+    pendingOpenCount.value = summary.pendingOpen ?? 0
+    severeOverdueCount.value = summary.severeOverdue ?? 0
+    overdueCount.value = summary.overdue ?? 0
+    warningSoonCount.value = summary.warningSoon ?? 0
+    void refreshPendingShipmentSlaAlertCount()
+  } catch {
+    /* 保留上次统计 */
+  }
+}
+
 async function load() {
   loading.value = true
   try {
@@ -362,7 +380,6 @@ async function load() {
     items.value = res.items
     total.value = res.total
     syncSelectionWithItems()
-    void refreshPendingShipmentSlaAlertCount()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '加载失败')
   } finally {
@@ -379,7 +396,7 @@ async function runScan() {
     } else {
       message.success(`扫描 ${res.scanned} 单，新建 ${res.created}，更新 ${res.updated}`)
     }
-    await load()
+    await Promise.all([load(), loadSummary()])
   } catch (e) {
     message.error(e instanceof Error ? e.message : '扫描失败')
   } finally {
@@ -491,7 +508,7 @@ async function handleFollowUp(row: ShipmentSlaAlert) {
   try {
     await followUpShipmentSlaAlert(row.id)
     message.success(row.status === 'acknowledged' ? '已记录跟进' : '已标记跟进')
-    await load()
+    await Promise.all([load(), loadSummary()])
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
   }
@@ -501,7 +518,7 @@ async function handleResolve(row: ShipmentSlaAlert) {
   try {
     await resolveShipmentSlaAlert(row.id)
     message.success('已标记解决')
-    await load()
+    await Promise.all([load(), loadSummary()])
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
   }
@@ -511,7 +528,7 @@ async function handleIgnore(row: ShipmentSlaAlert) {
   try {
     await ignoreShipmentSlaAlert(row.id)
     message.success('已忽略')
-    await load()
+    await Promise.all([load(), loadSummary()])
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
   }
@@ -527,7 +544,7 @@ function handleConvert(row: ShipmentSlaAlert) {
       try {
         await convertShipmentSlaAlert(row.id, { exceptionCode: 'TRANSIT_TIMEOUT' })
         message.success('已转为人工异常')
-        await load()
+        await Promise.all([load(), loadSummary()])
       } catch (e) {
         message.error(e instanceof Error ? e.message : '操作失败')
       }
@@ -787,7 +804,8 @@ watch(search, () => {
 
 onMounted(() => {
   applyRouteQuery()
-  load()
+  void load()
+  void loadSummary()
   void getShipmentFilterOptions()
     .then((opts) => {
       filterOptions.value = opts
@@ -808,7 +826,10 @@ onMounted(() => {
     <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
       <div>
         <h1 class="page-h2">异常跟踪</h1>
-        <p class="mt-1 text-sm text-zinc-500">运输时效预警与人工异常集中处理</p>
+        <p class="page-subtitle mt-1">
+          待办 {{ pendingOpenCount }} 条 · 即将超时 {{ warningSoonCount }} 条 · 已超时
+          {{ overdueCount }} 条 · 严重超时 {{ severeOverdueCount }} 条 · 当前列表 {{ total }} 条
+        </p>
       </div>
       <NSpace>
         <NButton :loading="scanning" @click="runScan">立即扫描</NButton>

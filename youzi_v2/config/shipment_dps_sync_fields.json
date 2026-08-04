@@ -9,7 +9,13 @@
     },
     "customer_no": {
       "label": "客户订单号",
-      "dpsSource": "assOrderNumber；为空时回退 internalOrderNum",
+      "dpsSource": "internalOrderNum",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "ref_shipment_no": {
+      "label": "关联单号",
+      "dpsSource": "assOrderNumber",
       "onInsert": true,
       "onUpdate": true
     },

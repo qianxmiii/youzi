@@ -40,6 +40,7 @@ const statusCode = ref<string | null>(null)
 const paymentStatus = ref<string | null>(null)
 const customer = ref('')
 const customerNo = ref('')
+const refShipmentNo = ref('')
 const channelCode = ref<string | null>(null)
 const countryCode = ref<string | null>(null)
 const carrierCode = ref<string | null>(null)
@@ -66,6 +67,7 @@ watch(
     paymentStatus.value = null
     customer.value = ''
     customerNo.value = ''
+    refShipmentNo.value = ''
     channelCode.value = null
     countryCode.value = null
     carrierCode.value = null
@@ -99,6 +101,7 @@ function buildUpdates(): Partial<ShipmentPayload> | null {
   if (paymentStatus.value) updates.paymentStatus = paymentStatus.value
   if (customer.value.trim()) updates.customer = customer.value.trim()
   if (customerNo.value.trim()) updates.customerNo = customerNo.value.trim()
+  if (refShipmentNo.value.trim()) updates.refShipmentNo = refShipmentNo.value.trim()
   if (channelCode.value) updates.channelCode = channelCode.value
   if (countryCode.value) updates.countryCode = countryCode.value
   if (carrierCode.value) updates.carrierCode = carrierCode.value
@@ -170,6 +173,9 @@ function handleSubmit() {
         </NFormItem>
         <NFormItem label="客户订单号">
           <NInput v-model:value="customerNo" clearable placeholder="不修改" />
+        </NFormItem>
+        <NFormItem label="关联单号">
+          <NInput v-model:value="refShipmentNo" clearable placeholder="不修改" />
         </NFormItem>
         <NFormItem label="渠道">
           <NSelect

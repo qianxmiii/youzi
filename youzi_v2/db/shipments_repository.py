@@ -104,6 +104,7 @@ _LIST_SELECT = (
 _UPDATABLE = (
     "customer",
     "customer_no",
+    "ref_shipment_no",
     "channel_code",
     "country_code",
     "address_type",
@@ -167,6 +168,9 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "shipmentNo": row["shipment_no"],
         "customer": row["customer"],
         "customerNo": row["customer_no"],
+        "refShipmentNo": (
+            row["ref_shipment_no"] if "ref_shipment_no" in row.keys() else None
+        ),
         "channelCode": row["channel_code"],
         "channelNameZh": (
             (row["_channel_name_zh"] or "").strip()
@@ -265,6 +269,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
     snake_map = {
         "shipmentNo": "shipment_no",
         "customerNo": "customer_no",
+        "refShipmentNo": "ref_shipment_no",
         "channelCode": "channel_code",
         "countryCode": "country_code",
         "addressType": "address_type",
@@ -312,41 +317,6 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-PAID_SHIPMENT_LOCKED_MSG = "已付款运单不可修改其它字段，请先改为未付款"
-
-
-class PaidShipmentLockedError(ValueError):
-    """已付款运单被禁止修改（仅允许在运单列表改回未付款）。"""
-
-
-def _payment_status_from_row(row: dict[str, Any] | sqlite3.Row) -> str:
-    if isinstance(row, sqlite3.Row):
-        if "payment_status" not in row.keys():
-            return ""
-        return (row["payment_status"] or "").strip().upper()
-    return (row.get("payment_status") or row.get("paymentStatus") or "").strip().upper()
-
-
-def _is_paid_shipment_row(row: dict[str, Any] | sqlite3.Row) -> bool:
-    return _payment_status_from_row(row) == "PAID"
-
-
-def _filter_paid_shipment_update(
-    existing: dict[str, Any],
-    payload: dict[str, Any],
-    *,
-    allow_paid_unpay: bool,
-) -> dict[str, Any]:
-    """已付款运单：仅 allow_paid_unpay 且改为 UNPAID 时放行；其它字段一律忽略。"""
-    if not _is_paid_shipment_row(existing):
-        return payload
-    if allow_paid_unpay:
-        new_ps = payload.get("payment_status")
-        if new_ps is not None and str(new_ps).strip().upper() == "UNPAID":
-            return {"payment_status": "UNPAID"}
-    return {}
-
-
 class ShipmentsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -354,10 +324,6 @@ class ShipmentsRepository:
     @property
     def _conn(self) -> sqlite3.Connection:
         return self._database.conn
-
-    def _shipment_no_is_paid(self, shipment_no: str) -> bool:
-        row = self.get_by_shipment_no(shipment_no)
-        return row is not None and _is_paid_shipment_row(row)
 
     def _subscribed_shipment_ids(self) -> set[str]:
         return ShipmentSubscriptionsRepository(self._database).subscribed_shipment_ids()
@@ -498,7 +464,17 @@ class ShipmentsRepository:
             column="customer_shipment_id",
             values=customer_shipment_ids,
         )
-        append_exact_in_column(conditions, params, column="customer_no", values=customer_nos)
+        cleaned_customer_nos = [
+            s.strip() for s in (customer_nos or []) if s and str(s).strip()
+        ]
+        cleaned_customer_nos = list(dict.fromkeys(cleaned_customer_nos))
+        if cleaned_customer_nos:
+            placeholders = ", ".join("?" * len(cleaned_customer_nos))
+            conditions.append(
+                f"(s.customer_no IN ({placeholders}) OR s.ref_shipment_no IN ({placeholders}))"
+            )
+            params.extend(cleaned_customer_nos)
+            params.extend(cleaned_customer_nos)
         if search and search.strip():
             append_keyword_search(conditions, params, search.strip())
         if tracking_search and tracking_search.strip():
@@ -1065,7 +1041,7 @@ class ShipmentsRepository:
         """承运商侧单号/工作号：仅当库内为空时写入，返回是否新写入。"""
         sn = shipment_no.strip()
         cid = (carrier_id or "").strip()
-        if not sn or not cid or self._shipment_no_is_paid(sn):
+        if not sn or not cid:
             return False
         with self._database.lock:
             cur = self._conn.execute(
@@ -1084,7 +1060,7 @@ class ShipmentsRepository:
         """写入承运商侧单号/工作号（覆盖已有值）。"""
         sn = shipment_no.strip()
         cid = (carrier_id or "").strip()
-        if not sn or not cid or self._shipment_no_is_paid(sn):
+        if not sn or not cid:
             return False
         now = now_str()
         with self._database.lock:
@@ -1103,7 +1079,7 @@ class ShipmentsRepository:
         """写入运单主追踪号（TOPDA 根 trackingNum 等）。"""
         sn = shipment_no.strip()
         tn = normalize_tracking_field_value(tracking_number)
-        if not sn or not tn or self._shipment_no_is_paid(sn):
+        if not sn or not tn:
             return False
         with self._database.lock:
             cur = self._conn.execute(
@@ -1124,7 +1100,7 @@ class ShipmentsRepository:
         """尾程快递单号（UPS/FedEx 等）：仅当库内为空时写入。"""
         sn = shipment_no.strip()
         tn = normalize_tracking_field_value(tracking_number)
-        if not sn or not tn or self._shipment_no_is_paid(sn):
+        if not sn or not tn:
             return False
         with self._database.lock:
             cur = self._conn.execute(
@@ -1153,7 +1129,7 @@ class ShipmentsRepository:
         tracking_number: str | None = None,
     ) -> None:
         sn = shipment_no.strip()
-        if not sn or self._shipment_no_is_paid(sn):
+        if not sn:
             return
         old_row: sqlite3.Row | None = None
         with self._database.lock:
@@ -1298,7 +1274,7 @@ class ShipmentsRepository:
         return self._enrich_subscribed(_row_to_api(row))
 
     def get_by_shipment_or_customer_no(self, no: str) -> dict[str, Any] | None:
-        """运单号精确匹配；否则按客户订单号匹配首条。"""
+        """运单号精确匹配；否则按客户订单号/关联单号匹配首条。"""
         key = no.strip()
         if not key:
             return None
@@ -1309,11 +1285,11 @@ class ShipmentsRepository:
             found = self._conn.execute(
                 f"""
                 SELECT * FROM {TABLE_NAME}
-                WHERE customer_no = ?
+                WHERE customer_no = ? OR ref_shipment_no = ?
                 ORDER BY datetime(updated_time) DESC
                 LIMIT 1
                 """,
-                (key,),
+                (key, key),
             ).fetchone()
         if found is None:
             return None
@@ -1421,8 +1397,6 @@ class ShipmentsRepository:
         self,
         item_id: str,
         data: dict[str, Any],
-        *,
-        allow_paid_unpay: bool = False,
     ) -> dict[str, Any]:
         existing = self.get_by_id(item_id)
         if existing is None:
@@ -1431,12 +1405,6 @@ class ShipmentsRepository:
         payload.pop("shipment_no", None)
         if not payload:
             return existing
-        if _is_paid_shipment_row(existing):
-            payload = _filter_paid_shipment_update(
-                existing, payload, allow_paid_unpay=allow_paid_unpay
-            )
-            if not payload:
-                raise PaidShipmentLockedError(PAID_SHIPMENT_LOCKED_MSG)
         sets = [f"{col} = ?" for col in payload]
         sets.append("updated_time = ?")
         vals = list(payload.values()) + [now_str(), item_id]
@@ -1470,8 +1438,6 @@ class ShipmentsRepository:
             if not payload.get("status_code"):
                 payload["status_code"] = "UNKNOWN"
             return self.insert_row(payload), True
-        if _is_paid_shipment_row(existing):
-            return existing, False
         # 更新：仅覆盖 Excel 中填写的字段，空单元格不写入
         update_payload = {
             k: v for k, v in payload.items() if k != "shipment_no" and v is not None
@@ -1507,7 +1473,6 @@ class ShipmentsRepository:
                     SET zipcode = ?, updated_time = ?
                     WHERE id = ?
                       AND (zipcode IS NULL OR TRIM(zipcode) = '')
-                      AND (payment_status IS NULL OR UPPER(TRIM(payment_status)) != 'PAID')
                     """,
                     (pc, now, sid),
                 )

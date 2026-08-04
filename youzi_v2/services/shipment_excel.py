@@ -199,6 +199,7 @@ _API_TO_SNAKE: dict[str, str] = {
     "shipmentNo": "shipment_no",
     "statusCode": "status_code",
     "customerNo": "customer_no",
+    "refShipmentNo": "ref_shipment_no",
     "customerShipmentId": "customer_shipment_id",
     "amazonRefId": "amazon_ref_id",
     "customer": "customer",
@@ -209,10 +210,17 @@ _API_TO_SNAKE: dict[str, str] = {
     "zipcode": "zipcode",
     "channelCode": "channel_code",
     "carrierCode": "carrier_code",
+    "carrierNameZh": "carrier_name_zh",
+    "trackingNumber": "tracking_number",
+    "productName": "product_name",
+    "supplierName": "supplier_name",
     "originWarehouseCode": "origin_warehouse_code",
     "latestTrackingTime": "latest_tracking_time",
     "latestTrackingDesc": "latest_tracking_desc",
+    "etd": "etd",
     "atd": "atd",
+    "eta": "eta",
+    "ata": "ata",
     "deliveredTime": "delivered_time",
 }
 
@@ -225,6 +233,10 @@ _STATUS_EXPORT_LABELS: dict[str, str] = {
 
 
 def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any]) -> Any:
+    if field == "carrier_code":
+        name = row.get("carrier_name_zh")
+        if name is not None and str(name).strip():
+            return str(name).strip()
     if field in ("latest_tracking_time", "latest_tracking_desc"):
         time_raw = row.get("latest_tracking_time")
         desc_raw = row.get("latest_tracking_desc")
@@ -252,7 +264,7 @@ def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any])
             return int(val)
         except (TypeError, ValueError):
             return val
-    if field in ("delivered_time", "atd"):
+    if field in ("delivered_time", "etd", "atd", "eta", "ata"):
         text = str(val).strip()
         return text[:10] if len(text) >= 10 else text
     return val

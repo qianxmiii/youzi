@@ -1,10 +1,9 @@
 import { COST_EXCHANGE_RATE } from '@/constants/costCalculation'
-import { calcChargeVolume, calcVolumeRatio } from './chargeVolume'
+import { calcChargeVolume, calcChargeWeight, calcVolumeRatio } from './chargeVolume'
 import { Decimal, ceil0, ceil2, fixed2, num } from './decimal'
 import type { DduInput, DduOutput } from './types'
 
 export function calculateDdu(input: DduInput): DduOutput {
-  const weight = num(input.weight)
   const volume = num(input.volume)
   const pricePerCbm = num(input.pricePerCbm)
   const goodsValue = num(input.goodsValue)
@@ -12,6 +11,7 @@ export function calculateDdu(input: DduInput): DduOutput {
   const deliveryFeeUsd = num(input.deliveryFeeUsd)
 
   const chargeVolume = calcChargeVolume(input.weight, input.volume, input.weightRatio)
+  const chargeWeight = calcChargeWeight(input.weight, input.volume)
   const volumeRatio = calcVolumeRatio(input.weight, input.volume)
 
   let actualPricePerCbm = pricePerCbm
@@ -30,12 +30,14 @@ export function calculateDdu(input: DduInput): DduOutput {
   const unitPriceCbm = chargeVolume.greaterThan(0)
     ? totalCost.dividedBy(chargeVolume)
     : new Decimal(0)
-  const unitPriceKg = weight.greaterThan(0)
-    ? totalCost.dividedBy(weight)
+  // 单价/kg 按计费重（泡货取材积重），与包税一致
+  const unitPriceKg = chargeWeight.greaterThan(0)
+    ? totalCost.dividedBy(chargeWeight)
     : new Decimal(0)
 
   return {
     chargeVolume: chargeVolume.toFixed(2),
+    chargeWeight: chargeWeight.toFixed(0),
     volumeRatio: volumeRatio.isZero() ? '0' : volumeRatio.toFixed(0),
     forwardingCost: ceil2(forwardingCost),
     deliveryFeeRmb: fixed2(deliveryFeeRmb),

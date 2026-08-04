@@ -15,6 +15,14 @@ export function calcChargeVolume(
   return Decimal.max(v, weightVolume)
 }
 
+/** 计费重 = max(实重, 体积×10⁶/6000)，向上取整到整数 kg */
+export function calcChargeWeight(weight: number, volume: number): Decimal {
+  const w = num(weight)
+  const v = num(volume)
+  const volumeWeight = v.mul(1_000_000).dividedBy(6000)
+  return Decimal.max(w, volumeWeight).toDecimalPlaces(0, Decimal.ROUND_UP)
+}
+
 /** 泡比 = 实重 / 体积；体积或实重为 0 时返回 0 */
 export function calcVolumeRatio(weight: number, volume: number): Decimal {
   const w = num(weight)

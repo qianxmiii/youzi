@@ -1067,6 +1067,7 @@
                     <th class="hidden text-dark">箱数</th>
                     <th width="6.5%" class="text-center text-dark">实重(kg)</th>
                     <th width="6%" class="text-center text-dark">体积(cbm)</th>
+                    <th class="hidden text-dark">计费重(kg)</th>
                     <th width="6%" class="text-center text-dark">计费方(cbm)</th>
                     <th width="4.5%" class="text-center text-dark">泡比</th>
                     <th width="6%" class="text-center text-dark">按方表价(RMB)</th>
@@ -1089,6 +1090,7 @@
                     <td class="hidden"><input type="number" class="form-control" id="t_quantity" oninput="calculateCostDDU()" /></td>
                     <td><input type="number" class="form-control" id="t_weight" oninput="calculateCostDDU()" /></td>
                     <td><input type="number" class="form-control" id="t_volume" oninput="calculateCostDDU()" /></td>
+                    <td class="hidden"><span id="t_charge-weight">0</span></td>
                     <td><span id="t_charge-volume">0.00</span></td>
                     <td><span id="t_volume-ratio">0</span></td>
                     <td><input type="number" class="form-control" id="t_price-per-cbm" oninput="calculateCostDDU()" /></td>

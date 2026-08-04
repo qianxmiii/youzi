@@ -1,17 +1,14 @@
 import { EXCHANGE_RATE } from '@/constants/costCalculation'
-import { calcChargeVolume, calcVolumeRatio } from './chargeVolume'
+import { calcChargeVolume, calcChargeWeight, calcVolumeRatio } from './chargeVolume'
 import { Decimal, ceil0, ceil2, fixed2, num } from './decimal'
 import type { DdpRowInput, DdpRowOutput } from './types'
 
 export function calculateDdpRow(input: DdpRowInput): DdpRowOutput {
-  const weight = num(input.weight)
-  const volume = num(input.volume)
   const pricePerKg = num(input.pricePerKg)
   const deliveryFeeUsd = num(input.deliveryFeeUsd)
   const deliveryFeeRmb = num(input.deliveryFeeRmb)
 
-  const volumeWeight = volume.mul(1_000_000).dividedBy(6000)
-  const chargeWeight = Decimal.max(weight, volumeWeight).toDecimalPlaces(0, Decimal.ROUND_UP)
+  const chargeWeight = calcChargeWeight(input.weight, input.volume)
   const chargeVolume = calcChargeVolume(input.weight, input.volume, input.weightRatio)
   const volumeRatio = calcVolumeRatio(input.weight, input.volume)
 

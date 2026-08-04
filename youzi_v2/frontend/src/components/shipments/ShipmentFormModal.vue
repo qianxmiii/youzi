@@ -96,13 +96,6 @@ function applyWarehouseEntryTimeToForm() {
 
 const title = computed(() => (props.mode === 'create' ? '新增运单' : '编辑运单'))
 
-/** 已付款运单仅允许改回未付款，其它字段只读 */
-const paidLocked = computed(
-  () =>
-    props.mode === 'edit' &&
-    (props.initial?.paymentStatus || '').trim().toUpperCase() === 'PAID',
-)
-
 const addressTypeOptions = dictOptions('address_type')
 
 const carrierSelectOptions = computed(() =>
@@ -149,6 +142,7 @@ watch(
         shipmentNo: props.initial.shipmentNo,
         customer: props.initial.customer,
         customerNo: props.initial.customerNo,
+        refShipmentNo: props.initial.refShipmentNo ?? null,
         channelCode: props.initial.channelCode,
         countryCode: props.initial.countryCode,
         addressType: props.initial.addressType,
@@ -208,17 +202,6 @@ function handleSubmit() {
     message.warning('请填写运单号')
     return
   }
-  if (paidLocked.value) {
-    const ps = (form.value.paymentStatus || '').trim().toUpperCase()
-    if (ps !== 'UNPAID') {
-      message.warning('已付款运单仅可改为未付款；改回未付款后再编辑其它字段')
-      return
-    }
-    submitting.value = true
-    emit('submit', { shipmentNo: no, paymentStatus: 'UNPAID' })
-    submitting.value = false
-    return
-  }
   applyVoyageDatesToForm()
   applyWarehouseEntryTimeToForm()
   applyDeliveredTimeToForm()
@@ -254,12 +237,6 @@ function handleSubmit() {
     @update:show="(v: boolean) => !v && emit('close')"
   >
     <NForm label-placement="top" size="small" class="max-h-[65vh] overflow-y-auto pr-1">
-      <p
-        v-if="paidLocked"
-        class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800"
-      >
-        已付款运单已锁定，仅可将付款状态改为「未付款」；改回后再编辑其它字段。
-      </p>
       <div class="grid grid-cols-1 gap-x-4 sm:grid-cols-2">
         <NFormItem label="运单号" required>
           <NInput
@@ -272,7 +249,6 @@ function handleSubmit() {
           <NSelect
             v-model:value="form.statusCode"
             :options="statusOptions"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="付款状态">
@@ -287,17 +263,18 @@ function handleSubmit() {
           <NInput
             v-model:value="form.customer"
             placeholder="用户名/客户名"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="客户订单号">
-          <NInput v-model:value="form.customerNo" :disabled="paidLocked" />
+          <NInput v-model:value="form.customerNo" />
+        </NFormItem>
+        <NFormItem label="关联单号">
+          <NInput v-model:value="form.refShipmentNo" />
         </NFormItem>
         <NFormItem label="国家">
           <NInput
             v-model:value="form.countryCode"
             placeholder="US / 美国"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="件数">
@@ -305,14 +282,13 @@ function handleSubmit() {
             v-model:value="form.ctns"
             :min="0"
             class="w-full"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="品名">
-          <NInput v-model:value="form.productName" :disabled="paidLocked" />
+          <NInput v-model:value="form.productName" />
         </NFormItem>
         <NFormItem label="渠道">
-          <NInput v-model:value="form.channelCode" :disabled="paidLocked" />
+          <NInput v-model:value="form.channelCode" />
         </NFormItem>
         <NFormItem label="承运商">
           <NSelect
@@ -321,7 +297,6 @@ function handleSubmit() {
             clearable
             filterable
             placeholder="选择承运商"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="承运单号">
@@ -329,7 +304,6 @@ function handleSubmit() {
             v-model:value="form.carrierId"
             placeholder="承运商侧主单号（同步可自动填入）"
             clearable
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="转单号">
@@ -337,7 +311,6 @@ function handleSubmit() {
             v-model:value="form.trackingNumber"
             placeholder="尾程 UPS/FedEx 等"
             clearable
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="尾程快递">
@@ -346,7 +319,6 @@ function handleSubmit() {
             :options="EXPRESS_CODE_OPTIONS"
             clearable
             placeholder="自动识别"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="地址类型">
@@ -354,41 +326,38 @@ function handleSubmit() {
             v-model:value="form.addressType"
             clearable
             :options="addressTypeOptions"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="派送仓库/代码">
-          <NInput v-model:value="form.addressCode" :disabled="paidLocked" />
+          <NInput v-model:value="form.addressCode" />
         </NFormItem>
         <NFormItem label="派送地址" class="sm:col-span-2">
           <NInput
             v-model:value="form.deliveryAddress"
             type="textarea"
             :rows="2"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="邮编">
-          <NInput v-model:value="form.zipcode" :disabled="paidLocked" />
+          <NInput v-model:value="form.zipcode" />
         </NFormItem>
         <NFormItem label="交货仓库">
-          <NInput v-model:value="form.originWarehouseCode" :disabled="paidLocked" />
+          <NInput v-model:value="form.originWarehouseCode" />
         </NFormItem>
         <NFormItem label="供应商">
-          <NInput v-model:value="form.supplierName" :disabled="paidLocked" />
+          <NInput v-model:value="form.supplierName" />
         </NFormItem>
         <NFormItem label="货件号">
-          <NInput v-model:value="form.customerShipmentId" :disabled="paidLocked" />
+          <NInput v-model:value="form.customerShipmentId" />
         </NFormItem>
         <NFormItem label="亚马逊预约号">
-          <NInput v-model:value="form.amazonRefId" :disabled="paidLocked" />
+          <NInput v-model:value="form.amazonRefId" />
         </NFormItem>
         <NFormItem label="提单号">
           <NInput
             v-model:value="form.billOfLadingNo"
             placeholder="海运提单号"
             clearable
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="柜号">
@@ -396,17 +365,16 @@ function handleSubmit() {
             v-model:value="form.containerNo"
             placeholder="集装箱号"
             clearable
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="船名">
-          <NInput v-model:value="form.vesselName" :disabled="paidLocked" />
+          <NInput v-model:value="form.vesselName" />
         </NFormItem>
         <NFormItem label="航次">
-          <NInput v-model:value="form.voyageNo" :disabled="paidLocked" />
+          <NInput v-model:value="form.voyageNo" />
         </NFormItem>
         <NFormItem label="船名航次">
-          <NInput v-model:value="form.vesselVoyage" :disabled="paidLocked" />
+          <NInput v-model:value="form.vesselVoyage" />
         </NFormItem>
         <NFormItem label="ETD">
           <NDatePicker
@@ -414,7 +382,6 @@ function handleSubmit() {
             type="date"
             clearable
             class="w-full"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="ETA">
@@ -423,7 +390,6 @@ function handleSubmit() {
             type="date"
             clearable
             class="w-full"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="ATD">
@@ -432,7 +398,6 @@ function handleSubmit() {
             type="date"
             clearable
             class="w-full"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="ATA">
@@ -441,7 +406,6 @@ function handleSubmit() {
             type="date"
             clearable
             class="w-full"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="入仓时间">
@@ -451,7 +415,6 @@ function handleSubmit() {
             clearable
             class="w-full"
             format="yyyy-MM-dd HH:mm:ss"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="预计送仓">
@@ -460,14 +423,13 @@ function handleSubmit() {
             type="date"
             clearable
             class="w-full"
-            :disabled="paidLocked"
           />
         </NFormItem>
         <NFormItem label="出发港口">
-          <NInput v-model:value="form.originPortCode" :disabled="paidLocked" />
+          <NInput v-model:value="form.originPortCode" />
         </NFormItem>
         <NFormItem label="到达港口">
-          <NInput v-model:value="form.destinationPortCode" :disabled="paidLocked" />
+          <NInput v-model:value="form.destinationPortCode" />
         </NFormItem>
         <NFormItem label="签收时间">
           <NDatePicker
@@ -476,7 +438,6 @@ function handleSubmit() {
             clearable
             class="w-full"
             format="yyyy-MM-dd HH:mm:ss"
-            :disabled="paidLocked"
           />
         </NFormItem>
       </div>

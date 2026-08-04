@@ -24,7 +24,8 @@
 2. 自税成本计算
    - 适用于税金单独计算的成本模型。
    - 输入按方表价、货值、税率、派送费。
-   - 输出计费方、泡比、头程费、税金、总成本、单价/cbm、单价/kg。
+   - 输出计费方、计费重（隐藏）、泡比、头程费、税金、总成本、单价/cbm、单价/kg。
+   - 单价/kg 按计费重（`max(实重, 材积重)`），泡货与包税口径一致。
    - 支持“按方包税”开关：开启后按方价格会叠加额外包税金额，同时货值置 0 并禁用。
 
 3. 包税成本计算
@@ -240,10 +241,16 @@ unitPriceCbm = chargeVolume > 0 ? totalCost / chargeVolume : 0
 unitPriceCbmDisplay = ceil_to_0_decimal_places(unitPriceCbm)
 ```
 
-单价/kg：
+计费重（隐藏列，与包税同公式）：
 
 ```text
-unitPriceKg = weight > 0 ? totalCost / weight : 0
+chargeWeight = ceil_to_0(max(weight, volume * 1000000 / 6000))
+```
+
+单价/kg（按计费重，泡货取材积重）：
+
+```text
+unitPriceKg = chargeWeight > 0 ? totalCost / chargeWeight : 0
 unitPriceKgDisplay = fixed_2_decimal_places(unitPriceKg)
 ```
 
@@ -363,7 +370,7 @@ unitPriceKgDisplay = fixed_2_decimal_places(unitPriceKg)
 | 字段 ID | 名称 | 类型 | 默认值 | 说明 |
 | --- | --- | --- | --- | --- |
 | `t_quantity` | 箱数 | number | 空/0 | 隐藏列，当前不参与公式 |
-| `t_weight` | 实重 kg | number | 空/0 | 参与计费方、泡比、单价/kg |
+| `t_weight` | 实重 kg | number | 空/0 | 参与计费方、计费重、泡比 |
 | `t_volume` | 体积 cbm | number | 空/0 | 参与计费方、税金、泡比 |
 | `t_price-per-cbm` | 按方表价 RMB | number | 空/0 | 头程费单价 |
 | `t_by-volume-tax-included` | 按方包税 | checkbox | false | 开启后叠加包税金额 |
@@ -377,13 +384,14 @@ unitPriceKgDisplay = fixed_2_decimal_places(unitPriceKg)
 | 字段 ID | 名称 | 格式 | 公式 |
 | --- | --- | --- | --- |
 | `t_charge-volume` | 计费方 cbm | 2 位小数 | `max(volume, ceil2(weight / ratio))` 或实际方 |
+| `t_charge-weight` | 计费重 kg（隐藏） | 向上取整 | `max(weight, volume * 1000000 / 6000)` |
 | `t_volume-ratio` | 泡比 | 0 位小数 | `weight / volume` |
 | `t_freight-forwarding-cost` | 头程费 RMB | 向上保留 2 位 | `actualPricePerCbm * chargeVolume` |
 | `t_delivery-fee-rmb` | 派送费 RMB | 固定 2 位 | `deliveryFeeUSD * 7.1` |
 | `t_tax-amount` | 税金 RMB | 向上取整 | `goodsValue * ((taxRate + 20) / 100) * volume * 7.1` |
 | `t_total-cost` | 总成本 RMB | 向上取整 | `forwardingCost + taxAmount + deliveryFeeRMB` |
 | `t_unit-price-cbm` | 单价 RMB/cbm | 向上取整 | `totalCost / chargeVolume` |
-| `t_unit-price-kg` | 单价 RMB/kg | 固定 2 位 | `totalCost / weight` |
+| `t_unit-price-kg` | 单价 RMB/kg | 固定 2 位 | `totalCost / chargeWeight` |
 
 ### 3.4 包税 DDP 输入字段
 
@@ -444,7 +452,7 @@ parseFloat(value) || 0
 
 ```text
 chargeVolume <= 0 时，unitPriceCbm = 0
-weight <= 0 时，unitPriceKg = 0
+chargeWeight <= 0 时，unitPriceKg = 0
 ```
 
 包税：
@@ -636,6 +644,7 @@ cost_exchange_rate = 7.1
 ```text
 weight / 363 = 0.27548 -> ceil2 = 0.28
 chargeVolume = max(0.20, 0.28) = 0.28
+chargeWeight = ceil0(max(100, 0.20 * 1000000 / 6000)) = 100
 forwardingCost = 1000 * 0.28 = 280.00
 taxAmount = 167 * ((10 + 20) / 100) * 0.20 * 7.1 = 71.142 -> ceil0 = 72
 deliveryFeeRMB = 20 * 7.1 = 142.00
@@ -648,6 +657,7 @@ unitPriceKg = 493.142 / 100 = 4.93142 -> fixed2 = 4.93
 
 ```text
 t_charge-volume = 0.28
+t_charge-weight = 100
 t_volume-ratio = 500
 t_freight-forwarding-cost = 280.00
 t_tax-amount = 72
@@ -656,6 +666,9 @@ t_total-cost = 494
 t_unit-price-cbm = 1762
 t_unit-price-kg = 4.93
 ```
+
+泡货示例（实重/方数 < 167）：`weight=10, volume=1` 时
+`chargeWeight = ceil0(max(10, 166.666…)) = 167`，`unitPriceKg = totalCost / 167`（不得除以实重 10）。
 
 ### 5.5 自税 DDU：实际方
 

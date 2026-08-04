@@ -5,6 +5,7 @@
     "运单号": "shipment_no",
     "状态": "status_code",
     "客户订单号": "customer_no",
+    "关联单号": "ref_shipment_no",
     "货件号": "customer_shipment_id",
     "亚马逊预约号": "amazon_ref_id",
     "用户名": "customer",
@@ -15,11 +16,17 @@
     "邮编": "zipcode",
     "渠道": "channel_code",
     "承运商": "carrier_code",
+    "转单号": "tracking_number",
+    "供应商": "supplier_name",
+    "品名": "product_name",
     "交货仓库": "origin_warehouse_code",
-    "内部轨迹时间": "latest_tracking_time",
-    "内部最新轨迹": "latest_tracking_desc",
+    "ETD": "etd",
     "ATD": "atd",
-    "签收时间": "delivered_time"
+    "ETA": "eta",
+    "ATA": "ata",
+    "签收时间": "delivered_time",
+    "内部轨迹时间": "latest_tracking_time",
+    "内部最新轨迹": "latest_tracking_desc"
   },
   "column_aliases": {
     "Amazon ID": "customer_shipment_id",
@@ -27,7 +34,15 @@
     "仓库代码": "address_code",
     "收件人邮编": "zipcode"
   },
-  "export_only_fields": ["latest_tracking_time", "latest_tracking_desc", "atd", "delivered_time"],
+  "export_only_fields": [
+    "latest_tracking_time",
+    "latest_tracking_desc",
+    "etd",
+    "atd",
+    "eta",
+    "ata",
+    "delivered_time"
+  ],
   "group_import_columns": {
     "分组编号": "group_no",
     "分组名称": "group_name",

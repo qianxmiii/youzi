@@ -67,7 +67,8 @@
 | `id` | UUID 主键 | |
 | `shipment_no` | 运单号，**唯一** | |
 | `customer` | 客户（文本） | |
-| `customer_no` | 客户单号 | |
+| `customer_no` | 客户订单号（DPS `internalOrderNum`） | |
+| `ref_shipment_no` | 关联单号（DPS `assOrderNumber`） | |
 | `channel_code` | 渠道 | `channel_codes` |
 | `country_code` | 国家 | `country_codes` |
 | `address_type` | 地址类型：`AMZ` / `WFS` / `3PL`，可空 | |
@@ -242,6 +243,7 @@ API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST 
 | 运单号 | `shipment_no` |
 | 状态 | `status_code`（中文如 转运中→`IN_TRANSIT`，或直接填码） |
 | 客户订单号 | `customer_no` |
+| 关联单号 | `ref_shipment_no` |
 | 货件号 | `customer_shipment_id`（导入别名：`Amazon ID`） |
 | 亚马逊预约号 | `amazon_ref_id`（导入别名：`Amazon Reference ID`） |
 | 用户名 | `customer` |
@@ -250,11 +252,17 @@ API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST 
 | 派送仓库 | `address_code` |
 | 派送地址 | `delivery_address` |
 | 渠道 | `channel_code` |
-| 承运商 | `carrier_code` |
+| 承运商 | `carrier_code`（**导出**优先码表中文名 `carrierNameZh`，无则回退编码/ID） |
+| 转单号 | `tracking_number` |
+| 供应商 | `supplier_name` |
+| 品名 | `product_name` |
 | 交货仓库 | `origin_warehouse_code` |
+| ETD | `etd`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
+| ATD | `atd`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
+| ETA | `eta`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
+| ATA | `ata`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
+| 签收时间 | `delivered_time`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
 | 内部轨迹时间 | `latest_tracking_time`（**仅导出**） |
 | 内部最新轨迹 | `latest_tracking_desc`（**仅导出**） |
-| ATD | `atd`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
-| 签收时间 | `delivered_time`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
 
 导入时自动推断 `address_type`：订单号/地址含 FBA→`AMZ`，含 WFS→`WFS`，含 3PL→`3PL`；默认状态 `UNKNOWN`。

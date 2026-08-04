@@ -27,6 +27,7 @@ function trackingSourceLabel(source: string): string {
   if (source === 'internal') return '内部轨迹'
   if (source === 'carrier') return '承运商轨迹'
   if (source === 'arrival') return '到港'
+  if (source === 'eta_reminder') return '到港提醒'
   return '轨迹'
 }
 

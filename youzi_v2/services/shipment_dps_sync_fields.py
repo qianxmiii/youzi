@@ -15,6 +15,7 @@ KNOWN_SYNC_FIELDS = frozenset(
     {
         "customer",
         "customer_no",
+        "ref_shipment_no",
         "channel_code",
         "country_code",
         "address_type",

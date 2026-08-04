@@ -16,6 +16,7 @@ CREATE TABLE {TABLE_NAME} (
     shipment_no TEXT NOT NULL UNIQUE,
     customer TEXT,
     customer_no TEXT,
+    ref_shipment_no TEXT,
     channel_code TEXT,
     country_code TEXT,
     address_type TEXT CHECK (
@@ -160,6 +161,12 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_container_no "
             f"ON {TABLE_NAME}(container_no)"
+        )
+    if "ref_shipment_no" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN ref_shipment_no TEXT")
+        conn.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_ref_shipment_no "
+            f"ON {TABLE_NAME}(ref_shipment_no)"
         )
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "

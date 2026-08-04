@@ -9,6 +9,8 @@ export interface Shipment {
   /** 客户语言（zh/en），用于 UPS/FedEx 等官网跳转 */
   customerLang?: 'zh' | 'en'
   customerNo: string | null
+  /** 关联单号（DPS assOrderNumber） */
+  refShipmentNo?: string | null
   channelCode: string | null
   channelNameZh?: string | null
   channelCategory?: string | null
@@ -159,6 +161,7 @@ export function emptyShipmentForm(): ShipmentPayload {
     shipmentNo: '',
     customer: null,
     customerNo: null,
+    refShipmentNo: null,
     channelCode: null,
     countryCode: null,
     addressType: null,
@@ -199,6 +202,7 @@ export function shipmentToForm(row: Shipment): ShipmentPayload {
     shipmentNo: row.shipmentNo,
     customer: row.customer,
     customerNo: row.customerNo,
+    refShipmentNo: row.refShipmentNo ?? null,
     channelCode: row.channelCode,
     countryCode: row.countryCode,
     addressType: row.addressType,

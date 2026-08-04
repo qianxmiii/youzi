@@ -36,6 +36,7 @@ const ddu1 = calculateDdu({
   weightRatio: '363',
 })
 assertEq(ddu1.chargeVolume, '0.28', '5.4 chargeVolume')
+assertEq(ddu1.chargeWeight, '100', '5.4 chargeWeight')
 assertEq(ddu1.volumeRatio, '500', '5.4 volumeRatio')
 assertEq(ddu1.forwardingCost, '280.00', '5.4 forwarding')
 assertEq(ddu1.taxAmount, '72', '5.4 tax')
@@ -43,6 +44,24 @@ assertEq(ddu1.deliveryFeeRmb, '142.00', '5.4 delivery')
 assertEq(ddu1.totalCost, '494', '5.4 total')
 assertEq(ddu1.unitPriceCbm, '1762', '5.4 unit cbm')
 assertEq(ddu1.unitPriceKg, '4.93', '5.4 unit kg')
+
+// 泡货：实重/方数 < 167，计费重取材积重，单价/kg 按计费重
+const dduBulky = calculateDdu({
+  quantity: 0,
+  weight: 10,
+  volume: 1,
+  pricePerCbm: 1000,
+  byVolumeTaxIncluded: false,
+  byVolumeTaxIncludedValue: 0,
+  goodsValue: 167,
+  taxRate: 10,
+  deliveryFeeUsd: 20,
+  weightRatio: '363',
+})
+assertEq(dduBulky.chargeWeight, '167', '5.4b chargeWeight')
+assertEq(dduBulky.chargeVolume, '1.00', '5.4b chargeVolume')
+assertEq(dduBulky.totalCost, '1498', '5.4b total')
+assertEq(dduBulky.unitPriceKg, '8.97', '5.4b unit kg by chargeWeight')
 
 const ddp1 = calculateDdpRow({
   quantity: 0,

@@ -102,12 +102,62 @@ def test_list_reminders_fcl_exposes_bill_and_container(tmp_path: Path) -> None:
     repo, db = _prepare_repo(tmp_path)
     _seed(db, fcl=True)
 
-    listed = repo.list_reminders(scope="overdue", limit=20, offset=0)
+    listed = repo.list_reminders(scope="overdue", fcl_only=True, limit=20, offset=0)
     row = next(i for i in listed["items"] if i["shipmentNo"] == "FCL-PAY-001")
     assert row["isFcl"] is True
     assert row["billOfLadingNo"] == "OOLU2169890590"
     assert row["containerNo"] == "CONT9876543"
     assert row["customerNo"] == "PO-FCL"
+
+
+def test_list_reminders_fcl_only_filter(tmp_path: Path) -> None:
+    repo, db = _prepare_repo(tmp_path)
+    _seed(db)
+    now = "2026-07-11 12:00:00"
+    fcl_sid = str(uuid.uuid4())
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {SHIPMENTS_TABLE} (
+                id, shipment_no, customer, customer_no, channel_code,
+                bill_of_lading_no, container_no, etd, payment_status,
+                created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                fcl_sid,
+                "FCL-PAY-002",
+                "客户A",
+                "PO-FCL2",
+                "FC-整柜",
+                "OOLU2169890591",
+                "CONT111",
+                "2026-07-01",
+                "UNPAID",
+                now,
+                now,
+            ),
+        )
+        db.conn.commit()
+
+    exclude = repo.list_reminders(scope="all_unpaid", fcl_only=False, limit=50, offset=0)
+    nos = {i["shipmentNo"] for i in exclude["items"]}
+    assert "PAY-R-001" in nos
+    assert "FCL-PAY-002" not in nos
+
+    only_fcl = repo.list_reminders(scope="all_unpaid", fcl_only=True, limit=50, offset=0)
+    nos_fcl = {i["shipmentNo"] for i in only_fcl["items"]}
+    assert "FCL-PAY-002" in nos_fcl
+    assert "PAY-R-001" not in nos_fcl
+
+    summary = repo.reminder_summary(fcl_only=False)
+    assert summary["allUnpaidCount"] >= 1
+    summary_fcl = repo.reminder_summary(fcl_only=True)
+    assert summary_fcl["allUnpaidCount"] >= 1
+    assert "PAY-R-001" not in {
+        i["shipmentNo"]
+        for i in repo.list_reminders(scope="all_unpaid", fcl_only=True, limit=50)["items"]
+    }
 
 def test_list_reminders_followup_status_filter(tmp_path: Path) -> None:
     repo, db = _prepare_repo(tmp_path)

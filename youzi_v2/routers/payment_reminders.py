@@ -18,9 +18,11 @@ _EXPORT_MAX = 10_000
 
 
 @router.get("/api/v1/shipments/payment-reminders/summary")
-def payment_reminder_summary():
-    """待催 / 全部未付款数量（侧栏角标与页面标题统计）。"""
-    return shipment_payment_followups_repo.reminder_summary()
+def payment_reminder_summary(
+    fcl_only: bool | None = Query(False, alias="fclOnly"),
+):
+    """待催 / 全部未付款数量（侧栏角标与页面标题统计）。默认排除整柜。"""
+    return shipment_payment_followups_repo.reminder_summary(fcl_only=fcl_only)
 
 
 @router.get("/api/v1/shipments/payment-reminders/export")
@@ -31,6 +33,7 @@ def export_payment_reminders_excel(
     reminder_type: str | None = Query(None, alias="reminderType"),
     followup_status: str | None = Query(None, alias="followupStatus"),
     search: str | None = None,
+    fcl_only: bool | None = Query(False, alias="fclOnly"),
     limit: int = Query(_EXPORT_MAX, le=_EXPORT_MAX),
     offset: int = 0,
 ):
@@ -42,6 +45,7 @@ def export_payment_reminders_excel(
         reminder_type=reminder_type,
         followup_status=followup_status,
         search=search,
+        fcl_only=fcl_only,
         limit=limit,
         offset=offset,
     )
@@ -70,6 +74,7 @@ def list_payment_reminders(
     reminder_type: str | None = Query(None, alias="reminderType"),
     followup_status: str | None = Query(None, alias="followupStatus"),
     search: str | None = None,
+    fcl_only: bool | None = Query(False, alias="fclOnly"),
     limit: int = 50,
     offset: int = 0,
 ):
@@ -80,6 +85,7 @@ def list_payment_reminders(
         reminder_type=reminder_type,
         followup_status=followup_status,
         search=search,
+        fcl_only=fcl_only,
         limit=limit,
         offset=offset,
     )

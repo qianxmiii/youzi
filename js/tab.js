@@ -1000,6 +1000,11 @@ function calculateCostDDU() {
     }
     document.getElementById('t_charge-volume').textContent = chargeVolume.toFixed(2);
 
+    // 计算计费重（与包税一致：max(实重, 材积重) 向上取整；单价/kg 用此值）
+    const chargeWeight = Decimal.max(weight, volume.mul(1000000).dividedBy(6000)).toDecimalPlaces(0, Decimal.ROUND_UP);
+    const chargeWeightEl = document.getElementById('t_charge-weight');
+    if (chargeWeightEl) chargeWeightEl.textContent = chargeWeight;
+
     // 计算泡比 泡比 = 实重 / 体积
     let volumeRatio = new Decimal(0);
     if (weight != 0 && volume != 0) {
@@ -1037,8 +1042,8 @@ function calculateCostDDU() {
     const unitPriceCbm = chargeVolume.greaterThan(0) ? totalCost.dividedBy(chargeVolume) : new Decimal(0);
     document.getElementById('t_unit-price-cbm').textContent = unitPriceCbm.toDecimalPlaces(0, Decimal.ROUND_UP);
 
-    // 计算单价 (RMD/kg)
-    const unitPriceKg = weight.greaterThan(0) ? totalCost.dividedBy(weight) : new Decimal(0);
+    // 计算单价 (RMB/kg)：按计费重（泡货取材积重），与包税一致
+    const unitPriceKg = chargeWeight.greaterThan(0) ? totalCost.dividedBy(chargeWeight) : new Decimal(0);
     document.getElementById('t_unit-price-kg').textContent = unitPriceKg.toFixed(2);
 }
 

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import {
   NButton,
+  NCheckbox,
   NDataTable,
   NDrawer,
   NDrawerContent,
@@ -31,7 +32,7 @@ import {
   type PaymentReminderItem,
   type PaymentReminderScope,
 } from '@/api/paymentReminders'
-import { batchUpdateShipments, getShipment, getShipmentFilterOptions } from '@/api/shipments'
+import { batchUpdateShipments, getShipment, getShipmentFilterOptions, syncShipmentsFromDps } from '@/api/shipments'
 import {
   PAYMENT_FOLLOWUP_STATUS_OPTIONS,
   PAYMENT_REMINDER_TYPE_OPTIONS,
@@ -75,6 +76,7 @@ function applyRouteScope() {
 const loading = ref(false)
 const exporting = ref(false)
 const batchSubmitting = ref(false)
+const syncingDps = ref(false)
 const items = ref<PaymentReminderItem[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -89,6 +91,8 @@ const filterCustomer = ref<string | null>(null)
 const filterSettlementMethod = ref<string | null>(null)
 const filterReminderType = ref<string | null>(null)
 const filterFollowupStatus = ref<'unfollowed' | 'followed' | null>(null)
+/** 与运单列表一致：未勾选=排除整柜；勾选=仅整柜 */
+const filterFclOnly = ref(false)
 const search = ref('')
 
 const customerOptions = ref<{ label: string; value: string }[]>([])
@@ -115,6 +119,11 @@ const selectedRows = computed(() =>
 const selectedCount = computed(() => selectedRows.value.length)
 const selectedShipmentNos = computed(() =>
   selectedRows.value.map((r) => displayShipmentNo(r)).filter(Boolean),
+)
+
+/** DPS 更新必须用真实运单号（非整柜展示用的提单号） */
+const selectedRealShipmentNos = computed(() =>
+  selectedRows.value.map((r) => (r.shipmentNo || '').trim()).filter(Boolean),
 )
 
 function rowKey(row: PaymentReminderItem) {
@@ -160,6 +169,7 @@ async function load() {
       reminderType: filterReminderType.value || undefined,
       followupStatus: filterFollowupStatus.value || undefined,
       search: search.value.trim() || undefined,
+      fclOnly: filterFclOnly.value,
       limit: pageSize.value,
       offset: (page.value - 1) * pageSize.value,
     })
@@ -175,7 +185,7 @@ async function load() {
 
 async function loadSummary() {
   try {
-    const summary = await getPaymentReminderSummary()
+    const summary = await getPaymentReminderSummary({ fclOnly: filterFclOnly.value })
     todoCount.value = summary.todoCount ?? 0
     allUnpaidCount.value = summary.allUnpaidCount ?? 0
     overdueCount.value = summary.overdueCount ?? 0
@@ -208,6 +218,7 @@ async function handleExport() {
       reminderType: filterReminderType.value || undefined,
       followupStatus: filterFollowupStatus.value || undefined,
       search: search.value.trim() || undefined,
+      fclOnly: filterFclOnly.value,
       limit: Math.min(total.value || 10_000, 10_000),
       offset: 0,
     })
@@ -355,6 +366,41 @@ async function copySelectedShipmentNos() {
     message.success(`已复制 ${nos.length} 个号码`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
+  }
+}
+
+async function handleSyncSelectedFromDps() {
+  if (!selectedRows.value.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const nos = selectedRealShipmentNos.value
+  if (!nos.length) {
+    message.warning('所选运单无有效运单号')
+    return
+  }
+  syncingDps.value = true
+  try {
+    const res = await syncShipmentsFromDps(nos)
+    if (res.skipped) {
+      message.warning(res.reason || 'DPS 更新已跳过')
+      return
+    }
+    if (res.error) {
+      message.error(res.error)
+      return
+    }
+    let text = `DPS 更新：新增 ${res.created}，更新 ${res.updated}`
+    if (res.unchanged) text += `，无变化 ${res.unchanged}`
+    if (res.failed) text += `，失败 ${res.failed}`
+    if (res.notFound) text += `，DPS 未返回 ${res.notFound}`
+    message.success(text)
+    clearSelection()
+    await reloadAfterMutation()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : 'DPS 更新失败')
+  } finally {
+    syncingDps.value = false
   }
 }
 
@@ -719,11 +765,15 @@ const columns = computed<DataTableColumns<PaymentReminderItem>>(() => [
   },
 ])
 
-watch([scope, filterCustomer, filterSettlementMethod, filterReminderType, filterFollowupStatus], () => {
-  page.value = 1
-  clearSelection()
-  void load()
-})
+watch(
+  [scope, filterCustomer, filterSettlementMethod, filterReminderType, filterFollowupStatus, filterFclOnly],
+  () => {
+    page.value = 1
+    clearSelection()
+    void load()
+    void loadSummary()
+  },
+)
 
 watch([page, pageSize], () => void load())
 
@@ -760,9 +810,8 @@ onMounted(() => {
       <div>
         <h1 class="page-h2">催款管理</h1>
         <p class="page-subtitle mt-1">
-          待催 {{ todoCount }} 条 · 全部未付款 {{ allUnpaidCount }} 条
-          <span v-if="overdueCount > 0"> · 逾期 {{ overdueCount }} 条</span>
-          · 当前列表 {{ total }} 条
+          待催 {{ todoCount }} 条 · 全部未付款 {{ allUnpaidCount }} 条 · 逾期
+          {{ overdueCount }} 条 · 当前列表 {{ total }} 条
         </p>
       </div>
       <NButton size="small" :loading="exporting" :disabled="total <= 0" @click="handleExport">
@@ -821,6 +870,9 @@ onMounted(() => {
           class="payment-reminders-filter-search"
           size="small"
         />
+        <NCheckbox v-model:checked="filterFclOnly" size="small" class="shrink-0">
+          整柜
+        </NCheckbox>
       </div>
     </div>
 
@@ -854,6 +906,14 @@ onMounted(() => {
       <NSpace size="small">
         <NButton size="small" title="复制选中运单号（换行）" @click="copySelectedShipmentNos">
           复制运单号
+        </NButton>
+        <NButton
+          size="small"
+          :loading="syncingDps"
+          title="从 DPS shipment_queryByOrder 拉取并更新选中运单"
+          @click="handleSyncSelectedFromDps"
+        >
+          更新选中运单
         </NButton>
         <NButton
           size="small"

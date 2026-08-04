@@ -12,7 +12,11 @@ from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
 from .datetime_util import now_str
 from .shipment_payment_followups_table import TABLE_NAME as FOLLOWUPS_TABLE
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
-from .tracking_freshness import FCL_CARRIER_NAME_ZH, FCL_CHANNEL_CODE
+from .tracking_freshness import (
+    FCL_CARRIER_NAME_ZH,
+    FCL_CHANNEL_CODE,
+    fcl_only_filter_sql,
+)
 from ..services.payment_reminder_rules import (
     SETTLEMENT_METHODS,
     compute_payment_reminder,
@@ -154,6 +158,7 @@ class ShipmentPaymentFollowupsRepository:
         reminder_type: str | None = None,
         followup_status: str | None = None,
         search: str | None = None,
+        fcl_only: bool | None = None,
         today: date | None = None,
     ) -> list[dict[str, Any]]:
         today = today or date.today()
@@ -189,6 +194,15 @@ class ShipmentPaymentFollowupsRepository:
             conditions.append("COALESCE(fu.followup_count, 0) = 0")
         elif fu_status in ("followed", "done"):
             conditions.append("COALESCE(fu.followup_count, 0) > 0")
+
+        if fcl_only is True:
+            frag, frag_params = fcl_only_filter_sql(include_fcl=True)
+            conditions.append(frag)
+            params.extend(frag_params)
+        elif fcl_only is False:
+            frag, frag_params = fcl_only_filter_sql(include_fcl=False)
+            conditions.append(frag)
+            params.extend(frag_params)
 
         where = f"WHERE {' AND '.join(conditions)}"
 
@@ -245,6 +259,7 @@ class ShipmentPaymentFollowupsRepository:
         reminder_type: str | None = None,
         followup_status: str | None = None,
         search: str | None = None,
+        fcl_only: bool | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -257,6 +272,7 @@ class ShipmentPaymentFollowupsRepository:
             reminder_type=reminder_type,
             followup_status=followup_status,
             search=search,
+            fcl_only=fcl_only,
         )
         total = len(items)
         page = items[offset : offset + limit]
@@ -267,9 +283,9 @@ class ShipmentPaymentFollowupsRepository:
             "offset": offset,
         }
 
-    def reminder_summary(self) -> dict[str, Any]:
-        """侧栏/标题用：待催与全部未付款数量（无筛选）。"""
-        unpaid = self._collect_reminder_items(scope="all_unpaid")
+    def reminder_summary(self, *, fcl_only: bool | None = False) -> dict[str, Any]:
+        """侧栏/标题用：待催与全部未付款数量。默认排除整柜（与列表默认一致）。"""
+        unpaid = self._collect_reminder_items(scope="all_unpaid", fcl_only=fcl_only)
         todo_count = sum(
             1 for item in unpaid if matches_scope(item.get("reminderType") or "", "todo")
         )

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sqlite3
 import uuid
+from datetime import date, datetime, timedelta
 from typing import Any, Literal
 
 from .connection import Database
@@ -14,6 +15,8 @@ TrackingSource = Literal["internal", "carrier"]
 
 SUBSCRIPTIONS_TABLE = "shipment_subscriptions"
 NOTIFICATIONS_TABLE = "shipment_arrival_notifications"
+ETA_REMINDER_SOURCE = "eta_reminder"
+ETA_REMINDER_LEAD_DAYS = 7
 
 _CREATE_SUBSCRIPTIONS_SQL = f"""
 CREATE TABLE IF NOT EXISTS {SUBSCRIPTIONS_TABLE} (
@@ -25,7 +28,8 @@ CREATE TABLE IF NOT EXISTS {SUBSCRIPTIONS_TABLE} (
     created_at TEXT NOT NULL,
     last_notified_ata TEXT NOT NULL DEFAULT '',
     last_notified_internal_time TEXT NOT NULL DEFAULT '',
-    last_notified_carrier_time TEXT NOT NULL DEFAULT ''
+    last_notified_carrier_time TEXT NOT NULL DEFAULT '',
+    last_notified_eta_day TEXT NOT NULL DEFAULT ''
 )
 """
 
@@ -67,6 +71,9 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     )
     _add_column_if_missing(
         conn, SUBSCRIPTIONS_TABLE, "last_notified_carrier_time", "TEXT NOT NULL DEFAULT ''"
+    )
+    _add_column_if_missing(
+        conn, SUBSCRIPTIONS_TABLE, "last_notified_eta_day", "TEXT NOT NULL DEFAULT ''"
     )
     _add_column_if_missing(
         conn, NOTIFICATIONS_TABLE, "tracking_source", "TEXT NOT NULL DEFAULT ''"
@@ -112,6 +119,37 @@ def _notification_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "createdAt": row["created_at"],
         "readAt": row["read_at"] or None,
     }
+
+
+def _parse_date_only(raw: str | None) -> date | None:
+    text = (raw or "").strip()
+    if not text:
+        return None
+    day = text[:10]
+    try:
+        return datetime.strptime(day, "%Y-%m-%d").date()
+    except ValueError:
+        return None
+
+
+def _is_delivered(row: sqlite3.Row) -> bool:
+    status = (row["status_code"] or "").strip().upper() if "status_code" in row.keys() else ""
+    if status == "DELIVERED":
+        return True
+    delivered = ""
+    if "delivered_time" in row.keys():
+        delivered = (row["delivered_time"] or "").strip()
+    return bool(delivered)
+
+
+def format_eta_reminder_desc(eta_day: date, today: date) -> str:
+    delta = (eta_day - today).days
+    eta_label = eta_day.isoformat()
+    if delta > 0:
+        return f"预计 {delta} 天后到港（ETA {eta_label}）"
+    if delta == 0:
+        return f"今日预计到港（ETA {eta_label}）"
+    return f"已过 ETA {abs(delta)} 天未签收（ETA {eta_label}）"
 
 
 class ShipmentSubscriptionsRepository:
@@ -303,6 +341,72 @@ class ShipmentSubscriptionsRepository:
             if commit:
                 self._conn.commit()
 
+    def evaluate_eta_reminders(self, *, today: date | None = None) -> dict[str, int]:
+        """已订阅 + 有 ETA + 未签收：ETA 前 7 天起每天推一条顶栏消息。"""
+        today_d = today or date.today()
+        today_s = today_d.isoformat()
+        window_start_cutoff = today_d + timedelta(days=ETA_REMINDER_LEAD_DAYS)
+        scanned = 0
+        created = 0
+        skipped = 0
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT sub.id AS subscription_id,
+                       sub.shipment_id,
+                       sub.last_notified_eta_day,
+                       s.shipment_no,
+                       s.vessel_voyage,
+                       s.destination_port_code,
+                       s.eta,
+                       s.status_code,
+                       s.delivered_time
+                FROM {SUBSCRIPTIONS_TABLE} sub
+                INNER JOIN {SHIPMENTS_TABLE} s ON s.id = sub.shipment_id
+                """
+            ).fetchall()
+            for row in rows:
+                scanned += 1
+                if _is_delivered(row):
+                    skipped += 1
+                    continue
+                eta_day = _parse_date_only(row["eta"] if "eta" in row.keys() else None)
+                if eta_day is None:
+                    skipped += 1
+                    continue
+                # today >= eta - 7  <=>  eta <= today + 7
+                if eta_day > window_start_cutoff:
+                    skipped += 1
+                    continue
+                last_day = ""
+                if "last_notified_eta_day" in row.keys():
+                    last_day = (row["last_notified_eta_day"] or "").strip()
+                if last_day == today_s:
+                    skipped += 1
+                    continue
+                desc = format_eta_reminder_desc(eta_day, today_d)
+                self._create_tracking_notification_locked(
+                    subscription_id=row["subscription_id"],
+                    shipment_id=row["shipment_id"],
+                    shipment_no=row["shipment_no"] or "",
+                    vessel_voyage=row["vessel_voyage"] or "",
+                    destination_port_code=row["destination_port_code"] or "",
+                    source=ETA_REMINDER_SOURCE,
+                    latest_time=eta_day.isoformat(),
+                    latest_desc=desc,
+                )
+                self._conn.execute(
+                    f"""
+                    UPDATE {SUBSCRIPTIONS_TABLE}
+                    SET last_notified_eta_day = ?
+                    WHERE id = ?
+                    """,
+                    (today_s, row["subscription_id"]),
+                )
+                created += 1
+            self._conn.commit()
+        return {"scanned": scanned, "created": created, "skipped": skipped}
+
     def _create_tracking_notification_locked(
         self,
         *,
@@ -311,7 +415,7 @@ class ShipmentSubscriptionsRepository:
         shipment_no: str,
         vessel_voyage: str,
         destination_port_code: str,
-        source: TrackingSource,
+        source: str,
         latest_time: str,
         latest_desc: str,
     ) -> None:

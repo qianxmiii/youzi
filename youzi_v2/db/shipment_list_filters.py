@@ -81,6 +81,7 @@ def append_unified_batch_number_search(
             f"""(
               s.shipment_no = ?
               OR s.customer_no = ?
+              OR s.ref_shipment_no = ?
               OR s.customer_shipment_id = ?
               OR s.tracking_number = ?
               OR s.carrier_id = ?
@@ -94,7 +95,7 @@ def append_unified_batch_number_search(
               )
             )"""
         )
-        params.extend([token] * 10)
+        params.extend([token] * 11)
     conditions.append(f"({' OR '.join(token_clauses)})")
 
 

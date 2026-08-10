@@ -66,6 +66,7 @@ def _try_upsert_alert(
     """返回 (is_new, should_skip_terminal)."""
     alert_type = str(ctx.get("alertType") or ALERT_DELIVERY_TIME)
     event_key = build_event_key(
+        shipment_no=shipment_no,
         shipment_id=shipment_id,
         alert_type=alert_type,
         rule_id=str(ctx.get("ruleId") or ""),
@@ -273,6 +274,19 @@ def scan_shipment_sla_alerts(
         if stale_resolved:
             out(f"[运输时效] 兜底清理已签收预警 {stale_resolved} 条")
 
+        orphan_resolved = 0
+        rematched = alerts_repo.rematch_alerts_to_current_shipments()
+        if rematched:
+            out(f"[运输时效] 重绑运单 ID {rematched} 条")
+
+        orphan_resolved = alerts_repo.resolve_orphan_alerts()
+        if orphan_resolved:
+            out(f"[运输时效] 关闭孤儿预警 {orphan_resolved} 条")
+
+        deduped = alerts_repo.dedupe_open_alerts_by_shipment_type()
+        if deduped:
+            out(f"[运输时效] 同单同类型去重关闭 {deduped} 条")
+
         excluded_resolved = alerts_repo.resolve_excluded_channel_alerts()
         if excluded_resolved:
             out(f"[运输时效] 关闭排除渠道预警 {excluded_resolved} 条")
@@ -284,7 +298,7 @@ def scan_shipment_sla_alerts(
 
         created = 0
         updated = 0
-        resolved = excluded_resolved
+        resolved = excluded_resolved + orphan_resolved + deduped
         scanned = len(rows)
 
         for row in rows:

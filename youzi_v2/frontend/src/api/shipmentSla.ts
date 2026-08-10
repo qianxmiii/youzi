@@ -32,6 +32,9 @@ export interface ShipmentSlaAlert {
   shipmentId: string
   shipmentNo: string
   alertType: string
+  alertTypes?: string[]
+  alertTypeLabels?: string[]
+  relatedAlertIds?: string[]
   riskLevel: SlaRiskLevel
   status: SlaAlertStatus
   severity: string
@@ -175,6 +178,24 @@ export async function followUpShipmentSlaAlert(alertId: string): Promise<void> {
   })
 }
 
+export async function batchFollowUpShipmentSlaAlerts(
+  ids: string[],
+): Promise<{ updated: number; failed: { id: string; message: string }[] }> {
+  return api('/api/v1/shipment-sla-alerts/batch-follow-up', {
+    method: 'POST',
+    body: { ids },
+  })
+}
+
+export async function batchResolveShipmentSlaAlerts(
+  ids: string[],
+): Promise<{ updated: number; failed: { id: string; message: string }[] }> {
+  return api('/api/v1/shipment-sla-alerts/batch-resolve', {
+    method: 'POST',
+    body: { ids },
+  })
+}
+
 /** @deprecated 使用 followUpShipmentSlaAlert */
 export async function acknowledgeShipmentSlaAlert(alertId: string): Promise<void> {
   return followUpShipmentSlaAlert(alertId)
@@ -209,24 +230,30 @@ export async function updateShipmentSlaAlertNote(alertId: string, note: string):
   })
 }
 
-function slaAlertTitle(riskLevel: SlaRiskLevel): string {
-  if (riskLevel === 'severe_overdue') return '运输时效严重超时'
-  if (riskLevel === 'overdue') return '运输时效已超时'
-  return '运输时效即将超时'
+function slaAlertTitle(alert: ShipmentSlaAlert): string {
+  const labels = (alert.alertTypeLabels || []).filter(Boolean)
+  return labels[0] || '运输时效'
+}
+
+function slaRiskLabel(level: SlaRiskLevel): string {
+  if (level === 'severe_overdue') return '严重超时'
+  if (level === 'overdue') return '已超时'
+  return '即将超时'
 }
 
 function slaAlertMessage(alert: ShipmentSlaAlert): string {
+  const risk = slaRiskLabel(alert.riskLevel)
   const days = alert.daysUntilDue
   if (days != null && days >= 0) {
-    return `运单 ${alert.shipmentNo} · 预估截止 ${alert.dueDate}，剩余 ${days} 天。`
+    return `${risk} · 运单 ${alert.shipmentNo} · 预估截止 ${alert.dueDate}，剩余 ${days} 天。`
   }
   const overdue = alert.overdueDays || 0
-  return `运单 ${alert.shipmentNo} · 预估截止 ${alert.dueDate}，已超期 ${overdue} 天。`
+  return `${risk} · 运单 ${alert.shipmentNo} · 预估截止 ${alert.dueDate}，已超期 ${overdue} 天。`
 }
 
 export function slaAlertAsCard(alert: ShipmentSlaAlert) {
   return {
-    title: slaAlertTitle(alert.riskLevel),
+    title: slaAlertTitle(alert),
     message: slaAlertMessage(alert),
     subtitle: alert.shipmentNo,
     customerName: alert.customer || '',
@@ -234,4 +261,10 @@ export function slaAlertAsCard(alert: ShipmentSlaAlert) {
     severity: alert.severity,
     triggeredAt: alert.updatedTime || alert.createdTime,
   }
+}
+
+export function slaRelatedAlertIds(alert: ShipmentSlaAlert): string[] {
+  const ids = (alert.relatedAlertIds || []).map((id) => id.trim()).filter(Boolean)
+  if (ids.length) return [...new Set(ids)]
+  return alert.id ? [alert.id] : []
 }

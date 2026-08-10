@@ -15,7 +15,7 @@ import {
   useMessage,
   type DataTableColumns,
 } from 'naive-ui'
-import { Copy } from 'lucide-vue-next'
+import { Copy, CircleHelp, ScanBarcode } from 'lucide-vue-next'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
@@ -23,12 +23,15 @@ import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawe
 import { getShipment, getShipmentFilterOptions, type ShipmentFilterOptions } from '@/api/shipments'
 import {
   followUpShipmentSlaAlert,
+  batchFollowUpShipmentSlaAlerts,
+  batchResolveShipmentSlaAlerts,
   ignoreShipmentSlaAlert,
   convertShipmentSlaAlert,
   evaluateShipmentSlaAlerts,
   listShipmentSlaAlerts,
   getShipmentSlaSummary,
   resolveShipmentSlaAlert,
+  slaRelatedAlertIds,
   type ShipmentSlaAlert,
   type SlaAlertStatus,
   type SlaRiskLevel,
@@ -190,11 +193,27 @@ async function runBatchAction(
 }
 
 function handleBatchFollowUp() {
-  void runBatchAction('跟进', actionableSelectedRows.value, (row) => followUpShipmentSlaAlert(row.id))
+  void runBatchAction('跟进', actionableSelectedRows.value, async (row) => {
+    const ids = slaRelatedAlertIds(row)
+    if (ids.length > 1) {
+      const res = await batchFollowUpShipmentSlaAlerts(ids)
+      if (res.failed?.length) throw new Error(res.failed[0]?.message || '部分跟进失败')
+      return
+    }
+    await followUpShipmentSlaAlert(row.id)
+  })
 }
 
 function handleBatchResolve() {
-  void runBatchAction('解决', actionableSelectedRows.value, (row) => resolveShipmentSlaAlert(row.id))
+  void runBatchAction('解决', actionableSelectedRows.value, async (row) => {
+    const ids = slaRelatedAlertIds(row)
+    if (ids.length > 1) {
+      const res = await batchResolveShipmentSlaAlerts(ids)
+      if (res.failed?.length) throw new Error(res.failed[0]?.message || '部分解决失败')
+      return
+    }
+    await resolveShipmentSlaAlert(row.id)
+  })
 }
 
 function handleBatchIgnore() {
@@ -213,23 +232,71 @@ function riskLabel(level: SlaRiskLevel): string {
   return '即将超时'
 }
 
-function riskTagLabel(row: ShipmentSlaAlert): string {
+function alertTypeLabel(row: ShipmentSlaAlert): string {
+  const labels = (row.alertTypeLabels || []).filter(Boolean)
+  if (labels.length) return labels[0]!
   const t = (row.alertType || '').trim()
   if (t === 'WAREHOUSE_NO_DEPARTURE') return '入库未开船'
   if (t === 'ARRIVAL_NO_DELIVERY') return '到港未送仓'
-  return riskLabel(row.riskLevel)
+  if (t === 'DELIVERY_TIME') return '运输时效'
+  return t || '运输时效'
 }
 
-function riskDueSuffix(row: ShipmentSlaAlert): string {
-  if (row.daysUntilDue == null) return ''
-  if (row.daysUntilDue >= 0) return `剩 ${row.daysUntilDue} 天`
-  return `超 ${row.overdueDays} 天`
+function overdueSignedDays(row: ShipmentSlaAlert): number | null {
+  if (row.daysUntilDue == null) return null
+  if (row.daysUntilDue < 0) return row.overdueDays || Math.abs(row.daysUntilDue)
+  return -row.daysUntilDue
+}
+
+function overdueDaysText(days: number): string {
+  if (days > 0) return `+${days} 天`
+  if (days < 0) return `${days} 天`
+  return '0 天'
+}
+
+function overdueDaysClass(days: number): string {
+  if (days >= 21) return 'sla-overdue-days sla-overdue-days--severe'
+  if (days > 0) return 'sla-overdue-days sla-overdue-days--overdue'
+  if (days < 0) return 'sla-overdue-days sla-overdue-days--ahead'
+  return 'sla-overdue-days sla-overdue-days--due'
+}
+
+function renderOverdueDaysHeader() {
+  return h('span', { class: 'inline-flex items-center gap-1' }, [
+    '超时天数',
+    h(
+      NTooltip,
+      { trigger: 'hover' },
+      {
+        trigger: () =>
+          h(CircleHelp, {
+            class: 'h-3.5 w-3.5 shrink-0 text-zinc-400',
+            strokeWidth: ICON_STROKE,
+            'aria-label': '超时天数说明',
+          }),
+        default: () =>
+          '正数=已超过截止日的天数；负数=距截止日还剩天数。颜色：绿=未超时，橙=已超时，红=超时较多（≥21 天）。',
+      },
+    ),
+  ])
+}
+
+function renderOverdueDaysCell(row: ShipmentSlaAlert) {
+  const days = overdueSignedDays(row)
+  if (days == null) return h('span', { class: 'text-zinc-400' }, '—')
+  return h('span', { class: overdueDaysClass(days) }, overdueDaysText(days))
+}
+
+function riskDueTooltip(row: ShipmentSlaAlert): string {
+  const dueHint = row.dueDate ? `截止 ${formatMonthDay(row.dueDate) || row.dueDate.slice(0, 10)}` : ''
+  const types = (row.alertTypeLabels || []).filter(Boolean)
+  const typeHint = types.length > 1 ? `合并类型：${types.join('、')}` : ''
+  return [dueHint, typeHint].filter(Boolean).join(' · ')
 }
 
 function renderRiskDueCell(row: ShipmentSlaAlert) {
-  const suffix = riskDueSuffix(row)
-  const dueHint = row.dueDate ? `截止 ${row.dueDate.slice(0, 10)}` : ''
-  const title = [dueHint, suffix].filter(Boolean).join(' · ')
+  const title = riskDueTooltip(row)
+  const typeLabel = alertTypeLabel(row)
   return h(
     NTooltip,
     { disabled: !title },
@@ -238,12 +305,14 @@ function renderRiskDueCell(row: ShipmentSlaAlert) {
         h('span', { class: 'inline-flex flex-wrap items-center gap-1' }, [
           h(
             NTag,
-            { size: 'small', type: riskTagType(row.riskLevel), bordered: false },
-            () => riskTagLabel(row),
+            { size: 'small', type: 'default', bordered: false },
+            () => typeLabel,
           ),
-          suffix
-            ? h('span', { class: 'text-xs tabular-nums text-zinc-500 whitespace-nowrap' }, suffix)
-            : null,
+          h(
+            NTag,
+            { size: 'small', type: riskTagType(row.riskLevel), bordered: false },
+            () => riskLabel(row.riskLevel),
+          ),
         ]),
       default: () => title || '—',
     },
@@ -326,6 +395,25 @@ function renderStatusCell(row: ShipmentSlaAlert) {
 
 function onFollowTabChange(value: string | null) {
   filterStatus.value = value || null
+}
+
+type SummaryBadgeKey = 'pending' | 'warning_soon' | 'overdue' | 'severe_overdue'
+
+const SUMMARY_RISK_KEYS = new Set<string>(['warning_soon', 'overdue', 'severe_overdue'])
+
+const activeSummaryBadge = computed<SummaryBadgeKey | null>(() => {
+  const ts = filterTimelinessStatus.value
+  if (ts && SUMMARY_RISK_KEYS.has(ts)) return ts as SummaryBadgeKey
+  if (!ts) return 'pending'
+  return null
+})
+
+function onSummaryBadgeClick(key: SummaryBadgeKey) {
+  if (key === 'pending') {
+    if (filterTimelinessStatus.value) filterTimelinessStatus.value = null
+    return
+  }
+  filterTimelinessStatus.value = filterTimelinessStatus.value === key ? null : key
 }
 
 function applyRouteQuery() {
@@ -506,8 +594,14 @@ function goShipment(row: ShipmentSlaAlert) {
 
 async function handleFollowUp(row: ShipmentSlaAlert) {
   try {
-    await followUpShipmentSlaAlert(row.id)
-    message.success(row.status === 'acknowledged' ? '已记录跟进' : '已标记跟进')
+    const ids = slaRelatedAlertIds(row)
+    if (ids.length > 1) {
+      const res = await batchFollowUpShipmentSlaAlerts(ids)
+      message.success(`已跟进 ${res.updated} 条`)
+    } else {
+      await followUpShipmentSlaAlert(row.id)
+      message.success(row.status === 'acknowledged' ? '已记录跟进' : '已标记跟进')
+    }
     await Promise.all([load(), loadSummary()])
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
@@ -516,8 +610,14 @@ async function handleFollowUp(row: ShipmentSlaAlert) {
 
 async function handleResolve(row: ShipmentSlaAlert) {
   try {
-    await resolveShipmentSlaAlert(row.id)
-    message.success('已标记解决')
+    const ids = slaRelatedAlertIds(row)
+    if (ids.length > 1) {
+      const res = await batchResolveShipmentSlaAlerts(ids)
+      message.success(`已解决 ${res.updated} 条`)
+    } else {
+      await resolveShipmentSlaAlert(row.id)
+      message.success('已标记解决')
+    }
     await Promise.all([load(), loadSummary()])
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
@@ -619,6 +719,81 @@ function renderShipmentNoCell(row: ShipmentSlaAlert) {
   return h('span', { class: 'inline-flex flex-nowrap items-center gap-1.5' }, children)
 }
 
+/** 列表展示用 MM-DD（去掉年） */
+function formatMonthDay(value: string | null | undefined): string {
+  const v = (value || '').trim()
+  if (!v) return ''
+  const datePart = v.slice(0, 10)
+  if (datePart.length >= 10 && datePart[4] === '-' && datePart[7] === '-') {
+    return datePart.slice(5)
+  }
+  return v
+}
+
+function formatDateFull(value: string | null | undefined): string {
+  const v = (value || '').trim()
+  return v ? v.slice(0, 10) : ''
+}
+
+function renderTransitTimeHeader() {
+  return h('div', { class: 'leading-tight text-center' }, [
+    h('div', '运输时间'),
+    h('div', { class: 'text-[11px] font-normal text-zinc-400 whitespace-nowrap' }, '起运 - 到港 / 截止日'),
+  ])
+}
+
+function renderTransitTimeCell(row: ShipmentSlaAlert) {
+  const startMd = formatMonthDay(row.atd)
+  const endMd = formatMonthDay(row.ata)
+  const dueMd = formatMonthDay(row.dueDate)
+  const parts = [startMd, endMd]
+  const hasAny = parts.some(Boolean)
+
+  const tipParts = [
+    formatDateFull(row.atd) ? `起运 ${formatDateFull(row.atd)}` : '',
+    formatDateFull(row.ata) ? `到港 ${formatDateFull(row.ata)}` : '',
+    formatDateFull(row.dueDate) ? `截止 ${formatDateFull(row.dueDate)}` : '',
+  ].filter(Boolean)
+  const tip = tipParts.join(' · ')
+
+  const rangeChildren: ReturnType<typeof h>[] = []
+  if (!hasAny) {
+    rangeChildren.push(h('span', { class: 'font-semibold text-zinc-800' }, '—'))
+  } else {
+    parts.forEach((part, index) => {
+      if (index > 0) {
+        rangeChildren.push(
+          h('span', { class: 'mx-0.5 font-semibold text-zinc-300' }, '~'),
+        )
+      }
+      rangeChildren.push(
+        h('span', { class: 'font-semibold text-zinc-800' }, part || '—'),
+      )
+    })
+  }
+
+  const body = h('div', { class: 'leading-tight' }, [
+    h('div', { class: 'tabular-nums whitespace-nowrap' }, rangeChildren),
+    dueMd
+      ? h(
+          'div',
+          { class: 'text-xs font-semibold tabular-nums text-zinc-400 whitespace-nowrap' },
+          ['截止 ', h('span', { class: 'text-zinc-500' }, dueMd)],
+        )
+      : null,
+  ])
+
+  if (!tip) return body
+  return h(
+    NTooltip,
+    { placement: 'top' },
+    {
+      trigger: () => h('span', { class: 'inline-flex cursor-default' }, [body]),
+      default: () => tip,
+    },
+  )
+}
+
 function renderDaysInTransitCell(row: ShipmentSlaAlert) {
   const total = row.totalDaysInTransit ?? row.daysInTransit
   const net = row.netDaysInTransit ?? total
@@ -706,10 +881,33 @@ const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
       )
     },
   },
-  { title: '入库时间', key: 'warehouseEntryTime', width: 108, render: (row) => (row.warehouseEntryTime || '—').slice(0, 10) },
-  { title: 'ATD', key: 'atd', width: 108, render: (row) => (row.atd || '—').slice(0, 10) },
-  { title: 'ATA', key: 'ata', width: 108, render: (row) => (row.ata || '—').slice(0, 10) },
-  { title: '截止日', key: 'dueDate', width: 108 },
+  {
+    title: '入库时间',
+    key: 'warehouseEntryTime',
+    width: 88,
+    align: 'center',
+    render: (row) => {
+      const md = formatMonthDay(row.warehouseEntryTime)
+      if (!md) return '—'
+      const full = formatDateFull(row.warehouseEntryTime)
+      return h(
+        NTooltip,
+        { placement: 'top' },
+        {
+          trigger: () =>
+            h('span', { class: 'cursor-default font-semibold tabular-nums text-zinc-800' }, md),
+          default: () => full || md,
+        },
+      )
+    },
+  },
+  {
+    title: () => renderTransitTimeHeader(),
+    key: 'transitTime',
+    width: 132,
+    align: 'center',
+    render: (row) => renderTransitTimeCell(row),
+  },
   {
     title: '已运输天数(异常天数)',
     key: 'daysInTransit',
@@ -725,9 +923,16 @@ const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
     render: (row) => (row.estimatedDays != null ? `${row.estimatedDays} 天` : '—'),
   },
   {
+    title: () => renderOverdueDaysHeader(),
+    key: 'overdueDays',
+    width: 100,
+    align: 'center',
+    render: (row) => renderOverdueDaysCell(row),
+  },
+  {
     title: '时效状态',
     key: 'riskDue',
-    width: 128,
+    width: 168,
     render: (row) => renderRiskDueCell(row),
   },
   {
@@ -824,15 +1029,64 @@ onMounted(() => {
 <template>
   <div class="flex h-full min-h-0 w-full flex-col gap-4">
     <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
-      <div>
+      <div class="min-w-0">
         <h1 class="page-h2">异常跟踪</h1>
-        <p class="page-subtitle mt-1">
-          待办 {{ pendingOpenCount }} 条 · 即将超时 {{ warningSoonCount }} 条 · 已超时
-          {{ overdueCount }} 条 · 严重超时 {{ severeOverdueCount }} 条 · 当前列表 {{ total }} 条
-        </p>
+        <div class="sla-summary-bar mt-1.5" role="toolbar" aria-label="异常摘要筛选">
+          <button
+            type="button"
+            class="sla-summary-bar__badge sla-summary-bar__badge--exception"
+            :class="{ 'is-active': activeSummaryBadge === 'pending' }"
+            :aria-pressed="activeSummaryBadge === 'pending'"
+            @click="onSummaryBadgeClick('pending')"
+          >
+            <span class="sla-summary-bar__dot sla-summary-bar__dot--exception" aria-hidden="true" />
+            <span class="sla-summary-bar__label">异常</span>
+            <span class="sla-summary-bar__count">{{ pendingOpenCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="sla-summary-bar__badge sla-summary-bar__badge--warning"
+            :class="{ 'is-active': activeSummaryBadge === 'warning_soon' }"
+            :aria-pressed="activeSummaryBadge === 'warning_soon'"
+            @click="onSummaryBadgeClick('warning_soon')"
+          >
+            <span class="sla-summary-bar__dot sla-summary-bar__dot--warning" aria-hidden="true" />
+            <span class="sla-summary-bar__label">即将超时</span>
+            <span class="sla-summary-bar__count">{{ warningSoonCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="sla-summary-bar__badge sla-summary-bar__badge--overdue"
+            :class="{ 'is-active': activeSummaryBadge === 'overdue' }"
+            :aria-pressed="activeSummaryBadge === 'overdue'"
+            @click="onSummaryBadgeClick('overdue')"
+          >
+            <span class="sla-summary-bar__dot sla-summary-bar__dot--overdue" aria-hidden="true" />
+            <span class="sla-summary-bar__label">已超时</span>
+            <span class="sla-summary-bar__count">{{ overdueCount }}</span>
+          </button>
+          <button
+            type="button"
+            class="sla-summary-bar__badge sla-summary-bar__badge--severe"
+            :class="{ 'is-active': activeSummaryBadge === 'severe_overdue' }"
+            :aria-pressed="activeSummaryBadge === 'severe_overdue'"
+            @click="onSummaryBadgeClick('severe_overdue')"
+          >
+            <span class="sla-summary-bar__dot sla-summary-bar__dot--severe" aria-hidden="true" />
+            <span class="sla-summary-bar__label">严重超时</span>
+            <span class="sla-summary-bar__count">{{ severeOverdueCount }}</span>
+          </button>
+          <span class="sla-summary-bar__divider" aria-hidden="true" />
+          <span class="sla-summary-bar__total">当前列表 {{ total }} 条</span>
+        </div>
       </div>
       <NSpace>
-        <NButton :loading="scanning" @click="runScan">立即扫描</NButton>
+        <NButton type="primary" size="small" :loading="scanning" @click="runScan">
+          <template #icon>
+            <ScanBarcode class="h-4 w-4" :stroke-width="ICON_STROKE" aria-hidden="true" />
+          </template>
+          立即扫描
+        </NButton>
       </NSpace>
     </div>
 
@@ -914,7 +1168,7 @@ onMounted(() => {
         flex-height
         class="sla-exceptions-table h-full"
         size="small"
-        :scroll-x="1848"
+        :scroll-x="1720"
       />
     </div>
 
@@ -984,6 +1238,142 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.sla-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--color-fg);
+}
+
+.sla-summary-bar__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  margin: 0;
+  padding: 0.25rem 0.625rem;
+  border: 1px solid var(--color-border, #e4e4e7);
+  border-radius: 9999px;
+  background: var(--color-bg-elevated, #fff);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.sla-summary-bar__badge:hover {
+  border-color: #d4d4d8;
+  background: #fafafa;
+}
+
+.sla-summary-bar__badge:focus-visible {
+  outline: 2px solid var(--color-accent, #8b5cf6);
+  outline-offset: 2px;
+}
+
+.sla-summary-bar__badge.is-active {
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.sla-summary-bar__badge--exception.is-active {
+  border-color: #e02020;
+  background: #fef2f2;
+}
+
+.sla-summary-bar__badge--warning.is-active {
+  border-color: #f7b500;
+  background: #fffbeb;
+}
+
+.sla-summary-bar__badge--overdue.is-active {
+  border-color: #fa6400;
+  background: #fff7ed;
+}
+
+.sla-summary-bar__badge--severe.is-active {
+  border-color: #d0021b;
+  background: #fef2f2;
+}
+
+.sla-summary-bar__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.sla-summary-bar__dot--exception {
+  background: #e02020;
+}
+
+.sla-summary-bar__dot--warning {
+  background: #f7b500;
+}
+
+.sla-summary-bar__dot--overdue {
+  background: #fa6400;
+}
+
+.sla-summary-bar__dot--severe {
+  background: #d0021b;
+}
+
+.sla-summary-bar__label {
+  color: var(--color-fg-secondary, #52525b);
+}
+
+.sla-summary-bar__count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-emphasis, #18181b);
+}
+
+.sla-summary-bar__badge.is-active .sla-summary-bar__label,
+.sla-summary-bar__badge.is-active .sla-summary-bar__count {
+  color: inherit;
+}
+
+.sla-summary-bar__divider {
+  width: 1px;
+  height: 0.875rem;
+  margin: 0 0.25rem;
+  background: var(--color-border, #e4e4e7);
+  flex-shrink: 0;
+}
+
+.sla-summary-bar__total {
+  color: #999999;
+  font-variant-numeric: tabular-nums;
+  padding-left: 0.25rem;
+}
+
+.sla-exceptions-table :deep(.sla-overdue-days) {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.sla-exceptions-table :deep(.sla-overdue-days--severe) {
+  color: #d0021b;
+}
+
+.sla-exceptions-table :deep(.sla-overdue-days--overdue) {
+  color: #fa6400;
+}
+
+.sla-exceptions-table :deep(.sla-overdue-days--ahead) {
+  color: #16a34a;
+}
+
+.sla-exceptions-table :deep(.sla-overdue-days--due) {
+  color: #f7b500;
+}
+
 .sla-follow-tabs {
   flex-shrink: 0;
 }

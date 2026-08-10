@@ -10,10 +10,11 @@ import {
   type ShipmentExceptionFollowupNotification,
 } from '@/api/exceptionFollowup'
 import {
-  followUpShipmentSlaAlert,
+  batchFollowUpShipmentSlaAlerts,
+  batchResolveShipmentSlaAlerts,
   getShipmentSlaTodoNotifications,
-  resolveShipmentSlaAlert,
   slaAlertAsCard,
+  slaRelatedAlertIds,
   type ShipmentSlaAlert,
 } from '@/api/shipmentSla'
 import {
@@ -38,6 +39,7 @@ const message = useMessage()
 const { refreshPendingShipmentSlaAlertCount } = usePendingShipmentSlaAlertCount()
 
 const loading = ref(false)
+const batchBusy = ref(false)
 const items = ref<TodoItem[]>([])
 const pendingCount = ref(0)
 const quoteSummary = ref<QuoteNotificationSummary | null>(null)
@@ -46,6 +48,14 @@ const popoverShow = ref(false)
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const hasPending = computed(() => pendingCount.value > 0)
+const slaItems = computed(() => items.value.filter((x): x is Extract<TodoItem, { kind: 'sla' }> => x.kind === 'sla'))
+const slaRelatedIds = computed(() => {
+  const ids: string[] = []
+  for (const row of slaItems.value) {
+    ids.push(...slaRelatedAlertIds(row.sla))
+  }
+  return [...new Set(ids)]
+})
 
 function mergeTodos(
   groups: ShipmentGroupNotification[],
@@ -68,7 +78,7 @@ function mergeTodos(
     })),
     ...slaAlerts.map((s) => ({
       kind: 'sla' as const,
-      id: `sla:${s.id}`,
+      id: `sla:${s.shipmentNo || s.id}`,
       triggeredAt: s.updatedTime || s.createdTime,
       sla: s,
     })),
@@ -163,9 +173,11 @@ async function resolveException(n: ShipmentExceptionFollowupNotification) {
 }
 
 async function followUpSla(n: ShipmentSlaAlert) {
+  const ids = slaRelatedAlertIds(n)
+  if (!ids.length) return
   try {
-    await followUpShipmentSlaAlert(n.id)
-    message.success('已记录跟进')
+    const res = await batchFollowUpShipmentSlaAlerts(ids)
+    message.success(`已记录跟进 ${res.updated} 条`)
     void refreshPendingShipmentSlaAlertCount()
     await load()
   } catch (e) {
@@ -174,14 +186,35 @@ async function followUpSla(n: ShipmentSlaAlert) {
 }
 
 async function resolveSla(n: ShipmentSlaAlert) {
+  const ids = slaRelatedAlertIds(n)
+  if (!ids.length) return
   try {
-    await resolveShipmentSlaAlert(n.id)
-    items.value = items.value.filter((x) => !(x.kind === 'sla' && x.sla.id === n.id))
+    const res = await batchResolveShipmentSlaAlerts(ids)
+    items.value = items.value.filter((x) => !(x.kind === 'sla' && x.sla.shipmentNo === n.shipmentNo))
     pendingCount.value = Math.max(0, pendingCount.value - 1)
     void refreshPendingShipmentSlaAlertCount()
-    message.success('已标记解决')
+    message.success(`已标记解决 ${res.updated} 条`)
   } catch (e) {
     message.error(e instanceof Error ? e.message : '操作失败')
+  }
+}
+
+async function batchFollowUpVisibleSla() {
+  const ids = slaRelatedIds.value
+  if (!ids.length) {
+    message.info('当前列表无时效待办')
+    return
+  }
+  batchBusy.value = true
+  try {
+    const res = await batchFollowUpShipmentSlaAlerts(ids)
+    message.success(`已跟进 ${res.updated} 条时效预警`)
+    void refreshPendingShipmentSlaAlertCount()
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '批量跟进失败')
+  } finally {
+    batchBusy.value = false
   }
 }
 
@@ -249,7 +282,22 @@ onUnmounted(() => {
     <div class="header-notify-popover">
       <div class="header-notify-popover__head">
         <span class="header-notify-popover__title">待办</span>
-        <span v-if="hasPending" class="header-notify-popover__count">{{ pendingCount }} 项待处理</span>
+        <div class="header-notify-popover__actions">
+          <span v-if="hasPending" class="header-notify-popover__count">{{ pendingCount }} 项待处理</span>
+          <button
+            v-if="slaRelatedIds.length > 0"
+            type="button"
+            class="header-notify-popover__link"
+            :disabled="batchBusy"
+            title="对本页展示的时效预警全部标记已跟进"
+            @click="batchFollowUpVisibleSla"
+          >
+            本页已跟进
+          </button>
+          <button type="button" class="header-notify-popover__link" @click="goExceptionTracking">
+            异常跟踪
+          </button>
+        </div>
       </div>
 
       <NSpin :show="loading" size="small">
@@ -265,7 +313,10 @@ onUnmounted(() => {
             {{ quoteSummary.expiringSoonCount }}
           </span>
         </button>
-        <p v-if="!loading && items.length === 0 && !(quoteSummary && quoteSummary.pendingCount)" class="header-notify-popover__empty">
+        <p
+          v-if="!loading && items.length === 0 && !(quoteSummary && quoteSummary.pendingCount)"
+          class="header-notify-popover__empty"
+        >
           暂无待办
         </p>
         <ul v-else-if="items.length > 0" class="header-notify-popover__list header-notify-popover__list--alerts">
@@ -286,8 +337,13 @@ onUnmounted(() => {
               @click="goGroup(n.group.groupId)"
             >
               <template #aside>
-                <button type="button" class="group-alert-card__btn" @click.stop="dismissGroup(n.group)">
-                  知道了
+                <button
+                  type="button"
+                  class="group-alert-card__btn"
+                  title="仅标已读，待办不会消失；真正完成请点「已处理」"
+                  @click.stop="dismissGroup(n.group)"
+                >
+                  稍后再说
                 </button>
                 <button
                   type="button"
@@ -315,8 +371,13 @@ onUnmounted(() => {
               @click="goShipment(n.exception.shipmentNo)"
             >
               <template #aside>
-                <button type="button" class="group-alert-card__btn" @click.stop="dismissException(n.exception)">
-                  知道了
+                <button
+                  type="button"
+                  class="group-alert-card__btn"
+                  title="仅标已读，待办不会消失；真正完成请点「已跟进」"
+                  @click.stop="dismissException(n.exception)"
+                >
+                  稍后再说
                 </button>
                 <button
                   type="button"
@@ -445,9 +506,31 @@ onUnmounted(() => {
   color: var(--color-fg-emphasis);
 }
 
+.header-notify-popover__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
 .header-notify-popover__count {
   font-size: 0.75rem;
   color: rgb(217 119 6);
+}
+
+.header-notify-popover__link {
+  border: none;
+  padding: 0;
+  background: transparent;
+  font-size: 0.75rem;
+  color: var(--color-accent, #2563eb);
+  cursor: pointer;
+}
+
+.header-notify-popover__link:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .header-notify-popover__empty {

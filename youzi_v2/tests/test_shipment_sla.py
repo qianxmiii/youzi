@@ -124,12 +124,18 @@ def test_arrival_no_delivery_after_twelve_days() -> None:
 
 def test_stage_event_keys() -> None:
     assert build_event_key(
+        shipment_no="SN1",
+        alert_type=ALERT_WAREHOUSE_NO_DEPARTURE,
+        anchor_date="2026-06-01",
+    ) == "SN1|WAREHOUSE_NO_DEPARTURE|2026-06-01"
+    assert build_event_key(
+        shipment_no="SN1",
+        rule_id="r1",
+        due_date="2026-07-06",
+    ) == "SN1|DELIVERY_TIME|r1|2026-07-06"
+    # 兼容旧调用：仅传 shipment_id
+    assert build_event_key(
         shipment_id="s1",
         alert_type=ALERT_WAREHOUSE_NO_DEPARTURE,
         anchor_date="2026-06-01",
     ) == "s1|WAREHOUSE_NO_DEPARTURE|2026-06-01"
-    assert build_event_key(
-        shipment_id="s1",
-        rule_id="r1",
-        due_date="2026-07-06",
-    ) == "s1|DELIVERY_TIME|r1|2026-07-06"

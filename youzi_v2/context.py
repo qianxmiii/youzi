@@ -84,6 +84,7 @@ from .schemas.shipment_groups import (
 from .schemas.channels import ChannelIn, ChannelSeedResult, ChannelUpdateIn
 from .schemas.shipment_sla import (
     ChannelSlaRuleIn,
+    ShipmentSlaAlertBatchIn,
     ShipmentSlaAlertConvertIn,
     ShipmentSlaAlertNoteIn,
     ShipmentSlaScanResult,

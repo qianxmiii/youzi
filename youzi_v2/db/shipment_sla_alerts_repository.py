@@ -38,6 +38,81 @@ from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 EXCEPTION_CODES_TABLE = "shipment_exception_codes"
 CARRIER_CODES_TABLE = "carrier_codes"
 
+ALERT_TYPE_LABELS: dict[str, str] = {
+    "DELIVERY_TIME": "运输时效",
+    "WAREHOUSE_NO_DEPARTURE": "入库未开船",
+    "ARRIVAL_NO_DELIVERY": "到港未送仓",
+}
+
+_RISK_RANK = {
+    "severe_overdue": 0,
+    "overdue": 1,
+    "warning_soon": 2,
+}
+
+# 同风险等级时：阶段卡点优先于通用运输时效
+_ALERT_TYPE_RANK = {
+    "WAREHOUSE_NO_DEPARTURE": 0,
+    "ARRIVAL_NO_DELIVERY": 1,
+    "DELIVERY_TIME": 2,
+}
+
+
+def _alert_severity_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    return (
+        _RISK_RANK.get(str(item.get("riskLevel") or ""), 99),
+        _ALERT_TYPE_RANK.get(str(item.get("alertType") or ""), 99),
+        str(item.get("dueDate") or "9999-99-99"),
+        str(item.get("updatedTime") or ""),
+    )
+
+
+def _merge_alerts_by_shipment(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """同运单多条预警合并为一条；保留最严重的一条，附带 sibling ids。"""
+    groups: dict[str, list[dict[str, Any]]] = {}
+    order: list[str] = []
+    for item in items:
+        sn = (item.get("shipmentNo") or "").strip()
+        if not sn:
+            continue
+        if sn not in groups:
+            groups[sn] = []
+            order.append(sn)
+        groups[sn].append(item)
+
+    merged: list[dict[str, Any]] = []
+    for sn in order:
+        bucket = groups[sn]
+        bucket.sort(key=_alert_severity_sort_key)
+        primary = dict(bucket[0])
+        types: list[str] = []
+        related: list[str] = []
+        for row in bucket:
+            at = (row.get("alertType") or "").strip()
+            if at and at not in types:
+                types.append(at)
+            rid = (row.get("id") or "").strip()
+            if rid and rid not in related:
+                related.append(rid)
+        # 类型按严重度展示顺序
+        types.sort(key=lambda t: _ALERT_TYPE_RANK.get(t, 99))
+        primary["alertTypes"] = types
+        primary["relatedAlertIds"] = related
+        primary["alertTypeLabels"] = [ALERT_TYPE_LABELS.get(t, t) for t in types]
+        merged.append(primary)
+    # 合并后仍按严重度排序，保证分页语义稳定
+    merged.sort(key=_alert_severity_sort_key)
+    return merged
+
+
+def _merge_todo_alerts_by_shipment(
+    items: list[dict[str, Any]],
+    *,
+    limit: int,
+) -> list[dict[str, Any]]:
+    """同运单多条预警合并为一条展示；保留最严重的一条，附带 sibling ids。"""
+    return _merge_alerts_by_shipment(items)[: max(0, limit)]
+
 RESOLVE_ON_DELIVERY_STATUSES = ("open", "acknowledged", STATUS_CONVERTED)
 
 _FOLLOW_UP_STATS_SQL = f"""
@@ -191,6 +266,13 @@ def _alert_to_api(
         "shipmentId": row["shipment_id"],
         "shipmentNo": row["shipment_no"],
         "alertType": row["alert_type"],
+        "alertTypes": [row["alert_type"]] if row["alert_type"] else [],
+        "alertTypeLabels": (
+            [ALERT_TYPE_LABELS.get(row["alert_type"], row["alert_type"])]
+            if row["alert_type"]
+            else []
+        ),
+        "relatedAlertIds": [row["id"]] if row["id"] else [],
         "riskLevel": row["risk_level"],
         "status": row["status"],
         "severity": row["severity"],
@@ -378,25 +460,32 @@ class ShipmentSlaAlertsRepository:
         start_time: str,
         alert_type: str = "DELIVERY_TIME",
     ) -> bool:
-        """新建或更新 open/acknowledged 预警；返回是否新建。"""
+        """新建或更新 open/acknowledged 预警；返回是否新建。
+
+        同运单号 + 同 alert_type 仅保留当前这条 active，其余自动关闭。
+        """
         key = event_key.strip()
         now = now_str()
         severity = risk_to_severity(risk_level)
         alert = (alert_type or "DELIVERY_TIME").strip()
+        sid = shipment_id.strip()
+        sno = shipment_no.strip()
         with self._database.lock:
             row = self._conn.execute(
-                f"SELECT id, status FROM {TABLE_NAME} WHERE event_key = ?",
+                f"SELECT id, status, shipment_id FROM {TABLE_NAME} WHERE event_key = ?",
                 (key,),
             ).fetchone()
             if row:
                 status = (row["status"] or "").strip()
+                keep_id = str(row["id"])
                 if status in ACTIVE_STATUSES:
                     self._conn.execute(
                         f"""
                         UPDATE {TABLE_NAME}
                         SET risk_level = ?, severity = ?, due_date = ?, warning_date = ?,
                             start_field = ?, start_time = ?, rule_scope = ?, rule_id = ?,
-                            channel_code = ?, carrier_code = ?, updated_time = ?
+                            channel_code = ?, carrier_code = ?, shipment_id = ?,
+                            shipment_no = ?, updated_time = ?
                         WHERE id = ?
                         """,
                         (
@@ -410,13 +499,22 @@ class ShipmentSlaAlertsRepository:
                             rule_id,
                             channel_code,
                             carrier_code,
+                            sid,
+                            sno,
                             now,
-                            row["id"],
+                            keep_id,
                         ),
+                    )
+                    self._resolve_sibling_open_locked(
+                        shipment_no=sno,
+                        alert_type=alert,
+                        keep_id=keep_id,
+                        now=now,
                     )
                     self._conn.commit()
                 return False
 
+            keep_id = str(uuid.uuid4())
             self._conn.execute(
                 f"""
                 INSERT INTO {TABLE_NAME} (
@@ -426,9 +524,9 @@ class ShipmentSlaAlertsRepository:
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    str(uuid.uuid4()),
-                    shipment_id.strip(),
-                    shipment_no.strip(),
+                    keep_id,
+                    sid,
+                    sno,
                     alert,
                     risk_level,
                     STATUS_OPEN,
@@ -446,8 +544,130 @@ class ShipmentSlaAlertsRepository:
                     now,
                 ),
             )
+            self._resolve_sibling_open_locked(
+                shipment_no=sno,
+                alert_type=alert,
+                keep_id=keep_id,
+                now=now,
+            )
             self._conn.commit()
         return True
+
+    def _resolve_sibling_open_locked(
+        self,
+        *,
+        shipment_no: str,
+        alert_type: str,
+        keep_id: str,
+        now: str,
+    ) -> int:
+        """同运单号+类型的其它 active 预警关闭（调用方已持锁）。"""
+        sno = shipment_no.strip()
+        at = alert_type.strip()
+        if not sno or not at:
+            return 0
+        placeholders = ",".join("?" for _ in ACTIVE_STATUSES)
+        cur = self._conn.execute(
+            f"""
+            UPDATE {TABLE_NAME}
+            SET status = ?, resolved_time = ?, updated_time = ?
+            WHERE TRIM(shipment_no) = ?
+              AND alert_type = ?
+              AND id != ?
+              AND status IN ({placeholders})
+            """,
+            (STATUS_RESOLVED, now, now, sno, at, keep_id, *ACTIVE_STATUSES),
+        )
+        return int(cur.rowcount or 0)
+
+    def resolve_orphan_alerts(self) -> int:
+        """关闭 shipment_id 已不存在的挂起预警。"""
+        now = now_str()
+        placeholders = ",".join("?" for _ in RESOLVE_ON_DELIVERY_STATUSES)
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {TABLE_NAME}
+                SET status = ?, resolved_time = ?, updated_time = ?
+                WHERE status IN ({placeholders})
+                  AND NOT EXISTS (
+                    SELECT 1 FROM {SHIPMENTS_TABLE} s WHERE s.id = {TABLE_NAME}.shipment_id
+                  )
+                """,
+                (STATUS_RESOLVED, now, now, *RESOLVE_ON_DELIVERY_STATUSES),
+            )
+            self._conn.commit()
+            return int(cur.rowcount or 0)
+
+    def rematch_alerts_to_current_shipments(self) -> int:
+        """运单号仍在、但 shipment_id 已换新：把挂起预警绑到当前运单。"""
+        now = now_str()
+        placeholders = ",".join("?" for _ in RESOLVE_ON_DELIVERY_STATUSES)
+        with self._database.lock:
+            cur = self._conn.execute(
+                f"""
+                UPDATE {TABLE_NAME}
+                SET shipment_id = (
+                      SELECT s.id FROM {SHIPMENTS_TABLE} s
+                      WHERE TRIM(s.shipment_no) = TRIM({TABLE_NAME}.shipment_no)
+                      LIMIT 1
+                    ),
+                    updated_time = ?
+                WHERE status IN ({placeholders})
+                  AND TRIM(COALESCE(shipment_no, '')) != ''
+                  AND NOT EXISTS (
+                    SELECT 1 FROM {SHIPMENTS_TABLE} s WHERE s.id = {TABLE_NAME}.shipment_id
+                  )
+                  AND EXISTS (
+                    SELECT 1 FROM {SHIPMENTS_TABLE} s
+                    WHERE TRIM(s.shipment_no) = TRIM({TABLE_NAME}.shipment_no)
+                  )
+                """,
+                (now, *RESOLVE_ON_DELIVERY_STATUSES),
+            )
+            self._conn.commit()
+            return int(cur.rowcount or 0)
+
+    def dedupe_open_alerts_by_shipment_type(self) -> int:
+        """同运单号 + 同类型多条 active：保留最近更新的一条，其余关闭。"""
+        now = now_str()
+        placeholders = ",".join("?" for _ in ACTIVE_STATUSES)
+        with self._database.lock:
+            dups = self._conn.execute(
+                f"""
+                SELECT TRIM(shipment_no) AS sn, alert_type AS at, COUNT(*) AS c
+                FROM {TABLE_NAME}
+                WHERE status IN ({placeholders})
+                  AND TRIM(COALESCE(shipment_no, '')) != ''
+                GROUP BY TRIM(shipment_no), alert_type
+                HAVING c > 1
+                """,
+                (*ACTIVE_STATUSES,),
+            ).fetchall()
+            total = 0
+            for dup in dups:
+                sn = (dup["sn"] or "").strip()
+                at = (dup["at"] or "").strip()
+                keep = self._conn.execute(
+                    f"""
+                    SELECT id FROM {TABLE_NAME}
+                    WHERE TRIM(shipment_no) = ? AND alert_type = ?
+                      AND status IN ({placeholders})
+                    ORDER BY datetime(updated_time) DESC, datetime(created_time) DESC
+                    LIMIT 1
+                    """,
+                    (sn, at, *ACTIVE_STATUSES),
+                ).fetchone()
+                if not keep:
+                    continue
+                total += self._resolve_sibling_open_locked(
+                    shipment_no=sn,
+                    alert_type=at,
+                    keep_id=str(keep["id"]),
+                    now=now,
+                )
+            self._conn.commit()
+            return total
 
     def resolve_open_for_shipment(
         self,
@@ -600,15 +820,6 @@ class ShipmentSlaAlertsRepository:
 
         where = " AND ".join(conditions)
         with self._database.lock:
-            total = self._conn.execute(
-                f"""
-                SELECT COUNT(*) AS c
-                FROM {TABLE_NAME} a
-                INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
-                WHERE {where}
-                """,
-                params,
-            ).fetchone()["c"]
             rows = self._conn.execute(
                 f"""
                 SELECT a.*, s.customer, s.destination_port_code, s.atd, s.ata, s.warehouse_entry_time,
@@ -645,16 +856,21 @@ class ShipmentSlaAlertsRepository:
                   CASE a.status WHEN 'open' THEN 0 WHEN 'acknowledged' THEN 1 ELSE 2 END,
                   a.due_date ASC,
                   datetime(a.updated_time) DESC
-                LIMIT ? OFFSET ?
                 """,
-                [*params, limit, offset],
+                params,
             ).fetchall()
         rules_by_channel = self._load_channel_rules_grouped()
+        items = [
+            _alert_to_api(r, rules_by_channel=rules_by_channel) for r in rows
+        ]
+        # 待办列表：同运单只保留最严重一条（历史 scope=all 仍逐条展示）
+        if (scope or "todo").strip().lower() != "all":
+            items = _merge_alerts_by_shipment(items)
+        total = len(items)
+        page = items[offset : offset + limit]
         return {
-            "items": [
-                _alert_to_api(r, rules_by_channel=rules_by_channel) for r in rows
-            ],
-            "total": int(total),
+            "items": page,
+            "total": total,
             "limit": limit,
             "offset": offset,
         }
@@ -672,13 +888,23 @@ class ShipmentSlaAlertsRepository:
                 """,
                 excl,
             ).fetchall()
+            pending_row = self._conn.execute(
+                f"""
+                SELECT COUNT(DISTINCT a.shipment_no) AS c
+                FROM {TABLE_NAME} a
+                INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
+                WHERE a.status IN (?, ?)
+                  AND {sla_excluded_channels_sql("s.channel_code")}
+                """,
+                (STATUS_OPEN, STATUS_ACKNOWLEDGED, *excl),
+            ).fetchone()
             exc_row = self._conn.execute(
                 f"""
                 SELECT COUNT(*) AS c FROM {SHIPMENTS_TABLE}
                 WHERE exception_code IS NOT NULL AND TRIM(exception_code) != ''
                 """
             ).fetchone()
-        pending_open = 0
+        pending_open = int(pending_row["c"] or 0)
         severe = 0
         overdue = 0
         warning_soon = 0
@@ -687,7 +913,6 @@ class ShipmentSlaAlertsRepository:
             st = row["status"]
             count = int(row["c"] or 0)
             if st in ACTIVE_STATUSES:
-                pending_open += count
                 if rl == RISK_SEVERE_OVERDUE:
                     severe += count
                 elif rl == RISK_OVERDUE:
@@ -703,8 +928,9 @@ class ShipmentSlaAlertsRepository:
         }
 
     def list_todo_notifications(self, *, limit: int = 20) -> list[dict[str, Any]]:
-        """顶栏待办：已超时/严重超时且待处理。"""
+        """顶栏待办：已超时/严重超时且待处理；按运单号合并（每票一张）。"""
         lim = max(1, min(limit, 50))
+        fetch_cap = max(lim * 4, 80)
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
@@ -731,17 +957,19 @@ class ShipmentSlaAlertsRepository:
                     RISK_SEVERE_OVERDUE,
                     RISK_SEVERE_OVERDUE,
                     *sla_excluded_channels_params(),
-                    lim,
+                    fetch_cap,
                 ),
             ).fetchall()
         rules_by_channel = self._load_channel_rules_grouped()
-        return [_alert_to_api(r, rules_by_channel=rules_by_channel) for r in rows]
+        items = [_alert_to_api(r, rules_by_channel=rules_by_channel) for r in rows]
+        return _merge_todo_alerts_by_shipment(items, limit=lim)
 
     def count_todo(self) -> int:
+        """待办角标：按运单号去重计数。"""
         with self._database.lock:
             row = self._conn.execute(
                 f"""
-                SELECT COUNT(*) AS c
+                SELECT COUNT(DISTINCT a.shipment_no) AS c
                 FROM {TABLE_NAME} a
                 INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
                 WHERE a.status = ? AND a.risk_level IN (?, ?)
@@ -750,6 +978,32 @@ class ShipmentSlaAlertsRepository:
                 (STATUS_OPEN, RISK_OVERDUE, RISK_SEVERE_OVERDUE, *sla_excluded_channels_params()),
             ).fetchone()
         return int(row["c"] or 0)
+
+    def batch_follow_up(self, alert_ids: list[str]) -> dict[str, Any]:
+        ok = 0
+        failed: list[dict[str, str]] = []
+        for aid in alert_ids:
+            aid = (aid or "").strip()
+            if not aid:
+                continue
+            if self.follow_up(aid):
+                ok += 1
+            else:
+                failed.append({"id": aid, "message": "预警不存在或不可跟进"})
+        return {"updated": ok, "failed": failed}
+
+    def batch_resolve(self, alert_ids: list[str]) -> dict[str, Any]:
+        ok = 0
+        failed: list[dict[str, str]] = []
+        for aid in alert_ids:
+            aid = (aid or "").strip()
+            if not aid:
+                continue
+            if self.resolve_alert(aid):
+                ok += 1
+            else:
+                failed.append({"id": aid, "message": "预警不存在或不可解决"})
+        return {"updated": ok, "failed": failed}
 
     def follow_up(self, alert_id: str) -> bool:
         """记录一次跟进，并将预警置为已跟进（可重复）。"""

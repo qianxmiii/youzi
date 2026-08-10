@@ -98,6 +98,26 @@ def evaluate_shipment_sla_alerts():
     return ShipmentSlaScanResult(**result)
 
 
+@router.post("/api/v1/shipment-sla-alerts/batch-follow-up")
+def batch_follow_up_shipment_sla_alerts(body: ShipmentSlaAlertBatchIn):
+    ids = [i.strip() for i in body.ids if i and i.strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids 不能为空")
+    if len(ids) > 200:
+        raise HTTPException(status_code=400, detail="单次最多 200 条")
+    return shipment_sla_alerts_repo.batch_follow_up(ids)
+
+
+@router.post("/api/v1/shipment-sla-alerts/batch-resolve")
+def batch_resolve_shipment_sla_alerts(body: ShipmentSlaAlertBatchIn):
+    ids = [i.strip() for i in body.ids if i and i.strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="ids 不能为空")
+    if len(ids) > 200:
+        raise HTTPException(status_code=400, detail="单次最多 200 条")
+    return shipment_sla_alerts_repo.batch_resolve(ids)
+
+
 @router.post("/api/v1/shipment-sla-alerts/{alert_id}/follow-up")
 def follow_up_shipment_sla_alert(alert_id: str):
     if not shipment_sla_alerts_repo.follow_up(alert_id):

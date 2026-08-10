@@ -238,6 +238,8 @@ class ShipmentGroupAlertsRepository:
     ) -> bool:
         gid = group_id.strip()
         key = event_key.strip()
+        rt = normalize_rule_type(rule_type)
+        sn = (shipment_no or "").strip()
         now = now_str()
         with self._database.lock:
             existing = self._conn.execute(
@@ -245,6 +247,20 @@ class ShipmentGroupAlertsRepository:
                 (key,),
             ).fetchone()
             if existing:
+                return False
+            # 同组同规则同运单已有未处理待办则跳过，避免 ETA 微调叠出多条
+            pending = self._conn.execute(
+                f"""
+                SELECT id FROM {NOTIFICATIONS_TABLE}
+                WHERE group_id = ?
+                  AND rule_type = ?
+                  AND TRIM(COALESCE(shipment_no, '')) = ?
+                  AND (resolved_at IS NULL OR TRIM(resolved_at) = '')
+                LIMIT 1
+                """,
+                (gid, rt, sn),
+            ).fetchone()
+            if pending:
                 return False
             self._conn.execute(
                 f"""
@@ -256,11 +272,11 @@ class ShipmentGroupAlertsRepository:
                 (
                     str(uuid.uuid4()),
                     gid,
-                    normalize_rule_type(rule_type),
+                    rt,
                     severity,
                     title,
                     message,
-                    (shipment_no or "").strip(),
+                    sn,
                     key,
                     now,
                 ),

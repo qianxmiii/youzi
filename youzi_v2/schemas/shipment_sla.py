@@ -40,6 +40,12 @@ class ShipmentSlaAlertNoteIn(BaseModel):
     note: str = ""
 
 
+class ShipmentSlaAlertBatchIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    ids: list[str] = Field(default_factory=list)
+
+
 class ShipmentSlaScanResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

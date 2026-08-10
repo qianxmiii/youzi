@@ -807,12 +807,27 @@ onMounted(() => {
 <template>
   <div class="flex h-full min-h-0 w-full flex-col gap-4">
     <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
-      <div>
+      <div class="min-w-0">
         <h1 class="page-h2">催款管理</h1>
-        <p class="page-subtitle mt-1">
-          待催 {{ todoCount }} 条 · 全部未付款 {{ allUnpaidCount }} 条 · 逾期
-          {{ overdueCount }} 条 · 当前列表 {{ total }} 条
-        </p>
+        <div class="payment-summary-bar mt-1.5">
+          <span class="payment-summary-bar__item">
+            <span class="payment-summary-bar__dot payment-summary-bar__dot--todo" aria-hidden="true" />
+            <span class="payment-summary-bar__label">待催</span>
+            <span class="payment-summary-bar__count">{{ todoCount }}</span>
+          </span>
+          <span class="payment-summary-bar__item">
+            <span class="payment-summary-bar__dot payment-summary-bar__dot--unpaid" aria-hidden="true" />
+            <span class="payment-summary-bar__label">全部未付款</span>
+            <span class="payment-summary-bar__count">{{ allUnpaidCount }}</span>
+          </span>
+          <span class="payment-summary-bar__item">
+            <span class="payment-summary-bar__dot payment-summary-bar__dot--overdue" aria-hidden="true" />
+            <span class="payment-summary-bar__label">逾期</span>
+            <span class="payment-summary-bar__count">{{ overdueCount }}</span>
+          </span>
+          <span class="payment-summary-bar__divider" aria-hidden="true" />
+          <span class="payment-summary-bar__total">当前列表 {{ total }} 条</span>
+        </div>
       </div>
       <NButton size="small" :loading="exporting" :disabled="total <= 0" @click="handleExport">
         导出
@@ -974,6 +989,63 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.payment-summary-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 1rem 1.25rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  color: var(--color-fg);
+}
+
+.payment-summary-bar__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+}
+
+.payment-summary-bar__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.payment-summary-bar__dot--todo {
+  background: #e02020;
+}
+
+.payment-summary-bar__dot--unpaid {
+  background: #f7b500;
+}
+
+.payment-summary-bar__dot--overdue {
+  background: #fa6400;
+}
+
+.payment-summary-bar__label {
+  color: var(--color-fg-secondary, #52525b);
+}
+
+.payment-summary-bar__count {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-emphasis, #18181b);
+}
+
+.payment-summary-bar__divider {
+  width: 1px;
+  height: 0.875rem;
+  background: var(--color-border, #e4e4e7);
+  flex-shrink: 0;
+}
+
+.payment-summary-bar__total {
+  color: #999999;
+  font-variant-numeric: tabular-nums;
+}
+
 .payment-reminders-scope-tabs {
   flex-shrink: 0;
 }

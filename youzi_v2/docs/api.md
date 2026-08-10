@@ -154,11 +154,15 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/shipment-sla-alerts` | 预警列表（`scope=todo` 默认待办：未签收且 `open`/`acknowledged`；`scope=all` 含历史；`riskLevel` 为 `warning_soon`/`overdue`/`severe_overdue`；`alertType` 为 `WAREHOUSE_NO_DEPARTURE`/`ARRIVAL_NO_DELIVERY`；另支持 `status`、`hasException` 等） |
-| GET | `/api/v1/shipment-sla-alerts/summary` | 工作台摘要计数 |
-| GET | `/api/v1/shipment-sla-alerts/todo-notifications` | 顶栏待办（已超时/严重超时且 open） |
-| POST | `/api/v1/shipment-sla-alerts/evaluate` | 手动触发扫描 |
-| POST | `/api/v1/shipment-sla-alerts/{id}/acknowledge` | 标记已处理 |
+| GET | `/api/v1/shipment-sla-alerts` | 预警列表（`scope=todo` 默认待办：未签收且 open/acknowledged，**按运单合并只保留最严重一条**；`scope=all` 含历史且逐条；筛选见 `riskLevel` / `alertType` 等） |
+| GET | `/api/v1/shipment-sla-alerts/summary` | 工作台摘要计数（`pendingOpen` 按运单号去重） |
+| GET | `/api/v1/shipment-sla-alerts/todo-notifications` | 顶栏待办（已超时/严重超时且 open；按运单合并，`pendingCount` 按运单去重；项含 `alertTypes` / `relatedAlertIds`） |
+| POST | `/api/v1/shipment-sla-alerts/evaluate` | 手动触发扫描（含孤儿清理、重绑、同单同类型去重） |
+| POST | `/api/v1/shipment-sla-alerts/batch-follow-up` | 批量已跟进（body: `{ ids }`，最多 200） |
+| POST | `/api/v1/shipment-sla-alerts/batch-resolve` | 批量已解决（body: `{ ids }`，最多 200） |
+| POST | `/api/v1/shipment-sla-alerts/{id}/follow-up` | 记录跟进（置为 acknowledged） |
+| POST | `/api/v1/shipment-sla-alerts/{id}/acknowledge` | 同 follow-up（兼容） |
+| POST | `/api/v1/shipment-sla-alerts/{id}/resolve` | 标记已解决 |
 | POST | `/api/v1/shipment-sla-alerts/{id}/ignore` | 忽略 |
 | POST | `/api/v1/shipment-sla-alerts/{id}/convert` | 转为人工异常（默认 `TRANSIT_TIMEOUT`） |
 | GET | `/api/v1/channels/{code}/sla-rules` | 渠道时效规则 |

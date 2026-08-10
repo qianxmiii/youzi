@@ -259,15 +259,17 @@ def compute_days_in_transit(
 
 def build_event_key(
     *,
-    shipment_id: str,
+    shipment_no: str = "",
+    shipment_id: str = "",
     alert_type: str = ALERT_DELIVERY_TIME,
     rule_id: str = "",
     due_date: str = "",
     anchor_date: str = "",
 ) -> str:
-    sid = shipment_id.strip()
+    """稳定键：优先运单号，避免删建运单后换 UUID 重复开预警。"""
+    key_id = (shipment_no or shipment_id).strip()
     at = (alert_type or ALERT_DELIVERY_TIME).strip()
     if at == ALERT_DELIVERY_TIME:
-        return f"{sid}|{at}|{(rule_id or '').strip()}|{due_date.strip()}"
+        return f"{key_id}|{at}|{(rule_id or '').strip()}|{due_date.strip()}"
     anchor = (anchor_date or due_date).strip()
-    return f"{sid}|{at}|{anchor}"
+    return f"{key_id}|{at}|{anchor}"

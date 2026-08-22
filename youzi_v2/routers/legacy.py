@@ -57,45 +57,19 @@ async def product_import(invoice: UploadFile = File(...)):
     if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
         raise HTTPException(status_code=400, detail="请上传 .xlsx 或 .xls 文件")
 
-    task_id = str(uuid.uuid4())
-    extension = Path(filename).suffix if Path(filename).suffix else ".xlsx"
-    upload_path = UPLOAD_DIR / f"{task_id}{extension}"
-    output_path = OUTPUT_DIR / f"{task_id}.xls"
-
-    with upload_path.open("wb") as f:
-        shutil.copyfileobj(invoice.file, f)
-
+    data = await invoice.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    suffix = Path(filename).suffix or ".xlsx"
     try:
-        template_path = resolve_template_xls()
-        python_bin = os.environ.get("PYTHON", "python")
-        cmd = [
-            python_bin,
-            str(SCRIPT_PATH),
-            "--invoice",
-            str(upload_path),
-            "--template",
-            str(template_path),
-            "--config",
-            str(CONFIG_PATH),
-            "--output",
-            str(output_path),
-        ]
-        proc = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="ignore",
-            check=False,
-        )
-        if proc.returncode != 0:
-            message = (proc.stderr or proc.stdout or "转换失败").strip()
-            raise HTTPException(status_code=500, detail=message)
-    finally:
-        if upload_path.exists():
-            upload_path.unlink(missing_ok=True)
+        from ..services.product_import_convert import convert_invoice_to_product_import
 
-    return {"ok": True, "id": task_id, "filename": "产品导入模版.xls"}
+        result = convert_invoice_to_product_import(data, suffix=suffix)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"转换失败：{exc}") from exc
+    return {"ok": True, "id": result["id"], "filename": result["filename"]}
 
 @router.get("/api/product-import/download/{task_id}")
 def download_file(task_id: str):

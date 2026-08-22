@@ -14,6 +14,7 @@ export interface PaymentReminderItem {
   shipmentNo: string
   customer: string
   customerNo: string
+  refShipmentNo?: string
   billOfLadingNo?: string
   containerNo?: string
   isFcl?: boolean

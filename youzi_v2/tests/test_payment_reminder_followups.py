@@ -54,11 +54,11 @@ def _seed(db: Database, *, fcl: bool = False) -> str:
             db.conn.execute(
                 f"""
                 INSERT INTO {SHIPMENTS_TABLE} (
-                    id, shipment_no, customer, customer_no, etd, payment_status,
+                    id, shipment_no, customer, customer_no, ref_shipment_no, etd, payment_status,
                     created_time, updated_time
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (sid, "PAY-R-001", "客户A", "PO-1", "2026-07-01", "UNPAID", now, now),
+                (sid, "PAY-R-001", "客户A", "PO-1", "REF-001", "2026-07-01", "UNPAID", now, now),
             )
         db.conn.commit()
     return sid
@@ -90,6 +90,7 @@ def test_list_reminders_and_followup(tmp_path: Path) -> None:
     listed2 = repo.list_reminders(scope="overdue", limit=20, offset=0)
     row = next(i for i in listed2["items"] if i["shipmentNo"] == "PAY-R-001")
     assert row["customerNo"] == "PO-1"
+    assert row["refShipmentNo"] == "REF-001"
     assert row["isFcl"] is False
     assert row["followupCount"] == 1
     assert row["lastFollowupNote"] == "已电话催款"
@@ -216,7 +217,9 @@ def test_build_payment_reminder_export_bytes(tmp_path: Path) -> None:
     headers = [c.value for c in wb.active[1]]
     assert "ATA" in headers
     assert "签收日期" in headers
+    assert "关联单号" in headers
     row = {headers[i]: wb.active[2][i].value for i in range(len(headers))}
     assert row["ATA"] == "2026-06-20"
     assert row["签收日期"] == "2026-06-25"
+    assert row["关联单号"] == "REF-001"
 

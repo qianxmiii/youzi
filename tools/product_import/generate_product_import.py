@@ -2,6 +2,7 @@ import argparse
 import glob
 import json
 import os
+import re
 from typing import Any, Dict, List, Optional
 
 import xlrd
@@ -28,6 +29,20 @@ def find_template_xls(base_dir: str) -> str:
     return candidates[0] if candidates else all_xls[0]
 
 
+def normalize_cell(value: Any) -> Any:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip()
+    return value
+
+
+def normalize_header_name(value: Any) -> str:
+    text = str(value or "").replace("\r", "\n")
+    text = " ".join(part.strip() for part in text.split("\n") if part.strip())
+    return text.strip()
+
+
 def to_float(value: Any) -> Optional[float]:
     if value is None:
         return None
@@ -37,7 +52,15 @@ def to_float(value: Any) -> Optional[float]:
     try:
         return float(text)
     except ValueError:
-        return None
+        pass
+    # 件数常见写法：24CTNS / 24箱
+    m = re.match(r"^\s*(\d+(?:\.\d+)?)", text.replace(",", ""))
+    if m:
+        try:
+            return float(m.group(1))
+        except ValueError:
+            return None
+    return None
 
 
 def safe_div(a: Optional[float], b: Optional[float]) -> Optional[float]:
@@ -51,25 +74,31 @@ def load_config(config_path: str) -> Dict[str, Any]:
         return json.load(f)
 
 
-def normalize_cell(value: Any) -> Any:
-    if value is None:
-        return ""
-    if isinstance(value, str):
-        return value.strip()
-    return value
+def resolve_header_col(header_index: Dict[str, int], wanted: str) -> Optional[int]:
+    """精确或前缀匹配表头（兼容换行附加说明，如 申报总数量\\n（pcs））。"""
+    wanted_n = normalize_header_name(wanted)
+    if not wanted_n:
+        return None
+    if wanted_n in header_index:
+        return header_index[wanted_n]
+    # 箱单表头常带括号说明：配置写「申报总数量」，实际为「申报总数量 （pcs）」
+    for name, col in header_index.items():
+        if name == wanted_n or name.startswith(wanted_n) or wanted_n in name:
+            return col
+    return None
 
 
 def build_invoice_header_index(ws, header_row: int) -> Dict[str, int]:
     header_index: Dict[str, int] = {}
     for col in range(1, ws.max_column + 1):
-        name = normalize_cell(ws.cell(header_row, col).value)
-        if isinstance(name, str) and name != "":
+        name = normalize_header_name(ws.cell(header_row, col).value)
+        if name:
             header_index[name] = col
     return header_index
 
 
 def get_by_header(ws, row_idx: int, header_index: Dict[str, int], header_name: str) -> Any:
-    col = header_index.get(header_name)
+    col = resolve_header_col(header_index, header_name)
     if col is None:
         return ""
     return ws.cell(row_idx, col).value
@@ -113,9 +142,6 @@ def read_invoice_rows(invoice_path: str, config: Dict[str, Any]) -> List[Dict[st
     computed_config = config.get("computed_mapping", {})
 
     header_index = build_invoice_header_index(ws, header_row)
-    missing_headers = sorted(set(mapping.values()) - set(header_index.keys()))
-    if missing_headers:
-        raise RuntimeError(f"箱单缺少配置中需要的字段: {', '.join(missing_headers)}")
 
     required_source_headers = set(mapping.values())
     for rule in computed_config.values():
@@ -127,7 +153,9 @@ def read_invoice_rows(invoice_path: str, config: Dict[str, Any]) -> List[Dict[st
             if denominator:
                 required_source_headers.add(denominator)
 
-    missing_headers = sorted(required_source_headers - set(header_index.keys()))
+    missing_headers = sorted(
+        h for h in required_source_headers if resolve_header_col(header_index, h) is None
+    )
     if missing_headers:
         raise RuntimeError(f"箱单缺少配置中需要的字段: {', '.join(missing_headers)}")
 
@@ -139,7 +167,11 @@ def read_invoice_rows(invoice_path: str, config: Dict[str, Any]) -> List[Dict[st
 
         row_raw: Dict[str, Any] = {}
         for src_header in required_source_headers:
-            row_raw[src_header] = normalize_cell(get_by_header(ws, row_idx, header_index, src_header))
+            val = normalize_cell(get_by_header(ws, row_idx, header_index, src_header))
+            # 材质/用途等字段去掉换行，便于导入
+            if isinstance(val, str):
+                val = " ".join(part.strip() for part in val.replace("\r", "\n").split("\n") if part.strip())
+            row_raw[src_header] = val
 
         item: Dict[str, Any] = {}
         for target_field, source_header in mapping.items():
@@ -154,6 +186,15 @@ def read_invoice_rows(invoice_path: str, config: Dict[str, Any]) -> List[Dict[st
     return rows
 
 
+def normalize_write_value(value: Any) -> Any:
+    """海关编码等大整数避免写成 6505009100.0。"""
+    if isinstance(value, float) and value.is_integer() and abs(value) >= 1e9:
+        return str(int(value))
+    if isinstance(value, float) and value.is_integer():
+        return int(value)
+    return value
+
+
 def fill_template(template_path: str, output_path: str, rows: List[Dict[str, Any]]) -> None:
     rb = xlrd.open_workbook(template_path, formatting_info=True)
     rsh = rb.sheet_by_index(0)
@@ -166,7 +207,7 @@ def fill_template(template_path: str, output_path: str, rows: List[Dict[str, Any
     for i, item in enumerate(rows):
         target_row = start_row + i
         for col_idx, header in enumerate(headers):
-            value = item.get(header, "")
+            value = normalize_write_value(item.get(header, ""))
             wsh.write(target_row, col_idx, value)
 
     wb.save(output_path)

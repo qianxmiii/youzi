@@ -112,6 +112,11 @@ class ShipmentPaymentFollowupsRepository:
             "shipmentNo": row["shipment_no"],
             "customer": row["customer"] or "",
             "customerNo": (row["customer_no"] or "") if "customer_no" in row.keys() else "",
+            "refShipmentNo": (
+                (row["ref_shipment_no"] or "").strip()
+                if "ref_shipment_no" in row.keys()
+                else ""
+            ),
             "billOfLadingNo": bill_of_lading_no,
             "containerNo": container_no,
             "isFcl": self._is_fcl_shipment(row),

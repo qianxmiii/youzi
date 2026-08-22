@@ -60,6 +60,32 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     badge: 'new',
     audience: '运营 / 客服',
   },
+  {
+    id: 'shipment-file-rename',
+    name: '运单文件重命名',
+    description: '按 Excel 运单号/国家/仓库代码/件数，批量重命名本地文件夹中的文件',
+    category: 'file',
+    route: '/tools/shipment-file-rename',
+    icon: 'download',
+    inputSummary: 'Excel + 本地文件夹',
+    outputSummary: '运单号-国家-仓库代码-件数',
+    status: 'active',
+    badge: 'new',
+    audience: '运营 / 仓配',
+  },
+  {
+    id: 'product-import',
+    name: '箱单转产品导入',
+    description: '上传客户箱单发票，按产品导入模板生成可导入的 .xls',
+    category: 'file',
+    route: '/tools/product-import',
+    icon: 'download',
+    inputSummary: '箱单（.xls / .xlsx）',
+    outputSummary: '产品导入模版.xls',
+    status: 'active',
+    badge: 'new',
+    audience: '运营 / 报关',
+  },
 ]
 
 export function toolsByCategory(

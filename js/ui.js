@@ -460,6 +460,7 @@ function showTab(tabId) {
 // 监听运输方式变化，当切换回非快递派时返回到单地址报价页面，并将下方 Tab 切回「快速查询」
 function handleDeliveryMethodChange() {
     const channel = document.getElementById('delivery-method-select').value;
+    if (typeof applySurchargeFeeDefaults === 'function') applySurchargeFeeDefaults();
     
     if (!channel.includes("express")) {
         // 第一个模块：返回到单地址报价（#single-quote 在 #quoteTabsContent 内，不在 #myTabContent）
@@ -520,9 +521,19 @@ function toggleMOQBoxInput() {
 
     // 根据复选框状态显示或隐藏输入框
     if (moqBoxCheckbox.checked) {
-        moqBoxInputContainer.style.display = "block"; // 显示输入框
+        moqBoxInputContainer.style.display = "flex"; // 显示输入框 + 单位
     } else {
         moqBoxInputContainer.style.display = "none"; // 隐藏输入框
+    }
+    updateQuote();
+}
+
+/** MOQ Box 单位切换：同步 placeholder 并刷新报价 */
+function onMoqBoxUnitChange() {
+    const unitEl = document.getElementById("moq-box-unit");
+    const inputEl = document.getElementById("moq-box-input");
+    if (unitEl && inputEl) {
+        inputEl.placeholder = unitEl.value || "kg";
     }
     updateQuote();
 }
@@ -544,6 +555,40 @@ function togglePickupFeeInput() {
     updateQuote();
 }
 
+// 派送费输入控制（单地址报价，USD / RMB）
+function toggleDeliveryFeeInput() {
+    const deliveryFeeCheckbox = document.getElementById("delivery-fee-checkbox");
+    const deliveryFeeInputContainer = document.getElementById("delivery-fee-input-container");
+
+    if (deliveryFeeCheckbox.checked) {
+        deliveryFeeInputContainer.style.display = "block";
+    } else {
+        deliveryFeeInputContainer.style.display = "none";
+        document.getElementById("delivery-fee").value = "";
+        document.getElementById("delivery-fee-USD").value = "";
+    }
+
+    updateQuote();
+}
+
+// 超长输入控制（费用结构同超尺寸）
+function toggleOverLengthFeeInput() {
+    const overLengthFeeCheckbox = document.getElementById("overlength_check");
+    const overLengthFeeInputContainer = document.getElementById("overlength-input-container");
+    const quantity = document.getElementById("quantity").value;
+    const overlength_quantity = document.getElementById("overlength-quantity");
+
+    if (overLengthFeeCheckbox.checked) {
+        overLengthFeeInputContainer.style.display = "block";
+        overlength_quantity.value = quantity;
+        if (typeof applySurchargeFeeDefaults === 'function') applySurchargeFeeDefaults(true);
+    } else {
+        overLengthFeeInputContainer.style.display = "none";
+    }
+
+    updateQuote();
+}
+
 // 超尺寸输入控制
 function toggleOverSizeFeeInput() {
     const overSizeFeeCheckbox = document.getElementById("oversize_check");
@@ -555,6 +600,7 @@ function toggleOverSizeFeeInput() {
     if (overSizeFeeCheckbox.checked) {
         overSizeFeeInputContainer.style.display = "block";
         oversize_quantity.value = quantity;
+        if (typeof applySurchargeFeeDefaults === 'function') applySurchargeFeeDefaults(true);
     } else {
         overSizeFeeInputContainer.style.display = "none";
     }
@@ -575,6 +621,7 @@ function toggleOverWeightFeeInput() {
     if (overWeightFeeCheckbox.checked) {
         overWeightFeeInputContainer.style.display = "block";
         overweight_quantity.value = quantity;
+        if (typeof applySurchargeFeeDefaults === 'function') applySurchargeFeeDefaults(true);
     } else {
         overWeightFeeInputContainer.style.display = "none";
     }

@@ -686,6 +686,13 @@ const columns = computed<DataTableColumns<PaymentReminderItem>>(() => [
     ellipsis: { tooltip: true },
     render: (row) => displayCustomerNo(row) || '—',
   },
+  {
+    title: '关联单号',
+    key: 'refShipmentNo',
+    width: 140,
+    ellipsis: { tooltip: true },
+    render: (row) => (row.refShipmentNo || '').trim() || '—',
+  },
   { title: '客户', key: 'customer', width: 132, ellipsis: { tooltip: true } },
   {
     title: '渠道',
@@ -902,7 +909,7 @@ onMounted(() => {
         flex-height
         class="payment-reminders-table h-full"
         size="small"
-        :scroll-x="1648"
+        :scroll-x="1788"
       />
     </div>
 

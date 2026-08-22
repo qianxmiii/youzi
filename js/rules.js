@@ -53,21 +53,92 @@ function getRemoteAddressfee(totalQuantity, unit, feeLabel) {
     return remoteAddressStr;
 }
 
+/** 超长/超尺寸/超重默认单价：Air express 用空派档，其它渠道用海派档 */
+function isAirExpressChannel(channel) {
+    return String(channel || '').includes('Air express');
+}
+
+function getSurchargeRates(channel) {
+    if (isAirExpressChannel(channel)) {
+        return {
+            oversize: { rmb: 200, usd: 30 },
+            overlength: { rmb: 200, usd: 30 },
+            overweight: { rmb: 280, usd: 42 },
+        };
+    }
+    return {
+        oversize: { rmb: 150, usd: 21 },
+        overlength: { rmb: 150, usd: 21 },
+        overweight: { rmb: 180, usd: 25 },
+    };
+}
+
+function currentQuoteChannel() {
+    return document.getElementById('delivery-method-select')?.value || '';
+}
+
+function resolveSurchargeUnitFee(feePerBox, unit, rmbDefault, usdDefault) {
+    let fee = feePerBox || (unit == "RMB" ? rmbDefault : usdDefault);
+    if (feePerBox && unit == "USD") {
+        fee = Math.round(feePerBox * usdDefault / rmbDefault);
+    }
+    return fee;
+}
+
+let lastSurchargeChannel = null;
+
+/** 按当前渠道把超长/超尺寸/超重输入框同步为对应默认 RMB（仅覆盖空值或已知默认档） */
+function applySurchargeFeeDefaults(force) {
+    const channel = currentQuoteChannel();
+    if (!force && channel === lastSurchargeChannel) return;
+    lastSurchargeChannel = channel;
+    const rates = getSurchargeRates(channel);
+    const knownOversize = [150, 200];
+    const knownOverweight = [180, 280];
+    const overlengthEl = document.getElementById('overlength-input');
+    const oversizeEl = document.getElementById('oversize-input');
+    const overweightEl = document.getElementById('overweight-input');
+    if (overlengthEl && (!overlengthEl.value || knownOversize.includes(Number(overlengthEl.value)))) {
+        overlengthEl.value = rates.overlength.rmb;
+    }
+    if (oversizeEl && (!oversizeEl.value || knownOversize.includes(Number(oversizeEl.value)))) {
+        oversizeEl.value = rates.oversize.rmb;
+    }
+    if (overweightEl && (!overweightEl.value || knownOverweight.includes(Number(overweightEl.value)))) {
+        overweightEl.value = rates.overweight.rmb;
+    }
+}
+
+// 获取超长费（默认单价与超尺寸相同）
+function getOverLengthFee(country, totalQuantity, unit, feePerBox = null) {
+    let overLengthStr = "";
+    let overLengthFee = new Decimal(0);
+    const rate = getSurchargeRates(currentQuoteChannel()).overlength;
+    const fee = resolveSurchargeUnitFee(feePerBox, unit, rate.rmb, rate.usd);
+
+    if (unit == "RMB") {
+        overLengthStr = LINE_BREAK + '超长费: ';
+        overLengthFee = new Decimal(fee).mul(totalQuantity).toFixed(2);
+        overLengthStr += fee + 'RMB/箱 * ' + totalQuantity.toFixed(0) + '箱 = ' + overLengthFee + 'RMB ';
+        addFee = addFee.add(overLengthFee);
+    } else {
+        overLengthStr = LINE_BREAK + 'OverLength fee: ';
+        overLengthFee = new Decimal(fee).mul(totalQuantity).toFixed(2);
+        overLengthStr += fee + 'usd/ctn * ' + totalQuantity.toFixed(0) + 'ctns = ' + overLengthFee + 'usd ';
+        addFee = addFee.add(overLengthFee);
+    }
+    return overLengthStr;
+}
+
 // 获取超尺寸费
 function getOverSizeFee(country, totalQuantity, unit, feePerBox = null) {
     let overSizeStr = "";
     let overSizeFee = new Decimal(0);
-    
-    // 如果没有传入费用，使用默认值
-    let fee = feePerBox || (unit == "RMB" ? 150 : 21);
-    
-    // 如果传入了费用且是USD单位，需要将RMB转换为USD（150RMB=21USD）
-    if (feePerBox && unit == "USD") {
-        fee = Math.round(feePerBox * 21 / 150); // 按150:21的比例换算
-    }
+    const rate = getSurchargeRates(currentQuoteChannel()).oversize;
+    const fee = resolveSurchargeUnitFee(feePerBox, unit, rate.rmb, rate.usd);
 
     if (unit == "RMB") {
-        overSizeStr = LINE_BREAK + '超长费: ';
+        overSizeStr = LINE_BREAK + '超尺寸费: ';
         overSizeFee = new Decimal(fee).mul(totalQuantity).toFixed(2);
         overSizeStr += fee + 'RMB/箱 * ' + totalQuantity.toFixed(0) + '箱 = ' + overSizeFee + 'RMB ';
         addFee = addFee.add(overSizeFee)
@@ -85,14 +156,8 @@ function getOverSizeFee(country, totalQuantity, unit, feePerBox = null) {
 function getOverWeightFee(country, totalQuantity, unit, feePerBox = null) {
     let overWeightStr = "";
     let overWeightFee = new Decimal(0);
-    
-    // 如果没有传入费用，使用默认值
-    let fee = feePerBox || (unit == "RMB" ? 180 : 25);
-    
-    // 如果传入了费用且是USD单位，需要将RMB转换为USD（180RMB=25USD）
-    if (feePerBox && unit == "USD") {
-        fee = Math.round(feePerBox * 25 / 180); // 按180:25的比例换算
-    }
+    const rate = getSurchargeRates(currentQuoteChannel()).overweight;
+    const fee = resolveSurchargeUnitFee(feePerBox, unit, rate.rmb, rate.usd);
 
     if (unit == "RMB") {
         overWeightStr = LINE_BREAK + '超重费: ';

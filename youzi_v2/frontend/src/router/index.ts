@@ -141,6 +141,18 @@ const router = createRouter({
           component: () => import('@/views/tools/ImageLinkZipView.vue'),
           meta: { title: '标签图片打包' },
         },
+        {
+          path: 'tools/shipment-file-rename',
+          name: 'tools-shipment-file-rename',
+          component: () => import('@/views/tools/ShipmentFileRenameView.vue'),
+          meta: { title: '运单文件重命名' },
+        },
+        {
+          path: 'tools/product-import',
+          name: 'tools-product-import',
+          component: () => import('@/views/tools/ProductImportView.vue'),
+          meta: { title: '箱单转产品导入' },
+        },
       ],
     },
   ],

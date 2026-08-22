@@ -8,10 +8,6 @@ router = APIRouter()
 def index(request: Request):
     return templates.TemplateResponse(request, "admin.html", {"request": request})
 
-@router.get("/tools/product-import")
-def product_import_page():
-    return RedirectResponse(url="/")
-
 @router.get("/api/health")
 def health():
     return {"ok": True, "service": "youzi_v2"}

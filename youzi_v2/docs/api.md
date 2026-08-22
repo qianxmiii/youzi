@@ -79,6 +79,9 @@ curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6
 | POST | `/api/v1/tools/image-link-zip/jobs` | 上传 Excel，启动后台下载任务，返回 `jobId` |
 | GET | `/api/v1/tools/image-link-zip/jobs/{jobId}` | 查询进度（`done`/`total`/`status`） |
 | GET | `/api/v1/tools/image-link-zip/jobs/{jobId}/download` | 完成后下载 zip |
+| POST | `/api/v1/tools/shipment-file-rename/parse` | 解析运单 Excel，返回重命名映射（运单号/国家/仓库代码/件数 → `targetStem`）；本地改名在浏览器完成 |
+| POST | `/api/v1/tools/product-import` | 上传箱单发票，转换为产品导入模版；form 字段 `invoice` |
+| GET | `/api/v1/tools/product-import/download/{taskId}` | 下载生成的产品导入 .xls |
 
 查询参数：`column`（默认 `P`，创建任务时）。表单字段：`file`（`.xls` / `.xlsx`）。
 

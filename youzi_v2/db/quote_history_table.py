@@ -51,6 +51,30 @@ def _ensure_quote_history_incremental_columns(conn: sqlite3.Connection) -> None:
         conn.execute(
             f"ALTER TABLE {TABLE_NAME} ADD COLUMN product_name TEXT NOT NULL DEFAULT '00'"
         )
+    if "has_delivery_fee" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN has_delivery_fee INTEGER NOT NULL DEFAULT 0"
+        )
+    if "delivery_fee_rmb" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN delivery_fee_rmb REAL NOT NULL DEFAULT 0"
+        )
+    if "delivery_fee_usd" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN delivery_fee_usd REAL NOT NULL DEFAULT 0"
+        )
+    if "is_overlength" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN is_overlength INTEGER NOT NULL DEFAULT 0"
+        )
+    if "overlength_fee" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN overlength_fee REAL NOT NULL DEFAULT 0"
+        )
+    if "overlength_quantity" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN overlength_quantity REAL NOT NULL DEFAULT 0"
+        )
 
 
 def _row_as_dict(row: sqlite3.Row) -> dict[str, Any]:
@@ -119,6 +143,9 @@ def _create_fresh_table(conn: sqlite3.Connection) -> None:
             is_remote INTEGER NOT NULL DEFAULT 0,
             has_residential INTEGER NOT NULL DEFAULT 0,
             has_battery INTEGER NOT NULL DEFAULT 0,
+            is_overlength INTEGER NOT NULL DEFAULT 0,
+            overlength_fee REAL NOT NULL DEFAULT 0,
+            overlength_quantity REAL NOT NULL DEFAULT 0,
             is_oversize INTEGER NOT NULL DEFAULT 0,
             oversize_fee REAL NOT NULL DEFAULT 0,
             oversize_quantity REAL NOT NULL DEFAULT 0,
@@ -130,6 +157,9 @@ def _create_fresh_table(conn: sqlite3.Connection) -> None:
             has_pickup_fee INTEGER NOT NULL DEFAULT 0,
             pickup_fee_rmb REAL NOT NULL DEFAULT 0,
             pickup_fee_usd REAL NOT NULL DEFAULT 0,
+            has_delivery_fee INTEGER NOT NULL DEFAULT 0,
+            delivery_fee_rmb REAL NOT NULL DEFAULT 0,
+            delivery_fee_usd REAL NOT NULL DEFAULT 0,
             is_ddu INTEGER NOT NULL DEFAULT 0,
             is_usd INTEGER NOT NULL DEFAULT 0,
             charge_weight REAL NOT NULL DEFAULT 0,
@@ -192,6 +222,9 @@ def _payload_to_row_tuple(
         _bool_int(payload.get("isRemote")),
         _bool_int(payload.get("hasResidential")),
         _bool_int(payload.get("hasBattery")),
+        _bool_int(payload.get("isOverlength")),
+        _float_val(payload.get("overlengthFee")),
+        _float_val(payload.get("overlengthQuantity")),
         _bool_int(payload.get("isOversize")),
         _float_val(payload.get("oversizeFee")),
         _float_val(payload.get("oversizeQuantity")),
@@ -203,6 +236,9 @@ def _payload_to_row_tuple(
         _bool_int(payload.get("hasPickupFee")),
         _float_val(payload.get("pickupFeeRmb")),
         _float_val(payload.get("pickupFeeUsd")),
+        _bool_int(payload.get("hasDeliveryFee")),
+        _float_val(payload.get("deliveryFeeRmb")),
+        _float_val(payload.get("deliveryFeeUsd")),
         _bool_int(payload.get("isDDU")),
         _bool_int(payload.get("isUSD")),
         _float_val(payload.get("chargeWeight")),
@@ -224,10 +260,12 @@ INSERT OR REPLACE INTO {TABLE_NAME} (
     quantity, weight, volume,
     cost_rmb, profit_rmb, price_rmb, price_usd,
     is_remote, has_residential, has_battery,
+    is_overlength, overlength_fee, overlength_quantity,
     is_oversize, oversize_fee, oversize_quantity,
     is_overweight, overweight_fee, overweight_quantity,
     is_moq, moq_value,
     has_pickup_fee, pickup_fee_rmb, pickup_fee_usd,
+    has_delivery_fee, delivery_fee_rmb, delivery_fee_usd,
     is_ddu, is_usd,
     charge_weight, charge_cbm, volume_ratio,
     total_price_usd, total_price_rmb, unit_price_rmb,
@@ -241,7 +279,9 @@ INSERT OR REPLACE INTO {TABLE_NAME} (
     ?,?,?,
     ?,?,?,
     ?,?,?,
+    ?,?,?,
     ?,?,
+    ?,?,?,
     ?,?,?,
     ?,?,
     ?,?,?,
@@ -294,6 +334,9 @@ def _row_to_api_dict(row: sqlite3.Row) -> dict[str, Any]:
         "isRemote": b("is_remote"),
         "hasResidential": b("has_residential"),
         "hasBattery": b("has_battery"),
+        "isOverlength": b("is_overlength") if "is_overlength" in row.keys() else False,
+        "overlengthFee": float(row["overlength_fee"] or 0) if "overlength_fee" in row.keys() else 0,
+        "overlengthQuantity": float(row["overlength_quantity"] or 0) if "overlength_quantity" in row.keys() else 0,
         "isOversize": b("is_oversize"),
         "oversizeFee": float(row["oversize_fee"] or 0),
         "oversizeQuantity": float(row["oversize_quantity"] or 0),
@@ -305,6 +348,9 @@ def _row_to_api_dict(row: sqlite3.Row) -> dict[str, Any]:
         "hasPickupFee": b("has_pickup_fee"),
         "pickupFeeRmb": float(row["pickup_fee_rmb"] or 0),
         "pickupFeeUsd": float(row["pickup_fee_usd"] or 0),
+        "hasDeliveryFee": b("has_delivery_fee") if "has_delivery_fee" in row.keys() else False,
+        "deliveryFeeRmb": float(row["delivery_fee_rmb"] or 0) if "delivery_fee_rmb" in row.keys() else 0,
+        "deliveryFeeUsd": float(row["delivery_fee_usd"] or 0) if "delivery_fee_usd" in row.keys() else 0,
         "isDDU": b("is_ddu"),
         "isUSD": b("is_usd"),
         "chargeWeight": float(row["charge_weight"] or 0),

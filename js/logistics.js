@@ -3,8 +3,8 @@
  */
 
 // 新增常量 exchange_rate
-const exchange_rate = 6.75; //美元汇率
-const cost_exchange_rate = 7.1; //美元汇率
+const exchange_rate = 6.65; //美元汇率
+const cost_exchange_rate = 6.8; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 let addFee = new Decimal(0); //其他费用
@@ -357,6 +357,7 @@ function importData() {
 
 // 显示报价
 function updateQuote() {
+    if (typeof applySurchargeFeeDefaults === 'function') applySurchargeFeeDefaults();
 
     // 获取用户输入
     let data = getInputData();
@@ -370,7 +371,9 @@ function updateQuote() {
     let totalPriceRMB = new Decimal(0); // 总利润USD
     let unitPriceRMB = new Decimal(0); // 报价单价RMB
     let pickupFeeRMB = new Decimal(0); // 提货费RMB
-    let pickupFeeUSD = new Decimal(0); // 提货费RMB
+    let pickupFeeUSD = new Decimal(0); // 提货费USD
+    let deliveryFeeRMB = 0; // 派送费 RMB 输入
+    let deliveryFeeUSD = 0; // 派送费 USD 输入
     
     let MOQ = '';
     let notes = ""; // 备注
@@ -380,6 +383,15 @@ function updateQuote() {
     pickupFeeRMB = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee").value) || 0 : 0;
     pickupFeeUSD = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee-USD").value) || 0 : 0;
     pickUpFee = new Decimal(pickupFeeRMB).dividedBy(exchange_rate).add(pickupFeeUSD).toFixed(0);
+
+    // 获取派送费（可同时填 USD / RMB；报价文本按填写币种显示，不跟报价格式挂钩）
+    let deliveryFeeCheck = document.getElementById("delivery-fee-checkbox")?.checked || false;
+    deliveryFeeRMB = deliveryFeeCheck ? parseFloat(document.getElementById("delivery-fee").value) || 0 : 0;
+    deliveryFeeUSD = deliveryFeeCheck ? parseFloat(document.getElementById("delivery-fee-USD").value) || 0 : 0;
+    // 计入总费用时仍折算：英文总费用用 USD，中文总费用 / 综合单价用 RMB
+    const deliveryFee = new Decimal(deliveryFeeRMB).dividedBy(exchange_rate).add(deliveryFeeUSD).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
+    const deliveryFeeRmbTotal = new Decimal(deliveryFeeRMB).add(new Decimal(deliveryFeeUSD).mul(exchange_rate));
+    const deliveryFeeTip = formatDeliveryFeeTip(deliveryFeeRMB, deliveryFeeUSD);
 
     // 计算材积重 (kg) 使用公式：体积 * 1000000 / 6000
     if (data.totalVolume.greaterThan(0)) {
@@ -596,15 +608,17 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
-        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
+        if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
         if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
+        if (data.isOverLength) notes += getOverLengthFee(data.country, data.overLengthQuantity, "USD", data.overLengthFee);
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
-        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd`;
+        if (deliveryFeeCheck) notes += deliveryFeeTip;
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(deliveryFee).add(addFee)} usd`;
 
     } else if (data.quoteType === "通用-CBM") {
         // 构建备注内容
@@ -612,22 +626,23 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
-        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
+        if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
         if (data.isDDU) notes += getDDUFee(data.country, 1);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
-        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd`;
+        if (deliveryFeeCheck) notes += deliveryFeeTip;
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(deliveryFee).add(addFee)} usd`;
 
     } else if (data.quoteType === "通用-单价") {
         // 构建备注内容
         notes = `${data.address} ${data.channel}: ${priceUsd} usd per kg `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
-        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
+        if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
 
     } else if (data.quoteType === "通用-RMB-单价") {
         // 简洁单价行（RMB/kg），对应「通用-单价」的美元版
         notes = `${data.address} ${getCN(data.channel)}: ${priceRmb} RMB/kg `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天`;
-        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
+        if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
 
     } else if (data.quoteType === "通用-RMB") {
         // 构建备注内容
@@ -635,14 +650,16 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
-        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
+        if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
         if (data.isDDU) notes += getDDUFee(data.country, 0);
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB");
         if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB","residential");
+        if (data.isOverLength) notes += getOverLengthFee(data.country, data.overLengthQuantity, "RMB", data.overLengthFee);
         if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "RMB", data.overSizeFee);
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "RMB", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
-        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
+        if (deliveryFeeCheck) notes += deliveryFeeTip;
+        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(deliveryFeeRmbTotal).add(addFee)} RMB`;
 
     } else if (data.quoteType === "通用-RMB-CBM") {
         // 构建备注内容
@@ -650,72 +667,16 @@ function updateQuote() {
         notes += data.isDDU ?  'DDU ': 'DDP ';
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/cbm * ${chargeCBM}cbm = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
-        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
+        if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
         if (data.isDDU) notes += getDDUFee(data.country, 0); 
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
-        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(addFee)} RMB`;
+        if (deliveryFeeCheck) notes += deliveryFeeTip;
+        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(deliveryFeeRmbTotal).add(addFee)} RMB`;
 
-    } else if (data.quoteType === "PROBOXX") {
-        // 构建备注内容
-        notes = `${receiver},\n\n`;
-        notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        notes += data.isDDU ?  'DDU ': 'DDP ';
-        notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
-        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
-        if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
-        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
-        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
-        if (data.isDDU) notes += getDDUFee(data.country, 1);
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
-        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
-        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
-    } else if (data.quoteType === "PROBOXX-CBM") {
-        // 构建备注内容
-        notes = `${receiver},\n\n`;
-        notes += `To ${data.address},${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        notes += data.isDDU ? 'DDU ' : 'DDP ';
-        notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
-        if (data.isMOQBox) notes += ` MOQ each box is ${data.moqBoxInput}kg`;
-        if (data.isDDU) notes += getDDUFee(data.country, 1);
-        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
-        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\nValid date: ${valid_date} `;
-    } else if (data.quoteType === "163") {
-        // 构建备注内容
-        notes = `${data.address} = ${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        if (data.isDDU) notes += 'DDU ';
-        notes += `${data.channel}: ${priceUsd} usd/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
-        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
-        if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
-        if (data.isDDU) notes += getDDUFee(data.country, 1);
-        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
-        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
-        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
-
-    } else if (data.quoteType === "161") {
-        // 构建备注内容
-        notes = `To ${data.address} ${data.totalQuantity.toFixed(0)}${unit}${data.totalWeight.toFixed(0)}kg ${data.totalVolume.toFixed(2)}cbm\n`;
-        if (data.isDDU) notes += 'DDU ';
-        notes += `${data.channel}: ${totalPriceUsd}usd `;
-        notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
-        if (data.isMOQBox) notes += `MOQ each box is ${data.moqBoxInput}kg `;
-        if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
-        if (data.isDDU) notes += getDDUFee(data.country, 1);
-        if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
-        if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
-        if (data.isOverSize) notes += getOverSizeFee(data.country, data.overSizeQuantity, "USD", data.overSizeFee);
-        if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
-        if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
-        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(addFee)} usd\n\n`;
     }
 
     // 计算综合单价（包含所有费用）
-    // 综合单价 = (总报价RMB + 提货费RMB + 附加费RMB) / 计费重
+    // 综合单价 = (总报价RMB + 提货费RMB + 派送费RMB + 附加费RMB) / 计费重
     // 注意：addFee 在 RMB 格式下是 RMB，在 USD 格式下是 USD，需要转换
     // 使用固定转换比例：3.5 USD = 25 RMB（比例 25/3.5 ≈ 7.14）
     const FIXED_USD_TO_RMB_RATE = new Decimal(25).dividedBy(3.5);
@@ -728,7 +689,7 @@ function updateQuote() {
         addFeeRMB = addFee.mul(FIXED_USD_TO_RMB_RATE);
     }
     
-    let totalAllFeesRMB = totalPriceRMB.add(new Decimal(pickupFeeRMB)).add(addFeeRMB);
+    let totalAllFeesRMB = totalPriceRMB.add(new Decimal(pickupFeeRMB)).add(deliveryFeeRmbTotal).add(addFeeRMB);
     let totalUnitPrice = new Decimal(0);
     if (data.quoteType.includes("CBM")) {
         // 按方计费时，使用计费方
@@ -754,6 +715,9 @@ function updateQuote() {
     let feeDetails = `基础报价: ${totalPriceRMB.toFixed(2)} RMB`;
     if (new Decimal(pickupFeeRMB).greaterThan(0)) {
         feeDetails += `\n提货费: ${pickupFeeRMB} RMB`;
+    }
+    if (deliveryFeeRMB > 0 || deliveryFeeUSD > 0) {
+        feeDetails += formatDeliveryFeeTip(deliveryFeeRMB, deliveryFeeUSD);
     }
     if (addFeeRMB.greaterThan(0)) {
         feeDetails += `\n附加费: ${addFeeRMB.toFixed(2)} RMB`;
@@ -1468,6 +1432,9 @@ function getInputData() {
         isResidential: document.getElementById('residential-check').checked,
         isMOQ: document.getElementById('MOQ').checked,
         isDDU: document.getElementById('ddu_check').checked,
+        isOverLength: document.getElementById('overlength_check')?.checked || false,
+        overLengthQuantity: new Decimal(document.getElementById('overlength-quantity')?.value || 0),
+        overLengthFee: parseFloat(document.getElementById('overlength-input')?.value) || 0,
         isOverSize: document.getElementById('oversize_check').checked,
         overSizeQuantity: new Decimal(document.getElementById('oversize-quantity').value || 0),
         overSizeFee: parseFloat(document.getElementById('oversize-input').value) || 0,
@@ -1477,10 +1444,40 @@ function getInputData() {
         isUSD: document.getElementById('USD_check').checked,
         pickupFeeCheck: document.getElementById("pickup-fee-checkbox").checked,
         pickUpFeeRaw: parseFloat(document.getElementById("pickup-fee").value) || 0,
+        deliveryFeeCheck: document.getElementById("delivery-fee-checkbox")?.checked || false,
+        deliveryFeeRmb: parseFloat(document.getElementById("delivery-fee")?.value) || 0,
+        deliveryFeeUsd: parseFloat(document.getElementById("delivery-fee-USD")?.value) || 0,
         moqInput: new Decimal(document.getElementById('moq-input').value || 21),
         isMOQBox: document.getElementById('moq-box-checkbox').checked,
         moqBoxInput: parseFloat(document.getElementById('moq-box-input').value || 12),
+        moqBoxUnit: document.getElementById('moq-box-unit')?.value || 'kg',
     };
+}
+
+/**
+ * 派送费报价文案：按填写币种原样显示，不跟报价格式折算。
+ * 只填 RMB →「派送费: x RMB」；只填 USD →「Delivery fee: x USD」；都填则两行。
+ */
+function formatDeliveryFeeTip(rmb, usd) {
+    const r = Number(rmb) || 0;
+    const u = Number(usd) || 0;
+    let tip = '';
+    if (r > 0) tip += `\n派送费: ${r} RMB`;
+    if (u > 0) tip += `\nDelivery fee: ${u} USD`;
+    return tip;
+}
+
+/**
+ * MOQ Box 报价提示文案。
+ * 报价格式名含 RMB → 中文（单箱最低计费重/方）；否则英文。
+ */
+function formatMoqBoxTip(value, unit, quoteType) {
+    const n = (value != null && !Number.isNaN(Number(value))) ? value : 12;
+    const u = unit === 'cbm' ? 'cbm' : 'kg';
+    if (String(quoteType || '').includes('RMB')) {
+        return u === 'cbm' ? `单箱最低计费方为${n}cbm` : `单箱最低计费重为${n}kg`;
+    }
+    return `MOQ each box is ${n}${u}`;
 }
 
 /* 计算快递派成本 */
@@ -2059,6 +2056,9 @@ function quoteHistoryApiRowToRecord(apiRow) {
             isRemote: !!apiRow.isRemote,
             hasResidential: !!apiRow.hasResidential,
             hasBattery: !!apiRow.hasBattery,
+            isOverlength: !!apiRow.isOverlength,
+            overlengthFee: apiRow.overlengthFee || 0,
+            overlengthQuantity: apiRow.overlengthQuantity || 0,
             isOversize: !!apiRow.isOversize,
             oversizeFee: apiRow.oversizeFee || 0,
             oversizeQuantity: apiRow.oversizeQuantity || 0,
@@ -2070,6 +2070,9 @@ function quoteHistoryApiRowToRecord(apiRow) {
             hasPickupFee: !!apiRow.hasPickupFee,
             pickupFeeRmb: apiRow.pickupFeeRmb || 0,
             pickupFeeUsd: apiRow.pickupFeeUsd || 0,
+            hasDeliveryFee: !!apiRow.hasDeliveryFee,
+            deliveryFeeRmb: apiRow.deliveryFeeRmb || 0,
+            deliveryFeeUsd: apiRow.deliveryFeeUsd || 0,
             isDDU: !!apiRow.isDDU,
             isUSD: !!apiRow.isUSD,
             chargeWeight: apiRow.chargeWeight || 0,
@@ -2102,6 +2105,9 @@ function quoteHistoryApiRowToRecord(apiRow) {
         isRemote: false,
         hasResidential: false,
         hasBattery: false,
+        isOverlength: false,
+        overlengthFee: 0,
+        overlengthQuantity: 0,
         isOversize: false,
         oversizeFee: 0,
         oversizeQuantity: 0,
@@ -2113,6 +2119,9 @@ function quoteHistoryApiRowToRecord(apiRow) {
         hasPickupFee: false,
         pickupFeeRmb: 0,
         pickupFeeUsd: 0,
+        hasDeliveryFee: false,
+        deliveryFeeRmb: 0,
+        deliveryFeeUsd: 0,
         isDDU: false,
         isUSD: false,
         chargeWeight: 0,
@@ -2198,6 +2207,9 @@ function saveQuoteHistory() {
             isRemote: document.getElementById('remote-address').checked || false,
             hasResidential: document.getElementById('residential-check').checked || false,
             hasBattery: document.getElementById('battery_check').checked || false,
+            isOverlength: document.getElementById('overlength_check')?.checked || false,
+            overlengthFee: parseFloat(document.getElementById('overlength-input')?.value) || 0,
+            overlengthQuantity: parseFloat(document.getElementById('overlength-quantity')?.value) || 0,
             isOversize: document.getElementById('oversize_check').checked || false,
             oversizeFee: parseFloat(document.getElementById('oversize-input').value) || 0,
             oversizeQuantity: parseFloat(document.getElementById('oversize-quantity').value) || 0,
@@ -2209,6 +2221,9 @@ function saveQuoteHistory() {
             hasPickupFee: document.getElementById('pickup-fee-checkbox').checked || false,
             pickupFeeRmb: parseFloat(document.getElementById('pickup-fee').value) || 0,
             pickupFeeUsd: parseFloat(document.getElementById('pickup-fee-USD').value) || 0,
+            hasDeliveryFee: document.getElementById('delivery-fee-checkbox')?.checked || false,
+            deliveryFeeRmb: parseFloat(document.getElementById('delivery-fee')?.value) || 0,
+            deliveryFeeUsd: parseFloat(document.getElementById('delivery-fee-USD')?.value) || 0,
             isDDU: document.getElementById('ddu_check').checked || false,
             isUSD: document.getElementById('USD_check').checked || false,
             
@@ -2313,6 +2328,15 @@ function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
             if (record.pickupFeeRmb > 0) fees.push(`¥${record.pickupFeeRmb}`);
             if (record.pickupFeeUsd > 0) fees.push(`$${record.pickupFeeUsd}`);
             feeInfo.push(`<span class="badge bg-info">提货费: ${fees.join(' / ')}</span>`);
+        }
+        if (record.hasDeliveryFee && (record.deliveryFeeRmb > 0 || record.deliveryFeeUsd > 0)) {
+            const fees = [];
+            if (record.deliveryFeeRmb > 0) fees.push(`¥${record.deliveryFeeRmb}`);
+            if (record.deliveryFeeUsd > 0) fees.push(`$${record.deliveryFeeUsd}`);
+            feeInfo.push(`<span class="badge bg-primary">派送费: ${fees.join(' / ')}</span>`);
+        }
+        if (record.isOverlength && record.overlengthFee > 0) {
+            feeInfo.push(`<span class="badge bg-warning">超长: ¥${record.overlengthFee}/箱</span>`);
         }
         if (record.isOversize && record.oversizeFee > 0) {
             feeInfo.push(`<span class="badge bg-warning">超尺寸: ¥${record.oversizeFee}/箱</span>`);
@@ -2510,6 +2534,12 @@ function loadQuoteToForm(quoteId) {
         document.getElementById('remote-address').checked = record.isRemote;
         document.getElementById('residential-check').checked = record.hasResidential || false;
         document.getElementById('battery_check').checked = record.hasBattery;
+        const overlengthCheck = document.getElementById('overlength_check');
+        if (overlengthCheck) {
+            overlengthCheck.checked = record.isOverlength || false;
+            document.getElementById('overlength-input').value = record.overlengthFee || 0;
+            document.getElementById('overlength-quantity').value = record.overlengthQuantity || 0;
+        }
         document.getElementById('oversize_check').checked = record.isOversize;
         document.getElementById('oversize-input').value = record.oversizeFee || 0;
         document.getElementById('oversize-quantity').value = record.oversizeQuantity || 0;
@@ -2521,14 +2551,22 @@ function loadQuoteToForm(quoteId) {
         document.getElementById('pickup-fee-checkbox').checked = record.hasPickupFee;
         document.getElementById('pickup-fee').value = record.pickupFeeRmb || 0;
         document.getElementById('pickup-fee-USD').value = record.pickupFeeUsd || 0;
+        const deliveryFeeCheckbox = document.getElementById('delivery-fee-checkbox');
+        if (deliveryFeeCheckbox) {
+            deliveryFeeCheckbox.checked = record.hasDeliveryFee || false;
+            document.getElementById('delivery-fee').value = record.deliveryFeeRmb || 0;
+            document.getElementById('delivery-fee-USD').value = record.deliveryFeeUsd || 0;
+        }
         document.getElementById('ddu_check').checked = record.isDDU;
         document.getElementById('USD_check').checked = record.isUSD;
         
         // 触发各种输入框的显示/隐藏
+        if (typeof toggleOverLengthFeeInput === 'function') toggleOverLengthFeeInput();
         toggleOverSizeFeeInput();
         toggleOverWeightFeeInput();
         toggleMOQInput();
         togglePickupFeeInput();
+        if (typeof toggleDeliveryFeeInput === 'function') toggleDeliveryFeeInput();
         
         document.getElementById('quote-type').value = record.quoteType;
         document.getElementById('notes').value = record.notes;

@@ -127,3 +127,69 @@ export async function exportImageLinkZip(
 
   return downloadImageLinkZipJob(job.jobId)
 }
+
+export type ShipmentFileRenameParseResult = {
+  items: Array<{
+    shipmentNo: string
+    country: string
+    addressCode: string
+    ctns: string
+    folderName?: string
+    targetStem: string
+  }>
+  total: number
+  errors: string[]
+}
+
+/** 解析运单 Excel，得到重命名映射（浏览器本地改文件名） */
+export async function parseShipmentFileRenameExcel(
+  file: File,
+): Promise<ShipmentFileRenameParseResult> {
+  const form = new FormData()
+  form.append('file', file)
+  return api<ShipmentFileRenameParseResult>('/api/v1/tools/shipment-file-rename/parse', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export type ProductImportConvertResult = {
+  ok: boolean
+  id: string
+  filename: string
+}
+
+/** 箱单 → 产品导入模版 */
+export async function convertProductImport(file: File): Promise<ProductImportConvertResult> {
+  const form = new FormData()
+  form.append('invoice', file)
+  return api<ProductImportConvertResult>('/api/v1/tools/product-import', {
+    method: 'POST',
+    body: form,
+  })
+}
+
+export async function downloadProductImport(taskId: string): Promise<{ blob: Blob; filename: string }> {
+  try {
+    const response = await api.raw<Blob, 'blob'>(
+      `/api/v1/tools/product-import/download/${encodeURIComponent(taskId)}`,
+      { responseType: 'blob' },
+    )
+    const blob = response._data as Blob
+    const disposition = response.headers.get('content-disposition')
+    let filename = '产品导入模版.xls'
+    if (disposition) {
+      const star = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+      if (star?.[1]) {
+        try {
+          filename = decodeURIComponent(star[1])
+        } catch {
+          filename = star[1]
+        }
+      }
+    }
+    return { blob, filename }
+  } catch (e) {
+    return readFetchError(e)
+  }
+}

@@ -234,6 +234,13 @@ const checkedRowKeys = ref<string[]>([])
 
 const selectedCount = computed(() => selectedRows.value.length)
 
+const selectedCtns = computed(() =>
+  selectedRows.value.reduce((sum, row) => {
+    const n = Number(row.ctns)
+    return sum + (Number.isFinite(n) ? n : 0)
+  }, 0),
+)
+
 function syncSelectionWithItems() {
   const visible = new Set(items.value.map((row) => row.id))
   checkedRowKeys.value = checkedRowKeys.value.filter((id) => visible.has(id))
@@ -2748,7 +2755,9 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         <span class="shipments-selection-bar__label text-sm">
           已选
           <strong class="shipments-selection-bar__count">{{ selectedCount }}</strong>
-          条（本页）
+          条（本页），共
+          <strong class="shipments-selection-bar__count">{{ selectedCtns }}</strong>
+          件
         </span>
         <NButton size="small" quaternary @click="clearSelection">取消选择</NButton>
       </div>

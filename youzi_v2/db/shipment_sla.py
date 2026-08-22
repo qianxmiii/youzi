@@ -110,14 +110,15 @@ def compute_warehouse_no_departure_context(
     *,
     today: date | None = None,
 ) -> dict[str, Any] | None:
-    """入库后 7 天仍无 ETD/ATD 时生成入库未开船预警。"""
+    """入库超过 7 天仍无 ETD/ATD 时生成入库未开船预警（第 8 天起提示）。"""
     entry_raw = (row.get("warehouse_entry_time") or "").strip()
     entry_day = parse_date(entry_raw)
     if not entry_day or has_departure_schedule(row):
         return None
     check_day = today or date.today()
+    # 截止日 = 入库日 + 7；仅当 today > 截止日（超过 7 天）才提示
     due_day = entry_day + timedelta(days=WAREHOUSE_NO_DEPARTURE_DAYS)
-    if check_day < due_day:
+    if check_day <= due_day:
         return None
     due_iso = due_day.isoformat()
     return {

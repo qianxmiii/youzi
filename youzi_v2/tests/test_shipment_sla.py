@@ -99,9 +99,12 @@ def test_match_carrier_specific_rule() -> None:
     assert matched["estimatedDays"] == 33
 
 
-def test_warehouse_no_departure_after_seven_days() -> None:
+def test_warehouse_no_departure_after_exceeding_seven_days() -> None:
     row = {"warehouse_entry_time": "2026-06-01", "etd": "", "atd": ""}
-    ctx = compute_warehouse_no_departure_context(row, today=date(2026, 6, 8))
+    # 入库日 + 7 = 6/8，当天及之前不提示
+    assert compute_warehouse_no_departure_context(row, today=date(2026, 6, 8)) is None
+    # 超过 7 天（第 8 天起）才提示
+    ctx = compute_warehouse_no_departure_context(row, today=date(2026, 6, 9))
     assert ctx is not None
     assert ctx["alertType"] == ALERT_WAREHOUSE_NO_DEPARTURE
     assert ctx["dueDate"] == "2026-06-08"

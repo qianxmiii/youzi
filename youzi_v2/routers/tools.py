@@ -1,12 +1,18 @@
 """常用工具 API。"""
 
 from datetime import datetime
+from pathlib import Path
 from urllib.parse import quote
 
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 from ..services.image_link_zip import image_zip_jobs
+from ..services.product_import_convert import (
+    convert_invoice_to_product_import,
+    product_import_output_path,
+)
+from ..services.shipment_file_rename import parse_shipment_rename_excel
 
 router = APIRouter()
 
@@ -70,4 +76,64 @@ def download_image_link_zip_job(job_id: str):
             "X-Image-Zip-Downloaded": str(job.downloaded),
             "X-Image-Zip-Failed": str(job.failed),
         },
+    )
+
+
+@router.post("/api/v1/tools/shipment-file-rename/parse")
+async def parse_shipment_file_rename_excel(file: UploadFile = File(...)):
+    """解析运单 Excel，返回「运单号 → 目标文件名主干」映射（不改本地文件）。"""
+    filename = (file.filename or "").strip() or "upload.xlsx"
+    lower = filename.lower()
+    if not (lower.endswith(".xls") or lower.endswith(".xlsx") or lower.endswith(".xlsm")):
+        raise HTTPException(status_code=400, detail="请上传 .xls / .xlsx 文件")
+
+    data = await file.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(data) > _MAX_UPLOAD:
+        raise HTTPException(status_code=400, detail="文件过大（上限 30MB）")
+
+    try:
+        return parse_shipment_rename_excel(data)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"解析失败：{exc}") from exc
+
+
+@router.post("/api/v1/tools/product-import")
+async def product_import_convert(invoice: UploadFile = File(...)):
+    """上传箱单发票，转换为产品导入模版（.xls）。"""
+    filename = (invoice.filename or "").strip() or "invoice.xlsx"
+    lower = filename.lower()
+    if not (lower.endswith(".xls") or lower.endswith(".xlsx") or lower.endswith(".xlsm")):
+        raise HTTPException(status_code=400, detail="请上传 .xls / .xlsx 箱单文件")
+
+    data = await invoice.read()
+    if not data:
+        raise HTTPException(status_code=400, detail="文件为空")
+    if len(data) > _MAX_UPLOAD:
+        raise HTTPException(status_code=400, detail="文件过大（上限 30MB）")
+
+    suffix = Path(filename).suffix or ".xlsx"
+    try:
+        result = convert_invoice_to_product_import(data, suffix=suffix)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:  # noqa: BLE001
+        raise HTTPException(status_code=500, detail=f"转换失败：{exc}") from exc
+    return {"ok": True, **result}
+
+
+@router.get("/api/v1/tools/product-import/download/{task_id}")
+def product_import_download(task_id: str):
+    if len(task_id) < 8:
+        raise HTTPException(status_code=400, detail="无效 ID")
+    output_path = product_import_output_path(task_id)
+    if not output_path.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在或已过期")
+    return FileResponse(
+        path=str(output_path),
+        media_type="application/vnd.ms-excel",
+        filename="产品导入模版.xls",
     )

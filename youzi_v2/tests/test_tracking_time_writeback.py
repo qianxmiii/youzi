@@ -143,6 +143,36 @@ def test_goods_shipped_does_not_match_waiting_to_be_shipped() -> None:
     assert not is_goods_shipped_track(
         "The container has been extracted and is waiting to be shipped to Canada"
     )
+    assert not is_goods_shipped_track("货物待开船")
+    assert not is_goods_shipped_track("未离港")
+
+
+def test_parse_atd_from_zh_departure_keywords() -> None:
+    from youzi_v2.tracking_time_parser import is_goods_shipped_track
+
+    assert is_goods_shipped_track("已开船，起运地NINGBO")
+    assert is_goods_shipped_track("船舶已离港")
+    tracks = tracks_from_rows(
+        [
+            {
+                "id": "t1",
+                "tracking_time": "2026-05-19 08:00:00",
+                "tracking_desc": "已开船，起运地NINGBO",
+                "created_time": "2026-05-19 08:00:00",
+            },
+            {
+                "id": "t2",
+                "tracking_time": "2026-05-20 09:00:00",
+                "tracking_desc": "已离港",
+                "created_time": "2026-05-20 09:00:00",
+            },
+        ]
+    )
+    candidates = build_time_candidates(tracks)
+    # 无显式 ATD 时取最早一条开船/离港节点
+    assert candidates["atd"] is not None
+    assert candidates["atd"].candidate_value == "2026-05-19 08:00:00"
+    assert candidates["atd"].source_track_id == "t1"
 
 
 def test_parse_ata_from_arrival_node() -> None:

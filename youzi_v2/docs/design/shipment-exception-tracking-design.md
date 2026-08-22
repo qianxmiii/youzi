@@ -126,7 +126,7 @@ SLA 是 Service Level Agreement，在本系统中建议面向用户展示为“�
 且 ETD 为空
 且 ATD 为空
 且未签收
-且 today >= warehouse_entry_time + 7 天
+且 today > warehouse_entry_time + 7 天
   -> 生成入库未开船预警
 ```
 
@@ -554,7 +554,7 @@ rule_scope = channel
 否则如果 ETD 存在或 ATD 存在:
   关闭该票未解决的入库未开船预警
 
-否则如果 today >= warehouse_entry_time + 7 天:
+否则如果 today > warehouse_entry_time + 7 天:
   alert_type = WAREHOUSE_NO_DEPARTURE
   risk_level = overdue
   due_date = warehouse_entry_time + 7 天
@@ -871,7 +871,7 @@ shipment_exception_followup_notifications = 人工异常跟进提醒
 2. 每天计划任务扫描未签收运单，并在扫描开始前清理已签收但未关闭的历史预警。
 3. DPS 同步单独写入 `warehouse_entry_time`，不要只把 `warehouseEntryTime` 当作最新轨迹时间兜底。
 4. 截止日计算只使用 `ATD + 渠道预估天数`；没有 `ATD` 或没有命中渠道时效规则则跳过全程运输超时扫描。
-5. 入库后一周仍无 `ETD` 且无 `ATD` 时，生成 `WAREHOUSE_NO_DEPARTURE` 预警；补齐 `ETD` 或 `ATD` 后自动关闭该类预警。
+5. 入库超过 7 天（第 8 天起）仍无 `ETD` 且无 `ATD` 时，生成 `WAREHOUSE_NO_DEPARTURE` 预警；补齐 `ETD` 或 `ATD` 后自动关闭该类预警。
 6. ATA 后 10 天仍未签收时，生成 `ARRIVAL_NO_DELIVERY` 预警；签收后自动关闭该类预警。
 7. 生成 `shipment_sla_alerts`，运输时效风险等级为 `warning_soon`、`overdue`、`severe_overdue`，阶段卡点预警首版使用 `overdue`。
 8. 异常跟踪页面集中处理当前待办，默认排除已签收或已解决预警，支持标记已处理、忽略、转为人工异常。

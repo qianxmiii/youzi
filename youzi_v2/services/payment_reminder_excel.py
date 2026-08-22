@@ -17,6 +17,7 @@ _STATUS_LABELS = {
 _EXPORT_COLUMNS: list[tuple[str, str]] = [
     ("shipmentNo", "运单号"),
     ("customerNo", "客户单号"),
+    ("refShipmentNo", "关联单号"),
     ("billOfLadingNo", "提单号"),
     ("containerNo", "柜号"),
     ("isFcl", "整柜"),

@@ -87,6 +87,19 @@ function quoteAdminBadgeCell(item) {
     if (pUsd > 0) bits.push(`$${pUsd}`);
     fees.push(`<span class="b b-info">提货 ${bits.join(" / ")}</span>`);
   }
+  const dRmb = Number(item.deliveryFeeRmb) || 0;
+  const dUsd = Number(item.deliveryFeeUsd) || 0;
+  if (item.hasDeliveryFee && (dRmb > 0 || dUsd > 0)) {
+    const bits = [];
+    if (dRmb > 0) bits.push(`¥${dRmb}`);
+    if (dUsd > 0) bits.push(`$${dUsd}`);
+    fees.push(`<span class="b b-blue">派送 ${bits.join(" / ")}</span>`);
+  }
+  if (item.isOverlength && Number(item.overlengthFee) > 0) {
+    fees.push(
+      `<span class="b b-warn">超长 ¥${item.overlengthFee}/箱</span>`
+    );
+  }
   if (item.isOversize && Number(item.oversizeFee) > 0) {
     fees.push(
       `<span class="b b-warn">超尺寸 ¥${item.oversizeFee}/箱</span>`

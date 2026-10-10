@@ -1,8 +1,10 @@
 export interface NavItem {
   name: string
+  /** 有 children 时为空，仅作分组 */
   to: string
   icon: string
   badge?: string
+  children?: NavItem[]
 }
 
 export interface NavGroup {
@@ -23,17 +25,19 @@ export const navGroups: NavGroup[] = [
     icon: 'group-quote',
     items: [
       { name: '报价跟进', to: '/quote-center/followups', icon: 'quote' },
-      { name: '箱规计算', to: '/box', icon: 'box', badge: '待迁' },
-      { name: '单地址报价', to: '/quote', icon: 'quote', badge: '待迁' },
-      { name: '批量报价', to: '/quote/batch', icon: 'layers', badge: '待迁' },
-      { name: '成本计算', to: '/cost', icon: 'calc' },
+      // 未迁移：箱规计算 / 单地址报价 / 批量报价；成本计算暂一并隐藏
+      // { name: '箱规计算', to: '/box', icon: 'box', badge: '待迁' },
+      // { name: '单地址报价', to: '/quote', icon: 'quote', badge: '待迁' },
+      // { name: '批量报价', to: '/quote/batch', icon: 'layers', badge: '待迁' },
+      // { name: '成本计算', to: '/cost', icon: 'calc' },
     ],
   },
   {
     label: '资料中心',
     icon: 'group-library',
     items: [
-      { name: '资料库', to: '/library', icon: 'book', badge: '待迁' },
+      // 未迁移：资料库暂隐藏
+      // { name: '资料库', to: '/library', icon: 'book', badge: '待迁' },
       { name: '地址簿', to: '/addresses', icon: 'pin' },
     ],
   },
@@ -72,16 +76,18 @@ export const navGroups: NavGroup[] = [
     label: '系统管理',
     icon: 'group-system',
     items: [
-      { name: '渠道管理', to: '/channels', icon: 'layers' },
       { name: '计划任务', to: '/scheduled-tasks', icon: 'clock' },
+      {
+        name: '设置',
+        to: '',
+        icon: 'settings',
+        children: [{ name: '显示设置', to: '/display-settings', icon: 'globe' }],
+      },
     ],
   },
   {
     label: '后台管理',
     icon: 'settings',
-    items: [
-      { name: '码表', to: '/admin', icon: 'settings' },
-      { name: '显示设置', to: '/display-settings', icon: 'globe' },
-    ],
+    items: [{ name: '码表', to: '/admin', icon: 'settings' }],
   },
 ]

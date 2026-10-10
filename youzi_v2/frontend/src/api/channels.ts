@@ -7,6 +7,8 @@ export interface Channel {
   country: string
   category: string
   note: string
+  /** DPS 系统渠道名，用于同步时映射到本地 code */
+  dpsChannelName: string
   sortOrder: number
   isActive: boolean
   /** 渠道默认运输时效（ATD + 预估天数）；未配置时为 null */
@@ -30,6 +32,7 @@ export interface ChannelPayload {
   country: string
   category: string
   note?: string
+  dpsChannelName?: string
   sortOrder?: number
   isActive?: boolean
 }
@@ -38,6 +41,7 @@ export interface ChannelSeedResult {
   inserted: number
   updated: number
   total: number
+  deleted?: number
 }
 
 export async function getChannelMeta(): Promise<{ categories: string[] }> {

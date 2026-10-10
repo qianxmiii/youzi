@@ -28,9 +28,17 @@
     "category": "category",
     "备注": "note",
     "note": "note",
+    "DPS渠道名": "dps_channel_name",
+    "DPS_channelName": "dps_channel_name",
+    "dps_channel_name": "dps_channel_name",
+    "dpsChannelName": "dps_channel_name",
     "承运商ID": "carrier_id",
     "carrier_id": "carrier_id",
-    "carrierId": "carrier_id"
+    "carrierId": "carrier_id",
+    "DPS status": "dps_status",
+    "DPS status码": "dps_status",
+    "dps_status": "dps_status",
+    "dpsStatus": "dps_status"
   },
   "is_active_true": ["1", "true", "yes", "y", "是", "启用", "TRUE", "Yes"]
 }

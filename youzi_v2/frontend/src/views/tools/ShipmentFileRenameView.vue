@@ -5,6 +5,7 @@ import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { parseShipmentFileRenameExcel, type ShipmentFileRenameParseResult } from '@/api/tools'
 import { ICON_STROKE } from '@/constants/icons'
+import { apiErrorMessage } from '@/utils/apiError'
 import {
   applyRenamePlans,
   buildRenamePlans,
@@ -81,7 +82,7 @@ async function onExcelSelected(e: Event) {
     }
     await rebuildPlans()
   } catch (err) {
-    message.error(err instanceof Error ? err.message : '解析 Excel 失败')
+    message.error(apiErrorMessage(err, '解析 Excel 失败'))
   } finally {
     parsing.value = false
   }

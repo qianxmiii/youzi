@@ -23,6 +23,7 @@
 4. `expected_delivery_time` 从 `Expected to be delivered on` 轨迹中解析，一般自动回写。
 5. `signed_time` 从 `signed for` 或首字母大写 `Delivered` 节点识别；当签收节点事件日期和预计送仓日期不一致时，进入人工审批并询问是否采用预计送仓时间作为签收时间。
 6. 所有自动识别结果保留来源轨迹和审批状态，方便追溯、纠错和后续优化。
+7. 内部轨迹含 `FedEx` / `UPS` / `DHL` 等承运商标签 + 合法尾程单号时，若运单 `tracking_number` 为空则自动回写；已有值不覆盖；多条命中取最新轨迹。
 
 ## 核心原则
 
@@ -110,7 +111,7 @@ ATD 5/27
 | --- | --- | --- |
 | `ETD` | 最新一条包含 `ETD` 的轨迹 | 自动回写，可覆盖旧值 |
 | `ETA` | 最新一条包含 `ETA` 的轨迹 | 自动回写，可覆盖旧值 |
-| `ATD` | 最新一条包含 `ATD` 的轨迹；若无显式字段，则取最早一条开船/离港节点（`The goods have been shipped` / `已开船` / `已离港`）的事件时间 | 自动回写，可覆盖旧值 |
+| `ATD` | 最新一条包含 `ATD` 的轨迹；若无显式字段，则取最早一条开船/离港节点（`The goods have been shipped` / `The train has departed` / `已开船` / `已离港`）的事件时间 | 自动回写，可覆盖旧值 |
 
 “最新”按轨迹事件时间排序；如果事件时间相同，再按轨迹创建时间或轨迹 ID 做稳定排序。
 
@@ -118,6 +119,7 @@ ATD 5/27
 
 ```text
 The goods have been shipped
+The train has departed
 已开船
 已离港
 ```

@@ -115,6 +115,12 @@ def parse_excel_rows(
             payload["country"] = _cell_str(pick("country")) or ""
             payload["category"] = _cell_str(pick("category")) or ""
             payload["note"] = _cell_str(pick("note")) or ""
+            payload["dps_channel_name"] = (
+                _cell_str(pick("dps_channel_name"))
+                or _cell_str(pick("dpsChannelName"))
+                or _cell_str(pick("DPS_channelName"))
+                or ""
+            )
         parsed.append((excel_row, payload))
 
     wb.close()
@@ -157,14 +163,25 @@ def build_template_bytes(table: str) -> bytes:
     headers = ["编码", "中文名", "英文名", "排序", "启用"]
     sample = ["SAMPLE01", "示例中文", "Sample EN", 10, "是"]
     if table == "channel_codes":
-        headers = ["编码", "中文名", "英文名", "国家", "大类", "备注", "排序", "启用"]
+        headers = [
+            "编码",
+            "中文名",
+            "英文名",
+            "国家",
+            "大类",
+            "备注",
+            "DPS渠道名",
+            "排序",
+            "启用",
+        ]
         sample = [
-            "Sea Truck Standard Service - LAX",
-            "美国普船",
+            "STS-LAX",
+            "海卡经济达-洛杉矶",
             "Sea Truck Standard Service - LAX",
             "美国",
             "普船",
             "",
+            "海卡经济达-洛杉矶",
             10,
             "是",
         ]

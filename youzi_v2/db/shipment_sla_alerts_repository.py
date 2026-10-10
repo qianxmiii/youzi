@@ -67,6 +67,18 @@ def _alert_severity_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
     )
 
 
+def _alert_list_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    """列表顺序：未跟进在前，已跟进整组在后；组内再按严重度。"""
+    status = str(item.get("status") or "").strip()
+    if status == STATUS_OPEN:
+        followed = 0
+    elif status == STATUS_ACKNOWLEDGED:
+        followed = 1
+    else:
+        followed = 2
+    return (followed, *_alert_severity_sort_key(item))
+
+
 def _merge_alerts_by_shipment(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """同运单多条预警合并为一条；保留最严重的一条，附带 sibling ids。"""
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -100,8 +112,8 @@ def _merge_alerts_by_shipment(items: list[dict[str, Any]]) -> list[dict[str, Any
         primary["relatedAlertIds"] = related
         primary["alertTypeLabels"] = [ALERT_TYPE_LABELS.get(t, t) for t in types]
         merged.append(primary)
-    # 合并后仍按严重度排序，保证分页语义稳定
-    merged.sort(key=_alert_severity_sort_key)
+    # 合并后：已跟进整组排最后，组内再按严重度
+    merged.sort(key=_alert_list_sort_key)
     return merged
 
 
@@ -847,13 +859,13 @@ class ShipmentSlaAlertsRepository:
                 LEFT JOIN {RULES_TABLE} csr ON csr.id = a.rule_id
                 WHERE {where}
                 ORDER BY
+                  CASE a.status WHEN 'open' THEN 0 WHEN 'acknowledged' THEN 1 ELSE 2 END,
                   CASE a.risk_level
                     WHEN 'severe_overdue' THEN 0
                     WHEN 'overdue' THEN 1
                     WHEN 'warning_soon' THEN 2
                     ELSE 3
                   END,
-                  CASE a.status WHEN 'open' THEN 0 WHEN 'acknowledged' THEN 1 ELSE 2 END,
                   a.due_date ASC,
                   datetime(a.updated_time) DESC
                 """,

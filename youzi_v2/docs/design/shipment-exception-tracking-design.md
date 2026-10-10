@@ -35,7 +35,7 @@
 2. 支持提前 N 天提醒即将超时的未签收运单。
 3. 支持超过预估截止日后生成已超时或严重超时预警。
 4. 支持入库后一周仍无 ETD/ATD 的未开船预警。
-5. 支持 ATA 后 10 天仍未送仓/签收的到港未送仓预警。
+5. 支持 ATA 后超过 5 天仍未送仓/签收的到港未送仓预警。
 6. 支持从预警一键转为人工异常。
 7. 支持签收后自动关闭时效预警和未完成跟进提醒。
 8. 异常跟踪页面只承载当前待办；已签收或已解决的历史结果进入统计管理复盘。
@@ -150,7 +150,7 @@ DPS row.warehouseEntryTime 应单独写入 warehouse_entry_time
 ```text
 有 ATA
 且未签收
-且 today >= ATA + 10 天
+且 today > ATA + 5 天
   -> 生成到港未送仓预警
 ```
 
@@ -289,7 +289,7 @@ CREATE TABLE channel_sla_rules (
 首版建议放在：
 
 ```text
-系统管理 / 渠道管理 / 渠道时效配置
+系统管理 / 后台码表「渠道」/ 渠道时效配置
 ```
 
 或者在 `渠道管理` 的渠道详情中增加一个配置区：
@@ -521,7 +521,7 @@ channel_code
 加载未签收运单
   -> 先清理已签收但仍处于 open/acknowledged 的历史预警
   -> 检查入库后一周仍无 ETD/ATD 的前置阶段预警
-  -> 检查 ATA 后 10 天仍未送仓/签收的到港阶段预警
+  -> 检查 ATA 后超过 5 天仍未送仓/签收的到港阶段预警
   -> 找到运单匹配的运输时效规则
   -> 计算预估截止日 due_date
   -> 计算提醒日 warning_date
@@ -573,10 +573,10 @@ rule_scope = channel
 否则如果 ATA 为空:
   不生成到港未送仓预警
 
-否则如果 today >= ATA + 10 天:
+否则如果 today > ATA + 5 天:
   alert_type = ARRIVAL_NO_DELIVERY
   risk_level = overdue
-  due_date = ATA + 10 天
+  due_date = ATA + 5 天
   start_field = ATA
   start_time = ATA
 ```
@@ -657,7 +657,7 @@ due_date = date(due_date)
 承运商
 目的港
 入库时间（列表展示 MM-DD）
-运输时间（起运 ATD - 到港 ATA / 截止日；列表展示 MM-DD，日期加粗、~ 浅色分隔）
+运输时间（起运 ATD - 到港 ATA / 截止日；列表展示 MM-DD，起运/到港天蓝加粗、~ 浅蓝分隔，截止日琥珀字）
 已运输天数
 预估时效
 超时天数（正数=已超期，负数=距截止还剩；列表独立列，绿/橙/红着色）
@@ -737,11 +737,9 @@ due_date = date(due_date)
 默认排序：
 
 ```text
-严重超时
-已超时
-即将超时
-待处理优先于已处理
-按超期天数倒序
+未跟进（待处理）在前，已跟进整组排最后
+同组内：严重超时 > 已超时 > 即将超时
+再按截止日
 ```
 
 ## 首页与顶栏提醒
@@ -872,7 +870,7 @@ shipment_exception_followup_notifications = 人工异常跟进提醒
 3. DPS 同步单独写入 `warehouse_entry_time`，不要只把 `warehouseEntryTime` 当作最新轨迹时间兜底。
 4. 截止日计算只使用 `ATD + 渠道预估天数`；没有 `ATD` 或没有命中渠道时效规则则跳过全程运输超时扫描。
 5. 入库超过 7 天（第 8 天起）仍无 `ETD` 且无 `ATD` 时，生成 `WAREHOUSE_NO_DEPARTURE` 预警；补齐 `ETD` 或 `ATD` 后自动关闭该类预警。
-6. ATA 后 10 天仍未签收时，生成 `ARRIVAL_NO_DELIVERY` 预警；签收后自动关闭该类预警。
+6. ATA 后超过 5 天仍未签收时，生成 `ARRIVAL_NO_DELIVERY` 预警；签收后自动关闭该类预警。
 7. 生成 `shipment_sla_alerts`，运输时效风险等级为 `warning_soon`、`overdue`、`severe_overdue`，阶段卡点预警首版使用 `overdue`。
 8. 异常跟踪页面集中处理当前待办，默认排除已签收或已解决预警，支持标记已处理、忽略、转为人工异常。
 9. 转为人工异常时复用现有 `shipment_exception_events` 和当前异常字段。

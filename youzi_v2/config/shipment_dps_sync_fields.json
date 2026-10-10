@@ -21,7 +21,7 @@
     },
     "channel_code": {
       "label": "渠道",
-      "dpsSource": "channelCode",
+      "dpsSource": "channelCode（可经 channel_codes.dps_channel_name 映射为本地 code）",
       "onInsert": true,
       "onUpdate": true
     },
@@ -110,10 +110,16 @@
       "onUpdate": false
     },
     "status_code": {
-      "label": "状态",
-      "dpsSource": "status",
+      "label": "粗状态",
+      "dpsSource": "signingTime→DELIVERED；有 commerceWaybillRouteInfo.status→IN_TRANSIT（忽略 markVos/601）",
       "onInsert": true,
       "onUpdate": false
+    },
+    "route_status": {
+      "label": "轨迹细状态",
+      "dpsSource": "params.commerceWaybillRouteInfo.status → shipment_route_status_codes",
+      "onInsert": true,
+      "onUpdate": true
     },
     "payment_status": {
       "label": "付款状态",

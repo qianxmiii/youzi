@@ -418,9 +418,14 @@ def compute_payment_reminder(
     return _adjust_long_overdue_days(result, row, check_day)
 
 
-def matches_scope(reminder_type: str, scope: str) -> bool:
+def matches_scope(
+    reminder_type: str,
+    scope: str,
+    settlement_method: str | None = None,
+) -> bool:
     rt = (reminder_type or "").strip()
     sc = (scope or SCOPE_TODO).strip().lower()
+    method = (settlement_method or "").strip().upper()
     if sc == SCOPE_ALL_UNPAID:
         return True
     if sc == REMINDER_MISSING_RULE:
@@ -434,18 +439,22 @@ def matches_scope(reminder_type: str, scope: str) -> bool:
     if sc == REMINDER_OVERDUE:
         return rt == REMINDER_OVERDUE
     if sc == SCOPE_TODO:
+        # 月结按客户批量对账，不进入日常待催（含到期当天与逾期）
+        if method == SETTLEMENT_MONTHLY:
+            return False
         return rt in (
             REMINDER_UPCOMING_7,
             REMINDER_TODAY,
             REMINDER_OVERDUE,
-            REMINDER_MONTHLY,
             REMINDER_MISSING_RULE,
         )
     return False
 
 
 def reminder_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    # 已跟进（有跟进记录）排到最后，其余仍按提醒紧急度 + 应付款日
+    followed = 1 if int(item.get("followupCount") or 0) > 0 else 0
     rt = (item.get("reminderType") or "").strip()
     order = REMINDER_SORT_ORDER.get(rt, 99)
     due = item.get("dueDate") or "9999-99-99"
-    return (order, due, item.get("shipmentNo") or "")
+    return (followed, order, due, item.get("shipmentNo") or "")

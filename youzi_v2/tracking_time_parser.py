@@ -15,8 +15,12 @@ _EXPLICIT_DATE_RE = re.compile(
     re.IGNORECASE,
 )
 _ARRIVED_DEST_RE = re.compile(r"arriving\s+at\s+the\s+destination", re.IGNORECASE)
-_GOODS_SHIPPED_RE = re.compile(r"the\s+goods\s+have\s+been\s+shipped", re.IGNORECASE)
-# 中文开船/离港节点（与英文 shipped 节点同为 ATD 兜底）
+# 英文开船/离港节点（ATD 兜底）
+_DEPARTURE_EN_RE = re.compile(
+    r"the\s+goods\s+have\s+been\s+shipped|the\s+train\s+has\s+departed",
+    re.IGNORECASE,
+)
+# 中文开船/离港节点（与英文 shipped / train departed 同为 ATD 兜底）
 _DEPARTURE_ZH_RE = re.compile(r"已开船|已离港")
 _EXPECTED_DELIVERY_RE = re.compile(
     r"expected\s+to\s+be\s+delivered\s+on\s+(\d{1,2})[\/.-](\d{1,2})",
@@ -114,7 +118,7 @@ def is_goods_shipped_track(desc: str) -> bool:
     """是否开船/离港节点（用于 ATD 兜底，无显式 ATD 字段时）。
 
     匹配：
-    - 英文：The goods have been shipped
+    - 英文：The goods have been shipped / The train has departed
     - 中文：已开船、已离港
     """
     text = normalize_track_text(desc)
@@ -122,7 +126,7 @@ def is_goods_shipped_track(desc: str) -> bool:
         return False
     if _DEPARTURE_ZH_RE.search(text):
         return True
-    return _GOODS_SHIPPED_RE.search(text.lower()) is not None
+    return _DEPARTURE_EN_RE.search(text.lower()) is not None
 
 
 def _track_sort_key(track: InternalTrackRow) -> tuple[str, str, str]:

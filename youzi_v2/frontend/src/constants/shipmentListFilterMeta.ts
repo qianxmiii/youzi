@@ -107,7 +107,7 @@ export const DEFAULT_SHIPMENT_VISIBLE_COLUMNS = [
   'updatedTime',
 ] as const
 
-export const SHIPMENT_COLUMN_STORAGE_KEY = 'youzi-shipment-list-columns-v3'
+export const SHIPMENT_COLUMN_STORAGE_KEY = 'youzi-shipment-list-columns-v5'
 
 export type ShipmentSystemViewId =
   | 'warning_soon'
@@ -186,6 +186,7 @@ export function emptyAdvancedTimeRanges(): ShipmentAdvancedTimeRanges {
 
 export type ShipmentFilterSummaryContext = {
   statusLabel: Record<string, string>
+  routeStatusLabel: (code: string | null | undefined) => string
   countryLabel: (code: string | null | undefined) => string
   carrierLabel: (code: string | null | undefined) => string
   channelLabel: (code: string | null | undefined) => string

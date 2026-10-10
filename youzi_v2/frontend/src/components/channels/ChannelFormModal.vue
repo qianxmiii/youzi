@@ -22,6 +22,7 @@ const nameEn = ref('')
 const country = ref<string | null>(null)
 const category = ref<string | null>(null)
 const note = ref('')
+const dpsChannelName = ref('')
 const sortOrder = ref(0)
 const isActive = ref(true)
 
@@ -43,6 +44,7 @@ watch(
       country.value = props.row.country || null
       category.value = props.row.category || null
       note.value = props.row.note || ''
+      dpsChannelName.value = props.row.dpsChannelName || ''
       sortOrder.value = props.row.sortOrder
       isActive.value = props.row.isActive
     } else if (props.mode === 'copy' && props.row) {
@@ -52,6 +54,7 @@ watch(
       country.value = props.row.country || null
       category.value = props.row.category || null
       note.value = props.row.note || ''
+      dpsChannelName.value = props.row.dpsChannelName || ''
       sortOrder.value = props.row.sortOrder
       isActive.value = props.row.isActive
     } else {
@@ -61,6 +64,7 @@ watch(
       country.value = null
       category.value = null
       note.value = ''
+      dpsChannelName.value = ''
       sortOrder.value = 0
       isActive.value = true
     }
@@ -78,6 +82,7 @@ function handleSubmit() {
     country: country.value?.trim() || '',
     category: category.value?.trim() || '',
     note: note.value.trim(),
+    dpsChannelName: dpsChannelName.value.trim(),
     sortOrder: sortOrder.value,
     isActive: isActive.value,
   })
@@ -96,7 +101,7 @@ function handleSubmit() {
       <NFormItem label="渠道编码" required>
         <NInput
           v-model:value="code"
-          placeholder="与运单 channel_code、DPS channelCode 一致，如 AEE、AU sea truck"
+          placeholder="本地渠道编码，写入运单 channel_code，如 AEE、AU sea truck"
         />
       </NFormItem>
       <NFormItem label="中文名称" required>
@@ -104,6 +109,12 @@ function handleSubmit() {
       </NFormItem>
       <NFormItem label="英文名称">
         <NInput v-model:value="nameEn" placeholder="默认同渠道编码" />
+      </NFormItem>
+      <NFormItem label="DPS 渠道名">
+        <NInput
+          v-model:value="dpsChannelName"
+          placeholder="对齐 DPS cnName，如 海卡经济达-洛杉矶；空则按本地编码原样匹配"
+        />
       </NFormItem>
       <div class="grid grid-cols-2 gap-3">
         <NFormItem label="国家/地区">

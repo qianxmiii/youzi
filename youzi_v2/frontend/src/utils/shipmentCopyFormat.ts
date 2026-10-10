@@ -1,5 +1,6 @@
 import type { Shipment } from '@/types/shipment'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
+import { resolveLastMileTracking } from '@/utils/lastMileTracking'
 
 /** 与 config/shipment_excel_columns.json 导出列顺序一致 */
 export const SHIPMENT_DETAIL_COPY_HEADERS = [
@@ -147,14 +148,39 @@ export function formatShipmentDetailSummaryWithCustomerNoLine(row: Shipment): st
   ])
 }
 
-/** 多行运单明细摘要，每行一条运单 */
-export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
-  if (!rows.length) return ''
-  return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n')
+/** 转单号行：`-- FedEx 876457312498`；无转单号时返回空 */
+export function formatShipmentTrackingNumberSuffixLine(row: Shipment): string {
+  const info = resolveLastMileTracking(row)
+  if (!info) return ''
+  return `-- ${info.carrierLabel} ${info.number}`
 }
 
-/** 多行运单明细（含关联单号 / 客户编号），每行一条运单 */
+/** 运单明细摘要 + 转单号（有则第二行 `-- 承运商 转单号`） */
+export function formatShipmentDetailSummaryWithTrackingBlock(row: Shipment): string {
+  const head = formatShipmentDetailSummaryLine(row)
+  const tn = formatShipmentTrackingNumberSuffixLine(row)
+  return tn ? `${head}\n${tn}` : head
+}
+
+/** 运单明细（含关联单号）+ 转单号 */
+export function formatShipmentDetailSummaryWithCustomerNoAndTrackingBlock(
+  row: Shipment,
+): string {
+  const head = formatShipmentDetailSummaryWithCustomerNoLine(row)
+  const tn = formatShipmentTrackingNumberSuffixLine(row)
+  return tn ? `${head}\n${tn}` : head
+}
+
+/** 多行运单明细摘要（含转单号），运单之间空一行 */
+export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
+  if (!rows.length) return ''
+  return rows.map((row) => formatShipmentDetailSummaryWithTrackingBlock(row)).join('\n\n')
+}
+
+/** 多行运单明细（含关联单号 / 转单号），运单之间空一行 */
 export function formatShipmentDetailSummaryWithCustomerNoCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
-  return rows.map((row) => formatShipmentDetailSummaryWithCustomerNoLine(row)).join('\n')
+  return rows
+    .map((row) => formatShipmentDetailSummaryWithCustomerNoAndTrackingBlock(row))
+    .join('\n\n')
 }

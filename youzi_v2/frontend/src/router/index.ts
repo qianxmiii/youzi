@@ -113,9 +113,7 @@ const router = createRouter({
         },
         {
           path: 'channels',
-          name: 'channels',
-          component: () => import('@/views/channels/ChannelsView.vue'),
-          meta: { title: '渠道管理' },
+          redirect: { path: '/admin', query: { table: 'channel_codes' } },
         },
         {
           path: 'scheduled-tasks',
@@ -152,6 +150,12 @@ const router = createRouter({
           name: 'tools-product-import',
           component: () => import('@/views/tools/ProductImportView.vue'),
           meta: { title: '箱单转产品导入' },
+        },
+        {
+          path: 'tools/fba-box-code-expand',
+          name: 'tools-fba-box-code-expand',
+          component: () => import('@/views/tools/FbaBoxCodeExpandView.vue'),
+          meta: { title: 'FBA 箱号展开' },
         },
       ],
     },

@@ -14,6 +14,7 @@
 | [warehouse-flow.md](./warehouse-flow.md) | 仓库地址簿业务流程 |
 | [SCHEMA.md](./SCHEMA.md) | 码表与字段详细说明（历史文档，与 database.md 互补） |
 | [cost-calculation.md](./cost-calculation.md) | 成本计算（DDU/DDP） |
+| [design/shipment-route-status-design.md](./design/shipment-route-status-design.md) | DPS 轨迹细状态（route_status） |
 | [design/shipment-groups-design.md](./design/shipment-groups-design.md) | 运单分组与组提醒设计 |
 | [design/quote-followup-management-design.md](./design/quote-followup-management-design.md) | 报价跟进管理设计 |
 | [design/payment-reminder-list-design.md](./design/payment-reminder-list-design.md) | 催款列表设计 |

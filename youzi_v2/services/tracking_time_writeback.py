@@ -17,6 +17,10 @@ from ..tracking_time_parser import (
     build_time_candidates,
     tracks_from_rows,
 )
+from ..last_mile_tracking import (
+    carrier_hint_to_express_code,
+    pick_latest_last_mile_from_track_rows,
+)
 
 LogFn = Callable[[str], None]
 
@@ -258,6 +262,29 @@ def recalculate_for_shipment(
 
         _apply_shipment_fields(database.conn, sid, shipment_updates)
         database.conn.commit()
+
+    existing_tn = ""
+    try:
+        existing_tn = (shipment["tracking_number"] or "").strip()
+    except (KeyError, IndexError, TypeError):
+        existing_tn = ""
+
+    if not existing_tn and track_rows:
+        picked = pick_latest_last_mile_from_track_rows(track_rows)
+        if picked:
+            number, hint, _src = picked
+            from ..db.shipments_repository import ShipmentsRepository
+
+            wrote = ShipmentsRepository(database).set_tracking_number_if_empty(
+                sn,
+                number,
+                express_code=carrier_hint_to_express_code(hint),
+            )
+            if wrote:
+                applied_fields.append("tracking_number")
+                if log:
+                    label = carrier_hint_to_express_code(hint) or (hint or "")
+                    log(f"[转单号回写] {sn} ← {label} {number}")
 
     if "delivered_time" in shipment_updates and (shipment_updates.get("delivered_time") or "").strip():
         from .shipment_sla_scan import maybe_resolve_alerts_after_delivery

@@ -1864,7 +1864,11 @@
                     </div>
                   </div>
                   
-                  <div class="text-center">
+                  <div class="d-flex justify-content-center align-items-center gap-3 flex-wrap">
+                    <div class="form-check mb-0">
+                      <input class="form-check-input" type="checkbox" id="deliveryAmazonMode" onchange="onAmazonModeChange()">
+                      <label class="form-check-label" for="deliveryAmazonMode">亚马逊</label>
+                    </div>
                     <button type="button" class="btn btn-primary" onclick="batchQueryDeliveryTime()">
                       <i class="bi bi-search"></i> 批量查询
                     </button>

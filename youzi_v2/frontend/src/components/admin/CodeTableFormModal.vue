@@ -19,6 +19,7 @@ const props = defineProps<{
   hasPortType: boolean
   hasChannelFields?: boolean
   hasCarrierFields?: boolean
+  hasRouteStatusFields?: boolean
   initial: CodeTableRow | null
 }>()
 
@@ -48,7 +49,9 @@ const form = reactive<CodeTablePayload>({
   country: '',
   category: '',
   note: '',
+  dpsChannelName: '',
   carrierId: '',
+  dpsStatus: '',
 })
 
 const title = computed(() => (props.mode === 'create' ? '新增码表项' : '修改码表项'))
@@ -67,7 +70,9 @@ watch(
       form.country = props.initial.country || ''
       form.category = props.initial.category || ''
       form.note = props.initial.note || ''
+      form.dpsChannelName = props.initial.dpsChannelName || ''
       form.carrierId = props.initial.carrierId || ''
+      form.dpsStatus = props.initial.dpsStatus || ''
     } else {
       form.code = ''
       form.nameZh = ''
@@ -78,7 +83,9 @@ watch(
       form.country = ''
       form.category = ''
       form.note = ''
+      form.dpsChannelName = ''
       form.carrierId = ''
+      form.dpsStatus = ''
     }
   },
   { immediate: true },
@@ -124,10 +131,22 @@ function handleSubmit() {
       <NFormItem v-if="hasChannelFields" label="备注">
         <NInput v-model:value="form.note" type="textarea" :rows="2" />
       </NFormItem>
+      <NFormItem v-if="hasChannelFields" label="DPS渠道名">
+        <NInput
+          v-model:value="form.dpsChannelName"
+          placeholder="DPS channelCode / channelName，用于同步映射"
+        />
+      </NFormItem>
       <NFormItem v-if="hasCarrierFields" label="承运商ID">
         <NInput
           v-model:value="form.carrierId"
           placeholder="DPS carrierId，用于反查编码（写入运单 carrier_code）"
+        />
+      </NFormItem>
+      <NFormItem v-if="hasRouteStatusFields" label="DPS status">
+        <NInput
+          v-model:value="form.dpsStatus"
+          placeholder="commerceWaybillRouteInfo.status，如 601"
         />
       </NFormItem>
       <NFormItem label="排序">

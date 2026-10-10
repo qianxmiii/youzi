@@ -12,7 +12,7 @@ export const SETTLEMENT_METHOD_FILTER_OPTIONS = [
 ]
 
 export const PAYMENT_REMINDER_SCOPE_OPTIONS = [
-  { label: '待催（默认）', value: 'todo' },
+  { label: '待催（不含月结）', value: 'todo' },
   { label: '全部未付款', value: 'all_unpaid' },
   { label: '提前7天', value: 'upcoming_7_days' },
   { label: '当天提醒', value: 'today' },

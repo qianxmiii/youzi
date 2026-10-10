@@ -29,7 +29,8 @@
 | `address_codes` | 地址/仓库代码（部分有码表） |
 | `carrier_codes` | 承运商 |
 | `port_codes` | 出发/到达港口（共用） |
-| `shipment_status_codes` | 运单状态 |
+| `shipment_status_codes` | 运单粗状态 |
+| `shipment_route_status_codes` | DPS 轨迹细状态（含 `dps_status`） |
 
 ### 初始状态码
 
@@ -39,6 +40,16 @@
 | `DELIVERED` | 已签收 |
 | `INSPECTION` | 查验 |
 | `UNKNOWN` | 未知 |
+
+### 轨迹细状态（节选）
+
+| code | dps_status | name_zh |
+|------|------------|---------|
+| `WAREHOUSE_IN` | 202 | 入库 |
+| `DEPARTED_POL` | 301 | 离开起运港 |
+| `ARRIVED_POD` | 306 | 到达目的港 |
+| `LAST_MILE_HANDOVER` | 510 | 快递派-已交仓 |
+| `TRACK_SIGNED` | 601 | 轨迹签收 |
 
 ---
 
@@ -92,13 +103,14 @@
 | `origin_port_code` | 出发港口 | `port_codes` |
 | `destination_port_code` | 到达港口 | `port_codes` |
 | `delivered_time` | 签收时间 | |
-| `status_code` | 生命周期状态 | `shipment_status_codes` |
+| `status_code` | 粗状态（仅 `signingTime`→已签收） | `shipment_status_codes` |
+| `route_status` | 轨迹细状态（DPS route status） | `shipment_route_status_codes` |
 | `exception_code` | 当前异常（快照，可空） | `shipment_exception_codes` |
 | `exception_opened_time` | 当前异常开始时间 | |
 | `created_time` | 创建时间 | |
 | `updated_time` | 更新时间 | |
 
-**索引**：`shipment_no`(UNIQUE)、`customer`、`channel_code`、`country_code`、`carrier_code`、`status_code`、`updated_time`。
+**索引**：`shipment_no`(UNIQUE)、`customer`、`channel_code`、`country_code`、`carrier_code`、`status_code`、`route_status`、`updated_time`。
 
 ## 客户表 `customers`
 
@@ -122,12 +134,14 @@
 | `country` | 国家/地区（如 美国、欧洲） |
 | `category` | 大类：空运 / 海运 / 快递 / 卡航 / 铁路 |
 | `note` | 备注 |
+| `dps_channel_name` | DPS 渠道名（清单 `cnName` / DPS 中文渠道名）；同步时映射到本地 `code` |
 
-- `code`：渠道编码（与运单 `channel_code`、DPS `channelCode` 一致；可修改，同步更新关联运单）
+- `code`：本地渠道编码（写入运单 `channel_code`；可修改，同步更新关联运单）
 - `name_zh`：中文名称（如 美国普船）
 - `name_en`：英文名称（默认同 `code`）
+- DPS 同步：若 `dps_channel_name` 匹配 DPS 返回值，则运单写入本地 `code`；未配置时仍原样使用 DPS `channelCode`
 
-接口：`GET/POST/PATCH/DELETE /api/v1/channels`；`POST /api/v1/channels/seed-defaults` 导入内置 26 条；侧栏「渠道管理」`/channels`。
+接口：`GET/POST/PATCH/DELETE /api/v1/channels`；`POST /api/v1/channels/seed-defaults` **清空后全量导入**渠道清单（约 105 条）；入口：后台管理 · 码表 →「渠道」tab（`/admin?table=channel_codes`；`/channels` 重定向至此）。
 
 ## 承运商码表 `carrier_codes`（扩展）
 
@@ -162,7 +176,7 @@
 | `closed_time` | 结束（可空） |
 | `note` | 备注 |
 
-码表：`shipment_exception_codes`（查验中、掉件、暂扣、破损等）。
+码表：`shipment_exception_codes`（查验中、掉件、暂扣、破损、运输超时、出口海关异常、进口清关异常等）。
 
 API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST .../close`（`closedTime` 可选）、`GET /api/v1/shipments/{id}/exception-events`。
 

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import re
-from typing import Literal
+from typing import Any, Literal
 
 LastMileCarrierHint = Literal["ups", "fedex", "usps", "dhl", "conwest", "dpd"]
 
@@ -24,7 +24,7 @@ _EXPRESS_CODE_TO_HINT: dict[str, LastMileCarrierHint] = {
     "DHL": "dhl",
 }
 
-# 「UPS 1Z…」「CWE C03IK…」等
+# 「UPS 1Z…」「CWE C03IK…」等（整段输入）
 _PREFIX_WITH_SEP = re.compile(
     r"^(?P<prefix>UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)\s*[-#:：]?\s*(?P<number>.+)$",
     re.IGNORECASE,
@@ -32,6 +32,12 @@ _PREFIX_WITH_SEP = re.compile(
 # 「UPS1Z…」无空格（单号足够长才剥离，避免误伤）
 _PREFIX_COMPACT = re.compile(
     r"^(?P<prefix>UPS|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)(?P<number>.+)$",
+    re.IGNORECASE,
+)
+# 轨迹正文中的「FedEx 8776…」（可出现在句子任意位置）
+_IN_TEXT_LAST_MILE_RE = re.compile(
+    r"(?P<prefix>UPS|FED\s*EX|FEDEX|FDX|USPS|DHL|CWE|DPDUK|DPD)\s*[-#:：]?\s*"
+    r"(?P<number>[A-Za-z0-9]{8,30})",
     re.IGNORECASE,
 )
 
@@ -137,6 +143,81 @@ def express_code_to_carrier_hint(express_code: str | None) -> LastMileCarrierHin
     if not key:
         return None
     return _EXPRESS_CODE_TO_HINT.get(key)
+
+
+def carrier_hint_to_express_code(hint: LastMileCarrierHint | None) -> str | None:
+    if not hint:
+        return None
+    mapping: dict[LastMileCarrierHint, str] = {
+        "ups": "UPS",
+        "fedex": "FEDEX",
+        "dpd": "DPD",
+        "conwest": "CWE",
+        "usps": "USPS",
+        "dhl": "DHL",
+    }
+    return mapping.get(hint)
+
+
+def _is_plausible_last_mile_number(number: str, hint: LastMileCarrierHint) -> bool:
+    tn = (number or "").strip().upper().replace(" ", "")
+    if len(tn) < 8:
+        return False
+    if hint == "fedex":
+        return tn.isdigit() and 10 <= len(tn) <= 15
+    if hint == "ups":
+        return tn.startswith("1Z") and len(tn) >= 10
+    if hint == "dhl":
+        return tn.isdigit() and len(tn) >= 10
+    if hint == "dpd":
+        return tn.isdigit() and len(tn) >= 10
+    if hint == "conwest":
+        return is_conwest_tracking_number(tn) or (tn.startswith("C") and len(tn) >= 10)
+    if hint == "usps":
+        return len(tn) >= 10
+    return True
+
+
+def extract_last_mile_from_track_desc(
+    desc: str | None,
+) -> tuple[str, LastMileCarrierHint] | None:
+    """从轨迹正文识别「承运商 + 单号」（如 FedEx 877617962361）。
+
+    需同时具备承运商标签与合法单号；同一条描述多处命中时取最后一处。
+    """
+    text = (desc or "").strip()
+    if not text:
+        return None
+    matches = list(_IN_TEXT_LAST_MILE_RE.finditer(text))
+    if not matches:
+        return None
+    m = matches[-1]
+    number = (m.group("number") or "").strip().upper().replace(" ", "")
+    hint = _prefix_to_hint(m.group("prefix") or "")
+    if not number or not hint:
+        return None
+    if not _is_plausible_last_mile_number(number, hint):
+        return None
+    return number, hint
+
+
+def pick_latest_last_mile_from_track_rows(
+    rows: list[dict[str, Any]],
+) -> tuple[str, LastMileCarrierHint, dict[str, Any]] | None:
+    """多条轨迹中取事件时间最新且可识别的一条转单号。"""
+    from .db.datetime_util import normalize_tracking_time
+
+    def sort_key(row: dict[str, Any]) -> tuple[str, str, str]:
+        event = normalize_tracking_time(str(row.get("tracking_time") or "")) or ""
+        created = normalize_tracking_time(str(row.get("created_time") or "")) or ""
+        return (event, created, str(row.get("id") or ""))
+
+    for row in sorted(rows, key=sort_key, reverse=True):
+        hit = extract_last_mile_from_track_desc(str(row.get("tracking_desc") or ""))
+        if hit:
+            number, hint = hit
+            return number, hint, row
+    return None
 
 
 def infer_last_mile_carrier_hint(number: str) -> LastMileCarrierHint | None:

@@ -23,7 +23,9 @@
             异常开启 → 处理 → 异常关闭
 ```
 
-状态码存储在 `shipments.status_code`，具体枚举见码表 `shipment_status`（`db/code_tables.py`）。
+粗状态存 `shipments.status_code`（码表 `shipment_status_codes`）；DPS 轨迹细状态存 `shipments.route_status`（码表 `shipment_route_status_codes`，来自 `commerceWaybillRouteInfo.status`）。粗状态仅在有 `signingTime` 时为 `DELIVERED`，**不**因 601 / `markVos` 判签收；601 只映射为细状态 `TRACK_SIGNED`。
+
+DPS 同步后：细状态 206/402 自动开启清关异常；最新关键节点离开这两类时自动解除（不覆盖掉件等人工异常）。详见 [design/shipment-route-status-design.md](./design/shipment-route-status-design.md)。
 
 ## 数据录入
 
@@ -47,7 +49,7 @@
 
 **自动同步**：Uvicorn 启动后 `tracking_sync_scheduler` 每 N 小时全量同步（默认 2 小时，仅 `IN_TRANSIT`）。配置见 [deployment.md](./deployment.md)。
 
-同步后更新 `latest_tracking_time`、`latest_tracking_desc`、`tracking_log_count`，并可能推进 `status_code`。关键时间字段（ETD/ATD/ETA/ATA、入仓时间、预计送仓、签收时间）由 `tracking_time_writeback` 根据内部轨迹节点自动回写（签收时间冲突时需人工审批）。
+同步后更新 `latest_tracking_time`、`latest_tracking_desc`、`tracking_log_count`，并可能推进 `status_code`。关键时间字段（ETD/ATD/ETA/ATA、入仓时间、预计送仓、签收时间）由 `tracking_time_writeback` 根据内部轨迹节点自动回写（签收时间冲突时需人工审批）。若转单号为空且轨迹含 `FedEx/UPS/DHL… + 合法单号`，同步写入 `tracking_number`（不覆盖已有值）。
 
 **分组提醒联动**：本次同步中摘要或状态有变化的运单，会自动对其所在分组执行规则评估（签收期限、整组到港催款等）；响应字段 `groupAlertsEvaluated`、`groupAlertsCreated`。日志含 `[分组提醒]` 行。手动「重新计算」仍可用于全量补跑。
 

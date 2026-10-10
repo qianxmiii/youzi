@@ -21,6 +21,7 @@ _TABLE_LABELS: dict[str, str] = {
     "port_codes": "港口",
     "shipment_status_codes": "运单状态",
     "shipment_exception_codes": "运单异常",
+    "shipment_route_status_codes": "轨迹细状态",
 }
 
 _PORT_TYPES = frozenset({"origin", "destination", "both"})
@@ -45,6 +46,7 @@ def list_table_meta() -> list[dict[str, Any]]:
             "hasPortType": name == "port_codes",
             "hasChannelFields": name == "channel_codes",
             "hasCarrierFields": name == "carrier_codes",
+            "hasRouteStatusFields": name == "shipment_route_status_codes",
         }
         for name in sorted(_ALLOWED_TABLES)
     ]
@@ -66,8 +68,13 @@ def _row_to_api(table: str, row: sqlite3.Row) -> dict[str, Any]:
         out["country"] = row["country"] if "country" in row.keys() else ""
         out["category"] = row["category"] if "category" in row.keys() else ""
         out["note"] = row["note"] if "note" in row.keys() else ""
+        out["dpsChannelName"] = (
+            row["dps_channel_name"] if "dps_channel_name" in row.keys() else ""
+        ) or ""
     if table == "carrier_codes":
         out["carrierId"] = row["carrier_id"] if "carrier_id" in row.keys() else ""
+    if table == "shipment_route_status_codes":
+        out["dpsStatus"] = row["dps_status"] if "dps_status" in row.keys() else ""
     return out
 
 
@@ -125,6 +132,12 @@ class CodeTablesRepository:
                     "(code LIKE ? OR name_zh LIKE ? OR name_en LIKE ? OR carrier_id LIKE ?)"
                 )
                 params.extend([q, q, q, q])
+            elif t == "channel_codes":
+                conditions.append(
+                    "(code LIKE ? OR name_zh LIKE ? OR name_en LIKE ?"
+                    " OR country LIKE ? OR note LIKE ? OR dps_channel_name LIKE ?)"
+                )
+                params.extend([q, q, q, q, q, q])
             else:
                 conditions.append("(code LIKE ? OR name_zh LIKE ? OR name_en LIKE ?)")
                 params.extend([q, q, q])
@@ -190,9 +203,9 @@ class CodeTablesRepository:
                 self._conn.execute(
                     f"""
                     INSERT INTO {t} (
-                        code, name_zh, name_en, country, category, note,
+                        code, name_zh, name_en, country, category, note, dps_channel_name,
                         sort_order, is_active, created_time, updated_time
-                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         code,
@@ -201,6 +214,7 @@ class CodeTablesRepository:
                         payload["country"],
                         payload["category"],
                         payload["note"],
+                        payload["dps_channel_name"],
                         payload["sort_order"],
                         payload["is_active"],
                         now,
@@ -220,6 +234,25 @@ class CodeTablesRepository:
                         payload["name_zh"],
                         payload["name_en"],
                         payload["carrier_id"],
+                        payload["sort_order"],
+                        payload["is_active"],
+                        now,
+                        now,
+                    ),
+                )
+            elif t == "shipment_route_status_codes":
+                self._conn.execute(
+                    f"""
+                    INSERT INTO {t} (
+                        code, name_zh, name_en, dps_status,
+                        sort_order, is_active, created_time, updated_time
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        code,
+                        payload["name_zh"],
+                        payload["name_en"],
+                        payload["dps_status"],
                         payload["sort_order"],
                         payload["is_active"],
                         now,
@@ -288,11 +321,19 @@ class CodeTablesRepository:
             sets.insert(2, "port_type = ?")
             vals.insert(2, payload["port_type"])
         if t == "channel_codes":
-            sets[1:1] = ["country = ?", "category = ?", "note = ?"]
-            vals[1:1] = [payload["country"], payload["category"], payload["note"]]
+            sets[1:1] = ["country = ?", "category = ?", "note = ?", "dps_channel_name = ?"]
+            vals[1:1] = [
+                payload["country"],
+                payload["category"],
+                payload["note"],
+                payload["dps_channel_name"],
+            ]
         if t == "carrier_codes":
             sets.insert(2, "carrier_id = ?")
             vals.insert(2, payload["carrier_id"])
+        if t == "shipment_route_status_codes":
+            sets.insert(2, "dps_status = ?")
+            vals.insert(2, payload["dps_status"])
         vals.append(c)
         replaced = 0
         with self._database.lock:
@@ -395,15 +436,29 @@ class CodeTablesRepository:
             country = (data.get("country") or "").strip()
             category = (data.get("category") or "").strip()
             note = (data.get("note") or "").strip()
+            dps_channel_name = (
+                data.get("dps_channel_name")
+                or data.get("dpsChannelName")
+                or data.get("DPS_channelName")
+                or ""
+            ).strip()
             if category and category not in CHANNEL_CATEGORIES:
                 raise ValueError(f"大类须为: {' / '.join(CHANNEL_CATEGORIES)}")
             out["country"] = country
             out["category"] = category
             out["note"] = note
+            out["dps_channel_name"] = dps_channel_name
         if table == "carrier_codes":
             out["carrier_id"] = (
                 data.get("carrier_id") or data.get("carrierId") or ""
             ).strip()
+        if table == "shipment_route_status_codes":
+            dps = (
+                data.get("dps_status") or data.get("dpsStatus") or ""
+            ).strip()
+            if not dps:
+                raise ValueError("dpsStatus（DPS status 数字）不能为空")
+            out["dps_status"] = dps
         return out
 
     def lookup_carrier_code_by_id(self, carrier_id: str) -> str | None:
@@ -420,6 +475,23 @@ class CodeTablesRepository:
                 LIMIT 1
                 """,
                 (cid,),
+            ).fetchone()
+        return str(row["code"]) if row else None
+
+    def lookup_channel_code_by_dps_name(self, dps_channel_name: str) -> str | None:
+        """按 DPS 渠道名反查 channel_codes.code。"""
+        name = (dps_channel_name or "").strip()
+        if not name:
+            return None
+        with self._database.lock:
+            row = self._conn.execute(
+                """
+                SELECT code FROM channel_codes
+                WHERE dps_channel_name = ? AND is_active = 1
+                ORDER BY sort_order ASC, code ASC
+                LIMIT 1
+                """,
+                (name,),
             ).fetchone()
         return str(row["code"]) if row else None
 

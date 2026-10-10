@@ -36,6 +36,7 @@ KNOWN_SYNC_FIELDS = frozenset(
         "expected_delivery_time",
         "delivered_time",
         "status_code",
+        "route_status",
         "payment_status",
         "latest_tracking_time",
         "latest_tracking_desc",

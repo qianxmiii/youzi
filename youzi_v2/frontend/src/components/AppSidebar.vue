@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronLeft } from 'lucide-vue-next'
 import { NTooltip } from 'naive-ui'
-import { computed, onMounted } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import NavIcon from '@/components/icons/NavIcon.vue'
 import { ICON_STROKE, ICON_STROKE_NAV } from '@/constants/icons'
-import { navGroups } from '@/constants/navigation'
+import { navGroups, type NavItem } from '@/constants/navigation'
 import { useNavGroupsExpanded } from '@/composables/useNavGroupsExpanded'
 import { usePendingPaymentReminderCount } from '@/composables/usePendingPaymentReminderCount'
 import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
@@ -28,7 +28,19 @@ onMounted(() => {
   void refreshPendingPaymentReminderCount()
 })
 
-const flatItems = computed(() => navGroups.flatMap((g) => g.items))
+const flatItems = computed(() =>
+  navGroups.flatMap((g) => g.items.flatMap((item) => (item.children?.length ? item.children : [item]))),
+)
+
+const settingsMenuOpen = ref(true)
+
+function leafItems(item: NavItem): NavItem[] {
+  return item.children?.length ? item.children : [item]
+}
+
+function submenuHasActive(item: NavItem) {
+  return item.children?.some((child) => isActive(child.to)) ?? false
+}
 
 function navPathMatchesRoute(navPath: string, currentPath: string) {
   if (navPath === '/') return currentPath === '/'
@@ -45,7 +57,9 @@ function isActive(path: string) {
 
 function groupHasActiveItem(groupLabel: string) {
   const group = navGroups.find((g) => g.label === groupLabel)
-  return group?.items.some((item) => isActive(item.to)) ?? false
+  return (
+    group?.items.some((item) => leafItems(item).some((leaf) => isActive(leaf.to))) ?? false
+  )
 }
 
 function groupExpanded(label: string) {
@@ -153,28 +167,63 @@ function groupPendingCount(groupLabel: string) {
           </button>
 
           <div v-show="groupExpanded(group.label)" class="nav-group-children">
-            <RouterLink
-              v-for="item in group.items"
-              :key="item.to"
-              :to="item.to"
-              class="nav-item nav-item--child"
-              :class="{ 'nav-item-active': isActive(item.to) }"
-            >
-              <span class="flex-1 truncate">{{ item.name }}</span>
-              <span
-                v-if="pendingNavCount(item.to) > 0"
-                class="nav-pending-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+            <template v-for="item in group.items" :key="item.to || item.name">
+              <template v-if="item.children?.length">
+                <button
+                  type="button"
+                  class="nav-submenu-header"
+                  :class="{ 'nav-item-active': submenuHasActive(item) }"
+                  :aria-expanded="settingsMenuOpen || submenuHasActive(item)"
+                  @click="settingsMenuOpen = !(settingsMenuOpen || submenuHasActive(item))"
+                >
+                  <span class="min-w-0 flex-1 truncate text-left">{{ item.name }}</span>
+                  <ChevronDown
+                    class="nav-group-chevron shrink-0"
+                    :class="{
+                      'nav-group-chevron--folded': !(settingsMenuOpen || submenuHasActive(item)),
+                    }"
+                    :size="14"
+                    :stroke-width="ICON_STROKE"
+                    aria-hidden="true"
+                  />
+                </button>
+                <div
+                  v-show="settingsMenuOpen || submenuHasActive(item)"
+                  class="nav-submenu-children"
+                >
+                  <RouterLink
+                    v-for="child in item.children"
+                    :key="child.to"
+                    :to="child.to"
+                    class="nav-item nav-item--child"
+                    :class="{ 'nav-item-active': isActive(child.to) }"
+                  >
+                    <span class="flex-1 truncate">{{ child.name }}</span>
+                  </RouterLink>
+                </div>
+              </template>
+              <RouterLink
+                v-else
+                :to="item.to"
+                class="nav-item nav-item--child"
+                :class="{ 'nav-item-active': isActive(item.to) }"
               >
-                {{ pendingNavCount(item.to) > 99 ? '99+' : pendingNavCount(item.to) }}
-              </span>
-              <span
-                v-else-if="item.badge"
-                class="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
-                style="background: var(--color-badge-bg); color: var(--color-badge-fg)"
-              >
-                {{ item.badge }}
-              </span>
-            </RouterLink>
+                <span class="flex-1 truncate">{{ item.name }}</span>
+                <span
+                  v-if="pendingNavCount(item.to) > 0"
+                  class="nav-pending-badge shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums"
+                >
+                  {{ pendingNavCount(item.to) > 99 ? '99+' : pendingNavCount(item.to) }}
+                </span>
+                <span
+                  v-else-if="item.badge"
+                  class="rounded-md px-1.5 py-0.5 text-[10px] font-medium"
+                  style="background: var(--color-badge-bg); color: var(--color-badge-fg)"
+                >
+                  {{ item.badge }}
+                </span>
+              </RouterLink>
+            </template>
           </div>
         </template>
 
@@ -184,42 +233,45 @@ function groupPendingCount(groupLabel: string) {
             v-if="gi > 0"
             class="mx-1.5 mb-1.5 border-t border-[var(--color-border)] pt-1.5"
           />
-          <NTooltip
-            v-for="item in group.items"
-            :key="item.to"
-            placement="right"
-            :show-arrow="false"
-          >
-            <template #trigger>
-              <RouterLink
-                :to="item.to"
-                class="nav-item mb-0.5 justify-center px-0 py-2.5"
-                :class="{ 'nav-item-active': isActive(item.to) }"
-                :aria-label="item.name"
-              >
-                <span class="relative inline-flex">
-                  <NavIcon :name="item.icon" />
-                  <span
-                    v-if="pendingNavCount(item.to) > 0"
-                    class="nav-pending-count"
-                    :aria-label="pendingNavHint(item.to, pendingNavCount(item.to))"
-                  >
-                    {{ formatNavPendingCount(pendingNavCount(item.to)) }}
+          <template v-for="item in group.items" :key="item.to || item.name">
+            <NTooltip
+              v-for="leaf in leafItems(item)"
+              :key="leaf.to"
+              placement="right"
+              :show-arrow="false"
+            >
+              <template #trigger>
+                <RouterLink
+                  :to="leaf.to"
+                  class="nav-item mb-0.5 justify-center px-0 py-2.5"
+                  :class="{ 'nav-item-active': isActive(leaf.to) }"
+                  :aria-label="leaf.name"
+                >
+                  <span class="relative inline-flex">
+                    <NavIcon :name="leaf.icon" />
+                    <span
+                      v-if="pendingNavCount(leaf.to) > 0"
+                      class="nav-pending-count"
+                      :aria-label="pendingNavHint(leaf.to, pendingNavCount(leaf.to))"
+                    >
+                      {{ formatNavPendingCount(pendingNavCount(leaf.to)) }}
+                    </span>
                   </span>
-                </span>
-              </RouterLink>
-            </template>
-            {{
-              pendingNavCount(item.to) > 0
-                ? `${itemLabel(group.label, item.name)}（${pendingNavHint(item.to, pendingNavCount(item.to))}）`
-                : itemLabel(group.label, item.name, item.badge)
-            }}
-          </NTooltip>
+                </RouterLink>
+              </template>
+              {{
+                pendingNavCount(leaf.to) > 0
+                  ? `${itemLabel(group.label, leaf.name)}（${pendingNavHint(leaf.to, pendingNavCount(leaf.to))}）`
+                  : itemLabel(group.label, item.children?.length ? `${item.name} · ${leaf.name}` : leaf.name, leaf.badge)
+              }}
+            </NTooltip>
+          </template>
         </template>
       </div>
     </nav>
 
     <div class="shrink-0 border-t border-[var(--color-border)] p-2">
+      <!-- 旧版后台入口暂隐藏
       <NTooltip :disabled="!collapsed" placement="right" :show-arrow="false">
         <template #trigger>
           <a
@@ -236,10 +288,11 @@ function groupPendingCount(groupLabel: string) {
         </template>
         旧版后台
       </NTooltip>
+      -->
 
       <button
         type="button"
-        class="nav-item mt-1 w-full"
+        class="nav-item w-full"
         :class="collapsed ? 'justify-center px-0 py-2.5' : ''"
         :aria-label="collapsed ? '展开侧栏' : '收起侧栏'"
         @click="toggle"
@@ -319,6 +372,33 @@ function groupPendingCount(groupLabel: string) {
   margin-bottom: 0.125rem;
   padding: 0.4375rem 0.625rem;
   font-size: 0.8125rem;
+}
+
+.nav-submenu-header {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.375rem;
+  border: none;
+  border-radius: 0.5rem;
+  margin-bottom: 0.125rem;
+  padding: 0.4375rem 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--color-fg-secondary);
+  background: transparent;
+  cursor: pointer;
+}
+
+.nav-submenu-header:hover {
+  background: var(--color-nav-hover);
+  color: var(--color-nav-fg-hover);
+}
+
+.nav-submenu-children {
+  margin-left: 0.5rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid var(--color-border-subtle);
 }
 
 .nav-pending-badge {

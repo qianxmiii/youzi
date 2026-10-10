@@ -117,12 +117,13 @@ def test_warehouse_no_departure_skips_when_etd_exists() -> None:
     assert compute_warehouse_no_departure_context(row, today=date(2026, 6, 20)) is None
 
 
-def test_arrival_no_delivery_after_twelve_days() -> None:
+def test_arrival_no_delivery_after_exceeding_five_days() -> None:
     row = {"ata": "2026-06-01"}
-    ctx = compute_arrival_no_delivery_context(row, today=date(2026, 6, 13))
+    assert compute_arrival_no_delivery_context(row, today=date(2026, 6, 6)) is None
+    ctx = compute_arrival_no_delivery_context(row, today=date(2026, 6, 7))
     assert ctx is not None
     assert ctx["alertType"] == ALERT_ARRIVAL_NO_DELIVERY
-    assert ctx["dueDate"] == "2026-06-13"
+    assert ctx["dueDate"] == "2026-06-06"
 
 
 def test_stage_event_keys() -> None:

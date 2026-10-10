@@ -3,7 +3,6 @@ import {
   NButton,
   NCheckbox,
   NDataTable,
-  NDatePicker,
   NDropdown,
   NInput,
   NPagination,
@@ -74,6 +73,10 @@ import { shipmentGroupRuleSelectOptions, sortShipmentGroupEnabledRules } from '@
 import { ICON_STROKE } from '@/constants/icons'
 import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
 import {
+  isDisplayableRouteStatus,
+  routeStatusBadgeClass,
+} from '@/constants/shipmentRouteStatus'
+import {
   DEFAULT_SHIPMENT_VISIBLE_COLUMNS,
   SHIPMENT_COLUMN_STORAGE_KEY,
   SHIPMENT_SYSTEM_VIEWS,
@@ -139,6 +142,7 @@ const advBillNos = ref('')
 const advCustomerShipmentIds = ref('')
 const DEFAULT_STATUS_FILTER = 'IN_TRANSIT'
 const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
+const filterRouteStatus = ref<string | null>(null)
 const filterCustomer = ref<string | null>(null)
 const filterChannelCode = ref<string | null>(null)
 const timeField = ref<ShipmentTimeField | null>(null)
@@ -203,6 +207,7 @@ const filterOptions = ref<ShipmentFilterOptions>({
   channelNameZhs: [],
   channelCategories: [],
   statusCodes: [],
+  routeStatuses: [],
   exceptionCodes: [],
   exceptionTypes: [],
   groups: [],
@@ -462,6 +467,19 @@ const statusLabel: Record<string, string> = {
   UNKNOWN: '未知',
 }
 
+const routeStatusLabelByCode = computed(() => {
+  const m: Record<string, string> = {}
+  for (const t of filterOptions.value.routeStatuses || []) {
+    m[t.code] = t.nameZh
+  }
+  return m
+})
+
+function routeStatusLabel(code: string | null | undefined) {
+  if (!code) return '—'
+  return routeStatusLabelByCode.value[code] || code
+}
+
 const exceptionLabelByCode = computed(() => {
   const m: Record<string, string> = {}
   for (const t of filterOptions.value.exceptionTypes) {
@@ -683,25 +701,37 @@ function renderSubscribeAction(row: Shipment) {
   })
 }
 
+async function copyRowShipmentNo(row: Shipment) {
+  const sn = (row.shipmentNo || '').trim()
+  if (!sn) return
+  try {
+    await navigator.clipboard.writeText(sn)
+    message.success('已复制运单号')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
 function renderShipmentNo(row: Shipment) {
+  const sn = (row.shipmentNo || '').trim()
   const noCell = h(
-    'span',
-    { class: 'shipment-no-cell font-medium' },
-    row.shipmentNo,
+    'button',
+    {
+      type: 'button',
+      class: 'shipment-no-cell shipment-no-copy-btn font-semibold',
+      disabled: !sn,
+      onClick: (e: MouseEvent) => {
+        e.stopPropagation()
+        void copyRowShipmentNo(row)
+      },
+    },
+    sn || '—',
   )
-  const inner = h('span', { class: 'shipment-no-cell-row' }, [
+  return h('span', { class: 'shipment-no-cell-row' }, [
     noCell,
     renderLastMileBadge(row),
     renderExceptionBadge(row),
   ])
-  return h(
-    NTooltip,
-    { trigger: 'hover' },
-    {
-      trigger: () => inner,
-      default: () => row.shipmentNo,
-    },
-  )
 }
 
 const exceptionColumns: DataTableColumns<Shipment> = [
@@ -740,6 +770,13 @@ const statusOptions = computed(() =>
   filterOptions.value.statusCodes.map((code) => ({
     label: statusLabel[code] || code,
     value: code,
+  })),
+)
+
+const routeStatusOptions = computed(() =>
+  (filterOptions.value.routeStatuses || []).map((t) => ({
+    label: t.nameZh,
+    value: t.code,
   })),
 )
 
@@ -813,6 +850,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   advBillNos: advBillNos.value,
   advCustomerShipmentIds: advCustomerShipmentIds.value,
   filterStatus: filterStatus.value,
+  filterRouteStatus: filterRouteStatus.value,
   filterCustomer: filterCustomer.value,
   filterChannelCode: filterChannelCode.value,
   timeField: timeField.value,
@@ -852,12 +890,13 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   hasAta: hasAta.value,
   deliveryRisk: deliveryRisk.value,
   advancedTimes: advancedTimes.value,
-  shipmentNoSearchActive: shipmentNoTokens.value.length > 0,
+  shipmentNoSearchActive: batchShipmentSearchActive.value,
 }))
 
 const filterSummaryTags = computed(() =>
   buildShipmentFilterSummaryTags(filterQueryInput.value, {
     statusLabel,
+    routeStatusLabel,
     countryLabel,
     carrierLabel,
     channelLabel: (code) => channelFilterLabel(filterOptions.value.channels, code),
@@ -877,21 +916,18 @@ const advancedOnlyActiveCount = computed(() => {
   if (filterCarrier.value) n++
   if (filterCountry.value) n++
   if (filterChannelNameZh.value) n++
-  if (filterChannelCategory.value) n++
   if (filterCustomerNo.value) n++
   if (filterDestinationPort.value) n++
   if (filterAddressKeyword.value) n++
   if (filterVesselVoyage.value) n++
   if (filterVipOnly.value) n++
-  if (!filterFclOnly.value) n++
-  if (filterHasException.value != null) n++
   if (filterException.value) n++
   if (filterPaymentStatus.value) n++
   if (filterNoInternalTracking.value) n++
   if (filterNoCarrierTracking.value) n++
   if (filterNoZipcode.value) n++
-  if (filterHasTrackingNumber.value) n++
   if (filterStaleDays.value) n++
+  if (timeField.value && timeRange.value) n++
   if (filterGroupId.value) n++
   if (filterGroupNo.value) n++
   if (filterRuleType.value) n++
@@ -905,6 +941,8 @@ const advancedOnlyActiveCount = computed(() => {
   if (notDelivered.value) n++
   if (hasAta.value) n++
   if (deliveryRisk.value) n++
+  if (filterPendingTrackingTimeReview.value) n++
+  if (filterCarrierAheadOfInternal.value) n++
   const adv = advancedTimes.value
   for (const key of Object.keys(adv) as (keyof typeof adv)[]) {
     if (adv[key]) n++
@@ -1009,10 +1047,23 @@ function onFiltersChanged() {
   void loadList()
 }
 
+function onHasExceptionFilterChange(val: string | null) {
+  filterHasException.value = val === 'yes' ? true : val === 'no' ? false : null
+  onFiltersChanged()
+}
+
 let searchTimer: ReturnType<typeof setTimeout> | null = null
+/** 多号精确搜索时会清空状态筛选；退出多号后恢复默认「转运中」 */
+let statusClearedByBatchSearch = false
 watch([searchShipmentNo, searchKeyword, searchTrackingContent], () => {
-  if (shipmentNoTokens.value.length > 0) {
-    filterStatus.value = null
+  if (batchShipmentSearchActive.value) {
+    if (filterStatus.value != null) {
+      statusClearedByBatchSearch = true
+      filterStatus.value = null
+    }
+  } else if (statusClearedByBatchSearch) {
+    statusClearedByBatchSearch = false
+    filterStatus.value = DEFAULT_STATUS_FILTER
   }
   page.value = 1
   if (searchTimer) clearTimeout(searchTimer)
@@ -1467,6 +1518,7 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
 function resetFilterValues() {
   selectedSystemView.value = null
   filterStatus.value = DEFAULT_STATUS_FILTER
+  filterRouteStatus.value = null
   filterException.value = null
   filterPaymentStatus.value = null
   filterHasException.value = null
@@ -1545,6 +1597,9 @@ function removeFilterTag(key: string) {
       break
     case 'filterStatus':
       filterStatus.value = DEFAULT_STATUS_FILTER
+      break
+    case 'filterRouteStatus':
+      filterRouteStatus.value = null
       break
     case 'filterCustomer':
       filterCustomer.value = null
@@ -1891,14 +1946,20 @@ async function handleSyncSelectedFromDps() {
 }
 
 async function copySelectedShipmentNos() {
-  const nos = selectedShipmentNos.value
-  if (!nos.length) {
+  const rows = selectedRows.value
+  if (!rows.length) {
     message.warning('请先勾选运单')
     return
   }
-  const text = nos.join('\n')
+  const nos = rows
+    .map((row) => displayField(row.shipmentNo).trim())
+    .filter(Boolean)
+  if (!nos.length) {
+    message.warning('所选运单无有效运单号')
+    return
+  }
   try {
-    await navigator.clipboard.writeText(text)
+    await navigator.clipboard.writeText(nos.join('\n'))
     message.success(`已复制 ${nos.length} 个运单号`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
@@ -2185,9 +2246,24 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
   statusCode: {
     title: '状态',
     key: 'statusCode',
-    width: 88,
+    width: 132,
     align: 'center',
+    ellipsis: { tooltip: true },
     render: (row) => {
+      const route = (row.routeStatus || '').trim()
+      if (isDisplayableRouteStatus(route)) {
+        const label = routeStatusLabel(route)
+        const coarseCode = row.statusCode || 'UNKNOWN'
+        const coarse = statusLabel[coarseCode] || coarseCode
+        return h(
+          'span',
+          {
+            class: ['shipment-status-badge', routeStatusBadgeClass(route)],
+            title: coarse && coarse !== label ? `粗状态：${coarse}` : undefined,
+          },
+          label,
+        )
+      }
       const code = row.statusCode || 'UNKNOWN'
       const label = statusLabel[code] || code
       const tone =
@@ -2651,6 +2727,16 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             @update:value="onFiltersChanged"
           />
           <NSelect
+            v-model:value="filterRouteStatus"
+            :options="routeStatusOptions"
+            placeholder="细状态"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
             v-model:value="filterChannelCode"
             :options="channelCodeOptions"
             placeholder="渠道"
@@ -2658,6 +2744,15 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             filterable
             size="small"
             class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-model:value="filterChannelCategory"
+            :options="channelCategoryOptions"
+            placeholder="渠道大类"
+            clearable
+            size="small"
+            class="shipments-filter-select"
             @update:value="onFiltersChanged"
           />
           <NSelect
@@ -2671,22 +2766,23 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             @update:value="onFiltersChanged"
           />
           <NSelect
-            v-model:value="timeField"
-            :options="timeFieldOptions"
-            placeholder="时间口径"
+            :value="filterHasException === true ? 'yes' : filterHasException === false ? 'no' : null"
+            :options="hasExceptionFilterOptions"
+            placeholder="是否有异常"
             clearable
             size="small"
-            class="shipments-filter-select shipments-filter-select--wide"
-            @update:value="onFiltersChanged"
+            class="shipments-filter-select"
+            @update:value="onHasExceptionFilterChange"
           />
-          <NDatePicker
-            v-model:value="timeRange"
-            type="daterange"
-            clearable
+          <NCheckbox
+            v-model:checked="filterHasTrackingNumber"
             size="small"
-            class="shipments-filter-daterange"
-            @update:value="onFiltersChanged"
-          />
+            class="shrink-0"
+            title="有转单号（快递派）"
+            @update:checked="onFiltersChanged"
+          >
+            快递派
+          </NCheckbox>
           <NCheckbox
             v-model:checked="filterFclOnly"
             size="small"
@@ -2915,7 +3011,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:filter-carrier="filterCarrier"
       v-model:filter-country="filterCountry"
       v-model:filter-channel-name-zh="filterChannelNameZh"
-      v-model:filter-channel-category="filterChannelCategory"
       v-model:filter-customer-no="filterCustomerNo"
       v-model:adv-exact-shipment-no="advExactShipmentNo"
       v-model:adv-container-nos="advContainerNos"
@@ -2929,12 +3024,10 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:has-ata="hasAta"
       v-model:filter-exception="filterException"
       v-model:filter-payment-status="filterPaymentStatus"
-      v-model:filter-has-exception="filterHasException"
       v-model:filter-stale-days="filterStaleDays"
       v-model:filter-no-internal-tracking="filterNoInternalTracking"
       v-model:filter-no-carrier-tracking="filterNoCarrierTracking"
       v-model:filter-no-zipcode="filterNoZipcode"
-      v-model:filter-has-tracking-number="filterHasTrackingNumber"
       v-model:filter-group-id="filterGroupId"
       v-model:filter-group-no="filterGroupNo"
       v-model:filter-rule-type="filterRuleType"
@@ -2948,14 +3041,15 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:missing-delivered="missingDelivered"
       v-model:not-delivered="notDelivered"
       v-model:delivery-risk="deliveryRisk"
+      v-model:time-field="timeField"
+      v-model:time-range="timeRange"
       v-model:advanced-times="advancedTimes"
       :filter-options="filterOptions"
       :carrier-options="carrierOptions"
       :country-options="countryOptions"
       :channel-name-zh-options="channelNameZhOptions"
-      :channel-category-options="channelCategoryOptions"
+      :time-field-options="timeFieldOptions"
       :exception-filter-options="exceptionFilterOptions"
-      :has-exception-filter-options="hasExceptionFilterOptions"
       :stale-options="staleOptions"
       :has-group-filter-options="hasGroupFilterOptions"
       :group-filter-options="groupFilterOptions"
@@ -3146,6 +3240,29 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   color: var(--color-fg-emphasis);
 }
 
+.shipments-data-table :deep(button.shipment-no-copy-btn) {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  font-family: inherit;
+  font-size: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  cursor: pointer;
+  color: var(--color-accent-text);
+  text-align: left;
+}
+
+.shipments-data-table :deep(button.shipment-no-copy-btn:hover:not(:disabled)) {
+  text-decoration: underline;
+}
+
+.shipments-data-table :deep(button.shipment-no-copy-btn:disabled) {
+  cursor: default;
+  color: var(--color-muted);
+}
+
 .shipments-data-table :deep(.shipment-group-cell) {
   display: inline-flex;
   max-width: 100%;
@@ -3255,6 +3372,46 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 .shipments-data-table :deep(.shipment-status-badge--error) {
   color: var(--tag-error-fg);
   background: var(--tag-error-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--slate) {
+  color: var(--tag-slate-fg);
+  background: var(--tag-slate-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--sky) {
+  color: var(--tag-sky-fg);
+  background: var(--tag-sky-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--teal) {
+  color: var(--tag-teal-fg);
+  background: var(--tag-teal-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--indigo) {
+  color: var(--tag-indigo-fg);
+  background: var(--tag-indigo-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--violet) {
+  color: var(--tag-violet-fg);
+  background: var(--tag-violet-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--cyan) {
+  color: var(--tag-cyan-fg);
+  background: var(--tag-cyan-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--orange) {
+  color: var(--tag-orange-fg);
+  background: var(--tag-orange-bg);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--rose) {
+  color: var(--tag-rose-fg);
+  background: var(--tag-rose-bg);
 }
 
 .shipments-selection-bar {

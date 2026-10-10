@@ -50,6 +50,8 @@ export interface Shipment {
   warehouseEntryTime: string | null
   deliveredTime: string | null
   statusCode: string | null
+  /** DPS 轨迹细状态（commerceWaybillRouteInfo.status 映射） */
+  routeStatus?: string | null
   /** DPS clientVerifyStatus：UNPAID=未付款，PAID=已付款 */
   paymentStatus?: 'UNPAID' | 'PAID' | null
   exceptionCode: string | null

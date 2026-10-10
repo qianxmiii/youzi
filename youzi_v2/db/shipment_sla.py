@@ -16,7 +16,7 @@ ALERT_WAREHOUSE_NO_DEPARTURE = "WAREHOUSE_NO_DEPARTURE"
 ALERT_ARRIVAL_NO_DELIVERY = "ARRIVAL_NO_DELIVERY"
 
 WAREHOUSE_NO_DEPARTURE_DAYS = 7
-ARRIVAL_NO_DELIVERY_DAYS = 12
+ARRIVAL_NO_DELIVERY_DAYS = 5
 
 STATUS_OPEN = "open"
 STATUS_ACKNOWLEDGED = "acknowledged"
@@ -138,14 +138,15 @@ def compute_arrival_no_delivery_context(
     *,
     today: date | None = None,
 ) -> dict[str, Any] | None:
-    """ATA 后 12 天仍未签收时生成到港未送仓预警。"""
+    """ATA 后超过 5 天仍未签收时生成到港未送仓预警（第 6 天起提示）。"""
     ata_raw = (row.get("ata") or "").strip()
     ata_day = parse_date(ata_raw)
     if not ata_day:
         return None
     check_day = today or date.today()
+    # 截止日 = ATA + 5；仅当 today > 截止日（超过 5 天）才提示
     due_day = ata_day + timedelta(days=ARRIVAL_NO_DELIVERY_DAYS)
-    if check_day < due_day:
+    if check_day <= due_day:
         return None
     due_iso = due_day.isoformat()
     return {

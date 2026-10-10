@@ -72,3 +72,31 @@ def test_parse_rejects_missing_headers():
         raise AssertionError("expected ValueError")
     except ValueError as exc:
         assert "表头" in str(exc)
+
+
+def test_parse_skips_cover_sheet():
+    from openpyxl import Workbook
+
+    wb = Workbook()
+    cover = wb.active
+    cover.title = "封面"
+    cover.append(["入仓单"])
+    ws = wb.create_sheet("运单信息")
+    ws.append(["运单号", "国家", "仓库代码", "件数"])
+    ws.append(["DPSECO1", "CA", "3PL", 18])
+    buf = BytesIO()
+    wb.save(buf)
+    result = parse_shipment_rename_excel(buf.getvalue())
+    assert result["total"] == 1
+    assert result["items"][0]["targetStem"] == "DPSECO1-CA-3PL-18"
+
+
+def test_parse_header_with_newline_suffix():
+    data = _xlsx_bytes(
+        [
+            ["运单号", "国家", "仓库代码", "件数\n（箱）"],
+            ["DPSECO1", "CA", "3PL", 18],
+        ]
+    )
+    result = parse_shipment_rename_excel(data)
+    assert result["total"] == 1

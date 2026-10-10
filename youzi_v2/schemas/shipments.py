@@ -113,6 +113,9 @@ class ShipmentRecordIn(BaseModel):
     status_code: str | None = Field(
         default="UNKNOWN", validation_alias=AliasChoices("statusCode", "status_code")
     )
+    route_status: str | None = Field(
+        default=None, validation_alias=AliasChoices("routeStatus", "route_status")
+    )
     payment_status: str | None = Field(
         default=None, validation_alias=AliasChoices("paymentStatus", "payment_status")
     )
@@ -230,6 +233,9 @@ class ShipmentUpdateIn(BaseModel):
     )
     status_code: str | None = Field(
         default=None, validation_alias=AliasChoices("statusCode", "status_code")
+    )
+    route_status: str | None = Field(
+        default=None, validation_alias=AliasChoices("routeStatus", "route_status")
     )
     payment_status: str | None = Field(
         default=None, validation_alias=AliasChoices("paymentStatus", "payment_status")

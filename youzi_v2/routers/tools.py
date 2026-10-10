@@ -94,7 +94,7 @@ async def parse_shipment_file_rename_excel(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="文件过大（上限 30MB）")
 
     try:
-        return parse_shipment_rename_excel(data)
+        return parse_shipment_rename_excel(data, filename=filename)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:  # noqa: BLE001

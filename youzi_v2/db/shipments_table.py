@@ -49,6 +49,7 @@ CREATE TABLE {TABLE_NAME} (
     warehouse_entry_time TEXT,
     delivered_time TEXT,
     status_code TEXT,
+    route_status TEXT,
     payment_status TEXT CHECK (
         payment_status IS NULL OR payment_status IN ('UNPAID', 'PAID')
     ),
@@ -69,6 +70,7 @@ _INDEXES = [
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_address_type ON {TABLE_NAME}(address_type)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_carrier_code ON {TABLE_NAME}(carrier_code)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_status_code ON {TABLE_NAME}(status_code)",
+    f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_route_status ON {TABLE_NAME}(route_status)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code ON {TABLE_NAME}(exception_code)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_updated_time ON {TABLE_NAME}(updated_time DESC)",
     f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_latest_tracking_time ON {TABLE_NAME}(latest_tracking_time)",
@@ -167,6 +169,12 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_ref_shipment_no "
             f"ON {TABLE_NAME}(ref_shipment_no)"
+        )
+    if "route_status" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN route_status TEXT")
+        conn.execute(
+            f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_route_status "
+            f"ON {TABLE_NAME}(route_status)"
         )
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "

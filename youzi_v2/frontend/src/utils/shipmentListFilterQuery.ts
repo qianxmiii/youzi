@@ -26,6 +26,7 @@ export interface ShipmentFilterQueryInput {
   advBillNos: string
   advCustomerShipmentIds: string
   filterStatus: string | null
+  filterRouteStatus: string | null
   filterCustomer: string | null
   filterChannelCode: string | null
   timeField: ShipmentTimeField | null
@@ -65,6 +66,7 @@ export interface ShipmentFilterQueryInput {
   hasAta: boolean
   deliveryRisk: string | null
   advancedTimes: ShipmentAdvancedTimeRanges
+  /** true 时不传 statusCode（用于多号精确搜索 ≥2） */
   shipmentNoSearchActive: boolean
 }
 
@@ -108,7 +110,9 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
     ...(input.searchTrackingContent.trim()
       ? { trackingSearch: input.searchTrackingContent.trim() }
       : {}),
+    // 多号精确搜索时不套状态（否则已签收等单易被「转运中」滤掉）；单号及其他筛选仍带 filterStatus
     statusCode: input.shipmentNoSearchActive ? undefined : input.filterStatus || undefined,
+    routeStatus: input.filterRouteStatus || undefined,
     paymentStatus: input.filterPaymentStatus || undefined,
     exceptionCode: input.filterException || undefined,
     hasException:
@@ -220,6 +224,12 @@ export function buildShipmentFilterSummaryTags(
     tags.push({
       key: 'filterStatus',
       label: `状态 = ${ctx.statusLabel[input.filterStatus] || input.filterStatus}`,
+    })
+  }
+  if (input.filterRouteStatus) {
+    tags.push({
+      key: 'filterRouteStatus',
+      label: `细状态 = ${ctx.routeStatusLabel(input.filterRouteStatus)}`,
     })
   }
   if (input.filterCustomer) tags.push({ key: 'filterCustomer', label: `客户 = ${input.filterCustomer}` })

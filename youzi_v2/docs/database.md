@@ -81,7 +81,8 @@ erDiagram
 | expected_delivery_time | TEXT | 预计送仓时间 |
 | warehouse_entry_time | TEXT | 入仓时间（内部轨迹 `Your goods are in the warehouse` 回写） |
 | delivered_time | TEXT | 签收时间 |
-| status_code | TEXT | 状态码 |
+| status_code | TEXT | 粗状态码（`IN_TRANSIT` / `DELIVERED` 等） |
+| route_status | TEXT | 轨迹细状态（DPS `commerceWaybillRouteInfo.status` 映射，见 `shipment_route_status_codes`） |
 | exception_code | TEXT | 当前异常码 |
 | exception_opened_time | TEXT | 异常开启时间 |
 | latest_tracking_time, latest_tracking_desc | TEXT | 最新轨迹 |
@@ -140,7 +141,7 @@ erDiagram
 
 ### channels（渠道）
 
-通过 `db/channels_repository.py` 管理，含默认种子 `channel_seeds.py`。主键 `code` 与运单 `channel_code`、DPS `channelCode` 一致；修改 `code` 时会同步更新关联运单。
+通过 `db/channels_repository.py` 管理，含默认种子 `channel_seeds.py`（「渠道清单.xlsx」全量，约 105 条）。主键 `code` 写入运单 `channel_code`；`dps_channel_name`（API：`dpsChannelName`，对应 DPS `cnName`）用于同步映射。`POST /api/v1/channels/seed-defaults` 会**清空**现有渠道后全量导入，并把运单中等于英文 `name` 的 `channel_code` 映射到新 `code`。
 
 ### shipment_groups / shipment_group_members（运单分组）
 
@@ -234,7 +235,7 @@ erDiagram
 | severe_overdue_days | INTEGER | 严重超时天数（默认 7） |
 | enabled | INTEGER | 1/0 |
 
-唯一约束：`(channel_code, carrier_code, start_field)`。配置入口：渠道管理 →「时效」。
+唯一约束：`(channel_code, carrier_code, start_field)`。配置入口：后台码表「渠道」→「时效」。
 
 **shipment_sla_alerts** — 运输时效预警
 

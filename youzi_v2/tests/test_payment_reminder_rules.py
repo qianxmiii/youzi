@@ -172,3 +172,36 @@ class PaymentReminderRulesTest(unittest.TestCase):
         self.assertTrue(matches_scope("missing_rule", "todo"))
         self.assertFalse(matches_scope("missing_date", "todo"))
         self.assertFalse(matches_scope("", "todo"))
+        # 月结不进日常待催（含到期当天与逾期）
+        self.assertFalse(matches_scope("monthly", "todo", SETTLEMENT_MONTHLY))
+        self.assertFalse(matches_scope("overdue", "todo", SETTLEMENT_MONTHLY))
+        self.assertTrue(matches_scope("monthly", "all_unpaid", SETTLEMENT_MONTHLY))
+        self.assertTrue(matches_scope("overdue", "overdue", SETTLEMENT_MONTHLY))
+        self.assertTrue(matches_scope("monthly", "today", SETTLEMENT_MONTHLY))
+
+    def test_reminder_sort_followed_last(self) -> None:
+        from youzi_v2.services.payment_reminder_rules import reminder_sort_key
+
+        unfollowed = {
+            "reminderType": "overdue",
+            "dueDate": "2026-07-01",
+            "shipmentNo": "B",
+            "followupCount": 0,
+        }
+        followed = {
+            "reminderType": "overdue",
+            "dueDate": "2026-06-01",
+            "shipmentNo": "A",
+            "followupCount": 2,
+        }
+        upcoming = {
+            "reminderType": "upcoming_7_days",
+            "dueDate": "2026-07-10",
+            "shipmentNo": "C",
+            "followupCount": 0,
+        }
+        ordered = sorted([followed, upcoming, unfollowed], key=reminder_sort_key)
+        self.assertEqual(
+            [i["shipmentNo"] for i in ordered],
+            ["B", "C", "A"],
+        )

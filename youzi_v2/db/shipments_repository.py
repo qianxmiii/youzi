@@ -137,6 +137,7 @@ _UPDATABLE = (
     "warehouse_entry_time",
     "delivered_time",
     "status_code",
+    "route_status",
     "payment_status",
     "latest_tracking_time",
     "latest_tracking_desc",
@@ -241,6 +242,9 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         ),
         "deliveredTime": row["delivered_time"],
         "statusCode": row["status_code"],
+        "routeStatus": (
+            row["route_status"] if "route_status" in row.keys() else None
+        ),
         "paymentStatus": (
             row["payment_status"] if "payment_status" in row.keys() else None
         ),
@@ -297,6 +301,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "warehouseEntryTime": "warehouse_entry_time",
         "deliveredTime": "delivered_time",
         "statusCode": "status_code",
+        "routeStatus": "route_status",
         "paymentStatus": "payment_status",
         "latestTrackingTime": "latest_tracking_time",
         "latestTrackingDesc": "latest_tracking_desc",
@@ -381,6 +386,7 @@ class ShipmentsRepository:
         customer_shipment_ids: list[str] | None = None,
         customer_nos: list[str] | None = None,
         status_code: str | None = None,
+        route_status: str | None = None,
         payment_status: str | None = None,
         exception_code: str | None = None,
         has_exception: bool | None = None,
@@ -501,6 +507,9 @@ class ShipmentsRepository:
         if status_code and status_code.strip():
             conditions.append("s.status_code = ?")
             params.append(status_code.strip())
+        if route_status and route_status.strip():
+            conditions.append("s.route_status = ?")
+            params.append(route_status.strip().upper())
         if payment_status and payment_status.strip():
             ps = payment_status.strip().upper()
             if ps == PAYMENT_STATUS_FILTER_EMPTY:
@@ -861,6 +870,13 @@ class ShipmentsRepository:
                 ORDER BY sort_order, code
                 """
             ).fetchall()
+            route_status_defs = self._conn.execute(
+                """
+                SELECT code, name_zh, dps_status FROM shipment_route_status_codes
+                WHERE is_active = 1
+                ORDER BY sort_order, code
+                """
+            ).fetchall()
             channel_rows = self._conn.execute(
                 f"""
                 SELECT TRIM(s.channel_code) AS code,
@@ -940,6 +956,14 @@ class ShipmentsRepository:
             "channelNameZhs": [str(r["v"]) for r in channel_name_rows],
             "channelCategories": [str(r["v"]) for r in channel_category_rows],
             "statusCodes": out["status_code"],
+            "routeStatuses": [
+                {
+                    "code": str(r["code"]),
+                    "nameZh": str(r["name_zh"] or r["code"]),
+                    "dpsStatus": str(r["dps_status"] or ""),
+                }
+                for r in route_status_defs
+            ],
             "exceptionCodes": [str(r["v"]) for r in exc_in_use],
             "exceptionTypes": [
                 {"code": str(r["code"]), "nameZh": str(r["name_zh"] or r["code"])}
@@ -1096,22 +1120,45 @@ class ShipmentsRepository:
             self._persist_conwest_tracking_numbers(sn, tn, self._shipment_ctns(sn))
         return wrote
 
-    def set_tracking_number_if_empty(self, shipment_no: str, tracking_number: str) -> bool:
-        """尾程快递单号（UPS/FedEx 等）：仅当库内为空时写入。"""
+    def set_tracking_number_if_empty(
+        self,
+        shipment_no: str,
+        tracking_number: str,
+        *,
+        express_code: str | None = None,
+    ) -> bool:
+        """尾程快递单号（UPS/FedEx 等）：仅当库内为空时写入；可选顺带填空 express_code。"""
         sn = shipment_no.strip()
         tn = normalize_tracking_field_value(tracking_number)
         if not sn or not tn:
             return False
+        ec = normalize_express_code(express_code) if express_code else None
         with self._database.lock:
-            cur = self._conn.execute(
-                f"""
-                UPDATE {TABLE_NAME}
-                SET tracking_number = ?
-                WHERE shipment_no = ?
-                  AND (tracking_number IS NULL OR TRIM(tracking_number) = '')
-                """,
-                (tn, sn),
-            )
+            if ec:
+                cur = self._conn.execute(
+                    f"""
+                    UPDATE {TABLE_NAME}
+                    SET tracking_number = ?,
+                        express_code = CASE
+                            WHEN express_code IS NULL OR TRIM(express_code) = '' THEN ?
+                            ELSE express_code
+                        END,
+                        updated_time = ?
+                    WHERE shipment_no = ?
+                      AND (tracking_number IS NULL OR TRIM(tracking_number) = '')
+                    """,
+                    (tn, ec, now_str(), sn),
+                )
+            else:
+                cur = self._conn.execute(
+                    f"""
+                    UPDATE {TABLE_NAME}
+                    SET tracking_number = ?, updated_time = ?
+                    WHERE shipment_no = ?
+                      AND (tracking_number IS NULL OR TRIM(tracking_number) = '')
+                    """,
+                    (tn, now_str(), sn),
+                )
             self._conn.commit()
             wrote = cur.rowcount > 0
         if wrote:

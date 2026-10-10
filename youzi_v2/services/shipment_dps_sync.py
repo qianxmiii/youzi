@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..db.shipments_repository import ShipmentsRepository
+from ..db.code_tables_repository import CodeTablesRepository
 from .shipment_dps_mapper import dps_row_to_shipment
 from .shipment_dps_sync_fields import filter_dps_payload, get_dps_sync_fields_config
 from .shipment_dps_sync_schedule import should_run_scheduled_dps_sync
@@ -14,6 +15,7 @@ from .shipment_dps_sync_settings import (
     get_shipment_dps_sync_settings,
     record_shipment_dps_sync_finished,
 )
+from .shipment_route_status_exception import apply_customs_exception_from_route_status
 from .shipment_query_config import (
     normalize_shipment_nos,
     query_shipments_by_order,
@@ -50,6 +52,32 @@ def _maybe_backfill_payment_status(
     return filtered
 
 
+def _resolve_channel_code(
+    payload: dict[str, Any],
+    *,
+    dps_row: dict[str, Any],
+    code_tables: CodeTablesRepository,
+) -> dict[str, Any]:
+    """若配置了 dps_channel_name，将 DPS channelCode/channelName 映射为本地 code。"""
+    candidates: list[str] = []
+    for key in ("channel_code",):
+        val = (payload.get(key) or "").strip()
+        if val:
+            candidates.append(val)
+    for key in ("channelCode", "channelName", "DPS_channelName"):
+        raw = dps_row.get(key)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if text and text not in candidates:
+            candidates.append(text)
+    for name in candidates:
+        mapped = code_tables.lookup_channel_code_by_dps_name(name)
+        if mapped:
+            return {**payload, "channel_code": mapped}
+    return payload
+
+
 def _upsert_dps_rows(
     shipments_repo: ShipmentsRepository,
     rows: list[Any],
@@ -57,11 +85,14 @@ def _upsert_dps_rows(
     log: LogFn | None = None,
 ) -> dict[str, Any]:
     database = shipments_repo._database
+    code_tables = CodeTablesRepository(database)
     field_cfg = get_dps_sync_fields_config()
     created = 0
     updated = 0
     unchanged = 0
     failed = 0
+    customs_opened = 0
+    customs_closed = 0
     errors: list[str] = []
 
     for row in rows:
@@ -72,6 +103,7 @@ def _upsert_dps_rows(
         if not payload:
             failed += 1
             continue
+        payload = _resolve_channel_code(payload, dps_row=row, code_tables=code_tables)
         shipment_no = str(payload.get("shipment_no") or "").strip()
         try:
             existing = shipments_repo.get_by_shipment_no(shipment_no)
@@ -93,6 +125,21 @@ def _upsert_dps_rows(
                 unchanged += 1
             else:
                 updated += 1
+
+            # 本次写入了 route_status 用新值；否则用库中当前细状态（如 DPS 100 被跳过）
+            if "route_status" in filtered:
+                route_for_exc = filtered.get("route_status")
+            else:
+                route_for_exc = result_row.get("routeStatus")
+            exc_result = apply_customs_exception_from_route_status(
+                database,
+                shipment_no,
+                route_for_exc if isinstance(route_for_exc, str) else None,
+            )
+            if exc_result.get("action") == "opened":
+                customs_opened += 1
+            elif exc_result.get("action") == "closed":
+                customs_closed += 1
         except Exception as exc:
             failed += 1
             sn = payload.get("shipment_no") or "?"
@@ -106,6 +153,8 @@ def _upsert_dps_rows(
         "updated": updated,
         "unchanged": unchanged,
         "failed": failed,
+        "customsExceptionOpened": customs_opened,
+        "customsExceptionClosed": customs_closed,
         "errors": errors,
     }
 

@@ -19,6 +19,7 @@ from .tracking_freshness import (
 )
 from ..services.payment_reminder_rules import (
     SETTLEMENT_METHODS,
+    SETTLEMENT_MONTHLY,
     compute_payment_reminder,
     is_unpaid_payment_status,
     matches_scope,
@@ -251,7 +252,11 @@ class ShipmentPaymentFollowupsRepository:
         items: list[dict[str, Any]] = []
         for row in rows:
             item = self._build_reminder_item(row, today=today)
-            if not matches_scope(item.get("reminderType") or "", scope):
+            if not matches_scope(
+                item.get("reminderType") or "",
+                scope,
+                item.get("settlementMethod"),
+            ):
                 continue
             if reminder_type and reminder_type.strip():
                 if (item.get("reminderType") or "") != reminder_type.strip():
@@ -295,13 +300,24 @@ class ShipmentPaymentFollowupsRepository:
         }
 
     def reminder_summary(self, *, fcl_only: bool | None = False) -> dict[str, Any]:
-        """侧栏/标题用：待催与全部未付款数量。默认排除整柜（与列表默认一致）。"""
+        """侧栏/标题用：待催与全部未付款数量。默认排除整柜（与列表默认一致）。
+        待催 / 逾期统计均排除月结（日常按票催款不关注月结对账）。
+        """
         unpaid = self._collect_reminder_items(scope="all_unpaid", fcl_only=fcl_only)
         todo_count = sum(
-            1 for item in unpaid if matches_scope(item.get("reminderType") or "", "todo")
+            1
+            for item in unpaid
+            if matches_scope(
+                item.get("reminderType") or "",
+                "todo",
+                item.get("settlementMethod"),
+            )
         )
         overdue_count = sum(
-            1 for item in unpaid if (item.get("reminderType") or "") == "overdue"
+            1
+            for item in unpaid
+            if (item.get("reminderType") or "") == "overdue"
+            and (item.get("settlementMethod") or "").strip().upper() != SETTLEMENT_MONTHLY
         )
         return {
             "todoCount": todo_count,

@@ -35,6 +35,12 @@ export interface ShipmentChannelFilterOption {
   nameZh: string
 }
 
+export interface ShipmentRouteStatusOption {
+  code: string
+  nameZh: string
+  dpsStatus?: string
+}
+
 export interface ShipmentFilterOptions {
   customers: string[]
   carriers: ShipmentCarrierFilterOption[]
@@ -45,6 +51,7 @@ export interface ShipmentFilterOptions {
   channelNameZhs: string[]
   channelCategories: string[]
   statusCodes: string[]
+  routeStatuses: ShipmentRouteStatusOption[]
   exceptionCodes: string[]
   exceptionTypes: { code: string; nameZh: string }[]
   groups: ShipmentGroupFilterOption[]
@@ -62,6 +69,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.customerShipmentIds?.length) q.customerShipmentIds = params.customerShipmentIds
   if (params.customerNos?.length) q.customerNos = params.customerNos
   if (params.statusCode?.trim()) q.statusCode = params.statusCode.trim()
+  if (params.routeStatus?.trim()) q.routeStatus = params.routeStatus.trim()
   if (params.paymentStatus?.trim()) q.paymentStatus = params.paymentStatus.trim()
   if (params.exceptionCode?.trim()) q.exceptionCode = params.exceptionCode.trim()
   if (params.hasException === true) q.hasException = 'true'
@@ -148,6 +156,7 @@ export interface ListShipmentsParams {
   /** 高级筛选：客户编号批量精确 */
   customerNos?: string[]
   statusCode?: string
+  routeStatus?: string
   paymentStatus?: string
   exceptionCode?: string
   hasException?: boolean

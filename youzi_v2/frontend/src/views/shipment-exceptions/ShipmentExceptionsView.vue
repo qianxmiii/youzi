@@ -20,7 +20,7 @@ import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
-import { getShipment, getShipmentFilterOptions, type ShipmentFilterOptions } from '@/api/shipments'
+import { getShipment, getShipmentFilterOptions, syncTracking, type ShipmentFilterOptions } from '@/api/shipments'
 import {
   followUpShipmentSlaAlert,
   batchFollowUpShipmentSlaAlerts,
@@ -41,6 +41,7 @@ import { formatAbsoluteDateTime, formatRelativeTime } from '@/utils/formatDateTi
 import { buildChannelSelectOptions } from '@/utils/channelFilterOptions'
 import { ICON_STROKE } from '@/constants/icons'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
+import { notifyTrackingSyncResult } from '@/utils/trackingSyncNotify'
 import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
 
 const route = useRoute()
@@ -52,6 +53,7 @@ const { refreshPendingShipmentSlaAlertCount } = usePendingShipmentSlaAlertCount(
 const loading = ref(false)
 const scanning = ref(false)
 const batchSubmitting = ref(false)
+const syncingTracking = ref(false)
 const items = ref<ShipmentSlaAlert[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -134,7 +136,9 @@ const selectedRows = computed(() =>
 
 const selectedCount = computed(() => selectedRows.value.length)
 
-const selectedShipmentNos = computed(() => selectedRows.value.map((row) => row.shipmentNo))
+const selectedShipmentNos = computed(() =>
+  [...new Set(selectedRows.value.map((row) => (row.shipmentNo || '').trim()).filter(Boolean))],
+)
 
 const actionableSelectedRows = computed(() =>
   selectedRows.value.filter((row) => ['open', 'acknowledged'].includes(row.status)),
@@ -164,6 +168,24 @@ async function copySelectedShipmentNos() {
     message.success(`已复制 ${nos.length} 个运单号`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
+  }
+}
+
+async function handleSyncSelectedInternal() {
+  const nos = selectedShipmentNos.value
+  if (!nos.length) {
+    message.warning('请先勾选记录')
+    return
+  }
+  syncingTracking.value = true
+  try {
+    const res = await syncTracking(nos)
+    notifyTrackingSyncResult(message, res, '内部轨迹')
+    await Promise.all([load(), loadSummary()])
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '更新内部轨迹失败')
+  } finally {
+    syncingTracking.value = false
   }
 }
 
@@ -758,16 +780,16 @@ function renderTransitTimeCell(row: ShipmentSlaAlert) {
 
   const rangeChildren: ReturnType<typeof h>[] = []
   if (!hasAny) {
-    rangeChildren.push(h('span', { class: 'font-semibold text-zinc-800' }, '—'))
+    rangeChildren.push(h('span', { class: 'font-semibold text-slate-500' }, '—'))
   } else {
     parts.forEach((part, index) => {
       if (index > 0) {
         rangeChildren.push(
-          h('span', { class: 'mx-0.5 font-semibold text-zinc-300' }, '~'),
+          h('span', { class: 'mx-0.5 font-semibold text-sky-300' }, '~'),
         )
       }
       rangeChildren.push(
-        h('span', { class: 'font-semibold text-zinc-800' }, part || '—'),
+        h('span', { class: 'font-semibold text-sky-700' }, part || '—'),
       )
     })
   }
@@ -777,8 +799,8 @@ function renderTransitTimeCell(row: ShipmentSlaAlert) {
     dueMd
       ? h(
           'div',
-          { class: 'text-xs font-semibold tabular-nums text-zinc-400 whitespace-nowrap' },
-          ['截止 ', h('span', { class: 'text-zinc-500' }, dueMd)],
+          { class: 'text-xs font-semibold tabular-nums text-amber-600/90 whitespace-nowrap' },
+          ['截止 ', h('span', { class: 'text-amber-700' }, dueMd)],
         )
       : null,
   ])
@@ -1187,6 +1209,14 @@ onMounted(() => {
       <NSpace size="small">
         <NButton size="small" title="复制选中运单号（换行）" @click="copySelectedShipmentNos">
           复制运单号
+        </NButton>
+        <NButton
+          size="small"
+          :loading="syncingTracking"
+          title="含已签收；以 DPS 接口全量覆盖本地轨迹（删除源端已删节点）"
+          @click="handleSyncSelectedInternal"
+        >
+          更新选中内部轨迹
         </NButton>
         <NButton
           size="small"

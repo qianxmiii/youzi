@@ -774,6 +774,54 @@ function calcEtaRange(etdDate, transitStr) {
     };
 }
 
+function isAmazonDeliveryMode() {
+    const el = document.getElementById('deliveryAmazonMode');
+    return el ? el.checked : false;
+}
+
+/** 取 date 所在周的周日（0=日） */
+function getWeekSunday(date) {
+    const d = new Date(date);
+    d.setDate(d.getDate() - d.getDay());
+    return d;
+}
+
+/** 亚马逊模式：预计派送对齐为 etaEnd 所在周的周日～周六 */
+function applyAmazonDeliveryWindow(eta) {
+    const sunday = getWeekSunday(eta.etaEnd);
+    const saturday = addDaysDate(sunday, 6);
+    return { etaStart: sunday, etaEnd: saturday };
+}
+
+function calcDisplayEta(etdDate, transitStr) {
+    const eta = calcEtaRange(etdDate, transitStr);
+    if (!eta) return null;
+    return isAmazonDeliveryMode() ? applyAmazonDeliveryWindow(eta) : eta;
+}
+
+function formatEtaRange(eta) {
+    if (!eta) return '无法计算';
+    return `${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`;
+}
+
+function onAmazonModeChange() {
+    recalcAllDeliveryRows();
+}
+
+function recalcAllDeliveryRows() {
+    const tbody = document.getElementById('deliveryResultBody');
+    if (!tbody) return;
+    tbody.querySelectorAll('tr[data-index]').forEach(row => {
+        const index = row.getAttribute('data-index');
+        const etdInput = row.querySelector('input[type="date"]');
+        const transitInput = row.querySelector('input[type="text"]');
+        const etaCell = document.getElementById(`eta-${index}`);
+        if (!etdInput || !transitInput || !etaCell) return;
+        const etdDate = new Date(etdInput.value + 'T00:00:00');
+        etaCell.textContent = formatEtaRange(calcDisplayEta(etdDate, transitInput.value));
+    });
+}
+
 /**
  * 格式化英文日期 (Dec 5th)
  */
@@ -876,12 +924,12 @@ function batchQueryDeliveryTime() {
         const transitTime = getTransitTime(matchedCountry, channel, postcode, address);
         
         // 计算ETA
-        const eta = calcEtaRange(etdDate, transitTime);
+        const eta = calcDisplayEta(etdDate, transitTime);
         
         // 格式化结果
         const channelCN = getCN(channel);
         const etdStr = formatDateMMDD(etdDate);
-        const etaStr = eta ? `${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}` : '无法计算';
+        const etaStr = formatEtaRange(eta);
         
         // 生成复制格式
         const enFormat = eta ? `${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.` : `${address} estimate delivery time: 无法计算`;
@@ -970,14 +1018,7 @@ function updateRowETD(index, newETD) {
     const transitTime = transitTimeInput.value;
     
     const etdDate = new Date(newETD + 'T00:00:00');
-    const eta = calcEtaRange(etdDate, transitTime);
-    
-    if (eta) {
-        const etaStr = `${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`;
-        document.getElementById(`eta-${index}`).textContent = etaStr;
-    } else {
-        document.getElementById(`eta-${index}`).textContent = '无法计算';
-    }
+    document.getElementById(`eta-${index}`).textContent = formatEtaRange(calcDisplayEta(etdDate, transitTime));
 }
 
 /**
@@ -989,14 +1030,7 @@ function updateRowTransitTime(index, newTransitTime) {
     
     const etdInput = row.querySelector('input[type="date"]');
     const etdDate = new Date(etdInput.value + 'T00:00:00');
-    const eta = calcEtaRange(etdDate, newTransitTime);
-    
-    if (eta) {
-        const etaStr = `${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`;
-        document.getElementById(`eta-${index}`).textContent = etaStr;
-    } else {
-        document.getElementById(`eta-${index}`).textContent = '无法计算';
-    }
+    document.getElementById(`eta-${index}`).textContent = formatEtaRange(calcDisplayEta(etdDate, newTransitTime));
 }
 
 /**
@@ -1009,7 +1043,7 @@ function copyRowEN(index) {
     const etdInput = row.querySelector('input[type="date"]').value;
     const transit = row.querySelector('input[type="text"]').value;
     const etdDate = new Date(etdInput + 'T00:00:00');
-    const eta = calcEtaRange(etdDate, transit);
+    const eta = calcDisplayEta(etdDate, transit);
     if (!eta) { showToast('无法计算ETA', 'error'); return; }
     const text = `${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.`;
     navigator.clipboard.writeText(text).then(() => showToast('英文结果已复制到剪贴板','success')).catch(()=>showToast('复制失败','error'));
@@ -1022,7 +1056,7 @@ function copyRowCN(index) {
     const etdInput = row.querySelector('input[type="date"]').value;
     const transit = row.querySelector('input[type="text"]').value;
     const etdDate = new Date(etdInput + 'T00:00:00');
-    const eta = calcEtaRange(etdDate, transit);
+    const eta = calcDisplayEta(etdDate, transit);
     if (!eta) { showToast('无法计算ETA', 'error'); return; }
     const text = `${address} 预计派送时间: ${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`;
     navigator.clipboard.writeText(text).then(() => showToast('中文结果已复制到剪贴板','success')).catch(()=>showToast('复制失败','error'));
@@ -1048,7 +1082,7 @@ function copyBatchResultEN() {
             const etdStr = row.querySelector('input[type="date"]').value;
             const transit = row.querySelector('input[type="text"]').value;
             const etdDate = new Date(etdStr + 'T00:00:00');
-            const eta = calcEtaRange(etdDate, transit);
+            const eta = calcDisplayEta(etdDate, transit);
             if (eta) {
                 results.push(`${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.`);
             }
@@ -1089,7 +1123,7 @@ function copyBatchResultCN() {
             const etdStr = row.querySelector('input[type="date"]').value;
             const transit = row.querySelector('input[type="text"]').value;
             const etdDate = new Date(etdStr + 'T00:00:00');
-            const eta = calcEtaRange(etdDate, transit);
+            const eta = calcDisplayEta(etdDate, transit);
             if (eta) {
                 results.push(`${address} 预计派送时间: ${formatDateMMDD(eta.etaStart)} - ${formatDateMMDD(eta.etaEnd)}`);
             }
@@ -1198,7 +1232,7 @@ function copyAllTableEN() {
                 const etdStr = etdInput.value;
                 const transit = transitInput.value;
                 const etdDate = new Date(etdStr + 'T00:00:00');
-                const eta = calcEtaRange(etdDate, transit);
+                const eta = calcDisplayEta(etdDate, transit);
                 if (eta) {
                     results.push(`${address} estimate delivery time: ${formatDateEN(eta.etaStart)} to ${formatDateEN(eta.etaEnd)}.`);
                 }
@@ -1227,6 +1261,7 @@ function resetDeliveryQuery() {
     document.getElementById('deliveryAddresses').value = '';
     document.getElementById('deliveryChannel').value = 'Sea truck';
     document.getElementById('deliveryETD').value = '';
+    document.getElementById('deliveryAmazonMode').checked = false;
     document.getElementById('deliveryResultCount').textContent = '0 条记录';
     
     // 清空表格

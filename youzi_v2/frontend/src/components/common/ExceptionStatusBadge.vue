@@ -16,12 +16,18 @@ const props = withDefaults(
   { size: 'sm', showLabel: false },
 )
 
-/** 异常码表：查验(INSPECTION) 用深红，其余用浅红 */
+/** 查验 / 清关异常用深红，其余用浅红 */
 const isInspection = computed(() => {
   const code = props.code.trim().toUpperCase()
-  if (code === 'INSPECTION') return true
+  if (
+    code === 'INSPECTION' ||
+    code === 'EXPORT_CUSTOMS_EXCEPTION' ||
+    code === 'IMPORT_CUSTOMS_EXCEPTION'
+  ) {
+    return true
+  }
   const name = (props.label || '').trim()
-  return name.includes('查验')
+  return name.includes('查验') || name.includes('海关') || name.includes('清关')
 })
 
 const toneClass = computed(() =>

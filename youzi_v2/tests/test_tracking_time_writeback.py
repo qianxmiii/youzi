@@ -152,6 +152,8 @@ def test_parse_atd_from_zh_departure_keywords() -> None:
 
     assert is_goods_shipped_track("已开船，起运地NINGBO")
     assert is_goods_shipped_track("船舶已离港")
+    assert is_goods_shipped_track("The train has departed")
+    assert is_goods_shipped_track("THE TRAIN HAS DEPARTED from Xi'an")
     tracks = tracks_from_rows(
         [
             {
@@ -172,6 +174,23 @@ def test_parse_atd_from_zh_departure_keywords() -> None:
     # 无显式 ATD 时取最早一条开船/离港节点
     assert candidates["atd"] is not None
     assert candidates["atd"].candidate_value == "2026-05-19 08:00:00"
+    assert candidates["atd"].source_track_id == "t1"
+
+
+def test_parse_atd_from_train_departed() -> None:
+    tracks = tracks_from_rows(
+        [
+            {
+                "id": "t1",
+                "tracking_time": "2026-05-21 14:30:00",
+                "tracking_desc": "The train has departed",
+                "created_time": "2026-05-21 14:30:00",
+            },
+        ]
+    )
+    candidates = build_time_candidates(tracks)
+    assert candidates["atd"] is not None
+    assert candidates["atd"].candidate_value == "2026-05-21 14:30:00"
     assert candidates["atd"].source_track_id == "t1"
 
 
@@ -347,3 +366,47 @@ def test_cross_year_eta(env) -> None:
     recalculate_for_shipment(db, shipment_id=sid)
     row = shipments.get_by_id(sid)
     assert row["eta"] == "2027-01-05 00:00:00"
+
+
+def test_tracking_number_writeback_when_empty(env) -> None:
+    db, shipments, tracks, _ = env
+    sid = _insert_shipment(shipments)
+    _insert_track(
+        tracks,
+        "SH001",
+        "2026-06-20 10:00:00",
+        "货物已交快递派送，FedEx 877617962361",
+    )
+    result = recalculate_for_shipment(db, shipment_id=sid)
+    assert "tracking_number" in result["applied"]
+    row = shipments.get_by_id(sid)
+    assert row["trackingNumber"] == "877617962361"
+    assert (row.get("expressCode") or "").upper() == "FEDEX"
+
+
+def test_tracking_number_writeback_does_not_overwrite(env) -> None:
+    db, shipments, tracks, _ = env
+    sid = _insert_shipment(shipments)
+    shipments.set_tracking_number("SH001", "111111111111")
+    _insert_track(
+        tracks,
+        "SH001",
+        "2026-06-20 10:00:00",
+        "FedEx 877617962361",
+    )
+    result = recalculate_for_shipment(db, shipment_id=sid)
+    assert "tracking_number" not in result["applied"]
+    row = shipments.get_by_id(sid)
+    assert row["trackingNumber"] == "111111111111"
+
+
+def test_tracking_number_writeback_prefers_newest(env) -> None:
+    db, shipments, tracks, _ = env
+    sid = _insert_shipment(shipments)
+    _insert_track(tracks, "SH001", "2026-06-01 10:00:00", "FedEx 877617962361")
+    _insert_track(tracks, "SH001", "2026-06-15 10:00:00", "UPS 1ZA06B016813555890")
+    result = recalculate_for_shipment(db, shipment_id=sid)
+    assert "tracking_number" in result["applied"]
+    row = shipments.get_by_id(sid)
+    assert row["trackingNumber"] == "1ZA06B016813555890"
+    assert (row.get("expressCode") or "").upper() == "UPS"

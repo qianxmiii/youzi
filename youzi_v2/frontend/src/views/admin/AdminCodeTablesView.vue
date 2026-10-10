@@ -13,6 +13,7 @@ import {
   type DataTableColumns,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   codeTableTemplateUrl,
   createCodeTableRow,
@@ -23,9 +24,14 @@ import {
   updateCodeTableRow,
 } from '@/api/codeTables'
 import CodeTableFormModal from '@/components/admin/CodeTableFormModal.vue'
+import ChannelsView from '@/views/channels/ChannelsView.vue'
 import type { CodeTableMeta, CodeTablePayload, CodeTableRow } from '@/types/codeTable'
 
+const CHANNEL_CODES_TABLE = 'channel_codes'
+
 const message = useMessage()
+const route = useRoute()
+const router = useRouter()
 const tables = ref<CodeTableMeta[]>([])
 const activeTable = ref('')
 const loading = ref(false)
@@ -42,20 +48,25 @@ const editingRow = ref<CodeTableRow | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const activeMeta = computed(() => tables.value.find((t) => t.table === activeTable.value))
+const isChannelTable = computed(() => activeTable.value === CHANNEL_CODES_TABLE)
 const hasPortType = computed(() => activeMeta.value?.hasPortType ?? false)
 const hasChannelFields = computed(() => activeMeta.value?.hasChannelFields ?? false)
 const hasCarrierFields = computed(() => activeMeta.value?.hasCarrierFields ?? false)
+const hasRouteStatusFields = computed(() => activeMeta.value?.hasRouteStatusFields ?? false)
 
 async function loadTables() {
   const res = await listCodeTableTypes()
   tables.value = res.tables
-  if (!activeTable.value && res.tables.length) {
+  const q = route.query.table
+  if (typeof q === 'string' && res.tables.some((t) => t.table === q)) {
+    activeTable.value = q
+  } else if (!activeTable.value && res.tables.length) {
     activeTable.value = res.tables[0].table
   }
 }
 
 async function loadRows() {
-  if (!activeTable.value) return
+  if (!activeTable.value || isChannelTable.value) return
   loading.value = true
   try {
     const res = await listCodeTableRows(activeTable.value, {
@@ -72,24 +83,37 @@ async function loadRows() {
   }
 }
 
+function syncTableQuery(table: string) {
+  const current = typeof route.query.table === 'string' ? route.query.table : ''
+  if (current === table) return
+  void router.replace({
+    path: route.path,
+    query: { ...route.query, table },
+  })
+}
+
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(search, () => {
+  if (isChannelTable.value) return
   page.value = 1
   if (searchTimer) clearTimeout(searchTimer)
   searchTimer = setTimeout(loadRows, 300)
 })
 
-watch(activeTable, () => {
+watch(activeTable, (table) => {
   page.value = 1
   search.value = ''
-  loadRows()
+  if (table) syncTableQuery(table)
+  if (!isChannelTable.value) void loadRows()
 })
 
-watch([page, pageSize], loadRows)
+watch([page, pageSize], () => {
+  if (!isChannelTable.value) void loadRows()
+})
 
 onMounted(async () => {
   await loadTables()
-  await loadRows()
+  if (!isChannelTable.value) await loadRows()
 })
 
 function openCreate() {
@@ -140,7 +164,7 @@ async function onFileSelected(ev: Event) {
   const input = ev.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  if (!file || !activeTable.value) return
+  if (!file || !activeTable.value || isChannelTable.value) return
   importing.value = true
   try {
     const res = await importCodeTableExcel(activeTable.value, file)
@@ -156,7 +180,7 @@ async function onFileSelected(ev: Event) {
 }
 
 function downloadTemplate() {
-  if (!activeTable.value) return
+  if (!activeTable.value || isChannelTable.value) return
   window.open(codeTableTemplateUrl(activeTable.value), '_blank')
 }
 
@@ -190,6 +214,14 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       render: (row) => row.carrierId || '—',
     })
   }
+  if (hasRouteStatusFields.value) {
+    cols.push({
+      title: 'DPS status',
+      key: 'dpsStatus',
+      width: 110,
+      render: (row) => row.dpsStatus || '—',
+    })
+  }
   if (hasChannelFields.value) {
     cols.push(
       { title: '国家', key: 'country', width: 88, render: (row) => row.country || '—' },
@@ -201,6 +233,13 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
           row.category
             ? h(NTag, { size: 'small', bordered: false }, () => row.category)
             : h('span', { class: 'text-zinc-500' }, '—'),
+      },
+      {
+        title: 'DPS渠道名',
+        key: 'dpsChannelName',
+        minWidth: 140,
+        ellipsis: { tooltip: true },
+        render: (row) => row.dpsChannelName || '—',
       },
       {
         title: '备注',
@@ -260,13 +299,13 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       <div>
         <h2 class="page-h2">后台管理 · 码表</h2>
         <p class="text-xs text-zinc-500">
-          维护渠道、国家、承运商等码表；承运商「编码」对应运单
+          「渠道」页与原渠道管理一致（含时效、全量导入）；其他码表可 Excel 导入。承运商「编码」对应运单
           <code class="text-zinc-400">carrier_code</code>；「承运商ID」为 DPS
-          <code class="text-zinc-400">carrierId</code>，仅用于反查编码（不是运单
-          <code class="text-zinc-400">carrier_id</code> 承运商单号）。
+          <code class="text-zinc-400">carrierId</code>
+          ，仅用于反查编码。
         </p>
       </div>
-      <NSpace>
+      <NSpace v-if="!isChannelTable">
         <NButton size="small" quaternary @click="downloadTemplate">下载模板</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入 Excel</NButton>
         <NButton size="small" type="primary" :disabled="!activeTable" @click="openCreate">
@@ -292,50 +331,57 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       />
     </NTabs>
 
-    <div class="shrink-0 flex flex-wrap items-center gap-2">
-      <NInput
-        v-model:value="search"
-        placeholder="搜索编码、中英文名…"
-        clearable
-        size="small"
-        class="w-64"
-      />
+    <div v-if="isChannelTable" class="min-h-0 flex-1 overflow-hidden">
+      <ChannelsView embedded />
     </div>
 
-    <div class="panel min-h-0 flex-1 overflow-hidden p-0">
-      <NDataTable
-        :columns="columns"
-        :data="items"
-        :loading="loading"
-        :scroll-x="hasPortType ? 980 : hasChannelFields ? 1080 : hasCarrierFields ? 980 : 880"
-        size="small"
-        flex-height
-        class="code-tables-data-table h-full"
-        :bordered="false"
-      />
-    </div>
+    <template v-else>
+      <div class="shrink-0 flex flex-wrap items-center gap-2">
+        <NInput
+          v-model:value="search"
+          placeholder="搜索编码、中英文名…"
+          clearable
+          size="small"
+          class="w-64"
+        />
+      </div>
 
-    <div class="shrink-0 flex justify-end border-t border-[var(--color-border)] pt-3">
-      <NPagination
-        v-model:page="page"
-        v-model:page-size="pageSize"
-        :item-count="total"
-        :page-sizes="[20, 50, 100, 200]"
-        show-size-picker
-        size="small"
-      />
-    </div>
+      <div class="panel min-h-0 flex-1 overflow-hidden p-0">
+        <NDataTable
+          :columns="columns"
+          :data="items"
+          :loading="loading"
+          :scroll-x="hasPortType ? 980 : hasChannelFields ? 1220 : hasCarrierFields || hasRouteStatusFields ? 980 : 880"
+          size="small"
+          flex-height
+          class="code-tables-data-table h-full"
+          :bordered="false"
+        />
+      </div>
 
-    <CodeTableFormModal
-      :show="modalShow"
-      :mode="modalMode"
-      :has-port-type="hasPortType"
-      :has-channel-fields="hasChannelFields"
-      :has-carrier-fields="hasCarrierFields"
-      :initial="editingRow"
-      @close="modalShow = false"
-      @submit="handleFormSubmit"
-    />
+      <div class="shrink-0 flex justify-end border-t border-[var(--color-border)] pt-3">
+        <NPagination
+          v-model:page="page"
+          v-model:page-size="pageSize"
+          :item-count="total"
+          :page-sizes="[20, 50, 100, 200]"
+          show-size-picker
+          size="small"
+        />
+      </div>
+
+      <CodeTableFormModal
+        :show="modalShow"
+        :mode="modalMode"
+        :has-port-type="hasPortType"
+        :has-channel-fields="hasChannelFields"
+        :has-carrier-fields="hasCarrierFields"
+        :has-route-status-fields="hasRouteStatusFields"
+        :initial="editingRow"
+        @close="modalShow = false"
+        @submit="handleFormSubmit"
+      />
+    </template>
   </div>
 </template>
 

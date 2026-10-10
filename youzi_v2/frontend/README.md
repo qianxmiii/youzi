@@ -36,18 +36,19 @@ Youzi v2 前端 — Vue 3 SPA
 | `/addresses` | 地址簿 | ✅ |
 | `/statistics` | 统计管理 | ✅ |
 | `/customers` | 客户管理 | ✅ |
-| `/channels` | 渠道管理 | ✅ |
+| `/channels` | 重定向至码表「渠道」 | → `/admin?table=channel_codes` |
 | `/scheduled-tasks` | 计划任务 | ✅ |
-| `/admin` | 后台管理 · 码表 | ✅ |
-| `/display-settings` | 后台管理 · 显示设置 | ✅ |
-| `/cost` | 成本计算（自税/包税） | ✅ |
+| `/admin` | 后台管理 · 码表（渠道 tab = 完整渠道管理） | ✅ |
+| `/display-settings` | 系统管理 · 设置 · 显示设置 | ✅ |
+| `/cost` | 成本计算（自税/包税） | 侧栏暂隐藏 |
 | `/quote-center/followups` | 报价跟进 | ✅ |
 | `/tools` | 工具中心（分类卡片入口） | ✅ |
 | `/tools/image-link-zip` | 标签图片打包 | ✅ |
 | `/tools/shipment-file-rename` | 运单文件重命名 | ✅ |
 | `/tools/product-import` | 箱单转产品导入 | ✅ |
+| `/tools/fba-box-code-expand` | FBA 箱号展开 | ✅ |
 | `/shipments/payment-reminders` | 催款管理（侧栏待催角标、导出） | ✅ |
-| `/box`、`/quote` 等 | 占位（待迁移） | 待迁 |
+| `/box`、`/quote`、`/quote/batch`、`/library` 等 | 占位（待迁移）；侧栏暂隐藏箱规/单地址/批量报价/资料库 | 待迁 |
 
 ## 开发命令
 

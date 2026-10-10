@@ -26,6 +26,14 @@ import {
 } from '@/api/channels'
 import { listChannelSlaRules, upsertChannelSlaRule } from '@/api/shipmentSla'
 
+withDefaults(
+  defineProps<{
+    /** 嵌入后台码表时隐藏页面大标题，避免与「后台管理 · 码表」重复 */
+    embedded?: boolean
+  }>(),
+  { embedded: false },
+)
+
 const message = useMessage()
 const loading = ref(false)
 const seeding = ref(false)
@@ -92,7 +100,10 @@ async function handleSeed() {
   seeding.value = true
   try {
     const res = await seedDefaultChannels()
-    message.success(`内置渠道：新增 ${res.inserted}，更新 ${res.updated}，共 ${res.total} 条`)
+    const deleted = res.deleted ?? 0
+    message.success(
+      `已全量导入渠道清单：删除 ${deleted}，写入 ${res.inserted}，共 ${res.total} 条`,
+    )
     page.value = 1
     await load()
   } catch (e) {
@@ -193,6 +204,13 @@ const columns: DataTableColumns<Channel> = [
     key: 'nameZh',
     width: 120,
     ellipsis: { tooltip: true },
+  },
+  {
+    title: 'DPS渠道名',
+    key: 'dpsChannelName',
+    minWidth: 140,
+    ellipsis: { tooltip: true },
+    render: (row) => row.dpsChannelName || '—',
   },
   {
     title: '国家',
@@ -298,16 +316,27 @@ onMounted(async () => {
 <template>
   <div class="flex h-full min-h-0 w-full flex-col gap-4">
     <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
-      <div>
+      <div v-if="!embedded">
         <h1 class="page-h2">渠道管理</h1>
         <p class="mt-1 text-sm text-zinc-500">
-          渠道编码（<code class="text-zinc-400">code</code>）与运单
-          <code class="text-zinc-400">channel_code</code>、DPS
-          <code class="text-zinc-400">channelCode</code> 一致，可编辑。
+          本地渠道编码写入运单
+          <code class="text-zinc-400">channel_code</code>；
+          <code class="text-zinc-400">DPS渠道名</code>
+          对应清单
+          <code class="text-zinc-400">cnName</code>
+          ，用于同步映射。
         </p>
       </div>
+      <p v-else class="text-xs text-zinc-500">
+        本地渠道编码写入运单
+        <code class="text-zinc-400">channel_code</code>；
+        <code class="text-zinc-400">DPS渠道名</code>
+        对应清单
+        <code class="text-zinc-400">cnName</code>
+        ，用于同步映射。支持时效配置与全量导入。
+      </p>
       <NSpace>
-        <NButton :loading="seeding" @click="handleSeed">导入内置渠道</NButton>
+        <NButton :loading="seeding" @click="handleSeed">全量导入渠道清单</NButton>
         <NButton type="primary" @click="openCreate">新增渠道</NButton>
       </NSpace>
     </div>
@@ -334,7 +363,7 @@ onMounted(async () => {
       <NInput
         v-model:value="search"
         clearable
-        placeholder="搜索渠道代码、英文、中文、国家、备注…"
+        placeholder="搜索渠道代码、英文、中文、DPS渠道名、国家、备注…"
         class="min-w-0"
         size="small"
       />

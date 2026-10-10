@@ -849,7 +849,9 @@ onMounted(() => {
           class="payment-reminders-scope-tabs shrink-0"
           @update:value="onScopeTabChange"
         >
-          <NRadioButton value="todo">待催</NRadioButton>
+          <NRadioButton value="todo" title="不含月结；月结请用「全部未付款」或结算方式筛选">
+            待催
+          </NRadioButton>
           <NRadioButton value="all_unpaid">全部未付款</NRadioButton>
         </NRadioGroup>
         <NSelect

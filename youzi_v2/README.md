@@ -112,16 +112,18 @@ SQLite 单文件，表在启动时自动初始化。核心表：`shipments`、`v
 | `/vessel-schedules` | ✅ 船期监控 | — |
 | `/addresses` | ✅ 地址簿 | `/api/addresses` |
 | `/statistics` | ✅ 统计 | — |
-| `/customers`、`/channels` | ✅ | — |
+| `/customers` | ✅ 客户管理 | — |
+| `/admin` | ✅ 码表（「渠道」tab 为完整渠道管理，含时效/全量导入） | — |
+| `/channels` | 重定向 → `/admin?table=channel_codes` | — |
 | `/scheduled-tasks` | ✅ 计划任务 | — |
-| `/admin` | ✅ 码表 | `templates/admin.html` |
-| `/cost` | 成本计算（DDU/DDP） | ✅ |
+| `/cost` | 成本计算（DDU/DDP） | 侧栏暂隐藏，路由仍可用 |
 | `/quote-center/followups` | ✅ 报价跟进 | — |
 | `/shipments/payment-reminders` | ✅ 催款管理 | — |
 | `/tools` | ✅ 工具中心 | — |
+| `/tools/fba-box-code-expand` | ✅ FBA 箱号展开 | — |
 | `/tools/image-link-zip` | ✅ 标签图片打包 | — |
 | `/approvals/tracking-time` | ✅ 轨迹审批 | — |
-| `/box`、`/quote`、`/library` | 待迁 | Legacy JS |
+| `/box`、`/quote`、`/quote/batch`、`/library` | 待迁；箱规/单地址/批量报价/资料库侧栏暂隐藏 | Legacy JS |
 
 ## API 文档入口
 

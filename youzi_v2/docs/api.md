@@ -101,14 +101,14 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/` | 列表（筛选、分页；含 `groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应 `groups` 数组） |
+| GET | `/` | 列表（筛选、分页；含 `statusCode`、`routeStatus`、`groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应含 `routeStatus`） |
 | GET | `/{item_id}` | 单条详情 |
 | POST | `/` | 新建 |
 | PUT | `/{item_id}` | 更新运单字段 |
 | DELETE | `/{item_id}` | 删除 |
 | POST | `/batch-delete` | 批量删除 |
 | PATCH | `/batch-update` | 批量更新字段 |
-| GET | `/filter-options` | 筛选项（含 `groups` 分组下拉） |
+| GET | `/filter-options` | 筛选项（含 `groups`、`routeStatuses`：`{ code, nameZh, dpsStatus }`） |
 | GET | `/export` | Excel 导出 |
 | POST | `/import` | Excel 导入 |
 | POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
@@ -130,8 +130,8 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/payment-reminders` | 催款列表（`scope` / `customer` / `settlementMethod` / `reminderType` / `followupStatus` / `search` / `fclOnly`；`fclOnly` 默认 `false` 排除整柜，`true` 仅整柜） |
-| GET | `/payment-reminders/summary` | 数量统计：`todoCount` / `allUnpaidCount` / `overdueCount`（侧栏角标、页面标题；`fclOnly` 默认排除整柜） |
+| GET | `/payment-reminders` | 催款列表（`scope` / `customer` / `settlementMethod` / `reminderType` / `followupStatus` / `search` / `fclOnly`；`fclOnly` 默认 `false` 排除整柜，`true` 仅整柜；`scope=todo` 排除月结） |
+| GET | `/payment-reminders/summary` | 数量统计：`todoCount` / `allUnpaidCount` / `overdueCount`（侧栏角标、页面标题；默认排除整柜；`todoCount`/`overdueCount` 排除月结） |
 | GET | `/payment-reminders/export` | 导出当前筛选为 Excel（上限 10000；含 `fclOnly`） |
 | GET | `/payment-reminders/{shipment_id}/followups` | 跟进记录 |
 | POST | `/payment-reminders/{shipment_id}/followups` | 新增跟进 |
@@ -157,7 +157,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/shipment-sla-alerts` | 预警列表（`scope=todo` 默认待办：未签收且 open/acknowledged，**按运单合并只保留最严重一条**；`scope=all` 含历史且逐条；筛选见 `riskLevel` / `alertType` 等） |
+| GET | `/api/v1/shipment-sla-alerts` | 预警列表（`scope=todo` 默认待办：未签收且 open/acknowledged，**按运单合并只保留最严重一条**；已跟进整组排最后，组内按严重度；`scope=all` 含历史且逐条，同样已跟进在后；筛选见 `riskLevel` / `alertType` 等） |
 | GET | `/api/v1/shipment-sla-alerts/summary` | 工作台摘要计数（`pendingOpen` 按运单号去重） |
 | GET | `/api/v1/shipment-sla-alerts/todo-notifications` | 顶栏待办（已超时/严重超时且 open；按运单合并，`pendingCount` 按运单去重；项含 `alertTypes` / `relatedAlertIds`） |
 | POST | `/api/v1/shipment-sla-alerts/evaluate` | 手动触发扫描（含孤儿清理、重绑、同单同类型去重） |
@@ -174,7 +174,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 **列表示例**
 
 ```bash
-curl "http://127.0.0.1:3001/api/v1/shipments?page=1&page_size=20&status_code=IN_TRANSIT"
+curl "http://127.0.0.1:3001/api/v1/shipments?limit=20&statusCode=IN_TRANSIT&routeStatus=TRACK_SIGNED"
 ```
 
 **Excel 导入**
@@ -230,7 +230,7 @@ curl -X POST "http://127.0.0.1:3001/api/v1/vessel-schedules/import" -F "file=@�
 | 前缀 | 说明 |
 |------|------|
 | `/api/v1/customers` | CRUD + `sync-from-shipments`；`PATCH` 支持 `customerName` + `updateShipments` 批量改运单客户字段 |
-| `/api/v1/channels` | CRUD + `seed-defaults`、`/meta`；`PATCH` 可改 `code`，同步更新运单 `channel_code` |
+| `/api/v1/channels` | CRUD + `seed-defaults`（清空后全量导入渠道清单）、`/meta`；字段含 `dpsChannelName`（DPS cnName）；`PATCH` 可改 `code`，同步更新运单 `channel_code` |
 
 ## 报价跟进 quote-opportunities
 

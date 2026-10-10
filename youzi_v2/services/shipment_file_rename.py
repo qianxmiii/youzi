@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import re
 from io import BytesIO
-from typing import Any
+from pathlib import Path
+from typing import Any, Iterable
 
 from openpyxl import load_workbook
 
@@ -17,11 +18,28 @@ _HEADER_ALIASES: dict[str, tuple[str, ...]] = {
     "folderName": ("文件夹名", "目录名", "folder", "folder_name", "foldername", "子文件夹"),
 }
 
+_SHEET_PREFERENCE = ("运单信息", "Sheet1", "sheet1")
+
 _INVALID_FS = re.compile(r'[\\/:*?"<>|]+')
 
 
 def _norm_header(value: Any) -> str:
-    return str(value or "").strip().lower().replace(" ", "").replace("_", "")
+    text = str(value or "").replace("\r", "\n")
+    text = " ".join(part.strip() for part in text.split("\n") if part.strip())
+    return text.strip().lower().replace(" ", "").replace("_", "")
+
+
+def _header_matches(cell_text: str, alias: str) -> bool:
+    """精确或前缀匹配表头（兼容换行/括号说明）。"""
+    wanted = _norm_header(alias)
+    if not wanted:
+        return False
+    if cell_text == wanted:
+        return True
+    if cell_text.startswith(wanted):
+        rest = cell_text[len(wanted) :]
+        return not rest or rest[0] in "（("
+    return False
 
 
 def _map_headers(row: tuple[Any, ...]) -> dict[str, int]:
@@ -34,7 +52,7 @@ def _map_headers(row: tuple[Any, ...]) -> dict[str, int]:
             if field in found:
                 continue
             for alias in aliases:
-                if _norm_header(alias) == text:
+                if _header_matches(text, alias):
                     found[field] = idx
                     break
     return found
@@ -72,26 +90,88 @@ def _cell_str(value: Any) -> str:
     return str(value).strip()
 
 
-def parse_shipment_rename_excel(content: bytes) -> dict[str, Any]:
+def _rows_from_xlsx(content: bytes) -> list[list[tuple[Any, ...]]]:
+    wb = load_workbook(BytesIO(content), read_only=True, data_only=True)
+    try:
+        ordered: list[str] = []
+        for name in _SHEET_PREFERENCE:
+            if name in wb.sheetnames and name not in ordered:
+                ordered.append(name)
+        for name in wb.sheetnames:
+            if name not in ordered:
+                ordered.append(name)
+
+        sheets: list[list[tuple[Any, ...]]] = []
+        for name in ordered:
+            ws = wb[name]
+            rows = list(ws.iter_rows(values_only=True))
+            if rows:
+                sheets.append(rows)
+        return sheets
+    finally:
+        wb.close()
+
+
+def _rows_from_xls(content: bytes) -> list[list[tuple[Any, ...]]]:
+    import xlrd
+
+    wb = xlrd.open_workbook(file_contents=content)
+    sheets: list[list[tuple[Any, ...]]] = []
+    preferred = [wb.sheet_by_name(name) for name in _SHEET_PREFERENCE if name in wb.sheet_names()]
+    others = [wb.sheet_by_index(i) for i in range(wb.nsheets)]
+    seen: set[str] = set()
+    ordered = []
+    for sh in preferred + others:
+        if sh.name in seen:
+            continue
+        seen.add(sh.name)
+        ordered.append(sh)
+
+    for sh in ordered:
+        rows: list[tuple[Any, ...]] = []
+        for r in range(sh.nrows):
+            rows.append(tuple(sh.row_values(r)))
+        if rows:
+            sheets.append(rows)
+    return sheets
+
+
+def _load_workbook_rows(content: bytes, *, filename: str = "") -> list[list[tuple[Any, ...]]]:
+    ext = Path(filename or "").suffix.lower()
+    if ext == ".xls":
+        return _rows_from_xls(content)
+    if ext in {".xlsx", ".xlsm"}:
+        return _rows_from_xlsx(content)
+    try:
+        return _rows_from_xlsx(content)
+    except Exception:
+        return _rows_from_xls(content)
+
+
+def _find_header(sheets: Iterable[list[tuple[Any, ...]]]) -> tuple[int, dict[str, int], list[tuple[Any, ...]]]:
+    for rows in sheets:
+        for i, row in enumerate(rows[:30]):
+            mapped = _map_headers(tuple(row or ()))
+            if (
+                "shipmentNo" in mapped
+                and "country" in mapped
+                and "addressCode" in mapped
+                and "ctns" in mapped
+            ):
+                return i, mapped, rows
+    return -1, {}, []
+
+
+def parse_shipment_rename_excel(content: bytes, *, filename: str = "") -> dict[str, Any]:
     """解析入仓/运单明细 Excel，返回重命名映射。
 
     可选列「文件夹名」：有值时相同文件夹名归入同一子目录。
     """
-    wb = load_workbook(BytesIO(content), read_only=True, data_only=True)
-    ws = wb.active
-    rows = list(ws.iter_rows(values_only=True))
-    wb.close()
-    if not rows:
+    sheets = _load_workbook_rows(content, filename=filename)
+    if not sheets:
         raise ValueError("Excel 为空")
 
-    header_idx = -1
-    col_map: dict[str, int] = {}
-    for i, row in enumerate(rows[:30]):
-        mapped = _map_headers(tuple(row or ()))
-        if "shipmentNo" in mapped and "country" in mapped and "addressCode" in mapped and "ctns" in mapped:
-            header_idx = i
-            col_map = mapped
-            break
+    header_idx, col_map, rows = _find_header(sheets)
     if header_idx < 0:
         raise ValueError("未找到表头，需包含：运单号、国家、仓库代码、件数")
 
@@ -138,5 +218,5 @@ def parse_shipment_rename_excel(content: bytes) -> dict[str, Any]:
         )
 
     if not items:
-        raise ValueError("未解析到有效运单行")
+        raise ValueError("未解析到有效运单行（请检查国家、仓库代码、件数是否有值）")
     return {"items": items, "total": len(items), "errors": errors}

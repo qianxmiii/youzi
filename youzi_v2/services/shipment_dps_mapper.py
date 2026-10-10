@@ -4,12 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-_MARK_STATUS: dict[str, str] = {
-    "转运中": "IN_TRANSIT",
-    "已签收": "DELIVERED",
-    "签收": "DELIVERED",
-    "查验": "INSPECTION",
-}
+from ..db.shipment_route_status import map_dps_route_status
 
 
 def _opt_str(value: Any) -> str | None:
@@ -85,27 +80,16 @@ def map_dps_payment_status(value: Any) -> str | None:
 def map_dps_status(
     row: dict[str, Any],
     route: dict[str, Any],
-    params: dict[str, Any],
+    params: dict[str, Any] | None = None,
 ) -> str:
+    """
+    粗状态：仅 signingTime → DELIVERED；有轨迹 status 则 IN_TRANSIT；否则 UNKNOWN。
+    不读 markVos / 601 / nodeDesc（601 只写入细状态 route_status=TRACK_SIGNED）。
+    """
+    del params  # 保留签名兼容；粗状态不再使用 markVos
     if _opt_str(row.get("signingTime")):
         return "DELIVERED"
-    route_status = _opt_str(route.get("status")) or ""
-    if route_status == "601":
-        return "DELIVERED"
-    node_desc = (_opt_str(route.get("nodeDesc")) or "").lower()
-    if "signed" in node_desc:
-        return "DELIVERED"
-    marks = params.get("markVos")
-    if isinstance(marks, list):
-        for mark in marks:
-            if not isinstance(mark, dict):
-                continue
-            name = _opt_str(mark.get("name")) or ""
-            if name in _MARK_STATUS:
-                return _MARK_STATUS[name]
-            if "转运" in name:
-                return "IN_TRANSIT"
-    if route_status:
+    if _opt_str(route.get("status")):
         return "IN_TRANSIT"
     return "UNKNOWN"
 
@@ -130,6 +114,7 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
     ref_shipment_no = _opt_str(row.get("assOrderNumber")) or ""
     customer_shipment_id = _opt_str(params.get("amazonID"))
     address_code = _opt_str(row.get("deliveryWarehouseCode"))
+    route_status = map_dps_route_status(route.get("status"))
     payload: dict[str, Any] = {
         "shipment_no": shipment_no,
         "waybill_id": _opt_str(row.get("id")),
@@ -156,6 +141,7 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         or _opt_str(row.get("warehouseEntryTime")),
         "latest_tracking_desc": _opt_str(route.get("nodeDesc")),
         "status_code": map_dps_status(row, route, params),
+        "route_status": route_status,
         "payment_status": map_dps_payment_status(row.get("clientVerifyStatus")),
         "address_type": map_dps_address_type(
             row.get("deliveryAddressType"),

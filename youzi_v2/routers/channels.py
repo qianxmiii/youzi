@@ -28,7 +28,7 @@ def list_channels(
 
 @router.post("/api/v1/channels/seed-defaults", response_model=ChannelSeedResult)
 def seed_default_channels():
-    """写入/更新内置渠道列表（按 code 匹配，不删除已有记录）。"""
+    """清空现有渠道后按内置清单全量导入。"""
     return ChannelSeedResult(**channels_repo.seed_defaults())
 
 @router.post("/api/v1/channels", status_code=201)

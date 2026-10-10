@@ -66,6 +66,7 @@ class ShipmentDpsMapperTest(unittest.TestCase):
         self.assertEqual(payload["customer"], "422GS")
         self.assertEqual(payload["country_code"], "US")
         self.assertEqual(payload["status_code"], "DELIVERED")
+        self.assertEqual(payload["route_status"], "TRACK_SIGNED")
         self.assertEqual(payload["zipcode"], "64163")
         self.assertEqual(payload["address_type"], "AMZ")
         self.assertNotIn("carrier_id", payload)
@@ -179,7 +180,7 @@ class ShipmentDpsMapperTest(unittest.TestCase):
             "WFS",
         )
 
-    def test_map_in_transit_from_marks(self) -> None:
+    def test_map_in_transit_from_route_status(self) -> None:
         row = {
             **SAMPLE_DELIVERED,
             "signingTime": None,
@@ -190,6 +191,7 @@ class ShipmentDpsMapperTest(unittest.TestCase):
                     "nodeDesc": "in transit",
                     "status": "202",
                 },
+                "markVos": [{"name": "已签收"}],
             },
         }
         status = map_dps_status(
@@ -198,6 +200,57 @@ class ShipmentDpsMapperTest(unittest.TestCase):
             row["params"],
         )
         self.assertEqual(status, "IN_TRANSIT")
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload["status_code"], "IN_TRANSIT")
+        self.assertEqual(payload["route_status"], "WAREHOUSE_IN")
+
+    def test_map_601_without_signing_is_track_signed_not_delivered(self) -> None:
+        row = {
+            **SAMPLE_DELIVERED,
+            "signingTime": None,
+        }
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload["status_code"], "IN_TRANSIT")
+        self.assertEqual(payload["route_status"], "TRACK_SIGNED")
+
+    def test_map_info_100_skips_route_status(self) -> None:
+        """信息传递非关键节点：不写入 route_status，粗状态仍可为转运中。"""
+        row = {
+            **SAMPLE_DELIVERED,
+            "signingTime": None,
+            "params": {
+                **SAMPLE_DELIVERED["params"],
+                "commerceWaybillRouteInfo": {
+                    "nodeTime": "2026-06-10 08:00:00",
+                    "nodeDesc": "info",
+                    "status": "100",
+                },
+            },
+        }
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload["status_code"], "IN_TRANSIT")
+        self.assertNotIn("route_status", payload)
+
+    def test_map_510_is_last_mile_handover(self) -> None:
+        row = {
+            **SAMPLE_DELIVERED,
+            "signingTime": None,
+            "params": {
+                **SAMPLE_DELIVERED["params"],
+                "commerceWaybillRouteInfo": {
+                    "nodeTime": "2026-06-20 10:00:00",
+                    "nodeDesc": "handed over",
+                    "status": "510",
+                },
+            },
+        }
+        payload = dps_row_to_shipment(row)
+        assert payload is not None
+        self.assertEqual(payload["status_code"], "IN_TRANSIT")
+        self.assertEqual(payload["route_status"], "LAST_MILE_HANDOVER")
 
 
 class ShipmentDpsSyncFieldsTest(unittest.TestCase):
@@ -208,6 +261,7 @@ class ShipmentDpsSyncFieldsTest(unittest.TestCase):
             "shipment_no": "A",
             "customer": "c1",
             "status_code": "DELIVERED",
+            "route_status": "TRACK_SIGNED",
             "latest_tracking_time": "2026-01-01 00:00:00",
             "latest_tracking_desc": "signed",
         }
@@ -215,11 +269,13 @@ class ShipmentDpsSyncFieldsTest(unittest.TestCase):
         self.assertEqual(on_update["shipment_no"], "A")
         self.assertEqual(on_update["customer"], "c1")
         self.assertNotIn("status_code", on_update)
+        self.assertEqual(on_update.get("route_status"), "TRACK_SIGNED")
         self.assertNotIn("latest_tracking_time", on_update)
         self.assertNotIn("latest_tracking_desc", on_update)
 
         on_insert = filter_dps_payload(payload, is_new=True, config=cfg)
         self.assertIn("status_code", on_insert)
+        self.assertIn("route_status", on_insert)
 
 
 class ShipmentDpsSyncTest(unittest.TestCase):
@@ -312,6 +368,51 @@ class ShipmentDpsSyncTest(unittest.TestCase):
         assert saved is not None
         self.assertEqual(saved["carrierCode"], "1724258253196189697")
         self.assertFalse(saved.get("carrierId"))
+        db.conn.close()
+        tmp.cleanup()
+
+    def test_sync_maps_dps_channel_name_to_local_code(self) -> None:
+        tmp = tempfile.TemporaryDirectory()
+        db = Database(Path(tmp.name) / "t.db")
+        repo = ShipmentsRepository(db)
+        code_repo = CodeTablesRepository(db)
+        code_repo.insert_row(
+            "channel_codes",
+            {
+                "code": "LOCAL-AEE",
+                "nameZh": "空派慢飞达",
+                "category": "空运",
+                "dpsChannelName": "空派慢飞达",
+            },
+        )
+        cfg_path = Path(tmp.name) / "config.json"
+        cfg_path.write_text(
+            json.dumps(
+                {
+                    "shipment_queryByPerson": {
+                        "url": "https://example.com/list?pageSize=10",
+                        "Authorization": "token",
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+        fake_result = {
+            "code": 200,
+            "msg": "ok",
+            "total": 1,
+            "rows": [{**SAMPLE_DELIVERED, "channelCode": "空派慢飞达"}],
+            "pages": 1,
+        }
+        with patch(
+            "youzi_v2.services.shipment_dps_sync.query_shipments_by_person",
+            return_value=(fake_result, None),
+        ):
+            run_shipment_dps_sync_batch(repo, cfg_path, force=True, trigger="manual")
+        saved = repo.get_by_shipment_no("DPSECO260610178")
+        self.assertIsNotNone(saved)
+        assert saved is not None
+        self.assertEqual(saved["channelCode"], "LOCAL-AEE")
         db.conn.close()
         tmp.cleanup()
 

@@ -86,6 +86,19 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     badge: 'new',
     audience: '运营 / 报关',
   },
+  {
+    id: 'fba-box-code-expand',
+    name: 'FBA 箱号展开',
+    description: '按前缀与箱数批量生成「前缀+命名符+序号」箱号（如 FBA…U000001）',
+    category: 'warehouse',
+    route: '/tools/fba-box-code-expand',
+    icon: 'box',
+    inputSummary: '前缀与箱数 / 命名符 / 尾数位数',
+    outputSummary: '展开后的箱号列表',
+    status: 'active',
+    badge: 'new',
+    audience: '运营 / 仓配',
+  },
 ]
 
 export function toolsByCategory(

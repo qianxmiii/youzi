@@ -6,6 +6,7 @@ import sqlite3
 from typing import Any
 
 from .channel_seeds import CHANNEL_CATEGORIES, CHANNEL_SEEDS
+from .channel_sla_rules_table import TABLE_NAME as SLA_TABLE
 from .connection import Database
 from .datetime_util import now_str
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
@@ -26,6 +27,10 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "country": row["country"] if "country" in row.keys() else "",
         "category": row["category"] if "category" in row.keys() else "",
         "note": row["note"] if "note" in row.keys() else "",
+        "dpsChannelName": (
+            row["dps_channel_name"] if "dps_channel_name" in row.keys() else ""
+        )
+        or "",
         "sortOrder": row["sort_order"],
         "isActive": bool(row["is_active"]),
         "slaEstimatedDays": sla_days,
@@ -78,9 +83,10 @@ class ChannelsRepository:
         if search and search.strip():
             q = f"%{search.strip()}%"
             conditions.append(
-                "(c.code LIKE ? OR c.name_zh LIKE ? OR c.name_en LIKE ? OR c.country LIKE ? OR c.note LIKE ?)"
+                "(c.code LIKE ? OR c.name_zh LIKE ? OR c.name_en LIKE ? OR c.country LIKE ?"
+                " OR c.note LIKE ? OR c.dps_channel_name LIKE ?)"
             )
-            params.extend([q, q, q, q, q])
+            params.extend([q, q, q, q, q, q])
         if country and country.strip():
             conditions.append("c.country = ?")
             params.append(country.strip())
@@ -137,9 +143,9 @@ class ChannelsRepository:
             self._conn.execute(
                 f"""
                 INSERT INTO {TABLE_NAME} (
-                    code, name_zh, name_en, country, category, note,
+                    code, name_zh, name_en, country, category, note, dps_channel_name,
                     sort_order, is_active, created_time, updated_time
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     code,
@@ -148,6 +154,7 @@ class ChannelsRepository:
                     payload["country"],
                     payload["category"],
                     payload["note"],
+                    payload["dps_channel_name"],
                     payload["sort_order"],
                     payload["is_active"],
                     now,
@@ -177,6 +184,7 @@ class ChannelsRepository:
                 f"""
                 UPDATE {TABLE_NAME} SET
                     code = ?, name_zh = ?, name_en = ?, country = ?, category = ?, note = ?,
+                    dps_channel_name = ?,
                     sort_order = ?, is_active = ?, updated_time = ?
                 WHERE code = ?
                 """,
@@ -187,6 +195,7 @@ class ChannelsRepository:
                     payload["country"],
                     payload["category"],
                     payload["note"],
+                    payload["dps_channel_name"],
                     payload["sort_order"],
                     payload["is_active"],
                     now_str(),
@@ -211,40 +220,63 @@ class ChannelsRepository:
             return cur.rowcount > 0
 
     def seed_defaults(self) -> dict[str, int]:
-        """写入内置渠道列表（已存在的 code 仅更新扩展字段，不删用户数据）。"""
+        """清空渠道码表后按 CHANNEL_SEEDS 全量导入（不删运单，仅尽量把英文名映射到新 code）。"""
         now = now_str()
-        inserted = 0
-        updated = 0
         with self._database.lock:
-            for code, name_zh, country, category, note, sort_order in CHANNEL_SEEDS:
-                row = self._conn.execute(
-                    f"SELECT code FROM {TABLE_NAME} WHERE code = ?",
-                    (code,),
-                ).fetchone()
-                if row:
+            deleted = self._conn.execute(f"SELECT COUNT(*) AS c FROM {TABLE_NAME}").fetchone()["c"]
+            # 英文名 → 新 code（历史运单常存表格 name）
+            for code, _zh, name_en, *_rest in CHANNEL_SEEDS:
+                en = (name_en or "").strip()
+                if en and en != code:
                     self._conn.execute(
                         f"""
-                        UPDATE {TABLE_NAME} SET
-                            name_zh = ?, name_en = ?, country = ?, category = ?, note = ?,
-                            sort_order = ?, updated_time = ?
-                        WHERE code = ?
+                        UPDATE {SHIPMENTS_TABLE}
+                        SET channel_code = ?, updated_time = ?
+                        WHERE TRIM(COALESCE(channel_code, '')) = ?
                         """,
-                        (name_zh, code, country, category, note, sort_order, now, code),
+                        (code, now, en),
                     )
-                    updated += 1
-                else:
-                    self._conn.execute(
-                        f"""
-                        INSERT INTO {TABLE_NAME} (
-                            code, name_zh, name_en, country, category, note,
-                            sort_order, is_active, created_time, updated_time
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
-                        """,
-                        (code, name_zh, code, country, category, note, sort_order, now, now),
+            self._conn.execute(f"DELETE FROM {SLA_TABLE}")
+            self._conn.execute(f"DELETE FROM {TABLE_NAME}")
+            self._conn.executemany(
+                f"""
+                INSERT INTO {TABLE_NAME} (
+                    code, name_zh, name_en, country, category, note, dps_channel_name,
+                    sort_order, is_active, created_time, updated_time
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+                """,
+                [
+                    (
+                        code,
+                        name_zh,
+                        name_en or code,
+                        country,
+                        category,
+                        note,
+                        dps_channel_name,
+                        sort_order,
+                        now,
+                        now,
                     )
-                    inserted += 1
+                    for (
+                        code,
+                        name_zh,
+                        name_en,
+                        country,
+                        category,
+                        note,
+                        dps_channel_name,
+                        sort_order,
+                    ) in CHANNEL_SEEDS
+                ],
+            )
             self._conn.commit()
-        return {"inserted": inserted, "updated": updated, "total": len(CHANNEL_SEEDS)}
+        return {
+            "inserted": len(CHANNEL_SEEDS),
+            "updated": 0,
+            "deleted": int(deleted or 0),
+            "total": len(CHANNEL_SEEDS),
+        }
 
     def _normalize_payload(
         self,
@@ -269,6 +301,12 @@ class ChannelsRepository:
         country = (data.get("country") or "").strip()
         category = (data.get("category") or "").strip()
         note = (data.get("note") or "").strip()
+        dps_channel_name = (
+            data.get("dps_channel_name")
+            or data.get("dpsChannelName")
+            or data.get("DPS_channelName")
+            or ""
+        ).strip()
         if category and category not in CHANNEL_CATEGORIES:
             raise ValueError(f"大类须为: {' / '.join(CHANNEL_CATEGORIES)}")
         sort_order = data.get("sort_order", data.get("sortOrder", 0))
@@ -286,6 +324,24 @@ class ChannelsRepository:
             "country": country,
             "category": category,
             "note": note,
+            "dps_channel_name": dps_channel_name,
             "sort_order": sort_order,
             "is_active": 1 if is_active else 0,
         }
+
+    def lookup_code_by_dps_channel_name(self, dps_channel_name: str) -> str | None:
+        """按 DPS 渠道名反查本地 channel_codes.code。"""
+        name = (dps_channel_name or "").strip()
+        if not name:
+            return None
+        with self._database.lock:
+            row = self._conn.execute(
+                f"""
+                SELECT code FROM {TABLE_NAME}
+                WHERE dps_channel_name = ? AND is_active = 1
+                ORDER BY sort_order ASC, code ASC
+                LIMIT 1
+                """,
+                (name,),
+            ).fetchone()
+        return str(row["code"]) if row else None

@@ -253,3 +253,48 @@ def test_list_alerts_todo_keeps_most_severe_per_shipment(tmp_path: Path) -> None
     # 历史模式仍逐条
     all_res = alerts.list_alerts(scope="all", limit=20)
     assert all_res["total"] == 2
+
+
+def test_list_alerts_todo_puts_acknowledged_last(tmp_path: Path) -> None:
+    db, alerts = _prep(tmp_path)
+    now = now_str()
+    open_id = str(uuid.uuid4())
+    ack_id = str(uuid.uuid4())
+    with db.lock:
+        db.conn.execute(
+            f"""
+            INSERT INTO {SHIPMENTS_TABLE} (
+                id, shipment_no, channel_code, created_time, updated_time
+            ) VALUES
+            (?, 'SN-OPEN', 'CH1', ?, ?),
+            (?, 'SN-ACK', 'CH1', ?, ?)
+            """,
+            (open_id, now, now, ack_id, now, now),
+        )
+        db.conn.execute(
+            """
+            INSERT INTO shipment_sla_alerts (
+                id, shipment_id, shipment_no, alert_type, risk_level, status, severity,
+                due_date, event_key, created_time, updated_time
+            ) VALUES
+            (?, ?, 'SN-OPEN', 'DELIVERY_TIME', 'warning_soon', 'open', 'info',
+             '2026-09-20', 'SN-OPEN|1', ?, ?),
+            (?, ?, 'SN-ACK', 'DELIVERY_TIME', 'severe_overdue', 'acknowledged', 'urgent',
+             '2026-08-01', 'SN-ACK|1', ?, ?)
+            """,
+            (
+                str(uuid.uuid4()),
+                open_id,
+                now,
+                now,
+                str(uuid.uuid4()),
+                ack_id,
+                now,
+                now,
+            ),
+        )
+        db.conn.commit()
+
+    res = alerts.list_alerts(scope="todo", limit=20)
+    nos = [item["shipmentNo"] for item in res["items"]]
+    assert nos == ["SN-OPEN", "SN-ACK"]

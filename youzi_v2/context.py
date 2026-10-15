@@ -58,6 +58,8 @@ from .schemas.shipments import (
     ShipmentBatchUpdateIn,
     ShipmentDpsSyncByOrderRequest,
     ShipmentDpsSyncByOrderResult,
+    ShipmentDpsRouteStatusSyncRequest,
+    ShipmentDpsRouteStatusSyncResult,
     ShipmentRecordIn,
     ShipmentSubscribeBatchResult,
     ShipmentUnsubscribeBatchResult,

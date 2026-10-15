@@ -1375,6 +1375,14 @@ function renderPriceTable() {
     const carrier = typeof getExpressPricingRootKey === 'function' ? getExpressPricingRootKey() : '';
     const cfg = typeof getExpressPricingRootCfg === 'function' ? getExpressPricingRootCfg() : null;
 
+    // 显示价目更新时间（data_price.js → expressPricing.updatedAt）
+    const updatedAtEl = document.getElementById('express-price-updated-at');
+    if (updatedAtEl) {
+        const at = (typeof expressPricing !== 'undefined' && expressPricing?.updatedAt) || cfg?.updatedAt || '';
+        updatedAtEl.textContent = at ? `价格更新：${at}` : '';
+        updatedAtEl.style.display = at ? '' : 'none';
+    }
+
     const channel = (document.getElementById("t4_channel") || {}).value;
     const effectiveBreaks = typeof getEffectiveBreaks === 'function' ? getEffectiveBreaks(carrier, channel) : (cfg?.weightBreaks || []);
     const headers = typeof getWeightHeaders === 'function' ? getWeightHeaders(effectiveBreaks) : [];

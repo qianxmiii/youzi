@@ -9,7 +9,7 @@ import { apiErrorMessage } from '@/utils/apiError'
 import {
   applyRenamePlans,
   buildRenamePlans,
-  listDirectoryFileNames,
+  listDirectoryFiles,
   supportsDirectoryPicker,
   type RenamePlanItem,
 } from '@/utils/shipmentFileRename'
@@ -41,13 +41,13 @@ const statusLabel: Record<RenamePlanItem['status'], string> = {
 }
 
 const columns: DataTableColumns<RenamePlanItem> = [
-  { title: '当前文件名', key: 'oldName', ellipsis: { tooltip: true } },
+  { title: '当前路径', key: 'sourcePath', ellipsis: { tooltip: true } },
   {
-    title: '文件夹名',
+    title: '目标目录',
     key: 'folderName',
     width: 120,
     ellipsis: { tooltip: true },
-    render: (row) => row.folderName || '—',
+    render: (row) => row.folderName || '（根目录）',
   },
   { title: '目标路径', key: 'targetPath', ellipsis: { tooltip: true } },
   {
@@ -116,8 +116,8 @@ async function rebuildPlans() {
     unmatchedExcel.value = []
     return
   }
-  const names = await listDirectoryFileNames(dirHandle.value)
-  const built = buildRenamePlans(names, parseResult.value.items)
+  const files = await listDirectoryFiles(dirHandle.value)
+  const built = buildRenamePlans(files, parseResult.value.items)
   plans.value = built.plans
   unmatchedExcel.value = built.unmatchedExcel
 }
@@ -133,7 +133,7 @@ function confirmRename() {
   }
   dialog.warning({
     title: '确认重命名',
-            content: `将处理 ${readyCount.value} 个文件（含按文件夹名归入子目录），且不可撤销。是否继续？`,
+            content: `将处理 ${readyCount.value} 个文件（含全部子文件夹；可按 Excel 文件夹名归入子目录），且不可撤销。是否继续？`,
             positiveText: '确认',
     negativeText: '取消',
     onPositiveClick: () => {
@@ -175,8 +175,8 @@ async function doRename() {
       </button>
       <h1 class="page-h2">运单文件重命名</h1>
       <p class="page-subtitle mt-1">
-        导入含运单号/国家/仓库代码/件数的 Excel，将文件夹内以运单号命名的文件改为
-        「运单号-国家-仓库代码-件数」
+        导入含运单号/国家/仓库代码（无则邮编）/件数的 Excel，递归扫描所选文件夹及子文件夹，
+        将以运单号命名的文件改为「运单号-国家-仓库代码或邮编-件数」
       </p>
     </div>
 
@@ -194,7 +194,7 @@ async function doRename() {
                 选择 Excel
               </NButton>
               <span class="text-sm text-[var(--color-fg-secondary)]">
-                {{ excelFile?.name || '未选择（需含：运单号、国家、仓库代码、件数；可选文件夹名）' }}
+                {{ excelFile?.name || '未选择（需含：运单号、国家、仓库代码或邮编、件数；可选文件夹名）' }}
               </span>
             </div>
             <input
@@ -256,7 +256,7 @@ async function doRename() {
         size="small"
         :bordered="false"
         :max-height="420"
-        :row-key="(row: RenamePlanItem) => row.oldName"
+        :row-key="(row: RenamePlanItem) => row.sourcePath"
       />
       <ul
         v-if="parseResult?.errors?.length"
@@ -269,9 +269,9 @@ async function doRename() {
     <section class="panel max-w-3xl space-y-2 p-4 text-sm text-[var(--color-fg-secondary)]">
       <h2 class="text-sm font-semibold text-[var(--color-fg-emphasis)]">说明</h2>
       <ul class="list-disc space-y-1 pl-5">
-        <li>原文件名（去掉扩展名）须等于 Excel「运单号」，例如 <code>DPSECO260812093.pdf</code></li>
-        <li>新文件名格式：<code>运单号-国家-仓库代码-件数.pdf</code></li>
-        <li>可选列「文件夹名」：有值时，相同文件夹名的文件放入同一子目录（如 <code>A组/DPSECO…-CA-3PL-18.pdf</code>）</li>
+        <li>会遍历所选文件夹下的<strong>全部子文件夹</strong>；原文件名（去掉扩展名）须等于 Excel「运单号」</li>
+        <li>新文件名格式：<code>运单号-国家-仓库代码-件数.pdf</code>（无仓库代码时用邮编）</li>
+        <li>可选列「文件夹名」：有值时归入该子目录；无则在原目录原地改名</li>
         <li>需在 Chrome / Edge 中授权文件夹读写；操作在浏览器本地完成，不上传 PDF</li>
         <li>处理前请先预览；冲突或 Excel 无匹配的文件会跳过</li>
       </ul>

@@ -232,11 +232,33 @@ def append_missing_field(
         conditions.append(f"s.{col} IS NOT NULL AND TRIM(s.{col}) != ''")
 
 
-def append_not_delivered(conditions: list[str]) -> None:
-    conditions.append(
-        "(s.delivered_time IS NULL OR TRIM(s.delivered_time) = '') "
-        "AND (s.status_code IS NULL OR UPPER(TRIM(s.status_code)) != 'DELIVERED')"
+def sql_not_delivered(alias: str | None = "s") -> str:
+    p = f"{alias}." if alias else ""
+    return (
+        f"({p}delivered_time IS NULL OR TRIM({p}delivered_time) = '') "
+        f"AND ({p}status_code IS NULL OR UPPER(TRIM({p}status_code)) != 'DELIVERED')"
     )
+
+
+def sql_missing_route_status(alias: str | None = "s") -> str:
+    """无展示用明细状态：空，或非关键节点（如信息传递）。"""
+    from .shipment_route_status import non_milestone_route_status_codes
+
+    p = f"{alias}." if alias else ""
+    codes = ",".join(
+        f"'{c.replace(chr(39), chr(39) * 2)}'"
+        for c in sorted(non_milestone_route_status_codes())
+    )
+    extra = f" OR UPPER(TRIM({p}route_status)) IN ({codes})" if codes else ""
+    return f"({p}route_status IS NULL OR TRIM({p}route_status) = ''{extra})"
+
+
+def append_not_delivered(conditions: list[str]) -> None:
+    conditions.append(sql_not_delivered("s"))
+
+
+def append_missing_route_status(conditions: list[str]) -> None:
+    conditions.append(sql_missing_route_status("s"))
 
 
 def append_has_ata(conditions: list[str]) -> None:

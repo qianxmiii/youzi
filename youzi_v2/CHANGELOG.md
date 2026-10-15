@@ -2,19 +2,52 @@
 
 按日期倒序记录 youzi_v2 的代码与文档变更。
 
+## 2026-10-13
+
+### 新增
+
+- **轨迹抽屉 · 明细状态**：运单号右侧徽章展示明细状态；点击按 `waybillId` 轻量更新并刷新（修复未包 `NDrawerContent` 导致标题不显示）
+- **运单管理 · 状态列**：点击状态徽章可对该单刷新明细状态（需已有 `waybillId`）
+
+### 修改
+
+- **异常跟踪**：签收判断改为明细状态 `TRACK_SIGNED`（不再用粗状态 `DELIVERED` / `delivered_time`）；到港未送仓另认 `LAST_MILE_HANDOVER` 为已送仓；明细状态同步到签收后立即关闭预警
+- **异常跟踪 · 阶段卡点**：起算改用明细状态节点时间——入库未开船=`202`、到港未送仓=`306`、新增到仓未派送=`502`（超 5 天未交仓/签收）；同步回写 `route_warehouse_in_time` / `route_arrived_pod_time` / `route_dest_transit_warehouse_time`
+
+## 2026-10-12
+
+### 修改
+
+- **快递派查价**：按最新价卡核对四渠道——美森正班（限时达非定提）、美森加班（特快达）、合德以星（快速达非定提，深圳/义乌五档已更新）、普船（经济达，两地同价维持）
+- **快递派查价 · 更新时间**：`expressPricing.updatedAt` 记录价目日期，并在查价 Tab 顶部显示「价格更新：YYYY-MM-DD」（改价时同步改该字段）
+- **运单管理 · 复制**：「转单号」改为原「运单明细」格式（`运单号 = 货件号 = 仓库 = Nctns` + 可选第二行 `-- 承运商 转单号`）；「运单明细 / 运单明细（关联单号）」不再附带转单号行
+- **工作台首页 · 明细状态**：移到页头下方最上方；改为色条指标格（上标签下数字），去掉嵌套徽章
+
+## 2026-10-10
+
+### 新增
+
+- **明细状态同步**：按 `waybillId` 调用 `config.dps_route_status_query` 轻量回写 `route_status`；运单管理「更新选中/全部明细状态」；计划任务「更新全部明细状态」（`POST .../sync-route-status-from-dps`、`.../run-dps-route-status-sync`）；接口 URL 仅存 config.json
+
+### 修改
+
+- **文案**：原「细状态」统一为「明细状态」（筛选、码表、按钮与文档）
+- **工作台首页**：增加未签收「明细状态」漏斗，点击节点跳转运单管理（`routeStatus` / `missingRouteStatus` + `notDelivered`）
+- **运单文件重命名**：Excel 无仓库代码时用邮编拼文件名；表头可仅有邮编列；递归扫描所选文件夹下全部子目录
+
 ## 2026-10-07
 
 ### 新增
 
-- **运单轨迹细状态 `route_status`**：映射 DPS `commerceWaybillRouteInfo.status`（码表 `shipment_route_status_codes`）；列表可筛选/展示；同步时允许覆盖回退
+- **运单轨迹明细状态 `route_status`**：映射 DPS `commerceWaybillRouteInfo.status`（码表 `shipment_route_status_codes`）；列表可筛选/展示；同步时允许覆盖回退
 - **设计说明**：`docs/design/shipment-route-status-design.md`
 
 ### 修改
 
-- **DPS 粗状态**：仅 `signingTime`→`DELIVERED`；不再因 601 / `markVos` / nodeDesc「signed」判签收（601→细状态 `TRACK_SIGNED`；510→`LAST_MILE_HANDOVER`）
-- **运单列表状态列**：优先显示细状态中文名，无细状态时回退粗状态（鼠标悬停可见粗状态）；各细状态用不同色标区分
+- **DPS 粗状态**：仅 `signingTime`→`DELIVERED`；不再因 601 / `markVos` / nodeDesc「signed」判签收（601→明细状态 `TRACK_SIGNED`；510→`LAST_MILE_HANDOVER`）
+- **运单列表状态列**：优先显示明细状态中文名，无明细状态时回退粗状态（鼠标悬停可见粗状态）；各明细状态用不同色标区分
 - **信息传递（DPS 100）**：非关键节点——不同步写入 `route_status`、筛选隐藏、列表回退粗状态
-- **清关异常联动**：DPS 细状态 206/402 自动标记「出口海关异常 / 进口清关异常」；最新关键节点离开这两类后自动解除（不覆盖掉件等人工异常）
+- **清关异常联动**：DPS 明细状态 206/402 自动标记「出口海关异常 / 进口清关异常」；最新关键节点离开这两类后自动解除（不覆盖掉件等人工异常）
 
 ## 2026-09-28
 

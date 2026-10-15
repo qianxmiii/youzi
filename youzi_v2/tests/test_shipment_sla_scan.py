@@ -10,7 +10,11 @@ from unittest.mock import patch
 from youzi_v2.db.channel_sla_rules_repository import ChannelSlaRulesRepository
 from youzi_v2.db.connection import Database
 from youzi_v2.db.datetime_util import now_str
-from youzi_v2.db.shipment_sla import ALERT_WAREHOUSE_NO_DEPARTURE, SLA_EXCLUDED_CHANNEL_CODES
+from youzi_v2.db.shipment_sla import (
+    ALERT_DEST_WAREHOUSE_NO_DISPATCH,
+    ALERT_WAREHOUSE_NO_DEPARTURE,
+    SLA_EXCLUDED_CHANNEL_CODES,
+)
 from youzi_v2.db.shipment_sla_alerts_repository import ShipmentSlaAlertsRepository
 from youzi_v2.db.shipment_sla_alerts_table import ensure_schema as ensure_alerts_schema
 from youzi_v2.db.shipment_exception_followup_repository import (
@@ -26,6 +30,9 @@ def _insert_shipment(
     ship_id: str,
     shipment_no: str,
     warehouse_entry_time: str = "",
+    route_warehouse_in_time: str = "",
+    route_arrived_pod_time: str = "",
+    route_dest_transit_warehouse_time: str = "",
     etd: str = "",
     atd: str = "",
     ata: str = "",
@@ -36,15 +43,21 @@ def _insert_shipment(
         db.conn.execute(
             f"""
             INSERT INTO {SHIPMENTS_TABLE} (
-                id, shipment_no, channel_code, warehouse_entry_time, etd, atd, ata,
+                id, shipment_no, channel_code, warehouse_entry_time,
+                route_warehouse_in_time, route_arrived_pod_time,
+                route_dest_transit_warehouse_time,
+                etd, atd, ata,
                 created_time, updated_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 ship_id,
                 shipment_no,
                 channel_code,
                 warehouse_entry_time,
+                route_warehouse_in_time,
+                route_arrived_pod_time,
+                route_dest_transit_warehouse_time,
                 etd,
                 atd,
                 ata,
@@ -64,7 +77,7 @@ def test_scan_creates_warehouse_no_departure_alert(tmp_path: Path) -> None:
         db,
         ship_id=ship_id,
         shipment_no="SN-WH-1",
-        warehouse_entry_time="2026-06-01",
+        route_warehouse_in_time="2026-06-01",
     )
 
     alerts_repo = ShipmentSlaAlertsRepository(db)
@@ -100,7 +113,7 @@ def test_scan_closes_warehouse_alert_when_atd_filled(tmp_path: Path) -> None:
         db,
         ship_id=ship_id,
         shipment_no="SN-WH-2",
-        warehouse_entry_time="2026-06-01",
+        route_warehouse_in_time="2026-06-01",
         atd="2026-06-15",
     )
     with db.lock:
@@ -208,5 +221,35 @@ def test_scan_skips_excluded_fc_channel(tmp_path: Path) -> None:
         (alert_id,),
     ).fetchone()
     assert row["status"] == "resolved"
+
+
+def test_scan_creates_dest_warehouse_no_dispatch_alert(tmp_path: Path) -> None:
+    db = Database(tmp_path / "sla_scan_dest.db")
+    ensure_shipments_schema(db.conn)
+    ensure_alerts_schema(db.conn)
+    ship_id = str(uuid.uuid4())
+    _insert_shipment(
+        db,
+        ship_id=ship_id,
+        shipment_no="SN-DW-1",
+        route_dest_transit_warehouse_time="2026-06-01",
+    )
+
+    alerts_repo = ShipmentSlaAlertsRepository(db)
+    rules_repo = ChannelSlaRulesRepository(db)
+    followup_repo = ShipmentExceptionFollowupRepository(db)
+
+    with patch("youzi_v2.services.shipment_sla_scan.date") as mock_date:
+        mock_date.today.return_value = date(2026, 6, 7)
+        result = scan_shipment_sla_alerts(
+            alerts_repo,
+            rules_repo,
+            followup_repo,
+            force=True,
+            trigger="manual",
+        )
+
+    assert result["created"] == 1
     rows = alerts_repo.list_alerts(scope="todo", limit=10)
-    assert rows["total"] == 0
+    assert rows["total"] == 1
+    assert rows["items"][0]["alertType"] == ALERT_DEST_WAREHOUSE_NO_DISPATCH

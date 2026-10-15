@@ -6,8 +6,9 @@ import threading
 from pathlib import Path
 from typing import Any, Callable
 
-from ..db.shipments_repository import ShipmentsRepository
 from ..db.code_tables_repository import CodeTablesRepository
+from ..db.shipment_sla import SLA_DELIVERED_ROUTE_STATUS
+from ..db.shipments_repository import ShipmentsRepository
 from .shipment_dps_mapper import dps_row_to_shipment
 from .shipment_dps_sync_fields import filter_dps_payload, get_dps_sync_fields_config
 from .shipment_dps_sync_schedule import should_run_scheduled_dps_sync
@@ -15,7 +16,6 @@ from .shipment_dps_sync_settings import (
     get_shipment_dps_sync_settings,
     record_shipment_dps_sync_finished,
 )
-from .shipment_route_status_exception import apply_customs_exception_from_route_status
 from .shipment_query_config import (
     normalize_shipment_nos,
     query_shipments_by_order,
@@ -23,6 +23,8 @@ from .shipment_query_config import (
     resolve_transit_time_range,
     shipment_odd,
 )
+from .shipment_route_status_exception import apply_customs_exception_from_route_status
+from .shipment_sla_scan import maybe_resolve_alerts_after_delivery
 
 LogFn = Callable[[str], None]
 
@@ -126,7 +128,7 @@ def _upsert_dps_rows(
             else:
                 updated += 1
 
-            # 本次写入了 route_status 用新值；否则用库中当前细状态（如 DPS 100 被跳过）
+            # 本次写入了 route_status 用新值；否则用库中当前明细状态（如 DPS 100 被跳过）
             if "route_status" in filtered:
                 route_for_exc = filtered.get("route_status")
             else:
@@ -140,6 +142,16 @@ def _upsert_dps_rows(
                 customs_opened += 1
             elif exc_result.get("action") == "closed":
                 customs_closed += 1
+            if (
+                isinstance(route_for_exc, str)
+                and route_for_exc.strip().upper() == SLA_DELIVERED_ROUTE_STATUS
+            ):
+                maybe_resolve_alerts_after_delivery(
+                    database,
+                    result_row["id"],
+                    shipment_no=shipment_no,
+                    log=log,
+                )
         except Exception as exc:
             failed += 1
             sn = payload.get("shipment_no") or "?"

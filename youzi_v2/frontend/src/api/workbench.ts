@@ -51,6 +51,24 @@ export interface WorkbenchArrivalsModule {
   items: WorkbenchArrivalItem[]
 }
 
+export interface WorkbenchRouteStatusItem {
+  code: string
+  nameZh: string
+  count: number
+  isException: boolean
+  href: string
+}
+
+export interface WorkbenchRouteStatusModule {
+  available: boolean
+  error?: string | null
+  unsignedTotal: number
+  missingCount: number
+  missingHref: string
+  viewAllHref: string
+  items: WorkbenchRouteStatusItem[]
+}
+
 export interface WorkbenchTransportOverview {
   available: boolean
   error?: string | null
@@ -66,6 +84,7 @@ export interface WorkbenchOverview {
   todos: WorkbenchTodosModule
   arrivals: WorkbenchArrivalsModule
   overview: WorkbenchTransportOverview
+  routeStatus: WorkbenchRouteStatusModule
 }
 
 export type WorkbenchOverviewParams = {

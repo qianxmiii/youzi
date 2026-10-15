@@ -1,7 +1,7 @@
 /** 非关键节点：不同步写入、列表状态列不展示（回退粗状态） */
 export const NON_MILESTONE_ROUTE_STATUS = new Set(['INFO'])
 
-/** 运单列表状态徽章：细状态色调（与 CSS `shipment-status-badge--*` 对应） */
+/** 运单列表状态徽章：明细状态色调（与 CSS `shipment-status-badge--*` 对应） */
 export const ROUTE_STATUS_BADGE_TONE: Record<string, string> = {
   WAREHOUSE_IN: 'sky',
   EXPORT_CUSTOMS_RELEASE: 'teal',
@@ -12,6 +12,29 @@ export const ROUTE_STATUS_BADGE_TONE: Record<string, string> = {
   DEST_TRANSIT_WAREHOUSE: 'cyan',
   LAST_MILE_HANDOVER: 'orange',
   TRACK_SIGNED: 'success',
+}
+
+/** 默认中文名（与码表种子一致；后台改名时可由调用方传入覆盖） */
+export const ROUTE_STATUS_LABEL_ZH: Record<string, string> = {
+  INFO: '信息传递',
+  WAREHOUSE_IN: '入库',
+  EXPORT_CUSTOMS_RELEASE: '出口海关放行',
+  EXPORT_CUSTOMS_EXCEPTION: '出口海关异常',
+  DEPARTED_POL: '离开起运港',
+  ARRIVED_POD: '到达目的港',
+  IMPORT_CUSTOMS_EXCEPTION: '进口清关异常',
+  DEST_TRANSIT_WAREHOUSE: '到达目的国中转仓库',
+  LAST_MILE_HANDOVER: '快递派-已交仓',
+  TRACK_SIGNED: '轨迹签收',
+}
+
+export function routeStatusLabelZh(
+  code: string | null | undefined,
+  override?: Record<string, string> | null,
+): string {
+  const key = (code || '').trim().toUpperCase()
+  if (!key) return ''
+  return override?.[key] || ROUTE_STATUS_LABEL_ZH[key] || key
 }
 
 export function isDisplayableRouteStatus(code: string | null | undefined): boolean {

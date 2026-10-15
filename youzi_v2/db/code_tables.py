@@ -202,7 +202,7 @@ def _seed_exception_codes(conn: sqlite3.Connection) -> None:
 
 
 def _sync_route_status_codes(conn: sqlite3.Connection) -> None:
-    """幂等写入 DPS 轨迹细状态映射；非关键节点（如信息传递）is_active=0。"""
+    """幂等写入 DPS 轨迹明细状态映射；非关键节点（如信息传递）is_active=0。"""
     table = "shipment_route_status_codes"
     now = now_str()
     for code, dps, zh, en, order, is_milestone in ROUTE_STATUS_SEEDS:

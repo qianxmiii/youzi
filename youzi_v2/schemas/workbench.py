@@ -62,6 +62,28 @@ class WorkbenchArrivalsModule(BaseModel):
     items: list[WorkbenchArrivalItem] = Field(default_factory=list)
 
 
+class WorkbenchRouteStatusItem(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: str
+    name_zh: str = Field("", alias="nameZh")
+    count: int = 0
+    is_exception: bool = Field(False, alias="isException")
+    href: str = ""
+
+
+class WorkbenchRouteStatusModule(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    available: bool = True
+    error: str | None = None
+    unsigned_total: int = Field(0, alias="unsignedTotal")
+    missing_count: int = Field(0, alias="missingCount")
+    missing_href: str = Field("", alias="missingHref")
+    view_all_href: str = Field("", alias="viewAllHref")
+    items: list[WorkbenchRouteStatusItem] = Field(default_factory=list)
+
+
 class WorkbenchTransportOverview(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -81,3 +103,7 @@ class WorkbenchOverviewResponse(BaseModel):
     todos: WorkbenchTodosModule
     arrivals: WorkbenchArrivalsModule
     overview: WorkbenchTransportOverview
+    route_status: WorkbenchRouteStatusModule = Field(
+        default_factory=WorkbenchRouteStatusModule,
+        alias="routeStatus",
+    )

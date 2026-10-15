@@ -1,4 +1,4 @@
-"""按 DPS 关键细状态自动开/关清关类异常。"""
+"""按 DPS 关键明细状态自动开/关清关类异常。"""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from ..db.shipment_route_status import (
 )
 from ..db.shipments_repository import ShipmentsRepository
 
-_AUTO_NOTE_OPEN = "DPS 细状态自动标记"
+_AUTO_NOTE_OPEN = "DPS 明细状态自动标记"
 _AUTO_NOTE_CLOSE = "DPS 关键节点已离开清关异常"
 
 
@@ -25,7 +25,7 @@ def apply_customs_exception_from_route_status(
     """
     - 最新关键节点为 206/402 → 开启对应清关异常（不覆盖掉件/暂扣等非清关异常）
     - 最新关键节点为其他关键节点 → 仅当当前异常为清关类时自动解除
-    - 无细状态 / 非关键节点 → 不动
+    - 无明细状态 / 非关键节点 → 不动
     """
     sn = (shipment_no or "").strip()
     rs = (route_status or "").strip().upper()

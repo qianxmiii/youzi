@@ -1,4 +1,5 @@
 import { api } from '@/api/client'
+import type { ShipmentDpsRouteStatusSyncResult } from '@/api/shipments'
 import type {
   GroupAutoArchiveRunResult,
   ScheduledSyncRunResult,
@@ -81,4 +82,15 @@ export async function runDpsShipmentSync(
     method: 'POST',
     body: JSON.stringify(body ?? {}),
   })
+}
+
+/** 批处理：更新全部明细状态 */
+export async function runDpsRouteStatusSync(): Promise<ShipmentDpsRouteStatusSyncResult> {
+  return api<ShipmentDpsRouteStatusSyncResult>(
+    '/api/v1/scheduled-tasks/run-dps-route-status-sync',
+    {
+      method: 'POST',
+      timeout: 600_000,
+    },
+  )
 }

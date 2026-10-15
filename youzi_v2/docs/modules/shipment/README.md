@@ -27,8 +27,8 @@ Shipment — 运单管理域
 
 | 路径 | 作用 |
 |------|------|
-| `views/shipments/ShipmentsView.vue` | 主列表页 |
-| `components/shipments/*` | 表单、轨迹抽屉、异常 UI |
+| `views/shipments/ShipmentsView.vue` | 主列表页（状态列徽章可点击刷新明细状态） |
+| `components/shipments/*` | 表单、轨迹抽屉（含可点击更新的明细状态）、异常 UI |
 | `api/shipments.ts` | API 客户端 |
 
 ## 数据结构

@@ -35,8 +35,9 @@ def test_resolve_orphan_and_dedupe_on_scan(tmp_path: Path) -> None:
             f"""
             INSERT INTO {SHIPMENTS_TABLE} (
                 id, shipment_no, channel_code, warehouse_entry_time,
+                route_warehouse_in_time,
                 created_time, updated_time
-            ) VALUES (?, 'SN-LIVE', 'CH1', '2026-06-01', ?, ?)
+            ) VALUES (?, 'SN-LIVE', 'CH1', '2026-06-01', '2026-06-01', ?, ?)
             """,
             (live_id, now, now),
         )

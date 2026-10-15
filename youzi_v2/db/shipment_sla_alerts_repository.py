@@ -27,6 +27,8 @@ from .shipment_sla import (
     sla_excluded_channels_in_sql,
     sla_excluded_channels_params,
     sla_excluded_channels_sql,
+    sql_sla_delivered,
+    sql_sla_not_delivered,
 )
 from .exception_duration import duration_seconds, format_duration
 from .shipment_sla_alerts_table import TABLE_NAME
@@ -42,6 +44,7 @@ ALERT_TYPE_LABELS: dict[str, str] = {
     "DELIVERY_TIME": "运输时效",
     "WAREHOUSE_NO_DEPARTURE": "入库未开船",
     "ARRIVAL_NO_DELIVERY": "到港未送仓",
+    "DEST_WAREHOUSE_NO_DISPATCH": "到仓未派送",
 }
 
 _RISK_RANK = {
@@ -323,11 +326,17 @@ def _alert_to_api(
     delivered_time = ""
     if "delivered_time" in row.keys():
         delivered_time = (row["delivered_time"] or "").strip()
-    status_code = (row["status_code"] or "").strip() if "status_code" in row.keys() else ""
-    if is_delivered({"delivered_time": delivered_time, "status_code": status_code}):
+    route_status = ""
+    if "route_status" in row.keys():
+        route_status = (row["route_status"] or "").strip()
+    latest_tracking_time = ""
+    if "latest_tracking_time" in row.keys():
+        latest_tracking_time = (row["latest_tracking_time"] or "").strip()
+    if is_delivered({"route_status": route_status}):
+        end_time = delivered_time or latest_tracking_time or None
         out["daysInTransit"] = compute_days_in_transit(
             transit_start,
-            delivered_time=delivered_time or None,
+            delivered_time=end_time,
         )
     else:
         out["daysInTransit"] = compute_days_in_transit(transit_start, today=today)
@@ -420,11 +429,12 @@ class ShipmentSlaAlertsRepository:
                 f"""
                 SELECT id, shipment_no, channel_code, carrier_code, customer,
                        destination_port_code, atd, etd, ata, warehouse_entry_time,
-                       expected_delivery_time, delivered_time,
+                       expected_delivery_time, delivered_time, route_status,
+                       route_warehouse_in_time, route_arrived_pod_time,
+                       route_dest_transit_warehouse_time,
                        status_code, exception_code, latest_tracking_desc, latest_tracking_time
                 FROM {SHIPMENTS_TABLE}
-                WHERE (delivered_time IS NULL OR TRIM(delivered_time) = '')
-                  AND UPPER(COALESCE(status_code, '')) != 'DELIVERED'
+                WHERE {sql_sla_not_delivered("route_status")}
                   AND {sla_excluded_channels_sql("channel_code")}
                 ORDER BY shipment_no
                 """,
@@ -741,8 +751,7 @@ class ShipmentSlaAlertsRepository:
                 WHERE status IN ({status_placeholders})
                   AND shipment_id IN (
                     SELECT id FROM {SHIPMENTS_TABLE}
-                    WHERE (delivered_time IS NOT NULL AND TRIM(delivered_time) != '')
-                       OR UPPER(COALESCE(status_code, '')) = 'DELIVERED'
+                    WHERE {sql_sla_delivered("route_status")}
                   )
                 """,
                 (STATUS_RESOLVED, now, now, *RESOLVE_ON_DELIVERY_STATUSES),
@@ -796,10 +805,7 @@ class ShipmentSlaAlertsRepository:
         if (scope or "todo").strip().lower() != "all":
             conditions.append("a.status IN (?, ?)")
             params.extend([STATUS_OPEN, STATUS_ACKNOWLEDGED])
-            conditions.append(
-                "(s.delivered_time IS NULL OR TRIM(s.delivered_time) = '') "
-                "AND UPPER(COALESCE(s.status_code, '')) != 'DELIVERED'"
-            )
+            conditions.append(sql_sla_not_delivered("s.route_status"))
         if risk_level:
             conditions.append("a.risk_level = ?")
             params.append(risk_level.strip())
@@ -836,7 +842,8 @@ class ShipmentSlaAlertsRepository:
                 f"""
                 SELECT a.*, s.customer, s.destination_port_code, s.atd, s.ata, s.warehouse_entry_time,
                        s.expected_delivery_time,
-                       s.delivered_time, s.status_code, s.exception_code, s.exception_opened_time,
+                       s.delivered_time, s.route_status, s.status_code, s.exception_code,
+                       s.exception_opened_time,
                        s.latest_tracking_desc,
                        s.latest_tracking_time, s.carrier_code AS ship_carrier_code,
                        cc.name_zh AS channel_name_zh,
@@ -906,6 +913,7 @@ class ShipmentSlaAlertsRepository:
                 FROM {TABLE_NAME} a
                 INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
                 WHERE a.status IN (?, ?)
+                  AND {sql_sla_not_delivered("s.route_status")}
                   AND {sla_excluded_channels_sql("s.channel_code")}
                 """,
                 (STATUS_OPEN, STATUS_ACKNOWLEDGED, *excl),
@@ -1131,7 +1139,8 @@ class ShipmentSlaAlertsRepository:
                 f"""
                 SELECT a.*, s.customer, s.destination_port_code, s.atd, s.ata, s.warehouse_entry_time,
                        s.expected_delivery_time,
-                       s.delivered_time, s.status_code, s.exception_code, s.exception_opened_time,
+                       s.delivered_time, s.route_status, s.status_code, s.exception_code,
+                       s.exception_opened_time,
                        s.latest_tracking_desc,
                        s.latest_tracking_time, s.carrier_code AS ship_carrier_code,
                        cc.name_zh AS channel_name_zh,

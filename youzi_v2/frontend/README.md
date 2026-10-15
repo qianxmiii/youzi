@@ -20,7 +20,7 @@ Youzi v2 前端 — Vue 3 SPA
 | `src/api/` | API 客户端封装 |
 | `src/views/` | 页面级组件 |
 | `src/components/` | 可复用组件 |
-| `src/components/home/Workbench*.vue` | 工作台首页模块（Header / Focus / Todo / Arrival / TransportOverview） |
+| `src/components/home/Workbench*.vue` | 工作台首页模块（Header / Focus / Todo / Arrival / RouteStatusFunnel / TransportOverview） |
 | `src/api/workbench.ts` | 工作台聚合 API |
 | `src/types/` | TypeScript 类型 |
 | `src/domain/costCalculation/` | 成本计算纯函数（DDU/DDP、货物识别） |
@@ -30,7 +30,7 @@ Youzi v2 前端 — Vue 3 SPA
 
 | 路径 | 页面 | 状态 |
 |------|------|------|
-| `/` | 工作台（今日重点 / 待办 / 近期到港 / 运输概览） | ✅ |
+| `/` | 工作台（明细状态 / 今日重点 / 待办 / 近期到港 / 运输概览） | ✅ |
 | `/shipments` | 运单管理 | ✅ |
 | `/vessel-schedules` | 船期监控 | ✅ |
 | `/addresses` | 地址簿 | ✅ |

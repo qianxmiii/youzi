@@ -62,6 +62,7 @@ export interface ShipmentFilterQueryInput {
   missingAta: boolean
   missingExpectedDelivery: boolean
   missingDelivered: boolean
+  missingRouteStatus: boolean
   notDelivered: boolean
   hasAta: boolean
   deliveryRisk: string | null
@@ -173,6 +174,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
     missingAta: input.missingAta || undefined,
     missingExpectedDelivery: input.missingExpectedDelivery || undefined,
     missingDelivered: input.missingDelivered || undefined,
+    missingRouteStatus: input.missingRouteStatus || undefined,
     notDelivered: input.notDelivered || undefined,
     hasAta: input.hasAta || undefined,
     deliveryRisk: input.deliveryRisk || undefined,
@@ -229,8 +231,11 @@ export function buildShipmentFilterSummaryTags(
   if (input.filterRouteStatus) {
     tags.push({
       key: 'filterRouteStatus',
-      label: `细状态 = ${ctx.routeStatusLabel(input.filterRouteStatus)}`,
+      label: `明细状态 = ${ctx.routeStatusLabel(input.filterRouteStatus)}`,
     })
+  }
+  if (input.missingRouteStatus) {
+    tags.push({ key: 'missingRouteStatus', label: '无明细状态' })
   }
   if (input.filterCustomer) tags.push({ key: 'filterCustomer', label: `客户 = ${input.filterCustomer}` })
   if (input.filterChannelCode) {

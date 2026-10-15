@@ -1,12 +1,18 @@
 <script setup lang="ts">
-import { ExternalLink } from 'lucide-vue-next'
+import { ExternalLink, RefreshCw } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
-import { NDrawer } from 'naive-ui'
-import { computed } from 'vue'
+import { NDrawer, NDrawerContent, useMessage } from 'naive-ui'
+import { computed, ref } from 'vue'
+import { getShipment, syncShipmentsRouteStatusFromDps } from '@/api/shipments'
 import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
 import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
 import ShipmentTrackingTimeReview from '@/components/shipments/ShipmentTrackingTimeReview.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
+import {
+  isDisplayableRouteStatus,
+  routeStatusBadgeClass,
+  routeStatusLabelZh,
+} from '@/constants/shipmentRouteStatus'
 import type { Shipment } from '@/types/shipment'
 import { resolveLastMileTracking } from '@/utils/lastMileTracking'
 
@@ -15,12 +21,17 @@ const props = defineProps<{
   shipment: Shipment | null
   initialTab?: 'internal' | 'carrier'
   exceptionLabelByCode?: Record<string, string>
+  /** 码表中文名覆盖（如运单列表筛选项） */
+  routeStatusLabelByCode?: Record<string, string>
 }>()
 
 const emit = defineEmits<{
   'update:show': [value: boolean]
   'shipment-updated': [shipment: Shipment]
 }>()
+
+const message = useMessage()
+const syncingRouteStatus = ref(false)
 
 const showModel = computed({
   get: () => props.show,
@@ -71,10 +82,50 @@ const carrierText = computed(() => {
 
 const statusCode = computed(() => props.shipment?.statusCode?.trim().toUpperCase() || '')
 
+const routeStatusCode = computed(() => {
+  const code = props.shipment?.routeStatus?.trim().toUpperCase() || ''
+  return isDisplayableRouteStatus(code) ? code : ''
+})
+
+const routeStatusText = computed(() => {
+  if (!routeStatusCode.value) return '无明细状态'
+  return routeStatusLabelZh(routeStatusCode.value, props.routeStatusLabelByCode)
+})
+
 function openTrackUrl() {
   const url = transferNumber.value?.url
   if (!url) return
   window.open(url, '_blank', 'noopener,noreferrer')
+}
+
+async function syncRouteStatus() {
+  const s = props.shipment
+  if (!s?.shipmentNo || syncingRouteStatus.value) return
+  if (!s.waybillId?.trim()) {
+    message.warning('无 DPS 运单 ID，请先在运单管理「更新选中运单」补全')
+    return
+  }
+  syncingRouteStatus.value = true
+  try {
+    const res = await syncShipmentsRouteStatusFromDps([s.shipmentNo])
+    const next = await getShipment(s.id)
+    emit('shipment-updated', next)
+    if (res.failed) {
+      message.warning(res.errors?.[0] || '明细状态更新失败')
+    } else if (res.missingWaybillId) {
+      message.warning('无 DPS 运单 ID，请先更新运单')
+    } else if (res.empty) {
+      message.info('接口无轨迹节点')
+    } else if (res.updated) {
+      message.success(`明细状态已更新：${routeStatusLabelZh(next.routeStatus, props.routeStatusLabelByCode) || '—'}`)
+    } else {
+      message.success('明细状态无变化')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '明细状态更新失败')
+  } finally {
+    syncingRouteStatus.value = false
+  }
 }
 </script>
 
@@ -86,129 +137,154 @@ function openTrackUrl() {
     :auto-focus="false"
     class="shipment-tracking-drawer"
   >
-    <template #header>
-      <div v-if="shipment" class="drawer-header min-w-0 pr-8">
-        <div class="header-title-row">
-          <h2 class="shipment-no">
-            {{ shipment.shipmentNo }}
-          </h2>
-          <VipStarBadge v-if="shipment.isVip" size="md" />
+    <NDrawerContent closable :native-scrollbar="false" class="shipment-tracking-drawer-content">
+      <template #header>
+        <div v-if="shipment" class="drawer-header min-w-0">
+          <div class="header-title-row">
+            <h2 class="shipment-no">
+              {{ shipment.shipmentNo }}
+            </h2>
+            <button
+              type="button"
+              class="route-status-btn"
+              :class="[
+                routeStatusCode
+                  ? ['shipment-status-badge', routeStatusBadgeClass(routeStatusCode)]
+                  : 'route-status-btn--empty',
+                { 'route-status-btn--loading': syncingRouteStatus },
+              ]"
+              :disabled="syncingRouteStatus"
+              :title="
+                shipment.waybillId?.trim()
+                  ? '点击更新明细状态'
+                  : '无 DPS 运单 ID，需先更新运单'
+              "
+              :aria-label="`明细状态 ${routeStatusText}，点击更新`"
+              @click="syncRouteStatus"
+            >
+              <RefreshCw
+                v-if="syncingRouteStatus"
+                class="route-status-btn__icon route-status-btn__icon--spin"
+                :stroke-width="ICON_STROKE"
+                aria-hidden="true"
+              />
+              {{ routeStatusText }}
+            </button>
+            <VipStarBadge v-if="shipment.isVip" size="md" />
+          </div>
+
+          <div v-if="transferNumber" class="transfer-row">
+            <span class="transfer-label">转单号:</span>
+            <button
+              v-if="transferNumber.url"
+              type="button"
+              class="tracking-link tracking-link--clickable inline-flex items-center gap-1"
+              @click="openTrackUrl"
+            >
+              {{ transferNumber.number }}
+              <ExternalLink class="link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
+            </button>
+            <span v-else class="transfer-value">{{ transferNumber.number }}</span>
+          </div>
+
+          <div v-if="statusCode" class="status-row">
+            <span
+              class="status-badge"
+              :class="statusBadgeClass[statusCode] || 'status-badge--unknown'"
+            >
+              {{ statusLabel[statusCode] || shipment.statusCode }}
+            </span>
+          </div>
         </div>
+      </template>
 
-        <div v-if="transferNumber" class="transfer-row">
-          <span class="transfer-label">转单号:</span>
-          <button
-            v-if="transferNumber.url"
-            type="button"
-            class="tracking-link tracking-link--clickable inline-flex items-center gap-1"
-            @click="openTrackUrl"
-          >
-            {{ transferNumber.number }}
-            <ExternalLink class="link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
-          </button>
-          <span v-else class="transfer-value">{{ transferNumber.number }}</span>
-        </div>
-
-        <div v-if="statusCode" class="status-row">
-          <span
-            class="status-badge"
-            :class="statusBadgeClass[statusCode] || 'status-badge--unknown'"
-          >
-            {{ statusLabel[statusCode] || shipment.statusCode }}
-          </span>
-        </div>
-      </div>
-    </template>
-
-    <div v-if="shipment" class="drawer-body">
-      <section class="drawer-section meta-section">
-        <dl class="meta-list">
-          <div class="meta-item">
-            <dt class="section-label">Shipment No</dt>
-            <dd class="section-value drawer-yahei-bold">{{ shipment.shipmentNo || '—' }}</dd>
-          </div>
-          <div class="meta-item">
-            <dt class="section-label">Tracking Number</dt>
-            <dd class="section-value">
-              <button
-                v-if="transferNumber?.url"
-                type="button"
-                class="tracking-link tracking-link--clickable inline-flex items-center gap-1"
-                @click="openTrackUrl"
-              >
-                {{ transferNumber.number }}
-                <ExternalLink class="link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
-              </button>
-              <span v-else-if="transferNumber" class="meta-mono">{{ transferNumber.number }}</span>
-              <span v-else class="meta-empty">—</span>
-            </dd>
-          </div>
-          <div class="meta-item meta-item--split">
-            <div class="meta-split-cell">
-              <dt class="section-label">Package Count</dt>
-              <dd class="section-value">{{ packageCountText }}</dd>
+      <div v-if="shipment" class="drawer-body">
+        <section class="drawer-section meta-section">
+          <dl class="meta-list">
+            <div class="meta-item">
+              <dt class="section-label">Tracking Number</dt>
+              <dd class="section-value">
+                <button
+                  v-if="transferNumber?.url"
+                  type="button"
+                  class="tracking-link tracking-link--clickable inline-flex items-center gap-1"
+                  @click="openTrackUrl"
+                >
+                  {{ transferNumber.number }}
+                  <ExternalLink class="link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
+                </button>
+                <span v-else-if="transferNumber" class="meta-mono">{{ transferNumber.number }}</span>
+                <span v-else class="meta-empty">—</span>
+              </dd>
             </div>
-            <div class="meta-split-cell">
-              <dt class="section-label">承运商</dt>
-              <dd class="section-value meta-carrier">{{ carrierText }}</dd>
+            <div class="meta-item meta-item--split">
+              <div class="meta-split-cell">
+                <dt class="section-label">Package Count</dt>
+                <dd class="section-value">{{ packageCountText }}</dd>
+              </div>
+              <div class="meta-split-cell">
+                <dt class="section-label">承运商</dt>
+                <dd class="section-value meta-carrier">{{ carrierText }}</dd>
+              </div>
             </div>
-          </div>
-          <div class="meta-item meta-item--split">
-            <div class="meta-split-cell">
-              <dt class="section-label">派送仓库</dt>
-              <dd class="section-value">{{ shipment.addressCode?.trim() || '—' }}</dd>
+            <div class="meta-item meta-item--split">
+              <div class="meta-split-cell">
+                <dt class="section-label">派送仓库</dt>
+                <dd class="section-value">{{ shipment.addressCode?.trim() || '—' }}</dd>
+              </div>
+              <div class="meta-split-cell">
+                <dt class="section-label">邮编</dt>
+                <dd class="section-value drawer-yahei-bold">{{ shipment.zipcode?.trim() || '—' }}</dd>
+              </div>
             </div>
-            <div class="meta-split-cell">
-              <dt class="section-label">邮编</dt>
-              <dd class="section-value drawer-yahei-bold">{{ shipment.zipcode?.trim() || '—' }}</dd>
-            </div>
-          </div>
-        </dl>
-      </section>
+          </dl>
+        </section>
 
-      <ShipmentExceptionHistory
-        :shipment-id="shipment.id"
-        :shipment="shipment"
-        :label-by-code="exceptionLabelByCode"
-        mode="drawer"
-      />
-
-      <section class="drawer-section timeline-section">
-        <ShipmentTrackingTimeReview
-          :key="shipment.id + '-' + shipment.updatedTime"
-          :shipment="shipment"
-          @updated="(row) => emit('shipment-updated', row)"
-        />
-        <ShipmentTrackingPanel
-          :key="shipment.id + '-' + (initialTab || 'internal')"
+        <ShipmentExceptionHistory
           :shipment-id="shipment.id"
           :shipment="shipment"
+          :label-by-code="exceptionLabelByCode"
           mode="drawer"
-          :initial-tab="initialTab || 'internal'"
-          @shipment-updated="(row) => emit('shipment-updated', row)"
         />
-      </section>
-    </div>
+
+        <section class="drawer-section timeline-section">
+          <ShipmentTrackingTimeReview
+            :key="shipment.id + '-' + shipment.updatedTime"
+            :shipment="shipment"
+            @updated="(row) => emit('shipment-updated', row)"
+          />
+          <ShipmentTrackingPanel
+            :key="shipment.id + '-' + (initialTab || 'internal')"
+            :shipment-id="shipment.id"
+            :shipment="shipment"
+            mode="drawer"
+            :initial-tab="initialTab || 'internal'"
+            @shipment-updated="(row) => emit('shipment-updated', row)"
+          />
+        </section>
+      </div>
+    </NDrawerContent>
   </NDrawer>
 </template>
 
 <style scoped>
+.shipment-tracking-drawer :deep(.n-drawer-content) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
 .shipment-tracking-drawer :deep(.n-drawer-header) {
   padding: 1.25rem 1.25rem 1rem;
   border-bottom: 1px solid var(--color-border);
 }
 
-.shipment-tracking-drawer :deep(.n-drawer-body-content-wrapper) {
+.shipment-tracking-drawer :deep(.n-drawer-body-content-wrapper),
+.shipment-tracking-drawer :deep(.n-drawer-body) {
   padding: 0;
-  display: flex;
-  flex-direction: column;
+  flex: 1;
   min-height: 0;
   overflow: hidden;
-}
-
-.shipment-tracking-drawer :deep(.n-drawer-header__close) {
-  top: 1.25rem;
-  right: 1rem;
 }
 
 .drawer-header {
@@ -255,6 +331,125 @@ function openTrackUrl() {
   display: flex;
   align-items: center;
   padding-top: 0.125rem;
+}
+
+.route-status-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+  border: none;
+  cursor: pointer;
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+
+.route-status-btn:hover:not(:disabled) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.route-status-btn:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+.route-status-btn--empty {
+  border-radius: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--tag-slate-fg);
+  background: var(--tag-slate-bg);
+}
+
+.route-status-btn__icon {
+  height: 0.75rem;
+  width: 0.75rem;
+  flex-shrink: 0;
+}
+
+.route-status-btn__icon--spin {
+  animation: route-status-spin 0.8s linear infinite;
+}
+
+@keyframes route-status-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .route-status-btn {
+    transition: none;
+  }
+  .route-status-btn:hover:not(:disabled) {
+    transform: none;
+  }
+  .route-status-btn__icon--spin {
+    animation: none;
+  }
+}
+
+.shipment-status-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.2rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.shipment-status-badge--default {
+  color: var(--tag-default-fg);
+  background: var(--tag-default-bg);
+}
+.shipment-status-badge--warning {
+  color: var(--tag-warning-fg);
+  background: var(--tag-warning-bg);
+}
+.shipment-status-badge--success {
+  color: var(--tag-success-fg);
+  background: var(--tag-success-bg);
+}
+.shipment-status-badge--error {
+  color: var(--tag-error-fg);
+  background: var(--tag-error-bg);
+}
+.shipment-status-badge--slate {
+  color: var(--tag-slate-fg);
+  background: var(--tag-slate-bg);
+}
+.shipment-status-badge--sky {
+  color: var(--tag-sky-fg);
+  background: var(--tag-sky-bg);
+}
+.shipment-status-badge--teal {
+  color: var(--tag-teal-fg);
+  background: var(--tag-teal-bg);
+}
+.shipment-status-badge--indigo {
+  color: var(--tag-indigo-fg);
+  background: var(--tag-indigo-bg);
+}
+.shipment-status-badge--violet {
+  color: var(--tag-violet-fg);
+  background: var(--tag-violet-bg);
+}
+.shipment-status-badge--cyan {
+  color: var(--tag-cyan-fg);
+  background: var(--tag-cyan-bg);
+}
+.shipment-status-badge--orange {
+  color: var(--tag-orange-fg);
+  background: var(--tag-orange-bg);
+}
+.shipment-status-badge--rose {
+  color: var(--tag-rose-fg);
+  background: var(--tag-rose-bg);
 }
 
 .link-icon {

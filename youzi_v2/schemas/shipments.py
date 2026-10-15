@@ -328,6 +328,17 @@ class ShipmentDpsSyncByOrderRequest(BaseModel):
     )
 
 
+class ShipmentDpsRouteStatusSyncRequest(BaseModel):
+    """明细状态同步：shipmentNos 为空则同步全部有 waybillId 的运单。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    shipment_nos: list[str] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("shipmentNos", "shipment_nos"),
+    )
+
+
 class ShipmentDpsSyncByOrderResult(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -343,4 +354,24 @@ class ShipmentDpsSyncByOrderResult(BaseModel):
     not_found: int = Field(default=0, alias="notFound")
     not_found_nos: list[str] = Field(default_factory=list, alias="notFoundNos")
     pages: int = 0
+    errors: list[str] = Field(default_factory=list)
+
+
+class ShipmentDpsRouteStatusSyncResult(BaseModel):
+    """按 waybillId 拉取明细状态轨迹并回写。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    total: int = 0
+    updated: int = 0
+    unchanged: int = 0
+    empty: int = 0
+    failed: int = 0
+    not_local: int = Field(default=0, alias="notLocal")
+    missing_waybill_id: int = Field(default=0, alias="missingWaybillId")
+    missing_waybill_id_nos: list[str] = Field(
+        default_factory=list, alias="missingWaybillIdNos"
+    )
+    customs_exception_opened: int = Field(default=0, alias="customsExceptionOpened")
+    customs_exception_closed: int = Field(default=0, alias="customsExceptionClosed")
     errors: list[str] = Field(default_factory=list)

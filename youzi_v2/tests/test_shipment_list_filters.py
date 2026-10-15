@@ -195,6 +195,29 @@ def test_delivery_risk_overdue(tmp_path: Path) -> None:
     assert res["items"][0]["shipmentNo"] == "OVER-1"
 
 
+def test_missing_route_status_filter(tmp_path: Path) -> None:
+    db = Database(tmp_path / "rs.db")
+    ensure_shipments_schema(db.conn)
+    ensure_group_schema(db.conn)
+    repo = ShipmentsRepository(db)
+    now = now_str()
+    with db.lock:
+        for sn, rs in (("M-1", None), ("M-2", "INFO"), ("M-3", "ARRIVED_POD")):
+            db.conn.execute(
+                f"""
+                INSERT INTO {TABLE_NAME} (
+                    id, shipment_no, status_code, route_status, created_time, updated_time
+                ) VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (str(uuid.uuid4()), sn, "IN_TRANSIT", rs, now, now),
+            )
+        db.conn.commit()
+
+    res = repo.list_rows(missing_route_status=True, not_delivered=True)
+    nos = {item["shipmentNo"] for item in res["items"]}
+    assert nos == {"M-1", "M-2"}
+
+
 def test_arrived_not_delivered(tmp_path: Path) -> None:
     db = Database(tmp_path / "arr.db")
     ensure_shipments_schema(db.conn)

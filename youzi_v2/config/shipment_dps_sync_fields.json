@@ -116,7 +116,7 @@
       "onUpdate": false
     },
     "route_status": {
-      "label": "轨迹细状态",
+      "label": "轨迹明细状态",
       "dpsSource": "params.commerceWaybillRouteInfo.status → shipment_route_status_codes",
       "onInsert": true,
       "onUpdate": true

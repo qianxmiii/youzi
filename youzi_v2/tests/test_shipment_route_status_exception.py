@@ -1,4 +1,4 @@
-"""DPS 清关细状态 → 自动开/关异常。"""
+"""DPS 清关明细状态 → 自动开/关异常。"""
 
 from __future__ import annotations
 

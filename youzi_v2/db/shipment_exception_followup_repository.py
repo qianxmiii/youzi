@@ -8,6 +8,7 @@ from typing import Any
 
 from .connection import Database
 from .datetime_util import now_str
+from .shipment_sla import sql_sla_delivered
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 from .shipment_exception_followup_table import TABLE_NAME
 
@@ -192,8 +193,7 @@ class ShipmentExceptionFollowupRepository:
                 WHERE (resolved_at IS NULL OR TRIM(resolved_at) = '')
                   AND shipment_id IN (
                     SELECT id FROM {SHIPMENTS_TABLE}
-                    WHERE (delivered_time IS NOT NULL AND TRIM(delivered_time) != '')
-                       OR UPPER(COALESCE(status_code, '')) = 'DELIVERED'
+                    WHERE {sql_sla_delivered("route_status")}
                   )
                 """,
                 (now, now, now),

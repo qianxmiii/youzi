@@ -47,6 +47,35 @@ def test_parse_shipment_rename_excel():
     assert result["items"][1]["targetStem"] == "DPSECO260812094-US-AVP1-10"
 
 
+def test_parse_falls_back_to_zipcode_when_no_warehouse():
+    data = _xlsx_bytes(
+        [
+            ["运单号", "国家", "仓库代码", "收件人邮编", "件数"],
+            ["DPSECO1", "CA", "", "V5X 3Y1", 18],
+            ["DPSECO2", "US", "AVP1", "18202", 10],
+            ["DPSECO3", "US", "", "", 5],
+        ]
+    )
+    result = parse_shipment_rename_excel(data)
+    assert result["total"] == 2
+    assert result["items"][0]["targetStem"] == "DPSECO1-CA-V5X3Y1-18"
+    assert result["items"][0]["addressCode"] == "V5X 3Y1"
+    assert result["items"][1]["targetStem"] == "DPSECO2-US-AVP1-10"
+    assert any("DPSECO3" in e for e in result["errors"])
+
+
+def test_parse_zipcode_only_column():
+    data = _xlsx_bytes(
+        [
+            ["运单号", "国家", "邮编", "件数"],
+            ["DPSECO1", "US", "93308", 5],
+        ]
+    )
+    result = parse_shipment_rename_excel(data)
+    assert result["total"] == 1
+    assert result["items"][0]["targetStem"] == "DPSECO1-US-93308-5"
+
+
 def test_parse_with_folder_name():
     data = _xlsx_bytes(
         [

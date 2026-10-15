@@ -14,9 +14,11 @@ RISK_SEVERE_OVERDUE = "severe_overdue"
 ALERT_DELIVERY_TIME = "DELIVERY_TIME"
 ALERT_WAREHOUSE_NO_DEPARTURE = "WAREHOUSE_NO_DEPARTURE"
 ALERT_ARRIVAL_NO_DELIVERY = "ARRIVAL_NO_DELIVERY"
+ALERT_DEST_WAREHOUSE_NO_DISPATCH = "DEST_WAREHOUSE_NO_DISPATCH"
 
 WAREHOUSE_NO_DEPARTURE_DAYS = 7
 ARRIVAL_NO_DELIVERY_DAYS = 5
+DEST_WAREHOUSE_NO_DISPATCH_DAYS = 5
 
 STATUS_OPEN = "open"
 STATUS_ACKNOWLEDGED = "acknowledged"
@@ -29,6 +31,22 @@ TERMINAL_STATUSES = frozenset({STATUS_CONVERTED, STATUS_IGNORED, STATUS_RESOLVED
 
 DEFAULT_WARNING_DAYS = 3
 DEFAULT_SEVERE_OVERDUE_DAYS = 7
+
+# 异常跟踪「已签收」以明细状态为准（≠ 粗状态 DELIVERED / delivered_time）
+SLA_DELIVERED_ROUTE_STATUS = "TRACK_SIGNED"
+# 到港未送仓兑现：已到中转仓 / 已交仓 / 轨迹签收
+SLA_ARRIVAL_FULFILLED_ROUTE_STATUSES = frozenset(
+    {"DEST_TRANSIT_WAREHOUSE", "LAST_MILE_HANDOVER", "TRACK_SIGNED"}
+)
+# 到仓未派送兑现：已交仓 / 轨迹签收
+SLA_DEST_DISPATCH_FULFILLED_ROUTE_STATUSES = frozenset(
+    {"LAST_MILE_HANDOVER", "TRACK_SIGNED"}
+)
+
+# 阶段卡点起算字段（明细状态节点时间，由 DPS 轨迹回写）
+SLA_FIELD_WAREHOUSE_IN_TIME = "route_warehouse_in_time"
+SLA_FIELD_ARRIVED_POD_TIME = "route_arrived_pod_time"
+SLA_FIELD_DEST_TRANSIT_TIME = "route_dest_transit_warehouse_time"
 
 # 不参与异常跟踪扫描/待办/列表的渠道（与 shipments.channel_code 一致）
 SLA_EXCLUDED_CHANNEL_CODES = frozenset({"FC-整柜"})
@@ -69,10 +87,52 @@ def parse_date(value: str | None) -> date | None:
     return None
 
 
+def _route_status_of(row: dict[str, Any]) -> str:
+    return (
+        row.get("route_status") or row.get("routeStatus") or ""
+    ).strip().upper()
+
+
+def _row_time(row: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        raw = row.get(key)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if text:
+            return text
+    return ""
+
+
 def is_delivered(row: dict[str, Any]) -> bool:
-    status = (row.get("status_code") or "").strip().upper()
-    delivered = (row.get("delivered_time") or "").strip()
-    return status == "DELIVERED" or bool(delivered)
+    """异常跟踪签收判断：明细状态 TRACK_SIGNED。"""
+    return _route_status_of(row) == SLA_DELIVERED_ROUTE_STATUS
+
+
+def is_arrival_fulfilled(row: dict[str, Any]) -> bool:
+    """到港未送仓是否已完成：到中转仓 / 交仓 / 轨迹签收。"""
+    if _route_status_of(row) in SLA_ARRIVAL_FULFILLED_ROUTE_STATUSES:
+        return True
+    return bool(
+        _row_time(
+            row,
+            SLA_FIELD_DEST_TRANSIT_TIME,
+            "routeDestTransitWarehouseTime",
+        )
+    )
+
+
+def is_dest_dispatch_fulfilled(row: dict[str, Any]) -> bool:
+    """到仓未派送是否已完成：交仓或轨迹签收。"""
+    return _route_status_of(row) in SLA_DEST_DISPATCH_FULFILLED_ROUTE_STATUSES
+
+
+def sql_sla_delivered(column: str = "route_status") -> str:
+    return f"UPPER(TRIM(COALESCE({column}, ''))) = '{SLA_DELIVERED_ROUTE_STATUS}'"
+
+
+def sql_sla_not_delivered(column: str = "route_status") -> str:
+    return f"UPPER(TRIM(COALESCE({column}, ''))) != '{SLA_DELIVERED_ROUTE_STATUS}'"
 
 
 def match_channel_rule(
@@ -110,13 +170,16 @@ def compute_warehouse_no_departure_context(
     *,
     today: date | None = None,
 ) -> dict[str, Any] | None:
-    """入库超过 7 天仍无 ETD/ATD 时生成入库未开船预警（第 8 天起提示）。"""
-    entry_raw = (row.get("warehouse_entry_time") or "").strip()
+    """明细状态 202 入库后超过 7 天仍无 ETD/ATD → 入库未开船（第 8 天起）。"""
+    entry_raw = _row_time(
+        row,
+        SLA_FIELD_WAREHOUSE_IN_TIME,
+        "routeWarehouseInTime",
+    )
     entry_day = parse_date(entry_raw)
     if not entry_day or has_departure_schedule(row):
         return None
     check_day = today or date.today()
-    # 截止日 = 入库日 + 7；仅当 today > 截止日（超过 7 天）才提示
     due_day = entry_day + timedelta(days=WAREHOUSE_NO_DEPARTURE_DAYS)
     if check_day <= due_day:
         return None
@@ -125,7 +188,7 @@ def compute_warehouse_no_departure_context(
         "alertType": ALERT_WAREHOUSE_NO_DEPARTURE,
         "dueDate": due_iso,
         "warningDate": due_iso,
-        "startField": "warehouse_entry_time",
+        "startField": SLA_FIELD_WAREHOUSE_IN_TIME,
         "startTime": entry_raw[:10] if len(entry_raw) >= 10 else entry_raw,
         "ruleScope": "system",
         "ruleId": "",
@@ -138,14 +201,19 @@ def compute_arrival_no_delivery_context(
     *,
     today: date | None = None,
 ) -> dict[str, Any] | None:
-    """ATA 后超过 5 天仍未签收时生成到港未送仓预警（第 6 天起提示）。"""
-    ata_raw = (row.get("ata") or "").strip()
-    ata_day = parse_date(ata_raw)
-    if not ata_day:
+    """明细状态 306 到港后超过 5 天仍未到中转仓/交仓 → 到港未送仓（第 6 天起）。"""
+    if is_arrival_fulfilled(row):
+        return None
+    pod_raw = _row_time(
+        row,
+        SLA_FIELD_ARRIVED_POD_TIME,
+        "routeArrivedPodTime",
+    )
+    pod_day = parse_date(pod_raw)
+    if not pod_day:
         return None
     check_day = today or date.today()
-    # 截止日 = ATA + 5；仅当 today > 截止日（超过 5 天）才提示
-    due_day = ata_day + timedelta(days=ARRIVAL_NO_DELIVERY_DAYS)
+    due_day = pod_day + timedelta(days=ARRIVAL_NO_DELIVERY_DAYS)
     if check_day <= due_day:
         return None
     due_iso = due_day.isoformat()
@@ -153,8 +221,41 @@ def compute_arrival_no_delivery_context(
         "alertType": ALERT_ARRIVAL_NO_DELIVERY,
         "dueDate": due_iso,
         "warningDate": due_iso,
-        "startField": "ATA",
-        "startTime": ata_raw[:10] if len(ata_raw) >= 10 else ata_raw,
+        "startField": SLA_FIELD_ARRIVED_POD_TIME,
+        "startTime": pod_raw[:10] if len(pod_raw) >= 10 else pod_raw,
+        "ruleScope": "system",
+        "ruleId": "",
+        "riskLevel": RISK_OVERDUE,
+    }
+
+
+def compute_dest_warehouse_no_dispatch_context(
+    row: dict[str, Any],
+    *,
+    today: date | None = None,
+) -> dict[str, Any] | None:
+    """明细状态 502 到中转仓后超过 5 天仍未交仓/签收 → 到仓未派送（第 6 天起）。"""
+    if is_dest_dispatch_fulfilled(row):
+        return None
+    transit_raw = _row_time(
+        row,
+        SLA_FIELD_DEST_TRANSIT_TIME,
+        "routeDestTransitWarehouseTime",
+    )
+    transit_day = parse_date(transit_raw)
+    if not transit_day:
+        return None
+    check_day = today or date.today()
+    due_day = transit_day + timedelta(days=DEST_WAREHOUSE_NO_DISPATCH_DAYS)
+    if check_day <= due_day:
+        return None
+    due_iso = due_day.isoformat()
+    return {
+        "alertType": ALERT_DEST_WAREHOUSE_NO_DISPATCH,
+        "dueDate": due_iso,
+        "warningDate": due_iso,
+        "startField": SLA_FIELD_DEST_TRANSIT_TIME,
+        "startTime": transit_raw[:10] if len(transit_raw) >= 10 else transit_raw,
         "ruleScope": "system",
         "ruleId": "",
         "riskLevel": RISK_OVERDUE,

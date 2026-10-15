@@ -25,6 +25,7 @@ import {
   runZipcodeBackfill,
   runExceptionFollowup,
   runDpsShipmentSync,
+  runDpsRouteStatusSync,
   updateScheduledTasksSettings,
 } from '@/api/scheduledTasks'
 import type {
@@ -47,6 +48,7 @@ const runningGroupArchive = ref(false)
 const runningZipcodeBackfill = ref(false)
 const runningExceptionFollowup = ref(false)
 const runningDpsShipmentSync = ref(false)
+const runningDpsRouteStatusSync = ref(false)
 const overview = ref<ScheduledTaskOverview | null>(null)
 const jobs = ref<TrackingSyncJobRecord[]>([])
 const jobsTotal = ref(0)
@@ -335,6 +337,28 @@ async function onRunDpsShipmentSync() {
   }
 }
 
+async function onRunDpsRouteStatusSync() {
+  runningDpsRouteStatusSync.value = true
+  try {
+    const res = await runDpsRouteStatusSync()
+    let text = `明细状态：更新 ${res.updated} / 共 ${res.total}`
+    if (res.unchanged) text += `，无变化 ${res.unchanged}`
+    if (res.missingWaybillId) text += `，无 waybillId ${res.missingWaybillId}`
+    if (res.empty) text += `，无轨迹 ${res.empty}`
+    if (res.failed) text += `，失败 ${res.failed}`
+    if (res.failed || (res.errors && res.errors.length)) {
+      message.warning(text)
+    } else {
+      message.success(text)
+    }
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningDpsRouteStatusSync.value = false
+  }
+}
+
 function onPageChange(p: number) {
   page.value = p
   void loadJobs()
@@ -483,6 +507,20 @@ onMounted(load)
                 <span class="text-xs text-[var(--color-muted)]">每日批处理（约 24 小时，默认关闭）</span>
                 <NButton size="tiny" :loading="runningExceptionFollowup" @click="onRunExceptionFollowup">
                   立即执行
+                </NButton>
+              </NSpace>
+            </NFormItem>
+            <NFormItem label="明细状态同步">
+              <NSpace align="center">
+                <span class="text-xs text-[var(--color-muted)]">
+                  按 waybillId 拉取明细状态（需已配置 dps_route_status_query）
+                </span>
+                <NButton
+                  size="tiny"
+                  :loading="runningDpsRouteStatusSync"
+                  @click="onRunDpsRouteStatusSync"
+                >
+                  更新全部明细状态
                 </NButton>
               </NSpace>
             </NFormItem>

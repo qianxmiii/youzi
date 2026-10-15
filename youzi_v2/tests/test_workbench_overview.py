@@ -36,6 +36,7 @@ def _insert_shipment(
     vessel_voyage: str | None = None,
     destination_port_code: str | None = None,
     payment_status: str = "UNPAID",
+    route_status: str | None = None,
 ) -> None:
     now = now_str()
     with database.lock:
@@ -44,8 +45,8 @@ def _insert_shipment(
             INSERT INTO {SHIPMENTS_TABLE} (
                 id, shipment_no, status_code, exception_code, eta, ata,
                 delivered_time, vessel_voyage, destination_port_code,
-                payment_status, created_time, updated_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                payment_status, route_status, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 sid,
@@ -58,6 +59,7 @@ def _insert_shipment(
                 vessel_voyage,
                 destination_port_code,
                 payment_status,
+                route_status,
                 now,
                 now,
             ),
@@ -108,6 +110,9 @@ def test_overview_counts(database: Database) -> None:
     assert overview["overview"]["inspection"] == 1
     assert overview["overview"]["arrivedUnsigned"] == 1  # t3
     assert overview["overview"]["deliveredThisWeek"] >= 2
+    assert overview["routeStatus"]["available"] is True
+    assert overview["routeStatus"]["unsignedTotal"] == 3
+    assert overview["routeStatus"]["missingCount"] == 3
 
 
 def test_arrivals_aggregate_by_voyage(database: Database) -> None:
@@ -229,6 +234,56 @@ def test_focus_pending_exceptions_uses_summary(database: Database) -> None:
     overview = build_workbench_overview(database)
     assert overview["focus"]["available"] is True
     assert overview["focus"]["pendingExceptions"] >= 1
+
+
+def test_route_status_funnel_unsigned_scope(database: Database) -> None:
+    _insert_shipment(
+        database,
+        sid="r1",
+        shipment_no="R-1",
+        route_status="ARRIVED_POD",
+    )
+    _insert_shipment(
+        database,
+        sid="r2",
+        shipment_no="R-2",
+        route_status="IMPORT_CUSTOMS_EXCEPTION",
+    )
+    _insert_shipment(
+        database,
+        sid="r3",
+        shipment_no="R-3",
+        route_status="INFO",
+    )
+    _insert_shipment(
+        database,
+        sid="r4",
+        shipment_no="R-4",
+        route_status=None,
+    )
+    _insert_shipment(
+        database,
+        sid="r5",
+        shipment_no="R-5",
+        status_code="DELIVERED",
+        delivered_time="2026-10-01 10:00:00",
+        payment_status="PAID",
+        route_status="TRACK_SIGNED",
+    )
+
+    overview = build_workbench_overview(database)
+    rs = overview["routeStatus"]
+    assert rs["available"] is True
+    assert rs["unsignedTotal"] == 4
+    assert rs["missingCount"] == 2
+    by_code = {item["code"]: item for item in rs["items"]}
+    assert by_code["ARRIVED_POD"]["count"] == 1
+    assert by_code["IMPORT_CUSTOMS_EXCEPTION"]["count"] == 1
+    assert by_code["IMPORT_CUSTOMS_EXCEPTION"]["isException"] is True
+    assert by_code["TRACK_SIGNED"]["count"] == 0
+    assert "routeStatus=ARRIVED_POD" in by_code["ARRIVED_POD"]["href"]
+    assert "notDelivered=true" in by_code["ARRIVED_POD"]["href"]
+    assert "missingRouteStatus=true" in rs["missingHref"]
 
 
 def test_module_failure_isolation(database: Database) -> None:

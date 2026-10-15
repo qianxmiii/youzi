@@ -82,7 +82,10 @@ erDiagram
 | warehouse_entry_time | TEXT | 入仓时间（内部轨迹 `Your goods are in the warehouse` 回写） |
 | delivered_time | TEXT | 签收时间 |
 | status_code | TEXT | 粗状态码（`IN_TRANSIT` / `DELIVERED` 等） |
-| route_status | TEXT | 轨迹细状态（DPS `commerceWaybillRouteInfo.status` 映射，见 `shipment_route_status_codes`） |
+| route_status | TEXT | 轨迹明细状态（DPS `commerceWaybillRouteInfo.status` 映射，见 `shipment_route_status_codes`） |
+| route_warehouse_in_time | TEXT | 明细状态 202 入库节点时间（异常跟踪「入库未开船」起算） |
+| route_arrived_pod_time | TEXT | 明细状态 306 到港节点时间（「到港未送仓」起算） |
+| route_dest_transit_warehouse_time | TEXT | 明细状态 502 到中转仓节点时间（「到仓未派送」起算） |
 | exception_code | TEXT | 当前异常码 |
 | exception_opened_time | TEXT | 异常开启时间 |
 | latest_tracking_time, latest_tracking_desc | TEXT | 最新轨迹 |

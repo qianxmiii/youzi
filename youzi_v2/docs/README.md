@@ -9,6 +9,7 @@
 | [architecture.md](./architecture.md) | 系统架构、分层、数据流 |
 | [database.md](./database.md) | SQLite 表结构、字段、ER 关系 |
 | [deployment.md](./deployment.md) | 安装部署、环境变量、生产构建 |
+| [wecom-aibot.md](./wecom-aibot.md) | 企业微信智能机器人（长连接、@ 查运单、主动推送） |
 | [api.md](./api.md) | REST API 索引与调用示例 |
 | [shipment-flow.md](./shipment-flow.md) | 运单生命周期与轨迹同步 |
 | [warehouse-flow.md](./warehouse-flow.md) | 仓库地址簿业务流程 |

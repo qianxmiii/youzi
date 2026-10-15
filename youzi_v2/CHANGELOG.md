@@ -2,6 +2,31 @@
 
 按日期倒序记录 youzi_v2 的代码与文档变更。
 
+## 2026-10-16
+
+### 新增
+
+- **企业微信 · 订阅更新推送**：运单订阅后内部/承运商轨迹变更、ETA 到港每日提醒与顶栏铃铛同源写库时，主动推送到 `wecom_webhook.chat_id`（`subscription_push_enabled` 默认随企微启用）
+- **企业微信通知**：`services/wecom_webhook.py` + `POST /api/v1/notifications/wecom/test`；支持 Webhook（`key`/`url`）与智能机器人长连接（`bot_id`+`secret`+`chat_id`，见文档 101463）
+
+### 修改
+
+- **企业微信配置**：`bot_id`+`secret` 时默认可用（无需 `enabled`）；主动推送须配置 `chat_id`
+- **企业微信长连接**：后端启动自动连 WebSocket；群内 @机器人 后 `chat_id` 写入 `logs/wecom-aibot-*.log`；常驻模式下发送仅走守护连接（不再临时连以免踢线）
+- **企业微信 @ 查运单**：解析消息中的 DPSECO 运单号，查询本地运单并 stream 回复状态摘要（`shipment_query_enabled` 默认 true）
+
+### 修复
+
+- **企业微信 @ 查运单**：`get_database()` 补全 `youzi_v2/data/youzi_v2.db` 路径，避免查单报错
+
+### 修改
+
+- **企业微信 @ 查运单**：回复扩展客户/货件/渠道/仓库/转单号等；查单前默认同步 DPS 明细状态 + 内部/承运商轨迹（`shipment_query_refresh`）；客户编号与货件号相同时只显示货件号；内外轨迹与时间分行展示；空字段整行省略；支持运单号/货件号/客户编号查询（优先级依次匹配）；消息含「明细」时返回与列表「复制 → 运单明细」相同摘要（`services/shipment_copy_format.py`），且跳过查单前 DPS/轨迹同步
+
+### 文档
+
+- 新增 [docs/wecom-aibot.md](./docs/wecom-aibot.md)（企业微信智能机器人专篇）；索引同步 `docs/README.md`、根 README、`deployment.md`、`api.md`、`services/README.md`
+
 ## 2026-10-13
 
 ### 新增

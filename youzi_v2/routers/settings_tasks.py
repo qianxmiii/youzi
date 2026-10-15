@@ -1,6 +1,8 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ..context import *
+from ..schemas.wecom_webhook import WecomWebhookTestBody, WecomWebhookTestResult
+from ..services.wecom_webhook import send_wecom_text
 
 router = APIRouter()
 
@@ -204,6 +206,25 @@ def run_scheduled_tasks_sla_scan():
         trigger="manual",
     )
     return ShipmentSlaScanResult(**result)
+
+@router.post(
+    "/api/v1/notifications/wecom/test",
+    response_model=WecomWebhookTestResult,
+)
+def test_wecom_webhook(body: WecomWebhookTestBody | None = None):
+    """向 config.json 配置的企业微信通道发送测试消息（Webhook 或智能机器人长连接）。"""
+    content = (body.content if body and body.content else None) or "Youzi 企业微信机器人连通测试"
+    try:
+        result = send_wecom_text(LOGISTICS_CONFIG_PATH, content)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not result["ok"]:
+        raise HTTPException(
+            status_code=502,
+            detail=f"企业微信返回 errcode={result['errcode']} errmsg={result['errmsg']}",
+        )
+    return WecomWebhookTestResult(**result)
+
 
 @router.post("/api/v1/scheduled-tasks/run-tracking-sync", response_model=ScheduledSyncRunResult)
 def run_scheduled_tasks_tracking_sync():

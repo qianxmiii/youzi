@@ -1367,6 +1367,40 @@ class ShipmentsRepository:
             return None
         return self._enrich_subscribed(_row_to_api(found))
 
+    def get_by_lookup_priority(self, key: str) -> dict[str, Any] | None:
+        """同一关键字依次精确匹配：运单号 → 货件号 → 客户编号，命中即返回（同档多条取 updated_time 最新）。"""
+        token = (key or "").strip()
+        if not token:
+            return None
+        row = self.get_by_shipment_no(token)
+        if row is not None:
+            return row
+        with self._database.lock:
+            found = self._conn.execute(
+                f"""
+                SELECT * FROM {TABLE_NAME}
+                WHERE customer_shipment_id = ?
+                ORDER BY datetime(updated_time) DESC
+                LIMIT 1
+                """,
+                (token,),
+            ).fetchone()
+        if found is not None:
+            return self._enrich_subscribed(_row_to_api(found))
+        with self._database.lock:
+            found = self._conn.execute(
+                f"""
+                SELECT * FROM {TABLE_NAME}
+                WHERE customer_no = ?
+                ORDER BY datetime(updated_time) DESC
+                LIMIT 1
+                """,
+                (token,),
+            ).fetchone()
+        if found is None:
+            return None
+        return self._enrich_subscribed(_row_to_api(found))
+
     def list_shipment_nos_with_waybill_id(self) -> list[str]:
         """有 DPS waybill_id 的运单号（明细状态轻量同步用）。"""
         with self._database.lock:

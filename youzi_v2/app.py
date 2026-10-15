@@ -19,6 +19,10 @@ from .context import (
     start_tracking_sync_scheduler,
     tracking_jobs_repo,
 )
+from .services.wecom_aibot_runtime import (
+    start_wecom_aibot_runtime,
+    stop_wecom_aibot_runtime,
+)
 from .routers import (
     addresses,
     channels,
@@ -76,6 +80,7 @@ def _start_scheduled_tracking_sync() -> None:
         shipment_sla_alerts_repo,
         LOGISTICS_CONFIG_PATH,
     )
+    start_wecom_aibot_runtime(LOGISTICS_CONFIG_PATH)
 
 
 @app.on_event("shutdown")
@@ -83,6 +88,7 @@ def _stop_scheduled_tracking_sync() -> None:
     global _tracking_sync_stop
     if _tracking_sync_stop is not None:
         _tracking_sync_stop.set()
+    stop_wecom_aibot_runtime()
 
 
 for route_module in (

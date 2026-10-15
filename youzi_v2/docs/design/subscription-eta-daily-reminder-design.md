@@ -16,7 +16,7 @@
 | 开始 | `today >= eta_date - 7` |
 | 结束 | 已签收（`status_code=DELIVERED` 或 `delivered_time` 非空）则不再提醒 |
 | 频率 | 每运单每天最多 1 条（按本地日历日去重） |
-| 通道 | 复用表 `shipment_arrival_notifications`，`tracking_source=eta_reminder` |
+| 通道 | 复用表 `shipment_arrival_notifications`，`tracking_source=eta_reminder`；若已配置企微 `chat_id` 且 `subscription_push_enabled` 未关，同步推送群消息（见 [wecom-aibot.md](../wecom-aibot.md)） |
 
 ## 实现要点
 

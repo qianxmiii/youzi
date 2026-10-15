@@ -18,6 +18,9 @@ Youzi v2 业务服务层
 | `carrier_vendors.py` | 读取 config.json 承运商配置 |
 | `shipment_query_config.py` | DPS 运单查询：`queryByPerson` 全量 / `queryByOrder` 按 odd，自动翻页 |
 | `shipment_dps_sync.py` | DPS 运单全量同步至本地表（计划任务，默认关） |
+| `dps_waybill_route_info.py` | DPS 明细状态轨迹查询（URL 仅读 config `dps_route_status_query`） |
+| `shipment_dps_route_status_sync.py` | 轻量回写 `route_status`（更新选中/全部明细状态） |
+| `shipment_route_status_exception.py` | 206/402 清关异常自动开/关 |
 | `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`） |
 | `shipment_dps_sync_fields.py` | 同步字段白名单（`config/shipment_dps_sync_fields.json`） |
 | `logistics_tracking.py` | 物流轨迹解析 |
@@ -28,7 +31,7 @@ Youzi v2 业务服务层
 | `address_excel.py` | 仓库地址 Excel |
 | `vessel_schedule_sync.py` | 外部船期同步 |
 | `maritime_alerts.py` | 海运预警聚合 |
-| `workbench_overview.py` | 工作台首页聚合（今日重点 / 待办 / 近期到港 / 运输概览） |
+| `workbench_overview.py` | 工作台首页聚合（今日重点 / 待办 / 近期到港 / 明细状态漏斗 / 运输概览） |
 | `image_link_zip.py` | Excel 图片链接下载打包 |
 | `shipment_file_rename.py` | 运单文件重命名：解析 Excel 映射 |
 | `product_import_convert.py` | 箱单 → 产品导入模版（调用 tools/product_import 脚本） |

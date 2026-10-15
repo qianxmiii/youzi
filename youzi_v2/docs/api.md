@@ -49,7 +49,7 @@ curl http://127.0.0.1:3001/api/v1/health
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/workbench/overview` | 首页聚合：`focus` / `todos` / `arrivals` / `overview`（模块级 `available`/`error` 容错） |
+| GET | `/api/v1/workbench/overview` | 首页聚合：`focus` / `todos` / `arrivals` / `routeStatus` / `overview`（模块级 `available`/`error` 容错） |
 
 查询参数：
 
@@ -65,6 +65,7 @@ curl http://127.0.0.1:3001/api/v1/health
 - `todos.items`：异常 / 催款 / 轨迹审批合并，同票合并展示，统一优先级后截断
 - `arrivals.items`：ETA 今天～今天+3 天且无 ATA；按日分组、按船名航次+目的港+ETA 聚合
 - `overview`：在途（`IN_TRANSIT` 未签收）、查验中（`exception_code=INSPECTION`）、已到港未签收、本周签收（本地周一～周日）
+- `routeStatus`：未签收运单按关键明细状态计数；`missingCount` 为空或信息传递；点击跳转 `/shipments?routeStatus=…&notDelivered=true`
 
 ```bash
 curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6"
@@ -79,7 +80,7 @@ curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6
 | POST | `/api/v1/tools/image-link-zip/jobs` | 上传 Excel，启动后台下载任务，返回 `jobId` |
 | GET | `/api/v1/tools/image-link-zip/jobs/{jobId}` | 查询进度（`done`/`total`/`status`） |
 | GET | `/api/v1/tools/image-link-zip/jobs/{jobId}/download` | 完成后下载 zip |
-| POST | `/api/v1/tools/shipment-file-rename/parse` | 解析运单 Excel，返回重命名映射（运单号/国家/仓库代码/件数 → `targetStem`）；本地改名在浏览器完成 |
+| POST | `/api/v1/tools/shipment-file-rename/parse` | 解析运单 Excel，返回重命名映射（运单号/国家/仓库代码或邮编/件数 → `targetStem`；无仓库代码时用邮编）；浏览器递归扫描子文件夹后本地改名 |
 | POST | `/api/v1/tools/product-import` | 上传箱单发票，转换为产品导入模版；form 字段 `invoice` |
 | GET | `/api/v1/tools/product-import/download/{taskId}` | 下载生成的产品导入 .xls |
 
@@ -101,7 +102,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/` | 列表（筛选、分页；含 `statusCode`、`routeStatus`、`groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应含 `routeStatus`） |
+| GET | `/` | 列表（筛选、分页；含 `statusCode`、`routeStatus`、`missingRouteStatus`、`groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应含 `routeStatus`） |
 | GET | `/{item_id}` | 单条详情 |
 | POST | `/` | 新建 |
 | PUT | `/{item_id}` | 更新运单字段 |
@@ -114,6 +115,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
 | POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
 | POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200） |
+| POST | `/sync-route-status-from-dps` | 明细状态：按 `waybillId` 调 `config.dps_route_status_query`；`shipmentNos` 可选（最多 200），空则全部 |
 | GET | `/tracking-freshness-stats` | 轨迹新鲜度统计 |
 | GET | `/tracking-sync/daily-stats` | 日同步统计 |
 | POST | `/exceptions/open` | 开启异常 |
@@ -360,6 +362,7 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 | GET | `/api/v1/scheduled-tasks/jobs` | 同步任务历史 |
 | POST | `/api/v1/scheduled-tasks/run-*-sync` | 手动触发同步 |
 | POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync` | DPS 运单全量同步（body 可选 `transitTimeStart` / `transitTimeEnd`，默认当月） |
+| POST | `/api/v1/scheduled-tasks/run-dps-route-status-sync` | 更新全部明细状态（有 `waybillId` 的运单；无 body） |
 
 ## 地址簿
 

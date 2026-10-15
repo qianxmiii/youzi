@@ -155,14 +155,14 @@ export function formatShipmentTrackingNumberSuffixLine(row: Shipment): string {
   return `-- ${info.carrierLabel} ${info.number}`
 }
 
-/** 运单明细摘要 + 转单号（有则第二行 `-- 承运商 转单号`） */
+/** 明细摘要 + 转单号（有则第二行 `-- 承运商 转单号`）；供「复制转单号」使用 */
 export function formatShipmentDetailSummaryWithTrackingBlock(row: Shipment): string {
   const head = formatShipmentDetailSummaryLine(row)
   const tn = formatShipmentTrackingNumberSuffixLine(row)
   return tn ? `${head}\n${tn}` : head
 }
 
-/** 运单明细（含关联单号）+ 转单号 */
+/** 明细（含关联单号）+ 转单号 */
 export function formatShipmentDetailSummaryWithCustomerNoAndTrackingBlock(
   row: Shipment,
 ): string {
@@ -171,16 +171,23 @@ export function formatShipmentDetailSummaryWithCustomerNoAndTrackingBlock(
   return tn ? `${head}\n${tn}` : head
 }
 
-/** 多行运单明细摘要（含转单号），运单之间空一行 */
+/** 多行运单明细摘要（不含转单号），运单之间空一行 */
 export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
-  return rows.map((row) => formatShipmentDetailSummaryWithTrackingBlock(row)).join('\n\n')
+  return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n\n')
 }
 
-/** 多行运单明细（含关联单号 / 转单号），运单之间空一行 */
+/** 多行运单明细（含关联单号，不含转单号），运单之间空一行 */
 export function formatShipmentDetailSummaryWithCustomerNoCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
-  return rows
-    .map((row) => formatShipmentDetailSummaryWithCustomerNoAndTrackingBlock(row))
-    .join('\n\n')
+  return rows.map((row) => formatShipmentDetailSummaryWithCustomerNoLine(row)).join('\n\n')
+}
+
+/**
+ * 「复制转单号」：沿用原运单明细规则（明细行 + 可选第二行 `-- 承运商 转单号`），
+ * 运单之间空一行。
+ */
+export function formatShipmentTrackingNumbersCopyText(rows: Shipment[]): string {
+  if (!rows.length) return ''
+  return rows.map((row) => formatShipmentDetailSummaryWithTrackingBlock(row)).join('\n\n')
 }

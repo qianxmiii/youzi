@@ -482,6 +482,7 @@ timezone=Asia/Shanghai
 ```text
 HomeView
   WorkbenchHeader
+  WorkbenchRouteStatusFunnel
   WorkbenchFocusMetrics
   WorkbenchTodoList
   WorkbenchArrivalTimeline
@@ -514,6 +515,9 @@ HomeView
 | 查验中 | `/shipments` 或异常页 | `exceptionCode=INSPECTION` |
 | 本周签收 | `/shipments` | `deliveredFrom` / `deliveredTo`（本周周一～周日） |
 | 已到港未签收 | `/shipments` | `hasAta=true&notDelivered=true` |
+| 明细状态节点 | `/shipments` | `routeStatus={code}&notDelivered=true` |
+| 无明细状态 | `/shipments` | `missingRouteStatus=true&notDelivered=true` |
+| 明细状态查看全部 | `/shipments` | `notDelivered=true&routeStatus=_ALL` |
 
 业务页面必须支持这些参数并保持筛选状态可见。
 

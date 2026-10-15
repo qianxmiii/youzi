@@ -522,10 +522,10 @@ function getCarrierCfg(carrier) {
     return (window.data && expressPricing && expressPricing[carrier]) || null;
 }
 
-/** 当前价目表在 expressPricing 中的顶层键（合并渠道后通常只有一个） */
+/** 当前价目表在 expressPricing 中的顶层键（合并渠道后通常只有一个；跳过元数据字段） */
 function getExpressPricingRootKey() {
     if (typeof expressPricing === 'undefined' || !expressPricing) return '';
-    const keys = Object.keys(expressPricing);
+    const keys = Object.keys(expressPricing).filter((k) => k !== 'updatedAt');
     return keys[0] || '';
 }
 

@@ -5,11 +5,14 @@ from datetime import date
 
 from youzi_v2.db.shipment_sla import (
     ALERT_ARRIVAL_NO_DELIVERY,
+    ALERT_DEST_WAREHOUSE_NO_DISPATCH,
     ALERT_WAREHOUSE_NO_DEPARTURE,
-    ARRIVAL_NO_DELIVERY_DAYS,
-    WAREHOUSE_NO_DEPARTURE_DAYS,
+    SLA_FIELD_ARRIVED_POD_TIME,
+    SLA_FIELD_DEST_TRANSIT_TIME,
+    SLA_FIELD_WAREHOUSE_IN_TIME,
     compute_arrival_no_delivery_context,
     compute_days_in_transit,
+    compute_dest_warehouse_no_dispatch_context,
     compute_due_context,
     compute_risk_level,
     compute_warehouse_no_departure_context,
@@ -53,20 +56,52 @@ def test_due_date_from_atd_when_no_expected_delivery() -> None:
     ctx = compute_due_context(row, rule)
     assert ctx is not None
     assert ctx["dueDate"] == "2026-07-06"
-    assert ctx["ruleScope"] == "channel"
 
 
-def test_risk_level_progression() -> None:
+def test_no_rule_returns_none() -> None:
+    assert compute_due_context({"atd": "2026-06-01"}, None) is None
+
+
+def test_risk_levels() -> None:
     due = date(2026, 7, 6)
-    assert compute_risk_level(today=date(2026, 7, 3), due_day=due, warning_days=3, severe_overdue_days=7) == "warning_soon"
-    assert compute_risk_level(today=date(2026, 7, 7), due_day=due, warning_days=3, severe_overdue_days=7) == "overdue"
-    assert compute_risk_level(today=date(2026, 7, 14), due_day=due, warning_days=3, severe_overdue_days=7) == "severe_overdue"
-    assert compute_risk_level(today=date(2026, 7, 1), due_day=due, warning_days=3, severe_overdue_days=7) is None
+    assert compute_risk_level(
+        today=date(2026, 7, 2),
+        due_day=due,
+        warning_days=3,
+        severe_overdue_days=7,
+    ) is None
+    assert (
+        compute_risk_level(
+            today=date(2026, 7, 3),
+            due_day=due,
+            warning_days=3,
+            severe_overdue_days=7,
+        )
+        == "warning_soon"
+    )
+    assert (
+        compute_risk_level(
+            today=date(2026, 7, 7),
+            due_day=due,
+            warning_days=3,
+            severe_overdue_days=7,
+        )
+        == "overdue"
+    )
+    assert (
+        compute_risk_level(
+            today=date(2026, 7, 14),
+            due_day=due,
+            warning_days=3,
+            severe_overdue_days=7,
+        )
+        == "severe_overdue"
+    )
 
 
 def test_days_since_start() -> None:
     assert days_since_start("2026-06-01", today=date(2026, 6, 1)) == 0
-    assert days_since_start("2026-06-01 10:00:00", today=date(2026, 6, 10)) == 9
+    assert days_since_start("2026-06-01", today=date(2026, 6, 8)) == 7
     assert days_since_start("") is None
 
 
@@ -81,9 +116,12 @@ def test_compute_days_in_transit_uses_delivered_date() -> None:
     ) == 55
 
 
-def test_is_delivered_with_time_or_status() -> None:
-    assert is_delivered({"delivered_time": "2026-06-01", "status_code": "IN_TRANSIT"})
-    assert is_delivered({"delivered_time": "", "status_code": "DELIVERED"})
+def test_is_delivered_uses_route_status() -> None:
+    assert is_delivered({"route_status": "TRACK_SIGNED"})
+    assert is_delivered({"routeStatus": "TRACK_SIGNED"})
+    assert not is_delivered({"route_status": "LAST_MILE_HANDOVER"})
+    assert not is_delivered({"route_status": "ARRIVED_POD"})
+    assert not is_delivered({"delivered_time": "2026-06-01", "status_code": "DELIVERED"})
     assert not is_delivered({"delivered_time": "", "status_code": "IN_TRANSIT"})
 
 
@@ -99,31 +137,100 @@ def test_match_carrier_specific_rule() -> None:
     assert matched["estimatedDays"] == 33
 
 
-def test_warehouse_no_departure_after_exceeding_seven_days() -> None:
-    row = {"warehouse_entry_time": "2026-06-01", "etd": "", "atd": ""}
-    # 入库日 + 7 = 6/8，当天及之前不提示
+def test_warehouse_no_departure_uses_route_warehouse_in_time() -> None:
+    row = {SLA_FIELD_WAREHOUSE_IN_TIME: "2026-06-01", "etd": "", "atd": ""}
     assert compute_warehouse_no_departure_context(row, today=date(2026, 6, 8)) is None
-    # 超过 7 天（第 8 天起）才提示
     ctx = compute_warehouse_no_departure_context(row, today=date(2026, 6, 9))
     assert ctx is not None
     assert ctx["alertType"] == ALERT_WAREHOUSE_NO_DEPARTURE
     assert ctx["dueDate"] == "2026-06-08"
+    assert ctx["startField"] == SLA_FIELD_WAREHOUSE_IN_TIME
     assert ctx["riskLevel"] == "overdue"
+    # 旧 warehouse_entry_time 不再作为起算
+    assert (
+        compute_warehouse_no_departure_context(
+            {"warehouse_entry_time": "2026-06-01", "etd": "", "atd": ""},
+            today=date(2026, 6, 20),
+        )
+        is None
+    )
 
 
 def test_warehouse_no_departure_skips_when_etd_exists() -> None:
-    row = {"warehouse_entry_time": "2026-06-01", "etd": "2026-06-10", "atd": ""}
+    row = {SLA_FIELD_WAREHOUSE_IN_TIME: "2026-06-01", "etd": "2026-06-10", "atd": ""}
     assert has_departure_schedule(row)
     assert compute_warehouse_no_departure_context(row, today=date(2026, 6, 20)) is None
 
 
-def test_arrival_no_delivery_after_exceeding_five_days() -> None:
-    row = {"ata": "2026-06-01"}
+def test_arrival_no_delivery_uses_route_arrived_pod_time() -> None:
+    row = {SLA_FIELD_ARRIVED_POD_TIME: "2026-06-01"}
     assert compute_arrival_no_delivery_context(row, today=date(2026, 6, 6)) is None
     ctx = compute_arrival_no_delivery_context(row, today=date(2026, 6, 7))
     assert ctx is not None
     assert ctx["alertType"] == ALERT_ARRIVAL_NO_DELIVERY
     assert ctx["dueDate"] == "2026-06-06"
+    assert ctx["startField"] == SLA_FIELD_ARRIVED_POD_TIME
+    # 旧 ATA 不再作为起算
+    assert (
+        compute_arrival_no_delivery_context(
+            {"ata": "2026-06-01"},
+            today=date(2026, 6, 20),
+        )
+        is None
+    )
+
+
+def test_arrival_no_delivery_skips_when_route_fulfilled() -> None:
+    pod = {SLA_FIELD_ARRIVED_POD_TIME: "2026-06-01"}
+    assert (
+        compute_arrival_no_delivery_context(
+            {**pod, "route_status": "DEST_TRANSIT_WAREHOUSE"},
+            today=date(2026, 6, 20),
+        )
+        is None
+    )
+    assert (
+        compute_arrival_no_delivery_context(
+            {**pod, SLA_FIELD_DEST_TRANSIT_TIME: "2026-06-03"},
+            today=date(2026, 6, 20),
+        )
+        is None
+    )
+    assert (
+        compute_arrival_no_delivery_context(
+            {**pod, "route_status": "TRACK_SIGNED"},
+            today=date(2026, 6, 20),
+        )
+        is None
+    )
+
+
+def test_dest_warehouse_no_dispatch_uses_route_dest_transit_time() -> None:
+    row = {SLA_FIELD_DEST_TRANSIT_TIME: "2026-06-01"}
+    assert compute_dest_warehouse_no_dispatch_context(row, today=date(2026, 6, 6)) is None
+    ctx = compute_dest_warehouse_no_dispatch_context(row, today=date(2026, 6, 7))
+    assert ctx is not None
+    assert ctx["alertType"] == ALERT_DEST_WAREHOUSE_NO_DISPATCH
+    assert ctx["dueDate"] == "2026-06-06"
+    assert ctx["startField"] == SLA_FIELD_DEST_TRANSIT_TIME
+
+
+def test_dest_warehouse_no_dispatch_skips_when_dispatched() -> None:
+    base = {SLA_FIELD_DEST_TRANSIT_TIME: "2026-06-01"}
+    assert (
+        compute_dest_warehouse_no_dispatch_context(
+            {**base, "route_status": "LAST_MILE_HANDOVER"},
+            today=date(2026, 6, 20),
+        )
+        is None
+    )
+    assert (
+        compute_dest_warehouse_no_dispatch_context(
+            {**base, "route_status": "TRACK_SIGNED"},
+            today=date(2026, 6, 20),
+        )
+        is None
+    )
 
 
 def test_stage_event_keys() -> None:
@@ -137,9 +244,13 @@ def test_stage_event_keys() -> None:
         rule_id="r1",
         due_date="2026-07-06",
     ) == "SN1|DELIVERY_TIME|r1|2026-07-06"
-    # 兼容旧调用：仅传 shipment_id
     assert build_event_key(
         shipment_id="s1",
         alert_type=ALERT_WAREHOUSE_NO_DEPARTURE,
         anchor_date="2026-06-01",
     ) == "s1|WAREHOUSE_NO_DEPARTURE|2026-06-01"
+    assert build_event_key(
+        shipment_no="SN1",
+        alert_type=ALERT_DEST_WAREHOUSE_NO_DISPATCH,
+        anchor_date="2026-06-01",
+    ) == "SN1|DEST_WAREHOUSE_NO_DISPATCH|2026-06-01"

@@ -113,6 +113,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.missingAta) q.missingAta = 'true'
   if (params.missingExpectedDelivery) q.missingExpectedDelivery = 'true'
   if (params.missingDelivered) q.missingDelivered = 'true'
+  if (params.missingRouteStatus) q.missingRouteStatus = 'true'
   if (params.notDelivered) q.notDelivered = 'true'
   if (params.hasAta) q.hasAta = 'true'
   if (params.deliveryRisk?.trim()) q.deliveryRisk = params.deliveryRisk.trim()
@@ -198,6 +199,7 @@ export interface ListShipmentsParams {
   missingAta?: boolean
   missingExpectedDelivery?: boolean
   missingDelivered?: boolean
+  missingRouteStatus?: boolean
   notDelivered?: boolean
   hasAta?: boolean
   deliveryRisk?: string
@@ -384,6 +386,34 @@ export async function syncShipmentsFromDps(
     body: { shipmentNos },
     timeout: 600_000,
   })
+}
+
+export interface ShipmentDpsRouteStatusSyncResult {
+  total: number
+  updated: number
+  unchanged: number
+  empty: number
+  failed: number
+  notLocal?: number
+  missingWaybillId: number
+  missingWaybillIdNos?: string[]
+  customsExceptionOpened?: number
+  customsExceptionClosed?: number
+  errors?: string[]
+}
+
+/** 按 waybillId 拉 DPS 明细状态接口（轻量）；不传则更新全部有 waybillId 的运单 */
+export async function syncShipmentsRouteStatusFromDps(
+  shipmentNos?: string[],
+): Promise<ShipmentDpsRouteStatusSyncResult> {
+  return api<ShipmentDpsRouteStatusSyncResult>(
+    '/api/v1/shipments/sync-route-status-from-dps',
+    {
+      method: 'POST',
+      body: shipmentNos?.length ? { shipmentNos } : {},
+      timeout: 600_000,
+    },
+  )
 }
 
 /** @deprecated 使用 syncTracking() */

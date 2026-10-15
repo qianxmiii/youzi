@@ -30,7 +30,7 @@
 | `carrier_codes` | 承运商 |
 | `port_codes` | 出发/到达港口（共用） |
 | `shipment_status_codes` | 运单粗状态 |
-| `shipment_route_status_codes` | DPS 轨迹细状态（含 `dps_status`） |
+| `shipment_route_status_codes` | DPS 轨迹明细状态（含 `dps_status`） |
 
 ### 初始状态码
 
@@ -41,7 +41,7 @@
 | `INSPECTION` | 查验 |
 | `UNKNOWN` | 未知 |
 
-### 轨迹细状态（节选）
+### 轨迹明细状态（节选）
 
 | code | dps_status | name_zh |
 |------|------------|---------|
@@ -104,7 +104,10 @@
 | `destination_port_code` | 到达港口 | `port_codes` |
 | `delivered_time` | 签收时间 | |
 | `status_code` | 粗状态（仅 `signingTime`→已签收） | `shipment_status_codes` |
-| `route_status` | 轨迹细状态（DPS route status） | `shipment_route_status_codes` |
+| `route_status` | 轨迹明细状态（DPS route status） | `shipment_route_status_codes` |
+| `route_warehouse_in_time` | 明细 202 入库时间 | — |
+| `route_arrived_pod_time` | 明细 306 到港时间 | — |
+| `route_dest_transit_warehouse_time` | 明细 502 中转仓时间 | — |
 | `exception_code` | 当前异常（快照，可空） | `shipment_exception_codes` |
 | `exception_opened_time` | 当前异常开始时间 | |
 | `created_time` | 创建时间 | |

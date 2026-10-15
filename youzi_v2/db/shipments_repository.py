@@ -23,6 +23,7 @@ from .shipment_list_filters import (
     append_has_tracking_number,
     append_keyword_search,
     append_missing_field,
+    append_missing_route_status,
     append_not_delivered,
     append_time_range,
     append_unified_batch_number_search,
@@ -138,6 +139,9 @@ _UPDATABLE = (
     "delivered_time",
     "status_code",
     "route_status",
+    "route_warehouse_in_time",
+    "route_arrived_pod_time",
+    "route_dest_transit_warehouse_time",
     "payment_status",
     "latest_tracking_time",
     "latest_tracking_desc",
@@ -245,6 +249,21 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "routeStatus": (
             row["route_status"] if "route_status" in row.keys() else None
         ),
+        "routeWarehouseInTime": (
+            row["route_warehouse_in_time"]
+            if "route_warehouse_in_time" in row.keys()
+            else None
+        ),
+        "routeArrivedPodTime": (
+            row["route_arrived_pod_time"]
+            if "route_arrived_pod_time" in row.keys()
+            else None
+        ),
+        "routeDestTransitWarehouseTime": (
+            row["route_dest_transit_warehouse_time"]
+            if "route_dest_transit_warehouse_time" in row.keys()
+            else None
+        ),
         "paymentStatus": (
             row["payment_status"] if "payment_status" in row.keys() else None
         ),
@@ -302,6 +321,9 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "deliveredTime": "delivered_time",
         "statusCode": "status_code",
         "routeStatus": "route_status",
+        "routeWarehouseInTime": "route_warehouse_in_time",
+        "routeArrivedPodTime": "route_arrived_pod_time",
+        "routeDestTransitWarehouseTime": "route_dest_transit_warehouse_time",
         "paymentStatus": "payment_status",
         "latestTrackingTime": "latest_tracking_time",
         "latestTrackingDesc": "latest_tracking_desc",
@@ -443,6 +465,7 @@ class ShipmentsRepository:
         missing_ata: bool | None = None,
         missing_expected_delivery: bool | None = None,
         missing_delivered: bool | None = None,
+        missing_route_status: bool | None = None,
         not_delivered: bool | None = None,
         has_ata: bool | None = None,
         delivery_risk: str | None = None,
@@ -734,6 +757,8 @@ class ShipmentsRepository:
         ):
             if flag is True:
                 append_missing_field(conditions, field=field_key, missing=True)
+        if missing_route_status is True:
+            append_missing_route_status(conditions)
         if not_delivered is True:
             append_not_delivered(conditions)
         if has_ata is True:
@@ -1341,6 +1366,19 @@ class ShipmentsRepository:
         if found is None:
             return None
         return self._enrich_subscribed(_row_to_api(found))
+
+    def list_shipment_nos_with_waybill_id(self) -> list[str]:
+        """有 DPS waybill_id 的运单号（明细状态轻量同步用）。"""
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT shipment_no FROM {TABLE_NAME}
+                WHERE TRIM(COALESCE(shipment_no, '')) != ''
+                  AND waybill_id IS NOT NULL AND TRIM(waybill_id) != ''
+                ORDER BY shipment_no
+                """
+            ).fetchall()
+        return [str(r["shipment_no"]) for r in rows]
 
     def list_for_tracking_sync(
         self,

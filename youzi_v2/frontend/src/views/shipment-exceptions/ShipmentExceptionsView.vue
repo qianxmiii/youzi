@@ -96,9 +96,14 @@ const timelinessStatusOptions = [
   { label: '严重超时', value: 'severe_overdue' },
   { label: '入库未开船', value: 'WAREHOUSE_NO_DEPARTURE' },
   { label: '到港未送仓', value: 'ARRIVAL_NO_DELIVERY' },
+  { label: '到仓未派送', value: 'DEST_WAREHOUSE_NO_DISPATCH' },
 ]
 
-const STAGE_ALERT_TYPES = new Set(['WAREHOUSE_NO_DEPARTURE', 'ARRIVAL_NO_DELIVERY'])
+const STAGE_ALERT_TYPES = new Set([
+  'WAREHOUSE_NO_DEPARTURE',
+  'ARRIVAL_NO_DELIVERY',
+  'DEST_WAREHOUSE_NO_DISPATCH',
+])
 
 function timelinessListParams(status: string | null) {
   if (!status) return {}
@@ -260,6 +265,7 @@ function alertTypeLabel(row: ShipmentSlaAlert): string {
   const t = (row.alertType || '').trim()
   if (t === 'WAREHOUSE_NO_DEPARTURE') return '入库未开船'
   if (t === 'ARRIVAL_NO_DELIVERY') return '到港未送仓'
+  if (t === 'DEST_WAREHOUSE_NO_DISPATCH') return '到仓未派送'
   if (t === 'DELIVERY_TIME') return '运输时效'
   return t || '运输时效'
 }

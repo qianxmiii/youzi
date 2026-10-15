@@ -50,6 +50,9 @@ CREATE TABLE {TABLE_NAME} (
     delivered_time TEXT,
     status_code TEXT,
     route_status TEXT,
+    route_warehouse_in_time TEXT,
+    route_arrived_pod_time TEXT,
+    route_dest_transit_warehouse_time TEXT,
     payment_status TEXT CHECK (
         payment_status IS NULL OR payment_status IN ('UNPAID', 'PAID')
     ),
@@ -175,6 +178,18 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(
             f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_route_status "
             f"ON {TABLE_NAME}(route_status)"
+        )
+    if "route_warehouse_in_time" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN route_warehouse_in_time TEXT"
+        )
+    if "route_arrived_pod_time" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN route_arrived_pod_time TEXT"
+        )
+    if "route_dest_transit_warehouse_time" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN route_dest_transit_warehouse_time TEXT"
         )
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "

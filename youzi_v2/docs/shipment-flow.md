@@ -23,9 +23,11 @@
             异常开启 → 处理 → 异常关闭
 ```
 
-粗状态存 `shipments.status_code`（码表 `shipment_status_codes`）；DPS 轨迹细状态存 `shipments.route_status`（码表 `shipment_route_status_codes`，来自 `commerceWaybillRouteInfo.status`）。粗状态仅在有 `signingTime` 时为 `DELIVERED`，**不**因 601 / `markVos` 判签收；601 只映射为细状态 `TRACK_SIGNED`。
+粗状态存 `shipments.status_code`（码表 `shipment_status_codes`）；DPS 轨迹明细状态存 `shipments.route_status`（码表 `shipment_route_status_codes`，来自 `commerceWaybillRouteInfo.status`）。粗状态仅在有 `signingTime` 时为 `DELIVERED`，**不**因 601 / `markVos` 判签收；601 只映射为明细状态 `TRACK_SIGNED`。
 
-DPS 同步后：细状态 206/402 自动开启清关异常；最新关键节点离开这两类时自动解除（不覆盖掉件等人工异常）。详见 [design/shipment-route-status-design.md](./design/shipment-route-status-design.md)。
+异常跟踪的签收判断以明细状态 `TRACK_SIGNED` 为准；阶段卡点起算分别为 202 入库 / 306 到港 / 502 到中转仓节点时间（同步写入对应 `route_*_time` 字段）。不以粗状态 `DELIVERED` / `delivered_time` / `ATA` / `warehouse_entry_time` 作卡点起算。
+
+DPS 同步后：明细状态 206/402 自动开启清关异常；最新关键节点离开这两类时自动解除（不覆盖掉件等人工异常）。工作台首页有未签收明细状态漏斗，点击可跳转运单列表。详见 [design/shipment-route-status-design.md](./design/shipment-route-status-design.md)。
 
 ## 数据录入
 

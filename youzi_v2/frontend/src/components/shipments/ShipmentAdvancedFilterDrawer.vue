@@ -48,6 +48,7 @@ const missingEta = defineModel<boolean>('missingEta', { default: false })
 const missingAta = defineModel<boolean>('missingAta', { default: false })
 const missingExpectedDelivery = defineModel<boolean>('missingExpectedDelivery', { default: false })
 const missingDelivered = defineModel<boolean>('missingDelivered', { default: false })
+const missingRouteStatus = defineModel<boolean>('missingRouteStatus', { default: false })
 const notDelivered = defineModel<boolean>('notDelivered', { default: false })
 const deliveryRisk = defineModel<string | null>('deliveryRisk', { default: null })
 const timeField = defineModel<string | null>('timeField', { default: null })
@@ -208,6 +209,7 @@ function apply() {
             <NCheckbox v-model:checked="filterNoCarrierTracking" size="small">承运商无轨迹</NCheckbox>
             <NCheckbox v-model:checked="hasAta" size="small">已到港</NCheckbox>
             <NCheckbox v-model:checked="notDelivered" size="small">未签收</NCheckbox>
+            <NCheckbox v-model:checked="missingRouteStatus" size="small">无明细状态</NCheckbox>
             <NCheckbox v-model:checked="missingEtd" size="small">缺 ETD</NCheckbox>
             <NCheckbox v-model:checked="missingAtd" size="small">缺 ATD</NCheckbox>
             <NCheckbox v-model:checked="missingEta" size="small">缺 ETA</NCheckbox>

@@ -153,6 +153,32 @@ def run_scheduled_tasks_dps_shipment_sync(
     )
     return ShipmentDpsSyncRunResult(**result)
 
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-dps-route-status-sync",
+    response_model=ShipmentDpsRouteStatusSyncResult,
+)
+def run_scheduled_tasks_dps_route_status_sync():
+    """批处理：更新全部明细状态（有 waybillId 的运单）。"""
+    from ..services.shipment_dps_route_status_sync import sync_route_status_by_waybill_ids
+
+    try:
+        result = sync_route_status_by_waybill_ids(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            None,
+        )
+        return ShipmentDpsRouteStatusSyncResult(**result)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_route_status_query。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 @router.post(
     "/api/v1/scheduled-tasks/run-exception-followup",
     response_model=ExceptionFollowupRunResult,

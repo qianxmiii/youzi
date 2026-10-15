@@ -513,6 +513,43 @@ def sync_shipments_from_dps(body: ShipmentDpsSyncByOrderRequest):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
+
+@router.post(
+    "/api/v1/shipments/sync-route-status-from-dps",
+    response_model=ShipmentDpsRouteStatusSyncResult,
+)
+def sync_shipments_route_status_from_dps(
+    body: ShipmentDpsRouteStatusSyncRequest | None = Body(None),
+):
+    """
+    按本地 waybillId 调用 config.dps_route_status_query 明细状态接口，
+    只回写 route_status（及预计送仓/最新轨迹摘要），联动清关异常。
+    - 传入 shipmentNos：最多 200 个（勾选更新）
+    - 不传 / 空列表：同步全部有 waybillId 的运单
+    """
+    from ..services.shipment_dps_route_status_sync import sync_route_status_by_waybill_ids
+
+    raw = (body.shipment_nos if body else None) or []
+    nos = [n.strip() for n in raw if n and n.strip()]
+    if nos and len(nos) > 200:
+        raise HTTPException(status_code=400, detail="单次最多 200 个运单号；全量请勿传 shipmentNos")
+    try:
+        result = sync_route_status_by_waybill_ids(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            nos or None,
+        )
+        return ShipmentDpsRouteStatusSyncResult(**result)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_route_status_query。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
 @router.post("/api/v1/shipments/import")
 async def import_shipments_excel(file: UploadFile = File(...)):
     """

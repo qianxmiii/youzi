@@ -35,7 +35,7 @@
 2. 支持提前 N 天提醒即将超时的未签收运单。
 3. 支持超过预估截止日后生成已超时或严重超时预警。
 4. 支持入库后一周仍无 ETD/ATD 的未开船预警。
-5. 支持 ATA 后超过 5 天仍未送仓/签收的到港未送仓预警。
+5. 支持明细 306 到港后超过 5 天仍未到中转仓的到港未送仓预警；支持 502 到仓后超过 5 天仍未交仓的到仓未派送预警。
 6. 支持从预警一键转为人工异常。
 7. 支持签收后自动关闭时效预警和未完成跟进提醒。
 8. 异常跟踪页面只承载当前待办；已签收或已解决的历史结果进入统计管理复盘。
@@ -119,44 +119,44 @@ SLA 是 Service Level Agreement，在本系统中建议面向用户展示为“�
 
 除了全程运输超时，还需要监控前置阶段卡点：货物已经入库，但长时间没有开船计划或实际离港。
 
-规则口径：
+规则口径（起算以明细状态 **202 入库** 节点时间为准）：
 
 ```text
-有 warehouse_entry_time
+有 route_warehouse_in_time（DPS status=202）
 且 ETD 为空
 且 ATD 为空
-且未签收
-且 today > warehouse_entry_time + 7 天
+且未签收（route_status ≠ TRACK_SIGNED）
+且 today > route_warehouse_in_time + 7 天
   -> 生成入库未开船预警
 ```
 
-这个预警不依赖渠道预估运输天数，也不使用 `expected_delivery_time`。它关注的是“入库后是否及时进入船期/离港阶段”。
-
-数据来源：
-
-```text
-shipments.warehouse_entry_time = 入仓/入库时间
-DPS row.warehouseEntryTime 应单独写入 warehouse_entry_time
-```
-
-`warehouseEntryTime` 不应只作为 `latest_tracking_time` 的兜底。最新轨迹时间表示轨迹摘要，入库时间表示业务节点，两者需要独立保存。
+这个预警不依赖渠道预估运输天数，也不使用 `expected_delivery_time` / `warehouse_entry_time`。
 
 ### 到港未送仓预警
 
-到港后也需要监控送仓阶段卡点：已经有 `ATA`，但长时间没有送仓/签收结果。
-
-首版把“送仓完成”用 `delivered_time` 或 `status_code = DELIVERED` 表示。也就是说：
+到港后监控是否及时到中转仓/交仓。起算以明细状态 **306 到达目的港** 节点时间为准：
 
 ```text
-有 ATA
-且未签收
-且 today > ATA + 5 天
+有 route_arrived_pod_time（DPS status=306）
+且尚未 DEST_TRANSIT_WAREHOUSE / LAST_MILE_HANDOVER / TRACK_SIGNED
+且 today > route_arrived_pod_time + 5 天
   -> 生成到港未送仓预警
 ```
 
-这条规则不依赖渠道预估运输天数，也不使用 `expected_delivery_time`。它关注的是“到港后是否及时完成送仓/签收”。
+不再使用 `ATA` 作为起算。
 
-如果后续需要区分“送仓完成但未签收”，可以新增独立业务节点字段，例如 `warehouse_delivery_time` 或 `pod_time`，再把判断口径从 `delivered_time` 扩展为更细的送仓完成状态。
+### 到仓未派送预警
+
+到目的国中转仓后监控是否及时交仓/签收。起算以明细状态 **502 到达目的国中转仓库** 节点时间为准：
+
+```text
+有 route_dest_transit_warehouse_time（DPS status=502）
+且尚未 LAST_MILE_HANDOVER / TRACK_SIGNED
+且 today > route_dest_transit_warehouse_time + 5 天
+  -> 生成到仓未派送预警（DEST_WAREHOUSE_NO_DISPATCH）
+```
+
+全程运输超时仍仅以 `TRACK_SIGNED` 视为签收关闭。上述三个节点时间由明细状态同步从轨迹节点最早出现时间回写。
 
 ## 预警状态
 
@@ -170,7 +170,7 @@ DPS row.warehouseEntryTime 应单独写入 warehouse_entry_time
 | `overdue` | 已超时 | 当前日期已超过截止日 |
 | `severe_overdue` | 严重超时 | 超过截止日达到严重超时天数 |
 
-入库未开船、到港未送仓这类阶段卡点预警首版可使用：
+入库未开船、到港未送仓、到仓未派送这类阶段卡点预警首版可使用：
 
 ```text
 risk_level = overdue
@@ -451,7 +451,7 @@ CREATE TABLE shipment_sla_alerts (
 
 | 字段 | 说明 |
 | --- | --- |
-| `alert_type` | 预警类型，首版包括 `DELIVERY_TIME`、`WAREHOUSE_NO_DEPARTURE`、`ARRIVAL_NO_DELIVERY` |
+| `alert_type` | 预警类型：`DELIVERY_TIME`、`WAREHOUSE_NO_DEPARTURE`、`ARRIVAL_NO_DELIVERY`、`DEST_WAREHOUSE_NO_DISPATCH` |
 | `risk_level` | `warning_soon`、`overdue`、`severe_overdue` |
 | `status` | `open`、`acknowledged`、`converted`、`resolved`、`ignored` |
 | `severity` | `info`、`warning`、`urgent` |
@@ -468,8 +468,9 @@ CREATE TABLE shipment_sla_alerts (
 
 ```text
 DELIVERY_TIME: shipment_id + alert_type + rule_id + due_date
-WAREHOUSE_NO_DEPARTURE: shipment_id + alert_type + warehouse_entry_date
-ARRIVAL_NO_DELIVERY: shipment_id + alert_type + ata_date
+WAREHOUSE_NO_DEPARTURE: shipment_id + alert_type + route_warehouse_in_date
+ARRIVAL_NO_DELIVERY: shipment_id + alert_type + route_arrived_pod_date
+DEST_WAREHOUSE_NO_DISPATCH: shipment_id + alert_type + route_dest_transit_date
 ```
 
 ### 3. shipment_exception_followup_notifications
@@ -521,7 +522,7 @@ channel_code
 加载未签收运单
   -> 先清理已签收但仍处于 open/acknowledged 的历史预警
   -> 检查入库后一周仍无 ETD/ATD 的前置阶段预警
-  -> 检查 ATA 后超过 5 天仍未送仓/签收的到港阶段预警
+  -> 检查 306 到港 / 502 到仓阶段卡点预警
   -> 找到运单匹配的运输时效规则
   -> 计算预估截止日 due_date
   -> 计算提醒日 warning_date
@@ -545,21 +546,21 @@ rule_scope = channel
 ### 入库未开船判断
 
 ```text
-如果 delivered_time 存在或 status_code = DELIVERED:
+如果 route_status = TRACK_SIGNED:
   status = resolved
 
-否则如果 warehouse_entry_time 为空:
+否则如果 route_warehouse_in_time 为空:
   不生成入库未开船预警
 
 否则如果 ETD 存在或 ATD 存在:
   关闭该票未解决的入库未开船预警
 
-否则如果 today > warehouse_entry_time + 7 天:
+否则如果 today > route_warehouse_in_time + 7 天:
   alert_type = WAREHOUSE_NO_DEPARTURE
   risk_level = overdue
-  due_date = warehouse_entry_time + 7 天
-  start_field = warehouse_entry_time
-  start_time = warehouse_entry_time
+  due_date = route_warehouse_in_time + 7 天
+  start_field = route_warehouse_in_time
+  start_time = route_warehouse_in_time
 ```
 
 这条规则与全程运输超时并行。一票运单可以先触发入库未开船预警，后续 ETD/ATD 补齐后该预警关闭；等 ATD 存在后，再进入 `ATD + 渠道预估天数` 的全程运输超时监控。
@@ -567,21 +568,37 @@ rule_scope = channel
 ### 到港未送仓判断
 
 ```text
-如果 delivered_time 存在或 status_code = DELIVERED:
+如果 route_status in (DEST_TRANSIT_WAREHOUSE, LAST_MILE_HANDOVER, TRACK_SIGNED)
+   或已有 route_dest_transit_warehouse_time:
   status = resolved
 
-否则如果 ATA 为空:
+否则如果 route_arrived_pod_time 为空:
   不生成到港未送仓预警
 
-否则如果 today > ATA + 5 天:
+否则如果 today > route_arrived_pod_time + 5 天:
   alert_type = ARRIVAL_NO_DELIVERY
   risk_level = overdue
-  due_date = ATA + 5 天
-  start_field = ATA
-  start_time = ATA
+  due_date = route_arrived_pod_time + 5 天
+  start_field = route_arrived_pod_time
+  start_time = route_arrived_pod_time
 ```
 
-这条规则与全程运输超时并行。它不要求 ATD 存在；只要 ATA 存在且未签收，即可判断到港后送仓是否滞后。
+### 到仓未派送判断
+
+```text
+如果 route_status in (LAST_MILE_HANDOVER, TRACK_SIGNED):
+  status = resolved
+
+否则如果 route_dest_transit_warehouse_time 为空:
+  不生成到仓未派送预警
+
+否则如果 today > route_dest_transit_warehouse_time + 5 天:
+  alert_type = DEST_WAREHOUSE_NO_DISPATCH
+  risk_level = overdue
+  due_date = route_dest_transit_warehouse_time + 5 天
+  start_field = route_dest_transit_warehouse_time
+  start_time = route_dest_transit_warehouse_time
+```
 
 ### 风险等级判断
 
@@ -628,12 +645,12 @@ rule_scope = channel
 
 ```text
 查找 status in (open, acknowledged) 的预警
-  -> 如果关联运单已有 delivered_time 或 status_code = DELIVERED
+  -> 如果关联运单 route_status = TRACK_SIGNED
   -> 更新为 resolved
   -> 同时关闭该票未完成的异常跟进提醒
 ```
 
-运单保存、批量更新、轨迹回写或签收时间审批通过时，如果写入了签收时间，也应立即执行同样的关闭逻辑。扫描兜底负责修复历史遗漏，保存时关闭负责保证操作后的即时反馈。
+明细状态同步或整单 DPS 同步写入 `TRACK_SIGNED` 后，立即执行同样的关闭逻辑。扫描兜底负责修复历史遗漏，同步时关闭负责保证操作后的即时反馈。
 
 ### 日期口径
 
@@ -721,7 +738,7 @@ due_date = date(due_date)
 
 ```text
 风险等级：即将超时 / 已超时 / 严重超时
-预警类型：运输时效 / 入库未开船 / 到港未送仓
+预警类型：运输时效 / 入库未开船 / 到港未送仓 / 到仓未派送
 预警处理状态：待处理 / 已处理 / 已转异常 / 已解决 / 已忽略
 当前异常类型：查验中 / 掉件 / 暂扣 / 破损 / 运输超时
 ```
@@ -870,14 +887,14 @@ shipment_exception_followup_notifications = 人工异常跟进提醒
 3. DPS 同步单独写入 `warehouse_entry_time`，不要只把 `warehouseEntryTime` 当作最新轨迹时间兜底。
 4. 截止日计算只使用 `ATD + 渠道预估天数`；没有 `ATD` 或没有命中渠道时效规则则跳过全程运输超时扫描。
 5. 入库超过 7 天（第 8 天起）仍无 `ETD` 且无 `ATD` 时，生成 `WAREHOUSE_NO_DEPARTURE` 预警；补齐 `ETD` 或 `ATD` 后自动关闭该类预警。
-6. ATA 后超过 5 天仍未签收时，生成 `ARRIVAL_NO_DELIVERY` 预警；签收后自动关闭该类预警。
+6. 明细 306 到港后超过 5 天仍未到中转仓时，生成 `ARRIVAL_NO_DELIVERY`；502 到仓后超过 5 天仍未交仓时，生成 `DEST_WAREHOUSE_NO_DISPATCH`；`TRACK_SIGNED` 后关闭未解决预警。
 7. 生成 `shipment_sla_alerts`，运输时效风险等级为 `warning_soon`、`overdue`、`severe_overdue`，阶段卡点预警首版使用 `overdue`。
 8. 异常跟踪页面集中处理当前待办，默认排除已签收或已解决预警，支持标记已处理、忽略、转为人工异常。
 9. 转为人工异常时复用现有 `shipment_exception_events` 和当前异常字段。
 10. 签收后自动关闭未解决预警，并关闭该票未完成的异常跟进提醒；已签收超时表现进入统计管理。
 11. 新增 `运单中心 / 异常跟踪` 页面集中处理。
 12. 首页增加异常跟踪摘要卡片，只展示数量和跳转入口。
-13. 顶栏通知只推严重超时、已超时待处理、入库未开船待处理、到港未送仓待处理、人工异常跟进到期、分配给当前用户的异常。
+13. 顶栏通知只推严重超时、已超时待处理、入库未开船/到港未送仓/到仓未派送待处理、人工异常跟进到期、分配给当前用户的异常。
 
 暂不强制实现：
 

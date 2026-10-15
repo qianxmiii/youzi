@@ -4079,7 +4079,7 @@ function initCarrierSelector() {
     if (!carrierSelect || typeof expressPricing === 'undefined' || !expressPricing) return;
 
     carrierSelect.innerHTML = '';
-    const carriers = Object.keys(expressPricing);
+    const carriers = Object.keys(expressPricing).filter((k) => k !== 'updatedAt');
     carriers.forEach(carrierName => {
         const option = document.createElement('option');
         option.value = carrierName;

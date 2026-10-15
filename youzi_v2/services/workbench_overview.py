@@ -18,6 +18,11 @@ from youzi_v2.db.shipment_sla_alerts_repository import ShipmentSlaAlertsReposito
 from youzi_v2.db.shipment_tracking_time_candidates_repository import (
     ShipmentTrackingTimeCandidatesRepository,
 )
+from youzi_v2.db.shipment_list_filters import sql_missing_route_status, sql_not_delivered
+from youzi_v2.db.shipment_route_status import (
+    CUSTOMS_EXCEPTION_ROUTE_STATUSES,
+    ROUTE_STATUS_SEEDS,
+)
 from youzi_v2.db.shipments_repository import ShipmentsRepository
 from youzi_v2.services.maritime_alerts import build_maritime_alerts_overview
 from youzi_v2.services.payment_reminder_rules import REMINDER_OVERDUE, REMINDER_TODAY
@@ -471,13 +476,74 @@ def _build_overview(*, database: Database, today: date | None = None) -> dict[st
     }
 
 
+def _route_status_href(code: str) -> str:
+    return f"/shipments?routeStatus={quote(code)}&notDelivered=true"
+
+
+def _build_route_status(*, database: Database) -> dict[str, Any]:
+    """未签收运单的明细状态漏斗（关键节点 + 无明细状态）。"""
+    unsigned_sql = sql_not_delivered(None)
+    missing_sql = sql_missing_route_status(None)
+    with database.lock:
+        unsigned_total = int(
+            database.conn.execute(
+                f"SELECT COUNT(*) AS c FROM {SHIPMENTS_TABLE} WHERE {unsigned_sql}"
+            ).fetchone()["c"]
+            or 0
+        )
+        missing_count = int(
+            database.conn.execute(
+                f"""
+                SELECT COUNT(*) AS c FROM {SHIPMENTS_TABLE}
+                WHERE {unsigned_sql} AND {missing_sql}
+                """
+            ).fetchone()["c"]
+            or 0
+        )
+        grouped = database.conn.execute(
+            f"""
+            SELECT UPPER(TRIM(COALESCE(route_status, ''))) AS rs, COUNT(*) AS c
+            FROM {SHIPMENTS_TABLE}
+            WHERE {unsigned_sql}
+            GROUP BY rs
+            """
+        ).fetchall()
+
+    counts: dict[str, int] = {}
+    for row in grouped:
+        key = str(row["rs"] or "").strip().upper()
+        counts[key] = int(row["c"] or 0)
+
+    items: list[dict[str, Any]] = []
+    for code, _dps, zh, _en, _order, is_milestone in ROUTE_STATUS_SEEDS:
+        if not is_milestone:
+            continue
+        items.append(
+            {
+                "code": code,
+                "nameZh": zh,
+                "count": counts.get(code, 0),
+                "isException": code in CUSTOMS_EXCEPTION_ROUTE_STATUSES,
+                "href": _route_status_href(code),
+            }
+        )
+
+    return {
+        "unsignedTotal": unsigned_total,
+        "missingCount": missing_count,
+        "missingHref": "/shipments?missingRouteStatus=true&notDelivered=true",
+        "viewAllHref": "/shipments?notDelivered=true&routeStatus=_ALL",
+        "items": items,
+    }
+
+
 def build_workbench_overview(
     database: Database,
     *,
     todo_limit: int = 8,
     arrival_limit: int = 6,
 ) -> dict[str, Any]:
-    """聚合首页四模块；单模块失败不影响其余模块。"""
+    """聚合首页模块；单模块失败不影响其余模块。"""
     todo_limit = max(1, min(int(todo_limit or 8), 20))
     arrival_limit = max(1, min(int(arrival_limit or 6), 20))
 
@@ -530,6 +596,16 @@ def build_workbench_overview(
             "deliveredThisWeek": 0,
         },
     )
+    route_status = _safe_module(
+        lambda: _build_route_status(database=database),
+        empty={
+            "unsignedTotal": 0,
+            "missingCount": 0,
+            "missingHref": "/shipments?missingRouteStatus=true&notDelivered=true",
+            "viewAllHref": "/shipments?notDelivered=true&routeStatus=_ALL",
+            "items": [],
+        },
+    )
 
     return {
         "generatedAt": now_str(),
@@ -537,4 +613,5 @@ def build_workbench_overview(
         "todos": todos,
         "arrivals": arrivals,
         "overview": overview,
+        "routeStatus": route_status,
     }

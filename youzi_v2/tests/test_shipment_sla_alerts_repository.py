@@ -210,6 +210,7 @@ def _insert_shipment_alert(
     alert_status: str = STATUS_OPEN,
     delivered_time: str = "",
     status_code: str = "",
+    route_status: str = "",
     atd: str = "2026-04-21",
     alert_type: str = "sla_transit",
 ) -> None:
@@ -218,11 +219,20 @@ def _insert_shipment_alert(
         db.conn.execute(
             f"""
             INSERT INTO {SHIPMENTS_TABLE} (
-                id, shipment_no, atd, delivered_time, status_code,
+                id, shipment_no, atd, delivered_time, status_code, route_status,
                 created_time, updated_time
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (ship_id, shipment_no, atd, delivered_time, status_code, now, now),
+            (
+                ship_id,
+                shipment_no,
+                atd,
+                delivered_time,
+                status_code,
+                route_status,
+                now,
+                now,
+            ),
         )
         db.conn.execute(
             """
@@ -265,6 +275,7 @@ def test_list_alerts_todo_excludes_delivered_shipments(tmp_path: Path) -> None:
         ship_id=delivered_id,
         alert_id=str(uuid.uuid4()),
         shipment_no="SN-DELIVERED",
+        route_status="TRACK_SIGNED",
         delivered_time="2026-06-15 10:00:00",
     )
 
@@ -288,6 +299,7 @@ def test_resolve_delivered_stale_alerts(tmp_path: Path) -> None:
         ship_id=ship_id,
         alert_id=alert_id,
         shipment_no="SN-STALE",
+        route_status="TRACK_SIGNED",
         delivered_time="2026-06-15",
     )
 
@@ -341,6 +353,7 @@ def test_list_alerts_days_in_transit_uses_delivered_date(tmp_path: Path) -> None
         ship_id=ship_id,
         alert_id=str(uuid.uuid4()),
         shipment_no="SN-DAYS",
+        route_status="TRACK_SIGNED",
         delivered_time="2026-06-15",
         atd="2026-04-21",
     )

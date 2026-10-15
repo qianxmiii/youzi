@@ -84,7 +84,7 @@ def map_dps_status(
 ) -> str:
     """
     粗状态：仅 signingTime → DELIVERED；有轨迹 status 则 IN_TRANSIT；否则 UNKNOWN。
-    不读 markVos / 601 / nodeDesc（601 只写入细状态 route_status=TRACK_SIGNED）。
+    不读 markVos / 601 / nodeDesc（601 只写入明细状态 route_status=TRACK_SIGNED）。
     """
     del params  # 保留签名兼容；粗状态不再使用 markVos
     if _opt_str(row.get("signingTime")):

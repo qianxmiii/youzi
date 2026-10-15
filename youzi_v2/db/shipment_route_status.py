@@ -1,4 +1,4 @@
-"""DPS 轨迹细状态：commerceWaybillRouteInfo.status → 本地 route_status。"""
+"""DPS 轨迹明细状态：commerceWaybillRouteInfo.status → 本地 route_status。"""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ _NON_MILESTONE_CODES: frozenset[str] = frozenset(
 _DPS_TO_CODE: dict[str, str] = {dps: code for code, dps, *_ in ROUTE_STATUS_SEEDS}
 _CODE_TO_LABEL: dict[str, str] = {code: zh for code, _dps, zh, *_ in ROUTE_STATUS_SEEDS}
 
-# 细状态 → 自动异常码（与 shipment_exception_codes 一致）
+# 明细状态 → 自动异常码（与 shipment_exception_codes 一致）
 CUSTOMS_EXCEPTION_ROUTE_STATUSES: frozenset[str] = frozenset(
     {
         "EXPORT_CUSTOMS_EXCEPTION",
@@ -47,6 +47,10 @@ def normalize_dps_route_status(raw: Any) -> str | None:
     return text or None
 
 
+def non_milestone_route_status_codes() -> frozenset[str]:
+    return _NON_MILESTONE_CODES
+
+
 def is_milestone_route_status(code: str | None) -> bool:
     key = (code or "").strip().upper()
     if not key:
@@ -57,7 +61,7 @@ def is_milestone_route_status(code: str | None) -> bool:
 def map_dps_route_status(raw: Any) -> str | None:
     """
     DPS status → 本地 route_status。
-    非关键节点（如 100 信息传递）返回 None，避免写入/覆盖关键细状态。
+    非关键节点（如 100 信息传递）返回 None，避免写入/覆盖关键明细状态。
     """
     dps = normalize_dps_route_status(raw)
     if not dps:

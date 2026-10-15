@@ -54,6 +54,7 @@ import {
   subscribeShipment,
   syncCarrierTracking,
   syncShipmentsFromDps,
+  syncShipmentsRouteStatusFromDps,
   syncTracking,
   unsubscribeShipment,
   updateShipment,
@@ -98,7 +99,12 @@ import { dateOnlyToTimestamp, formatRelativeTime } from '@/utils/formatDateTime'
 import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
-import { formatShipmentDetailSummaryCopyText, formatShipmentDetailSummaryWithCustomerNoCopyText, joinEqualsParts } from '@/utils/shipmentCopyFormat'
+import {
+  formatShipmentDetailSummaryCopyText,
+  formatShipmentDetailSummaryWithCustomerNoCopyText,
+  formatShipmentTrackingNumbersCopyText,
+  joinEqualsParts,
+} from '@/utils/shipmentCopyFormat'
 import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
   daysSinceLocalCalendar,
@@ -124,6 +130,9 @@ const exporting = ref(false)
 const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
 const syncingDps = ref(false)
+const syncingRouteStatus = ref(false)
+/** 列表状态列单行点击刷新明细状态 */
+const syncingRouteStatusRowId = ref<number | null>(null)
 const carrierDaily = ref<TrackingSyncDailyStats | null>(null)
 const freshnessStats = ref<TrackingFreshnessStats | null>(null)
 const filterNoInternalTracking = ref(false)
@@ -173,6 +182,7 @@ const missingEta = ref(false)
 const missingAta = ref(false)
 const missingExpectedDelivery = ref(false)
 const missingDelivered = ref(false)
+const missingRouteStatus = ref(false)
 const notDelivered = ref(false)
 const hasAta = ref(false)
 const deliveryRisk = ref<string | null>(null)
@@ -886,6 +896,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   missingAta: missingAta.value,
   missingExpectedDelivery: missingExpectedDelivery.value,
   missingDelivered: missingDelivered.value,
+  missingRouteStatus: missingRouteStatus.value,
   notDelivered: notDelivered.value,
   hasAta: hasAta.value,
   deliveryRisk: deliveryRisk.value,
@@ -938,6 +949,7 @@ const advancedOnlyActiveCount = computed(() => {
   if (missingAta.value) n++
   if (missingExpectedDelivery.value) n++
   if (missingDelivered.value) n++
+  if (missingRouteStatus.value) n++
   if (notDelivered.value) n++
   if (hasAta.value) n++
   if (deliveryRisk.value) n++
@@ -1174,6 +1186,29 @@ function applyRouteExceptionFilter() {
   filterStatus.value = null
 }
 
+const ROUTE_STATUS_ALL = '_ALL'
+
+function applyRouteRouteStatusFunnel() {
+  const raw = readRouteQueryString('routeStatus')
+  const missing = readRouteBool('missingRouteStatus')
+  if (!raw && !missing) return
+  filterStatus.value = null
+  if (readRouteBool('notDelivered')) notDelivered.value = true
+  if (missing) {
+    missingRouteStatus.value = true
+    filterRouteStatus.value = null
+    return
+  }
+  const code = raw.toUpperCase()
+  if (code === ROUTE_STATUS_ALL) {
+    filterRouteStatus.value = null
+    missingRouteStatus.value = false
+    return
+  }
+  filterRouteStatus.value = code
+  missingRouteStatus.value = false
+}
+
 function readRouteBool(key: string): boolean {
   const q = route.query[key]
   const raw = Array.isArray(q) ? q[0] : q
@@ -1266,11 +1301,28 @@ watch(
   },
 )
 
+watch(
+  () => [route.query.routeStatus, route.query.missingRouteStatus] as const,
+  () => {
+    applyRouteRouteStatusFunnel()
+    onFiltersChanged()
+  },
+)
+
+watch(filterRouteStatus, (v) => {
+  if (v) missingRouteStatus.value = false
+})
+
+watch(missingRouteStatus, (v) => {
+  if (v) filterRouteStatus.value = null
+})
+
 onMounted(async () => {
   applyRouteShipmentNoToSearch()
   applyRouteStatusFilter()
   applyRouteExceptionFilter()
   applyRouteWorkbenchFilters()
+  applyRouteRouteStatusFunnel()
   await Promise.all([
     loadDictTypes('country_code'),
     loadFilterOptions(),
@@ -1553,6 +1605,7 @@ function resetFilterValues() {
   missingAta.value = false
   missingExpectedDelivery.value = false
   missingDelivered.value = false
+  missingRouteStatus.value = false
   notDelivered.value = false
   hasAta.value = false
   deliveryRisk.value = null
@@ -1600,6 +1653,9 @@ function removeFilterTag(key: string) {
       break
     case 'filterRouteStatus':
       filterRouteStatus.value = null
+      break
+    case 'missingRouteStatus':
+      missingRouteStatus.value = false
       break
     case 'filterCustomer':
       filterCustomer.value = null
@@ -1945,6 +2001,112 @@ async function handleSyncSelectedFromDps() {
   }
 }
 
+async function applySyncedShipmentRow(row: Shipment) {
+  try {
+    const next = await getShipment(row.id)
+    const idx = items.value.findIndex((x) => x.id === row.id)
+    if (idx >= 0) items.value[idx] = next
+    if (trackingDrawerShipment.value?.id === row.id) {
+      trackingDrawerShipment.value = next
+    }
+    return next
+  } catch {
+    return null
+  }
+}
+
+async function handleSyncRowRouteStatus(row: Shipment) {
+  const no = (row.shipmentNo || '').trim()
+  if (!no || syncingRouteStatusRowId.value != null || syncingRouteStatus.value) return
+  if (!row.waybillId?.trim()) {
+    message.warning('无 DPS 运单 ID，请先「更新选中运单」补全')
+    return
+  }
+  syncingRouteStatusRowId.value = row.id
+  try {
+    const res = await syncShipmentsRouteStatusFromDps([no])
+    const next = await applySyncedShipmentRow(row)
+    if (res.failed) {
+      message.warning(res.errors?.[0] || '明细状态更新失败')
+    } else if (res.missingWaybillId) {
+      message.warning('无 DPS 运单 ID，请先更新运单')
+    } else if (res.empty) {
+      message.info('接口无轨迹节点')
+    } else if (res.updated) {
+      const label = routeStatusLabel(next?.routeStatus) || '—'
+      message.success(`明细状态已更新：${label}`)
+    } else {
+      message.success('明细状态无变化')
+    }
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '明细状态更新失败')
+  } finally {
+    syncingRouteStatusRowId.value = null
+  }
+}
+
+async function handleSyncSelectedRouteStatus() {
+  if (!selectedRows.value.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const nos = selectedShipmentNos.value
+  if (!nos.length) {
+    message.warning('所选运单无有效运单号')
+    return
+  }
+  syncingRouteStatus.value = true
+  try {
+    const res = await syncShipmentsRouteStatusFromDps(nos)
+    let text = `明细状态：更新 ${res.updated}`
+    if (res.total) text += ` / 共 ${res.total}`
+    if (res.unchanged) text += `，无变化 ${res.unchanged}`
+    if (res.missingWaybillId) text += `，无 waybillId ${res.missingWaybillId}`
+    if (res.empty) text += `，无轨迹 ${res.empty}`
+    if (res.failed) text += `，失败 ${res.failed}`
+    if (res.customsExceptionOpened) text += `，开清关异常 ${res.customsExceptionOpened}`
+    if (res.customsExceptionClosed) text += `，解除清关异常 ${res.customsExceptionClosed}`
+    if (res.failed || (res.errors && res.errors.length)) {
+      message.warning(text)
+    } else if (res.missingWaybillId && !res.updated) {
+      message.warning(`${text}（请先「更新选中运单」补 DPS ID）`)
+    } else {
+      message.success(text)
+    }
+    clearSelection()
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '明细状态更新失败')
+  } finally {
+    syncingRouteStatus.value = false
+  }
+}
+
+async function handleSyncAllRouteStatus() {
+  syncingRouteStatus.value = true
+  try {
+    const res = await syncShipmentsRouteStatusFromDps()
+    let text = `明细状态：更新 ${res.updated} / 共 ${res.total}`
+    if (res.unchanged) text += `，无变化 ${res.unchanged}`
+    if (res.empty) text += `，无轨迹 ${res.empty}`
+    if (res.failed) text += `，失败 ${res.failed}`
+    if (res.customsExceptionOpened) text += `，开清关异常 ${res.customsExceptionOpened}`
+    if (res.customsExceptionClosed) text += `，解除清关异常 ${res.customsExceptionClosed}`
+    if (res.failed || (res.errors && res.errors.length)) {
+      message.warning(text)
+    } else {
+      message.success(text)
+    }
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '明细状态更新失败')
+  } finally {
+    syncingRouteStatus.value = false
+  }
+}
+
 async function copySelectedShipmentNos() {
   const rows = selectedRows.value
   if (!rows.length) {
@@ -2043,36 +2205,20 @@ function latestTrackingForCopy(row: Shipment): { desc: string; time: string } {
   return { desc: '—', time: '—' }
 }
 
-/** 复制格式：运单号 = FedEx 871877368540 */
-function formatTrackingNumberCopyLine(row: Shipment): string | null {
-  const info = resolveLastMileTracking(row)
-  if (!info) return null
-  const no = displayField(row.shipmentNo)
-  if (!no) return null
-  return `${no} = ${info.carrierLabel} ${info.number}`
-}
-
 async function copySelectedTrackingNumbers() {
   const rows = selectedRows.value
   if (!rows.length) {
     message.warning('请先勾选运单')
     return
   }
-  const lines = rows
-    .map((row) => formatTrackingNumberCopyLine(row))
-    .filter((line): line is string => Boolean(line))
-  if (!lines.length) {
-    message.warning('所选运单无转单号')
+  const text = formatShipmentTrackingNumbersCopyText(rows)
+  if (!text) {
+    message.warning('无可复制内容')
     return
   }
   try {
-    await navigator.clipboard.writeText(lines.join('\n'))
-    const skipped = rows.length - lines.length
-    message.success(
-      skipped > 0
-        ? `已复制 ${lines.length} 条转单号（${skipped} 条无转单号已跳过）`
-        : `已复制 ${lines.length} 条转单号`,
-    )
+    await navigator.clipboard.writeText(text)
+    message.success(`已复制 ${rows.length} 条转单号`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
@@ -2250,29 +2396,53 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     align: 'center',
     ellipsis: { tooltip: true },
     render: (row) => {
+      const busy = syncingRouteStatusRowId.value === row.id
+      const hasWaybill = Boolean(row.waybillId?.trim())
       const route = (row.routeStatus || '').trim()
+      let label: string
+      let toneClass: string
+      let tipExtra = ''
       if (isDisplayableRouteStatus(route)) {
-        const label = routeStatusLabel(route)
+        label = routeStatusLabel(route)
+        toneClass = routeStatusBadgeClass(route)
         const coarseCode = row.statusCode || 'UNKNOWN'
         const coarse = statusLabel[coarseCode] || coarseCode
-        return h(
-          'span',
-          {
-            class: ['shipment-status-badge', routeStatusBadgeClass(route)],
-            title: coarse && coarse !== label ? `粗状态：${coarse}` : undefined,
-          },
-          label,
-        )
+        if (coarse && coarse !== label) tipExtra = `粗状态：${coarse}；`
+      } else {
+        const code = row.statusCode || 'UNKNOWN'
+        label = statusLabel[code] || code
+        toneClass =
+          code === 'DELIVERED'
+            ? 'shipment-status-badge--success'
+            : code === 'INSPECTION'
+              ? 'shipment-status-badge--warning'
+              : 'shipment-status-badge--default'
       }
-      const code = row.statusCode || 'UNKNOWN'
-      const label = statusLabel[code] || code
-      const tone =
-        code === 'DELIVERED'
-          ? 'shipment-status-badge--success'
-          : code === 'INSPECTION'
-            ? 'shipment-status-badge--warning'
-            : 'shipment-status-badge--default'
-      return h('span', { class: ['shipment-status-badge', tone] }, label)
+      const title = busy
+        ? '正在更新明细状态…'
+        : hasWaybill
+          ? `${tipExtra}点击更新明细状态`
+          : `${tipExtra}无 DPS 运单 ID，需先更新运单`
+      return h(
+        'button',
+        {
+          type: 'button',
+          class: [
+            'shipment-status-badge',
+            'shipment-status-badge--clickable',
+            toneClass,
+            { 'shipment-status-badge--loading': busy },
+          ],
+          disabled: busy || syncingRouteStatus.value,
+          title,
+          'aria-label': `明细状态 ${label}，点击更新`,
+          onClick: (e: MouseEvent) => {
+            e.stopPropagation()
+            void handleSyncRowRouteStatus(row)
+          },
+        },
+        label,
+      )
     },
   },
   customer: {
@@ -2650,6 +2820,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         >
           更新全部承运商轨迹
         </NButton>
+        <NButton
+          size="small"
+          :loading="syncingRouteStatus"
+          title="按 waybillId 拉取全部运单明细状态（需已有 DPS 运单 ID）"
+          @click="handleSyncAllRouteStatus"
+        >
+          更新全部明细状态
+        </NButton>
         <NButton type="primary" size="small" @click="openCreate">新增运单</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
         <NButton size="small" :loading="exporting" @click="handleExport">导出运单</NButton>
@@ -2729,7 +2907,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
           <NSelect
             v-model:value="filterRouteStatus"
             :options="routeStatusOptions"
-            placeholder="细状态"
+            placeholder="明细状态"
             clearable
             filterable
             size="small"
@@ -2910,8 +3088,16 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </NButton>
         <NButton
           size="small"
+          :loading="syncingRouteStatus"
+          title="按 waybillId 拉 DPS 明细状态接口（需已有 DPS 运单 ID）"
+          @click="handleSyncSelectedRouteStatus"
+        >
+          更新选中明细状态
+        </NButton>
+        <NButton
+          size="small"
           :loading="syncingDps"
-          title="从 DPS shipment_queryByOrder 拉取并更新选中运单"
+          title="从 DPS shipment_queryByOrder 拉取并更新选中运单（整单，含 waybillId）"
           @click="handleSyncSelectedFromDps"
         >
           更新选中运单
@@ -3003,6 +3189,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :shipment="trackingDrawerShipment"
       :initial-tab="trackingDrawerTab"
       :exception-label-by-code="exceptionLabelByCode"
+      :route-status-label-by-code="routeStatusLabelByCode"
       @shipment-updated="handleTrackingDrawerShipmentUpdated"
     />
 
@@ -3039,6 +3226,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:missing-ata="missingAta"
       v-model:missing-expected-delivery="missingExpectedDelivery"
       v-model:missing-delivered="missingDelivered"
+      v-model:missing-route-status="missingRouteStatus"
       v-model:not-delivered="notDelivered"
       v-model:delivery-risk="deliveryRisk"
       v-model:time-field="timeField"
@@ -3345,13 +3533,43 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 2.5rem;
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+  min-width: 0;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
   font-size: 11px;
   font-weight: 500;
   line-height: 1.25;
   white-space: nowrap;
+}
+
+.shipments-data-table :deep(.shipment-status-badge--clickable) {
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  transition: opacity 0.15s ease, transform 0.12s ease;
+}
+
+.shipments-data-table :deep(.shipment-status-badge--clickable:hover:not(:disabled)) {
+  opacity: 0.88;
+  transform: translateY(-1px);
+}
+
+.shipments-data-table :deep(.shipment-status-badge--clickable:disabled),
+.shipments-data-table :deep(.shipment-status-badge--loading) {
+  cursor: wait;
+  opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shipments-data-table :deep(.shipment-status-badge--clickable) {
+    transition: none;
+  }
+  .shipments-data-table :deep(.shipment-status-badge--clickable:hover:not(:disabled)) {
+    transform: none;
+  }
 }
 
 .shipments-data-table :deep(.shipment-status-badge--default) {

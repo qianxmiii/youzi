@@ -7,6 +7,7 @@ import WorkbenchFocusMetrics from '@/components/home/WorkbenchFocusMetrics.vue'
 import WorkbenchTodoList from '@/components/home/WorkbenchTodoList.vue'
 import WorkbenchArrivalTimeline from '@/components/home/WorkbenchArrivalTimeline.vue'
 import WorkbenchTransportOverview from '@/components/home/WorkbenchTransportOverview.vue'
+import WorkbenchRouteStatusFunnel from '@/components/home/WorkbenchRouteStatusFunnel.vue'
 
 const message = useMessage()
 const loading = ref(false)
@@ -41,6 +42,13 @@ onMounted(() => {
       :generated-at="data?.generatedAt"
       :loading="loading"
       @refresh="load({ silent: true })"
+    />
+
+    <WorkbenchRouteStatusFunnel
+      :module="data?.routeStatus ?? null"
+      :loading="loading"
+      :error="data?.routeStatus?.available === false ? data?.routeStatus?.error : null"
+      @retry="load()"
     />
 
     <WorkbenchFocusMetrics

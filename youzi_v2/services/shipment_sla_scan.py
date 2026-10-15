@@ -11,9 +11,11 @@ from ..db.shipment_sla import (
     ACTIVE_STATUSES,
     ALERT_ARRIVAL_NO_DELIVERY,
     ALERT_DELIVERY_TIME,
+    ALERT_DEST_WAREHOUSE_NO_DISPATCH,
     ALERT_WAREHOUSE_NO_DEPARTURE,
     build_event_key,
     compute_arrival_no_delivery_context,
+    compute_dest_warehouse_no_dispatch_context,
     compute_due_context,
     compute_risk_level,
     compute_warehouse_no_departure_context,
@@ -42,6 +44,7 @@ ALERT_TYPE_LABEL = {
     ALERT_DELIVERY_TIME: "运输时效",
     ALERT_WAREHOUSE_NO_DEPARTURE: "入库未开船",
     ALERT_ARRIVAL_NO_DELIVERY: "到港未送仓",
+    ALERT_DEST_WAREHOUSE_NO_DISPATCH: "到仓未派送",
 }
 
 
@@ -154,6 +157,40 @@ def _scan_arrival_no_delivery(
     if not ctx:
         resolved += alerts_repo.resolve_open_for_shipment(
             shipment_id, alert_type=ALERT_ARRIVAL_NO_DELIVERY
+        )
+        return created, updated, resolved
+
+    is_new, _ = _try_upsert_alert(
+        alerts_repo,
+        row=row,
+        shipment_id=shipment_id,
+        shipment_no=shipment_no,
+        ctx=ctx,
+        channel_code=channel_code,
+        carrier_code=carrier_code,
+    )
+    if is_new:
+        created += 1
+    else:
+        updated += 1
+    return created, updated, resolved
+
+
+def _scan_dest_warehouse_no_dispatch(
+    alerts_repo: ShipmentSlaAlertsRepository,
+    *,
+    row: dict[str, Any],
+    shipment_id: str,
+    shipment_no: str,
+    channel_code: str,
+    carrier_code: str,
+    today: date,
+) -> tuple[int, int, int]:
+    created = updated = resolved = 0
+    ctx = compute_dest_warehouse_no_dispatch_context(row, today=today)
+    if not ctx:
+        resolved += alerts_repo.resolve_open_for_shipment(
+            shipment_id, alert_type=ALERT_DEST_WAREHOUSE_NO_DISPATCH
         )
         return created, updated, resolved
 
@@ -342,6 +379,15 @@ def scan_shipment_sla_alerts(
                 carrier_code=carrier_code,
                 today=today,
             )
+            dw_c, dw_u, dw_r = _scan_dest_warehouse_no_dispatch(
+                alerts_repo,
+                row=row,
+                shipment_id=shipment_id,
+                shipment_no=shipment_no,
+                channel_code=channel_code,
+                carrier_code=carrier_code,
+                today=today,
+            )
             dt_c, dt_u, dt_r = _scan_delivery_time(
                 alerts_repo,
                 rules_by_channel,
@@ -352,9 +398,9 @@ def scan_shipment_sla_alerts(
                 carrier_code=carrier_code,
                 today=today,
             )
-            created += wh_c + ar_c + dt_c
-            updated += wh_u + ar_u + dt_u
-            resolved += wh_r + ar_r + dt_r
+            created += wh_c + ar_c + dw_c + dt_c
+            updated += wh_u + ar_u + dw_u + dt_u
+            resolved += wh_r + ar_r + dw_r + dt_r
 
         if trigger == "scheduled" or force:
             record_sla_scan_finished(database)
@@ -443,7 +489,7 @@ def maybe_resolve_alerts_after_delivery(
     shipment_no: str | None = None,
     log: LogFn | None = None,
 ) -> int:
-    """运单写入签收时间或状态变为已签收后，立即关闭时效预警与跟进待办。"""
+    """明细状态变为轨迹签收后，立即关闭时效预警与跟进待办。"""
     from ..db.shipment_exception_followup_repository import (
         ShipmentExceptionFollowupRepository,
     )
@@ -458,12 +504,7 @@ def maybe_resolve_alerts_after_delivery(
     row = shipments_repo.get_by_id(sid)
     if row is None:
         return 0
-    if not is_delivered(
-        {
-            "status_code": row.get("statusCode"),
-            "delivered_time": row.get("deliveredTime"),
-        }
-    ):
+    if not is_delivered({"route_status": row.get("routeStatus")}):
         return 0
     alerts_repo = ShipmentSlaAlertsRepository(database)
     followup_repo = ShipmentExceptionFollowupRepository(database)
@@ -472,5 +513,5 @@ def maybe_resolve_alerts_after_delivery(
     if sn:
         followup_repo.resolve_all_pending_for_shipment(sn)
     if log and n:
-        log(f"[运输时效] {sn} 已签收，关闭 {n} 条预警")
+        log(f"[运输时效] {sn} 轨迹签收，关闭 {n} 条预警")
     return n

@@ -302,6 +302,7 @@ class ShipmentSubscriptionsRepository:
         new_d = (new_desc or "").strip()
         if old_t == new_t and old_d == new_d:
             return
+        push_payload: dict[str, Any] | None = None
         with self._database.lock:
             sub = self._conn.execute(
                 f"""
@@ -320,7 +321,7 @@ class ShipmentSubscriptionsRepository:
             )
             if (sub[last_col] or "").strip() == new_t:
                 return
-            self._create_tracking_notification_locked(
+            push_payload = self._create_tracking_notification_locked(
                 subscription_id=sub["id"],
                 shipment_id=shipment_id,
                 shipment_no=shipment_no,
@@ -340,6 +341,8 @@ class ShipmentSubscriptionsRepository:
             )
             if commit:
                 self._conn.commit()
+        if push_payload is not None:
+            self._dispatch_wecom_subscription_push(push_payload)
 
     def evaluate_eta_reminders(self, *, today: date | None = None) -> dict[str, int]:
         """已订阅 + 有 ETA + 未签收：ETA 前 7 天起每天推一条顶栏消息。"""
@@ -349,6 +352,7 @@ class ShipmentSubscriptionsRepository:
         scanned = 0
         created = 0
         skipped = 0
+        push_payloads: list[dict[str, Any]] = []
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
@@ -385,15 +389,17 @@ class ShipmentSubscriptionsRepository:
                     skipped += 1
                     continue
                 desc = format_eta_reminder_desc(eta_day, today_d)
-                self._create_tracking_notification_locked(
-                    subscription_id=row["subscription_id"],
-                    shipment_id=row["shipment_id"],
-                    shipment_no=row["shipment_no"] or "",
-                    vessel_voyage=row["vessel_voyage"] or "",
-                    destination_port_code=row["destination_port_code"] or "",
-                    source=ETA_REMINDER_SOURCE,
-                    latest_time=eta_day.isoformat(),
-                    latest_desc=desc,
+                push_payloads.append(
+                    self._create_tracking_notification_locked(
+                        subscription_id=row["subscription_id"],
+                        shipment_id=row["shipment_id"],
+                        shipment_no=row["shipment_no"] or "",
+                        vessel_voyage=row["vessel_voyage"] or "",
+                        destination_port_code=row["destination_port_code"] or "",
+                        source=ETA_REMINDER_SOURCE,
+                        latest_time=eta_day.isoformat(),
+                        latest_desc=desc,
+                    )
                 )
                 self._conn.execute(
                     f"""
@@ -405,7 +411,15 @@ class ShipmentSubscriptionsRepository:
                 )
                 created += 1
             self._conn.commit()
+        for payload in push_payloads:
+            self._dispatch_wecom_subscription_push(payload)
         return {"scanned": scanned, "created": created, "skipped": skipped}
+
+    @staticmethod
+    def _dispatch_wecom_subscription_push(payload: dict[str, Any]) -> None:
+        from youzi_v2.services.wecom_subscription_push import try_push_subscription_notification
+
+        try_push_subscription_notification(payload)
 
     def _create_tracking_notification_locked(
         self,
@@ -418,8 +432,9 @@ class ShipmentSubscriptionsRepository:
         source: str,
         latest_time: str,
         latest_desc: str,
-    ) -> None:
+    ) -> dict[str, Any]:
         now = now_str()
+        notification_id = str(uuid.uuid4())
         self._conn.execute(
             f"""
             INSERT INTO {NOTIFICATIONS_TABLE} (
@@ -430,7 +445,7 @@ class ShipmentSubscriptionsRepository:
             ) VALUES (?, ?, ?, ?, ?, ?, '', ?, ?, ?, ?, '')
             """,
             (
-                str(uuid.uuid4()),
+                notification_id,
                 subscription_id,
                 shipment_id,
                 shipment_no,
@@ -442,6 +457,13 @@ class ShipmentSubscriptionsRepository:
                 now,
             ),
         )
+        return {
+            "id": notification_id,
+            "shipmentNo": shipment_no,
+            "trackingSource": source,
+            "latestTime": latest_time,
+            "latestDesc": latest_desc,
+        }
 
     def count_unread_notifications(self) -> int:
         with self._database.lock:

@@ -6,7 +6,9 @@ Youzi v2 业务服务层
 
 ## 功能说明
 
-封装跨 Repository 的业务逻辑：轨迹同步、Excel 导入导出、承运商对接、船期抓取、海运预警等。由 `app.py` 路由层调用。
+封装跨 Repository 的业务逻辑：轨迹同步、Excel 导入导出、承运商对接、船期抓取、海运预警、企业微信智能机器人等。由 `app.py` 路由层调用。
+
+**企业微信**：配置、@ 查运单、主动推送与排障见 [docs/wecom-aibot.md](../docs/wecom-aibot.md)。
 
 ## 主要文件
 
@@ -16,6 +18,14 @@ Youzi v2 业务服务层
 | `tracking_sync_scheduler.py` | 定时任务调度（含订阅 ETA 到港每日提醒） |
 | `carrier_tracking_sync.py` | 承运商轨迹拉取 |
 | `carrier_vendors.py` | 读取 config.json 承运商配置 |
+| `wecom_webhook.py` | 企业微信通知（Webhook 或智能机器人 bot_id+secret） |
+| `wecom_aibot_ws.py` | 智能机器人 WebSocket 认证与 `aibot_send_msg` |
+| `wecom_aibot_runtime.py` | 长连接守护、心跳、chat_id 日志 |
+| `wecom_aibot_log.py` | 长连接运行日志文件 |
+| `wecom_aibot_shipment_query.py` | @ 消息解析运单号并查库回复 |
+| `shipment_copy_format.py` | 运单明细复制文案（与前端 `shipmentCopyFormat.ts` 对齐，企微「明细」回复复用） |
+| `wecom_aibot_shipment_refresh.py` | 查单前刷新明细状态与内外部轨迹 |
+| `wecom_subscription_push.py` | 运单订阅更新（轨迹/ETA 提醒）同步推企微 |
 | `shipment_query_config.py` | DPS 运单查询：`queryByPerson` 全量 / `queryByOrder` 按 odd，自动翻页 |
 | `shipment_dps_sync.py` | DPS 运单全量同步至本地表（计划任务，默认关） |
 | `dps_waybill_route_info.py` | DPS 明细状态轨迹查询（URL 仅读 config `dps_route_status_query`） |

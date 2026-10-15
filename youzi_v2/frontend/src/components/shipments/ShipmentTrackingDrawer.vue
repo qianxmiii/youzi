@@ -201,22 +201,6 @@ async function syncRouteStatus() {
       <div v-if="shipment" class="drawer-body">
         <section class="drawer-section meta-section">
           <dl class="meta-list">
-            <div class="meta-item">
-              <dt class="section-label">Tracking Number</dt>
-              <dd class="section-value">
-                <button
-                  v-if="transferNumber?.url"
-                  type="button"
-                  class="tracking-link tracking-link--clickable inline-flex items-center gap-1"
-                  @click="openTrackUrl"
-                >
-                  {{ transferNumber.number }}
-                  <ExternalLink class="link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
-                </button>
-                <span v-else-if="transferNumber" class="meta-mono">{{ transferNumber.number }}</span>
-                <span v-else class="meta-empty">—</span>
-              </dd>
-            </div>
             <div class="meta-item meta-item--split">
               <div class="meta-split-cell">
                 <dt class="section-label">Package Count</dt>
@@ -581,20 +565,10 @@ async function syncRouteStatus() {
   color: var(--color-fg-emphasis);
 }
 
-.meta-mono {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  letter-spacing: -0.01em;
-}
-
 .drawer-yahei-bold {
   font-family: "Microsoft YaHei UI Bold", "MicrosoftYaHeiUI-Bold", "Microsoft YaHei UI", "Microsoft YaHei", sans-serif;
   font-weight: 700;
   letter-spacing: 0;
-}
-
-.meta-empty {
-  color: var(--color-muted);
-  font-weight: 500;
 }
 
 .timeline-section {

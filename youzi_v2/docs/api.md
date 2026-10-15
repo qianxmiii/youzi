@@ -363,6 +363,7 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 | POST | `/api/v1/scheduled-tasks/run-*-sync` | 手动触发同步 |
 | POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync` | DPS 运单全量同步（body 可选 `transitTimeStart` / `transitTimeEnd`，默认当月） |
 | POST | `/api/v1/scheduled-tasks/run-dps-route-status-sync` | 更新全部明细状态（有 `waybillId` 的运单；无 body） |
+| POST | `/api/v1/notifications/wecom/test` | 企业微信通知测试（详见 [wecom-aibot.md](./wecom-aibot.md)；body 可选 `{ "content": "..." }`） |
 
 ## 地址簿
 

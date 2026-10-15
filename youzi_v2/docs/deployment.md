@@ -122,15 +122,20 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 
 明细状态轻量同步：`POST /api/v1/shipments/sync-route-status-from-dps`（可选 `shipmentNos`，空则全部）；批处理 `POST /api/v1/scheduled-tasks/run-dps-route-status-sync`。按运单 `waybill_id` 请求配置 URL 并回写 `route_status`。
 - 承运商：`vendors` 数组，由 `services/carrier_vendors.py` 按 `platform` 读取
+- 企业微信（可选）：`config.json` → `wecom_webhook`（智能机器人长连接 / Webhook 推送、@ 查运单、测试 API）。**完整说明见 [wecom-aibot.md](./wecom-aibot.md)**；凭证勿提交 Git。
+
 - 说明：根目录 `config/README.md`
 
 ## 日志
 
 轨迹同步日志：`youzi_v2/logs/tracking-sync-YYYY-MM-DD.log`（gitignore，勿提交）。
 
+企业微信智能机器人：`youzi_v2/logs/wecom-aibot-YYYY-MM-DD.log`（详见 [wecom-aibot.md](./wecom-aibot.md)，勿提交）。
+
 排查：本地打开日志文件或查看后端控制台输出。
 
 ## 相关文档
 
+- [wecom-aibot.md](./wecom-aibot.md)
 - [architecture.md](./architecture.md)
 - [../README.md](../README.md)

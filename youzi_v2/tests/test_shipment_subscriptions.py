@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -17,7 +18,9 @@ def repos(tmp_path: Path) -> tuple[ShipmentsRepository, ShipmentSubscriptionsRep
     return ShipmentsRepository(db), ShipmentSubscriptionsRepository(db)
 
 
+@patch("youzi_v2.services.wecom_subscription_push.try_push_subscription_notification")
 def test_subscribe_and_notify_on_internal_tracking_change(
+    mock_wecom_push,
     repos: tuple[ShipmentsRepository, ShipmentSubscriptionsRepository],
 ) -> None:
     shipments, subs = repos
@@ -56,6 +59,8 @@ def test_subscribe_and_notify_on_internal_tracking_change(
     assert notes[0]["trackingSource"] == "internal"
     assert notes[0]["latestTime"] == "2026-06-02 10:00:00"
     assert notes[0]["latestDesc"] == "新节点"
+    mock_wecom_push.assert_called_once()
+    assert mock_wecom_push.call_args[0][0]["shipmentNo"] == "SH001"
 
 
 def test_batch_subscribe(repos: tuple[ShipmentsRepository, ShipmentSubscriptionsRepository]) -> None:

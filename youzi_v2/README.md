@@ -130,6 +130,7 @@ SQLite 单文件，表在启动时自动初始化。核心表：`shipments`、`v
 - 完整索引：[docs/api.md](./docs/api.md)
 - 运单流程：[docs/shipment-flow.md](./docs/shipment-flow.md)
 - 仓库地址：[docs/warehouse-flow.md](./docs/warehouse-flow.md)
+- 企业微信机器人：[docs/wecom-aibot.md](./docs/wecom-aibot.md)
 
 常用示例：
 

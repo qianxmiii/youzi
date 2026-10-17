@@ -67,6 +67,7 @@ export interface WorkbenchRouteStatusModule {
   missingHref: string
   viewAllHref: string
   items: WorkbenchRouteStatusItem[]
+  todayItems: WorkbenchRouteStatusItem[]
 }
 
 export interface WorkbenchTransportOverview {

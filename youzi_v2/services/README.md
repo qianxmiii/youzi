@@ -33,6 +33,8 @@ Youzi v2 业务服务层
 | `shipment_dps_mark_download.py` | 勾选运单下载唛头 |
 | `dps_packinglist_download.py` | DPS 箱单发票 |
 | `shipment_dps_packinglist_download.py` | 勾选运单下载箱单发票 |
+| `dps_warehouseform_download.py` | DPS 排仓单 |
+| `shipment_dps_warehouseform_download.py` | 勾选运单下载排仓单（超 50 分批） |
 | `shipment_dps_sync.py` | DPS 运单全量同步至本地表（计划任务，默认关） |
 | `dps_waybill_route_info.py` | DPS 明细状态轨迹查询（URL 仅读 config `dps_route_status_query`） |
 | `shipment_dps_route_status_sync.py` | 轻量回写 `route_status`、阶段 `route_*_time`；301/306 且 ATD/ATA 空时回写开船/到港时间 |

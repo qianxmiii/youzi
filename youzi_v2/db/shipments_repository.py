@@ -142,6 +142,8 @@ _UPDATABLE = (
     "route_warehouse_in_time",
     "route_arrived_pod_time",
     "route_dest_transit_warehouse_time",
+    "route_last_mile_handover_time",
+    "route_track_signed_time",
     "payment_status",
     "latest_tracking_time",
     "latest_tracking_desc",
@@ -264,6 +266,16 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
             if "route_dest_transit_warehouse_time" in row.keys()
             else None
         ),
+        "routeLastMileHandoverTime": (
+            row["route_last_mile_handover_time"]
+            if "route_last_mile_handover_time" in row.keys()
+            else None
+        ),
+        "routeTrackSignedTime": (
+            row["route_track_signed_time"]
+            if "route_track_signed_time" in row.keys()
+            else None
+        ),
         "paymentStatus": (
             row["payment_status"] if "payment_status" in row.keys() else None
         ),
@@ -324,6 +336,8 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "routeWarehouseInTime": "route_warehouse_in_time",
         "routeArrivedPodTime": "route_arrived_pod_time",
         "routeDestTransitWarehouseTime": "route_dest_transit_warehouse_time",
+        "routeLastMileHandoverTime": "route_last_mile_handover_time",
+        "routeTrackSignedTime": "route_track_signed_time",
         "paymentStatus": "payment_status",
         "latestTrackingTime": "latest_tracking_time",
         "latestTrackingDesc": "latest_tracking_desc",

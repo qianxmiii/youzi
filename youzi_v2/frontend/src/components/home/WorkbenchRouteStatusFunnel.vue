@@ -81,6 +81,27 @@ const allChips = computed<Chip[]>(() => {
   return [...exceptions, ...pipeline, ...missing]
 })
 
+const TODAY_ROUTE_CODE: Record<string, string> = {
+  TODAY_DEPARTED: 'DEPARTED_POL',
+  TODAY_ARRIVED: 'ARRIVED_POD',
+  TODAY_INTERNAL_DELIVERED: 'TRACK_SIGNED',
+  TODAY_DEST_TRANSIT: 'DEST_TRANSIT_WAREHOUSE',
+  TODAY_LAST_MILE: 'LAST_MILE_HANDOVER',
+  TODAY_ROUTE_SIGNED: 'TRACK_SIGNED',
+}
+
+const todayChips = computed<Chip[]>(() => {
+  const items = props.module?.todayItems ?? []
+  return items.map((item) => ({
+    key: item.code,
+    label: item.nameZh,
+    count: item.count,
+    href: item.href,
+    tone: item.isException ? 'error' : toneOf(TODAY_ROUTE_CODE[item.code] || ''),
+    emphasis: item.isException,
+  }))
+})
+
 function go(href: string) {
   if (!href) return
   void router.push(href)
@@ -123,27 +144,55 @@ function goAll() {
       <div v-for="i in 10" :key="i" class="rs-skel" />
     </div>
 
-    <div v-else class="rs-grid">
-      <button
-        v-for="chip in allChips"
-        :key="chip.key"
-        type="button"
-        class="rs-tile"
-        :class="[
-          `rs-tile--${chip.tone}`,
-          {
-            'rs-tile--emphasis': chip.emphasis,
-            'rs-tile--zero': chip.count === 0,
-          },
-        ]"
-        :title="`${chip.label} ${chip.count}`"
-        :aria-label="`${chip.label} ${chip.count}，点击查看运单`"
-        @click="go(chip.href)"
-      >
-        <span class="rs-tile__bar" aria-hidden="true" />
-        <span class="rs-tile__label">{{ chip.label }}</span>
-        <span class="rs-tile__count">{{ chip.count }}</span>
-      </button>
+    <div v-else class="rs-stack">
+      <div class="rs-grid">
+        <button
+          v-for="chip in allChips"
+          :key="chip.key"
+          type="button"
+          class="rs-tile"
+          :class="[
+            `rs-tile--${chip.tone}`,
+            {
+              'rs-tile--emphasis': chip.emphasis,
+              'rs-tile--zero': chip.count === 0,
+            },
+          ]"
+          :title="`${chip.label} ${chip.count}`"
+          :aria-label="`${chip.label} ${chip.count}，点击查看运单`"
+          @click="go(chip.href)"
+        >
+          <span class="rs-tile__bar" aria-hidden="true" />
+          <span class="rs-tile__label">{{ chip.label }}</span>
+          <span class="rs-tile__count">{{ chip.count }}</span>
+        </button>
+      </div>
+
+      <div v-if="todayChips.length" class="rs-today-block">
+        <p class="rs-today-heading">今日动态</p>
+        <div class="rs-grid rs-grid--today">
+          <button
+            v-for="chip in todayChips"
+            :key="chip.key"
+            type="button"
+            class="rs-tile rs-tile--today"
+            :class="[
+              `rs-tile--${chip.tone}`,
+              {
+                'rs-tile--emphasis': chip.emphasis,
+                'rs-tile--zero': chip.count === 0,
+              },
+            ]"
+            :title="`${chip.label} ${chip.count}（按本地自然日）`"
+            :aria-label="`${chip.label} ${chip.count}，点击查看运单`"
+            @click="go(chip.href)"
+          >
+            <span class="rs-tile__bar" aria-hidden="true" />
+            <span class="rs-tile__label">{{ chip.label }}</span>
+            <span class="rs-tile__count">{{ chip.count }}</span>
+          </button>
+        </div>
+      </div>
     </div>
   </section>
 </template>
@@ -153,6 +202,24 @@ function goAll() {
   margin-left: 0.45rem;
   font-size: 0.75rem;
   font-weight: 500;
+  color: var(--color-muted);
+}
+
+.rs-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.rs-today-block {
+  padding-top: 0.15rem;
+}
+
+.rs-today-heading {
+  margin: 0 0 0.4rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.02em;
   color: var(--color-muted);
 }
 
@@ -171,6 +238,22 @@ function goAll() {
 @media (min-width: 1100px) {
   .rs-grid {
     grid-template-columns: repeat(10, minmax(0, 1fr));
+  }
+}
+
+.rs-grid--today {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+@media (min-width: 640px) {
+  .rs-grid--today {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1100px) {
+  .rs-grid--today {
+    grid-template-columns: repeat(7, minmax(0, 1fr));
   }
 }
 

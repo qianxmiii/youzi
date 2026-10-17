@@ -11,6 +11,8 @@ from ..db.shipment_sla import (
     SLA_DELIVERED_ROUTE_STATUS,
     SLA_FIELD_ARRIVED_POD_TIME,
     SLA_FIELD_DEST_TRANSIT_TIME,
+    SLA_FIELD_LAST_MILE_HANDOVER_TIME,
+    SLA_FIELD_TRACK_SIGNED_TIME,
     SLA_FIELD_WAREHOUSE_IN_TIME,
 )
 from ..db.shipments_repository import ShipmentsRepository
@@ -25,6 +27,8 @@ _ROUTE_MILESTONE_TIME_FIELDS: dict[str, str] = {
     "WAREHOUSE_IN": SLA_FIELD_WAREHOUSE_IN_TIME,
     "ARRIVED_POD": SLA_FIELD_ARRIVED_POD_TIME,
     "DEST_TRANSIT_WAREHOUSE": SLA_FIELD_DEST_TRANSIT_TIME,
+    "LAST_MILE_HANDOVER": SLA_FIELD_LAST_MILE_HANDOVER_TIME,
+    "TRACK_SIGNED": SLA_FIELD_TRACK_SIGNED_TIME,
 }
 
 
@@ -113,7 +117,7 @@ def sync_route_status_by_waybill_ids(
 ) -> dict[str, Any]:
     """
     对本地已有 waybill_id 的运单调用 config 中的明细状态接口，更新 route_status，
-    并联动清关异常；可选回写预计送仓 / 最新轨迹摘要。
+    并联动清关异常；可回写预计送仓。**不**写入 `latest_tracking_*`（该字段仅由内部轨迹同步维护）。
 
     shipment_nos 为 None / 空：同步全部有 waybill_id 的运单。
     """
@@ -182,6 +186,8 @@ def sync_route_status_by_waybill_ids(
                 SLA_FIELD_WAREHOUSE_IN_TIME: "routeWarehouseInTime",
                 SLA_FIELD_ARRIVED_POD_TIME: "routeArrivedPodTime",
                 SLA_FIELD_DEST_TRANSIT_TIME: "routeDestTransitWarehouseTime",
+                SLA_FIELD_LAST_MILE_HANDOVER_TIME: "routeLastMileHandoverTime",
+                SLA_FIELD_TRACK_SIGNED_TIME: "routeTrackSignedTime",
             }[field]
             if time_val != _opt_str(ship.get(camel)):
                 patch[field] = time_val
@@ -198,15 +204,6 @@ def sync_route_status_by_waybill_ids(
         ) or _opt_str(latest.get("estimatedDeliveryDate"))
         if edd and edd != _opt_str(ship.get("expectedDeliveryTime")):
             patch["expected_delivery_time"] = edd
-
-        latest_time = normalize_tracking_time(str(latest.get("nodeTime") or "")) or None
-        latest_desc = _opt_str(latest.get("nodeDesc"))
-        if latest_time and latest_desc:
-            if latest_time != _opt_str(
-                ship.get("latestTrackingTime")
-            ) or latest_desc != _opt_str(ship.get("latestTrackingDesc")):
-                patch["latest_tracking_time"] = latest_time
-                patch["latest_tracking_desc"] = latest_desc
 
         if patch:
             shipments_repo.update_row(ship["id"], patch)

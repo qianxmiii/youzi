@@ -17,6 +17,10 @@ TIME_FIELD_MAP: dict[str, str] = {
     "warehouseEntryTime": "warehouse_entry_time",
     "deliveredTime": "delivered_time",
     "updatedTime": "updated_time",
+    "exceptionOpenedTime": "exception_opened_time",
+    "routeDestTransitWarehouseTime": "route_dest_transit_warehouse_time",
+    "routeLastMileHandoverTime": "route_last_mile_handover_time",
+    "routeTrackSignedTime": "route_track_signed_time",
 }
 
 MISSING_FIELD_MAP: dict[str, str] = {

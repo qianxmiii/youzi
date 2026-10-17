@@ -82,6 +82,10 @@ class WorkbenchRouteStatusModule(BaseModel):
     missing_href: str = Field("", alias="missingHref")
     view_all_href: str = Field("", alias="viewAllHref")
     items: list[WorkbenchRouteStatusItem] = Field(default_factory=list)
+    today_items: list[WorkbenchRouteStatusItem] = Field(
+        default_factory=list,
+        alias="todayItems",
+    )
 
 
 class WorkbenchTransportOverview(BaseModel):

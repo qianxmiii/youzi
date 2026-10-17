@@ -86,6 +86,8 @@ erDiagram
 | route_warehouse_in_time | TEXT | 明细状态 202 入库节点时间（异常跟踪「入库未开船」起算） |
 | route_arrived_pod_time | TEXT | 明细状态 306 到港节点时间（「到港未送仓」起算） |
 | route_dest_transit_warehouse_time | TEXT | 明细状态 502 到中转仓节点时间（「到仓未派送」起算） |
+| route_last_mile_handover_time | TEXT | 明细状态 510 快递交仓节点时间 |
+| route_track_signed_time | TEXT | 明细状态 601 轨迹签收节点时间 |
 | exception_code | TEXT | 当前异常码 |
 | exception_opened_time | TEXT | 异常开启时间 |
 | latest_tracking_time, latest_tracking_desc | TEXT | 最新轨迹 |

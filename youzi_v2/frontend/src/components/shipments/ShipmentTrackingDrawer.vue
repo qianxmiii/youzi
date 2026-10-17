@@ -120,6 +120,17 @@ function openTrackUrl() {
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
+async function copyShipmentNo() {
+  const sn = props.shipment?.shipmentNo?.trim()
+  if (!sn) return
+  try {
+    await navigator.clipboard.writeText(sn)
+    message.success('已复制运单号')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
 async function syncRouteStatus() {
   const s = props.shipment
   if (!s?.shipmentNo || syncingRouteStatus.value) return
@@ -163,9 +174,16 @@ async function syncRouteStatus() {
       <template #header>
         <div v-if="shipment" class="drawer-header min-w-0">
           <div class="header-title-row">
-            <h2 class="shipment-no">
+            <button
+              type="button"
+              class="shipment-no shipment-no-copy-btn"
+              :disabled="!shipment.shipmentNo?.trim()"
+              title="点击复制运单号"
+              :aria-label="`运单号 ${shipment.shipmentNo}，点击复制`"
+              @click="copyShipmentNo"
+            >
               {{ shipment.shipmentNo }}
-            </h2>
+            </button>
             <button
               v-if="headerStatusDisplay"
               type="button"
@@ -310,6 +328,26 @@ async function syncRouteStatus() {
   letter-spacing: -0.02em;
   line-height: 1.25;
   color: var(--color-fg-emphasis);
+}
+
+.shipment-no-copy-btn {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  color: var(--color-accent-text, var(--color-fg-emphasis));
+  max-width: 100%;
+}
+
+.shipment-no-copy-btn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.shipment-no-copy-btn:disabled {
+  cursor: default;
+  color: var(--color-muted);
 }
 
 .transfer-row {

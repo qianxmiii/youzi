@@ -62,7 +62,7 @@ curl -X POST "http://127.0.0.1:3001/api/v1/shipments/sync-tracking" \
   -d '{"shipment_ids": ["uuid-here"]}'
 ```
 
-承运商配置在根目录 `config/config.json` 的 `vendors` 数组。运单 `carrier_code` 匹配主 vendor；若主 vendor 配置了 **`fallbackVendor`** / **`fallbackVendors`**（如森磊 → 森磊2），同步承运商轨迹时主系统查不到轨迹会依次尝试备用系统。
+承运商配置在根目录 `config/config.json` 的 `vendors` 数组。运单 `carrier_code` 匹配主 vendor；若主 vendor 配置了 **`fallbackVendor`** / **`fallbackVendors`**（如SENLEI → SENLEI2），同步承运商轨迹时主系统查不到轨迹会依次尝试备用系统。
 
 **WY（wy-express）**
 

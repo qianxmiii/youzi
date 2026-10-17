@@ -499,6 +499,17 @@ export async function downloadShipmentsDpsPackinglist(
   )
 }
 
+/** DPS 排仓单（dps_warehouseform_download）；?ids= 逗号拼接，后端超 50 自动分批 */
+export async function downloadShipmentsDpsWarehouseform(
+  shipmentIds: string[],
+): Promise<{ blob: Blob; filename: string }> {
+  return downloadShipmentsDpsBlob(
+    '/api/v1/shipments/download-dps-warehouseform',
+    shipmentIds,
+    '下载排仓单失败',
+  )
+}
+
 export async function syncShipmentsRouteStatusFromDps(
   shipmentNos?: string[],
 ): Promise<ShipmentDpsRouteStatusSyncResult> {

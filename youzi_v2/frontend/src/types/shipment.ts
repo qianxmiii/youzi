@@ -58,6 +58,10 @@ export interface Shipment {
   routeArrivedPodTime?: string | null
   /** 明细状态 502 到中转仓节点时间 */
   routeDestTransitWarehouseTime?: string | null
+  /** 明细状态 510 快递交仓节点时间 */
+  routeLastMileHandoverTime?: string | null
+  /** 明细状态 601 轨迹签收节点时间 */
+  routeTrackSignedTime?: string | null
   /** DPS clientVerifyStatus：UNPAID=未付款，PAID=已付款 */
   paymentStatus?: 'UNPAID' | 'PAID' | null
   exceptionCode: string | null

@@ -50,6 +50,8 @@ SLA_DEST_DISPATCH_FULFILLED_ROUTE_STATUSES = frozenset(
 SLA_FIELD_WAREHOUSE_IN_TIME = "route_warehouse_in_time"
 SLA_FIELD_ARRIVED_POD_TIME = "route_arrived_pod_time"
 SLA_FIELD_DEST_TRANSIT_TIME = "route_dest_transit_warehouse_time"
+SLA_FIELD_LAST_MILE_HANDOVER_TIME = "route_last_mile_handover_time"
+SLA_FIELD_TRACK_SIGNED_TIME = "route_track_signed_time"
 
 # 不参与异常跟踪扫描/待办/列表的渠道（与 shipments.channel_code 一致）
 SLA_EXCLUDED_CHANNEL_CODES = frozenset({"FC-整柜"})

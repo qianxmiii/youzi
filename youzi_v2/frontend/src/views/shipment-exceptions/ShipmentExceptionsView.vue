@@ -3,6 +3,7 @@ import {
   NButton,
   NCheckbox,
   NDataTable,
+  NDropdown,
   NInput,
   NPagination,
   NRadioButton,
@@ -14,8 +15,9 @@ import {
   useDialog,
   useMessage,
   type DataTableColumns,
+  type DropdownOption,
 } from 'naive-ui'
-import { Copy, CircleHelp, ScanBarcode } from 'lucide-vue-next'
+import { ChevronDown, Copy, CircleHelp, ScanBarcode } from 'lucide-vue-next'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
@@ -43,6 +45,17 @@ import { ICON_STROKE } from '@/constants/icons'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 import { notifyTrackingSyncResult } from '@/utils/trackingSyncNotify'
 import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
+import {
+  isDisplayableRouteStatus,
+  routeStatusBadgeClass,
+  routeStatusLabelZh,
+} from '@/constants/shipmentRouteStatus'
+import {
+  renderSlaTimelinessBadge,
+  renderTimelinessStatusSelectLabel,
+  toneForAlertType,
+  toneForRiskLevel,
+} from '@/utils/slaTimelinessBadge'
 
 const route = useRoute()
 const router = useRouter()
@@ -66,7 +79,8 @@ const warningSoonCount = ref(0)
 
 const filterTimelinessStatus = ref<string | null>(null)
 const filterStatus = ref<string | null>(null)
-const filterHasException = ref<string | null>(null)
+/** 未勾选：仅无当前异常码的货件；勾选：仅存在异常码的货件 */
+const filterOnlyExceptionShipments = ref(false)
 const filterExceptionCode = ref<string | null>(null)
 const filterChannelCode = ref<string | null>(null)
 const filterShowHistory = ref(false)
@@ -120,11 +134,6 @@ const statusOptions = [
   { label: '已忽略', value: 'ignored' },
 ]
 
-const hasExceptionOptions = [
-  { label: '有异常', value: 'true' },
-  { label: '无异常', value: 'false' },
-]
-
 const exceptionFilterOptions = computed(() =>
   Object.entries(exceptionLabelByCode.value).map(([code, nameZh]) => ({
     label: nameZh,
@@ -135,6 +144,30 @@ const exceptionFilterOptions = computed(() =>
 const channelCodeOptions = computed(() =>
   buildChannelSelectOptions(filterOptions.value.channels, filterOptions.value.channelCodes),
 )
+
+const routeStatusLabelByCode = computed(() => {
+  const map: Record<string, string> = {}
+  for (const t of filterOptions.value.routeStatuses || []) {
+    if (t.code && t.nameZh) map[t.code] = t.nameZh
+  }
+  return map
+})
+
+function renderRouteStatusCell(row: ShipmentSlaAlert) {
+  const code = (row.routeStatus || '').trim().toUpperCase()
+  if (!isDisplayableRouteStatus(code)) {
+    return h('span', { class: 'text-zinc-400' }, '—')
+  }
+  const label = routeStatusLabelZh(code, routeStatusLabelByCode.value) || code
+  return h(
+    'span',
+    {
+      class: ['shipment-status-badge', routeStatusBadgeClass(code)],
+      title: code,
+    },
+    label,
+  )
+}
 
 const selectedRows = computed(() =>
   items.value.filter((row) => checkedRowKeys.value.includes(row.id)),
@@ -248,12 +281,6 @@ function handleBatchIgnore() {
   void runBatchAction('忽略', actionableSelectedRows.value, (row) => ignoreShipmentSlaAlert(row.id))
 }
 
-function riskTagType(level: SlaRiskLevel): 'default' | 'info' | 'warning' | 'error' {
-  if (level === 'severe_overdue') return 'error'
-  if (level === 'overdue') return 'warning'
-  return 'info'
-}
-
 function riskLabel(level: SlaRiskLevel): string {
   if (level === 'severe_overdue') return '严重超时'
   if (level === 'overdue') return '已超时'
@@ -336,16 +363,8 @@ function renderRiskDueCell(row: ShipmentSlaAlert) {
     {
       trigger: () =>
         h('span', { class: 'inline-flex flex-wrap items-center gap-1' }, [
-          h(
-            NTag,
-            { size: 'small', type: 'default', bordered: false },
-            () => typeLabel,
-          ),
-          h(
-            NTag,
-            { size: 'small', type: riskTagType(row.riskLevel), bordered: false },
-            () => riskLabel(row.riskLevel),
-          ),
+          renderSlaTimelinessBadge(typeLabel, toneForAlertType(row.alertType)),
+          renderSlaTimelinessBadge(riskLabel(row.riskLevel), toneForRiskLevel(row.riskLevel)),
         ]),
       default: () => title || '—',
     },
@@ -459,9 +478,7 @@ function applyRouteQuery() {
         : null
   filterTimelinessStatus.value = ts
   filterStatus.value = typeof q.status === 'string' ? q.status : null
-  if (q.hasException === 'true') filterHasException.value = 'true'
-  else if (q.hasException === 'false') filterHasException.value = 'false'
-  else filterHasException.value = null
+  filterOnlyExceptionShipments.value = q.hasException === 'true'
   filterExceptionCode.value = typeof q.exceptionCode === 'string' ? q.exceptionCode : null
   filterChannelCode.value = typeof q.channelCode === 'string' ? q.channelCode : null
 }
@@ -486,12 +503,7 @@ async function load() {
       scope: filterShowHistory.value ? 'all' : 'todo',
       ...timelinessListParams(filterTimelinessStatus.value),
       status: filterStatus.value || undefined,
-      hasException:
-        filterHasException.value === 'true'
-          ? true
-          : filterHasException.value === 'false'
-            ? false
-            : undefined,
+      hasException: filterOnlyExceptionShipments.value,
       exceptionCode: filterExceptionCode.value || undefined,
       channelCode: filterChannelCode.value || undefined,
       search: search.value.trim() || undefined,
@@ -683,6 +695,84 @@ function handleConvert(row: ShipmentSlaAlert) {
       }
     },
   })
+}
+
+function rowActionTriggerLabel(row: ShipmentSlaAlert): string {
+  if (row.status === 'acknowledged') {
+    const count = row.followUpCount ?? 0
+    return count > 0 ? `已跟进 · ${count}次` : '已跟进'
+  }
+  return '已跟进'
+}
+
+function rowActionDropdownOptions(row: ShipmentSlaAlert): DropdownOption[] {
+  return [
+    {
+      label: row.status === 'acknowledged' ? '再跟进' : '已跟进',
+      key: 'follow',
+    },
+    { label: '已解决', key: 'resolve' },
+    { label: '转异常', key: 'convert' },
+    { label: '忽略', key: 'ignore' },
+  ]
+}
+
+function onRowActionSelect(row: ShipmentSlaAlert, key: string) {
+  if (key === 'follow') void handleFollowUp(row)
+  else if (key === 'resolve') void handleResolve(row)
+  else if (key === 'convert') handleConvert(row)
+  else if (key === 'ignore') void handleIgnore(row)
+}
+
+function renderActionsCell(row: ShipmentSlaAlert) {
+  if (!['open', 'acknowledged'].includes(row.status)) {
+    return h('span', { class: 'text-zinc-500' }, '—')
+  }
+
+  const triggerBtn = h(
+    NButton,
+    {
+      size: 'tiny',
+      quaternary: row.status !== 'open',
+      type: row.status === 'open' ? 'warning' : 'default',
+      class: 'sla-row-action-trigger',
+    },
+    {
+      default: () => rowActionTriggerLabel(row),
+      icon: () =>
+        h(ChevronDown, {
+          size: 14,
+          strokeWidth: ICON_STROKE,
+          class: 'sla-row-action-trigger__chevron',
+        }),
+    },
+  )
+
+  let trigger: ReturnType<typeof h> = triggerBtn
+  if (row.status === 'acknowledged') {
+    const tip = followUpTooltip(row)
+    if (tip) {
+      trigger = h(
+        NTooltip,
+        { placement: 'top' },
+        {
+          trigger: () => triggerBtn,
+          default: () => h('span', { class: 'whitespace-pre-line text-xs' }, tip),
+        },
+      )
+    }
+  }
+
+  return h(
+    NDropdown,
+    {
+      trigger: 'hover',
+      placement: 'bottom-end',
+      options: rowActionDropdownOptions(row),
+      onSelect: (key: string) => onRowActionSelect(row, key),
+    },
+    { default: () => trigger },
+  )
 }
 
 async function copyRowShipmentNo(row: ShipmentSlaAlert) {
@@ -880,12 +970,29 @@ const shipmentNoColWidth = computed(() => {
   return Math.min(385, Math.max(220, textW + copyW + badgeW))
 })
 
+function sumTableColumnWidths(cols: DataTableColumns<ShipmentSlaAlert>): number {
+  let total = 0
+  for (const col of cols) {
+    if (col.type === 'selection') {
+      total += typeof col.width === 'number' ? col.width : 40
+      continue
+    }
+    const w = 'width' in col ? col.width : undefined
+    const minW = 'minWidth' in col ? col.minWidth : undefined
+    if (typeof w === 'number') total += w
+    else if (typeof minW === 'number') total += minW
+  }
+  return total
+}
+
 const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
   { type: 'selection', fixed: 'left', width: 40 },
   {
     title: '运单号',
     key: 'shipmentNo',
     width: shipmentNoColWidth.value,
+    fixed: 'left',
+    cellProps: () => ({ class: 'sla-td-shipment-no' }),
     render: (row) => renderShipmentNoCell(row),
   },
   { title: '客户', key: 'customer', width: 100, ellipsis: { tooltip: true } },
@@ -913,6 +1020,14 @@ const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
         },
       )
     },
+  },
+  {
+    title: '明细状态',
+    key: 'routeStatus',
+    width: 120,
+    align: 'center',
+    ellipsis: { tooltip: true },
+    render: (row) => renderRouteStatusCell(row),
   },
   {
     title: '入库时间',
@@ -978,58 +1093,45 @@ const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
   {
     title: '跟进状态',
     key: 'status',
-    width: 96,
+    width: 108,
+    fixed: 'right',
     render: (row) => renderStatusCell(row),
   },
   {
     title: '操作',
     key: 'actions',
-    width: 260,
+    width: 112,
     fixed: 'right',
-    render: (row) => {
-      if (!['open', 'acknowledged'].includes(row.status)) {
-        return h('span', { class: 'text-zinc-500' }, '—')
-      }
-      return h(NSpace, { size: 4 }, () => [
-        h(
-          NButton,
-          {
-            size: 'tiny',
-            quaternary: row.status !== 'open',
-            type: row.status === 'open' ? 'warning' : 'default',
-            onClick: () => handleFollowUp(row),
-          },
-          () => (row.status === 'acknowledged' ? '再跟进' : '已跟进'),
-        ),
-        h(
-          NButton,
-          { size: 'tiny', quaternary: true, onClick: () => handleResolve(row) },
-          () => '已解决',
-        ),
-        h(
-          NButton,
-          { size: 'tiny', quaternary: true, onClick: () => handleConvert(row) },
-          () => '转异常',
-        ),
-        h(NButton, { size: 'tiny', quaternary: true, onClick: () => handleIgnore(row) }, () => '忽略'),
-      ])
-    },
+    align: 'center',
+    render: (row) => renderActionsCell(row),
   },
 ])
 
-watch([filterTimelinessStatus, filterStatus, filterHasException, filterExceptionCode, filterChannelCode, filterShowHistory], () => {
+const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
+
+watch(
+  [
+    filterTimelinessStatus,
+    filterStatus,
+    filterOnlyExceptionShipments,
+    filterExceptionCode,
+    filterChannelCode,
+    filterShowHistory,
+  ],
+  () => {
   page.value = 1
   void router.replace({
     query: {
       ...(filterTimelinessStatus.value ? { timelinessStatus: filterTimelinessStatus.value } : {}),
       ...(filterStatus.value ? { status: filterStatus.value } : {}),
-      ...(filterHasException.value ? { hasException: filterHasException.value } : {}),
+      ...(filterOnlyExceptionShipments.value ? { hasException: 'true' } : {}),
       ...(filterExceptionCode.value ? { exceptionCode: filterExceptionCode.value } : {}),
       ...(filterChannelCode.value ? { channelCode: filterChannelCode.value } : {}),
     },
   })
   load()
-})
+  },
+)
 
 watch([page, pageSize], load)
 
@@ -1138,6 +1240,7 @@ onMounted(() => {
         <NSelect
           v-model:value="filterTimelinessStatus"
           :options="timelinessStatusOptions"
+          :render-label="renderTimelinessStatusSelectLabel"
           clearable
           placeholder="时效状态"
           class="sla-exceptions-filter-select sla-exceptions-filter-select--wide"
@@ -1151,14 +1254,13 @@ onMounted(() => {
           class="sla-exceptions-filter-select"
           size="small"
         />
-        <NSelect
-          v-model:value="filterHasException"
-          :options="hasExceptionOptions"
-          clearable
-          placeholder="有无异常"
-          class="sla-exceptions-filter-select"
+        <NCheckbox
+          v-model:checked="filterOnlyExceptionShipments"
           size="small"
-        />
+          class="shrink-0 whitespace-nowrap"
+        >
+          仅异常货件
+        </NCheckbox>
         <NSelect
           v-model:value="filterExceptionCode"
           :options="exceptionFilterOptions"
@@ -1201,7 +1303,7 @@ onMounted(() => {
         flex-height
         class="sla-exceptions-table h-full"
         size="small"
-        :scroll-x="1720"
+        :scroll-x="tableScrollX"
       />
     </div>
 
@@ -1262,6 +1364,7 @@ onMounted(() => {
       :shipment="trackingDrawerShipment"
       :initial-tab="trackingDrawerTab"
       :exception-label-by-code="exceptionLabelByCode"
+      :route-status-label-by-code="routeStatusLabelByCode"
       @shipment-updated="handleTrackingDrawerShipmentUpdated"
     />
 
@@ -1391,6 +1494,236 @@ onMounted(() => {
   color: #999999;
   font-variant-numeric: tabular-nums;
   padding-left: 0.25rem;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge),
+.sla-exceptions-filters :deep(.sla-timeliness-badge) {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  padding: 0 0.375rem;
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.35rem;
+  font-weight: 500;
+  border: 1px solid transparent;
+  white-space: nowrap;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--warning-soon) {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--overdue) {
+  color: #c2410c;
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--severe) {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--warehouse) {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--arrival) {
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--dest) {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-color: #99f6e4;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--delivery) {
+  color: #475569;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.sla-exceptions-table :deep(.sla-timeliness-badge--muted) {
+  color: var(--color-fg-secondary, #52525b);
+  background: var(--color-bg-muted, #f4f4f5);
+  border-color: var(--color-border, #e4e4e7);
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--warning-soon) {
+  color: #92400e;
+  background: #fffbeb;
+  border-color: #fde68a;
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--overdue) {
+  color: #c2410c;
+  background: #fff7ed;
+  border-color: #fdba74;
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--severe) {
+  color: #b91c1c;
+  background: #fef2f2;
+  border-color: #fecaca;
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--warehouse) {
+  color: #1d4ed8;
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--arrival) {
+  color: #6d28d9;
+  background: #f5f3ff;
+  border-color: #ddd6fe;
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--dest) {
+  color: #0f766e;
+  background: #f0fdfa;
+  border-color: #99f6e4;
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--delivery) {
+  color: #475569;
+  background: #f8fafc;
+  border-color: #e2e8f0;
+}
+
+.sla-exceptions-filters :deep(.sla-timeliness-badge--muted) {
+  color: var(--color-fg-secondary, #52525b);
+  background: var(--color-bg-muted, #f4f4f5);
+  border-color: var(--color-border, #e4e4e7);
+}
+
+/* 固定列：运单号左、跟进状态+操作右，避免右侧操作列挡住跟进状态 */
+.sla-exceptions-table :deep(.n-data-table-tbody .n-data-table-td--fixed-left),
+.sla-exceptions-table :deep(.n-data-table-tbody .n-data-table-td--fixed-right) {
+  background-color: var(--n-td-color) !important;
+  z-index: 3;
+}
+
+.sla-exceptions-table :deep(.n-data-table-th--fixed-left),
+.sla-exceptions-table :deep(.n-data-table-th--fixed-right) {
+  background-color: var(--n-th-color) !important;
+  z-index: 4;
+}
+
+.sla-exceptions-table :deep(.n-data-table-td--fixed-left) {
+  box-shadow: 6px 0 10px -6px rgb(0 0 0 / 0.35);
+}
+
+.sla-exceptions-table :deep(.n-data-table-td--fixed-right) {
+  box-shadow: -6px 0 10px -6px rgb(0 0 0 / 0.35);
+}
+
+.sla-exceptions-table :deep(
+    .n-data-table-tbody .n-data-table-tr:not(.n-data-table-tr--summary):hover > .n-data-table-td
+  ) {
+  background-color: var(--n-td-color-hover) !important;
+}
+
+.sla-exceptions-table :deep(
+    .n-data-table-tbody
+      .n-data-table-tr:not(.n-data-table-tr--summary):hover
+      > .n-data-table-td--fixed-left
+  ),
+.sla-exceptions-table :deep(
+    .n-data-table-tbody
+      .n-data-table-tr:not(.n-data-table-tr--summary):hover
+      > .n-data-table-td--fixed-right
+  ) {
+  background-color: var(--n-td-color-hover) !important;
+}
+
+.sla-exceptions-table :deep(.sla-td-shipment-no) {
+  padding-right: 10px !important;
+}
+
+.sla-exceptions-table :deep(.sla-row-action-trigger) {
+  max-width: 100%;
+}
+
+.sla-exceptions-table :deep(.sla-row-action-trigger__chevron) {
+  opacity: 0.65;
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  padding: 0.1rem 0.35rem;
+  border-radius: 0.2rem;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--default) {
+  color: var(--tag-default-fg);
+  background: var(--tag-default-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--warning) {
+  color: var(--tag-warning-fg);
+  background: var(--tag-warning-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--success) {
+  color: var(--tag-success-fg);
+  background: var(--tag-success-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--error) {
+  color: var(--tag-error-fg);
+  background: var(--tag-error-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--sky) {
+  color: var(--tag-sky-fg);
+  background: var(--tag-sky-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--teal) {
+  color: var(--tag-teal-fg);
+  background: var(--tag-teal-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--indigo) {
+  color: var(--tag-indigo-fg);
+  background: var(--tag-indigo-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--violet) {
+  color: var(--tag-violet-fg);
+  background: var(--tag-violet-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--cyan) {
+  color: var(--tag-cyan-fg);
+  background: var(--tag-cyan-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--orange) {
+  color: var(--tag-orange-fg);
+  background: var(--tag-orange-bg);
+}
+
+.sla-exceptions-table :deep(.shipment-status-badge--rose) {
+  color: var(--tag-rose-fg);
+  background: var(--tag-rose-bg);
 }
 
 .sla-exceptions-table :deep(.sla-overdue-days) {

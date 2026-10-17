@@ -480,6 +480,117 @@ def _route_status_href(code: str) -> str:
     return f"/shipments?routeStatus={quote(code)}&notDelivered=true"
 
 
+def _today_api_range() -> tuple[str, str]:
+    today = date.today()
+    day = today.isoformat()
+    return f"{day} 00:00:00", f"{day} 23:59:59"
+
+
+def _shipments_href_today_range(*, from_key: str, to_key: str, extra: str = "") -> str:
+    start, end = _today_api_range()
+    q = f"{from_key}={quote(start)}&{to_key}={quote(end)}"
+    if extra:
+        q = f"{extra}&{q}"
+    return f"/shipments?{q}"
+
+
+def _shipments_href_today_time_field(time_field: str, *, extra: str = "") -> str:
+    start, end = _today_api_range()
+    base = (
+        f"timeField={quote(time_field)}"
+        f"&timeFrom={quote(start)}&timeTo={quote(end)}"
+    )
+    if extra:
+        base = f"{extra}&{base}"
+    return f"/shipments?{base}"
+
+
+def _count_shipments_on_local_date(database: Database, column: str) -> int:
+    col = column.strip()
+    if col not in (
+        "atd",
+        "ata",
+        "delivered_time",
+        "exception_opened_time",
+        "route_dest_transit_warehouse_time",
+        "route_last_mile_handover_time",
+        "route_track_signed_time",
+    ):
+        raise ValueError(f"unsupported column: {column}")
+    with database.lock:
+        return int(
+            database.conn.execute(
+                f"""
+                SELECT COUNT(*) AS c FROM {SHIPMENTS_TABLE}
+                WHERE {col} IS NOT NULL AND TRIM({col}) != ''
+                  AND date(substr({col}, 1, 10)) = date('now', 'localtime')
+                """
+            ).fetchone()["c"]
+            or 0
+        )
+
+
+def _build_route_status_today(*, database: Database) -> list[dict[str, Any]]:
+    """今日动态：ATD/ATA/签收/异常 + 明细节点时间（DPS 回写）。"""
+    exc_href = _shipments_href_today_time_field(
+        "exceptionOpenedTime",
+        extra="hasException=true",
+    )
+    return [
+        {
+            "code": "TODAY_EXCEPTION",
+            "nameZh": "今日异常",
+            "count": _count_shipments_on_local_date(database, "exception_opened_time"),
+            "isException": True,
+            "href": exc_href,
+        },
+        {
+            "code": "TODAY_DEPARTED",
+            "nameZh": "今日离港",
+            "count": _count_shipments_on_local_date(database, "atd"),
+            "isException": False,
+            "href": _shipments_href_today_range(from_key="atdFrom", to_key="atdTo"),
+        },
+        {
+            "code": "TODAY_ARRIVED",
+            "nameZh": "今日到港",
+            "count": _count_shipments_on_local_date(database, "ata"),
+            "isException": False,
+            "href": _shipments_href_today_range(from_key="ataFrom", to_key="ataTo"),
+        },
+        {
+            "code": "TODAY_INTERNAL_DELIVERED",
+            "nameZh": "今日内签收",
+            "count": _count_shipments_on_local_date(database, "delivered_time"),
+            "isException": False,
+            "href": _shipments_href_today_range(from_key="deliveredFrom", to_key="deliveredTo"),
+        },
+        {
+            "code": "TODAY_DEST_TRANSIT",
+            "nameZh": "今日到中转仓",
+            "count": _count_shipments_on_local_date(
+                database, "route_dest_transit_warehouse_time"
+            ),
+            "isException": False,
+            "href": _shipments_href_today_time_field("routeDestTransitWarehouseTime"),
+        },
+        {
+            "code": "TODAY_LAST_MILE",
+            "nameZh": "今日快递交仓",
+            "count": _count_shipments_on_local_date(database, "route_last_mile_handover_time"),
+            "isException": False,
+            "href": _shipments_href_today_time_field("routeLastMileHandoverTime"),
+        },
+        {
+            "code": "TODAY_ROUTE_SIGNED",
+            "nameZh": "今日签收",
+            "count": _count_shipments_on_local_date(database, "route_track_signed_time"),
+            "isException": False,
+            "href": _shipments_href_today_time_field("routeTrackSignedTime"),
+        },
+    ]
+
+
 def _build_route_status(*, database: Database) -> dict[str, Any]:
     """未签收运单的明细状态漏斗（关键节点 + 无明细状态）。"""
     unsigned_sql = sql_not_delivered(None)
@@ -528,12 +639,15 @@ def _build_route_status(*, database: Database) -> dict[str, Any]:
             }
         )
 
+    today_items = _build_route_status_today(database=database)
+
     return {
         "unsignedTotal": unsigned_total,
         "missingCount": missing_count,
         "missingHref": "/shipments?missingRouteStatus=true&notDelivered=true",
         "viewAllHref": "/shipments?notDelivered=true&routeStatus=_ALL",
         "items": items,
+        "todayItems": today_items,
     }
 
 
@@ -604,6 +718,7 @@ def build_workbench_overview(
             "missingHref": "/shipments?missingRouteStatus=true&notDelivered=true",
             "viewAllHref": "/shipments?notDelivered=true&routeStatus=_ALL",
             "items": [],
+            "todayItems": [],
         },
     )
 

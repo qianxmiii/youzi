@@ -502,7 +502,13 @@ def sync_shipments_from_dps(body: ShipmentDpsSyncByOrderRequest):
             LOGISTICS_CONFIG_PATH,
             nos,
         )
-        return ShipmentDpsSyncByOrderResult(**result)
+        try:
+            return ShipmentDpsSyncByOrderResult(**result)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"DPS 同步结果解析失败：{exc}",
+            ) from exc
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=503,
@@ -510,8 +516,102 @@ def sync_shipments_from_dps(body: ShipmentDpsSyncByOrderRequest):
         ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/shipments/download-dps-cargo-data")
+def download_shipments_dps_cargo_data(body: ShipmentBatchIdsIn):
+    """
+    按勾选运单从 DPS 下载货箱重量尺寸数据（config.dps_data_download，参数 ids=waybill_id）。
+    单票文件名为 {运单号}_data.ext；多票打包为 zip。
+    """
+    from ..services.shipment_dps_cargo_download import build_dps_cargo_data_download
+
+    try:
+        content, media_type, filename = build_dps_cargo_data_download(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_data_download。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+@router.post("/api/v1/shipments/download-dps-mark-data")
+def download_shipments_dps_mark_data(body: ShipmentBatchIdsIn):
+    """
+    按勾选运单从 DPS 下载唛头（单票 dps_mark_download ?id=&type=；多票 dps_batchmark_download JSON 数组）。
+    """
+    from ..services.shipment_dps_mark_download import build_dps_mark_data_download
+
+    try:
+        content, media_type, filename = build_dps_mark_data_download(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_mark_download / dps_batchmark_download。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+@router.post("/api/v1/shipments/download-dps-packinglist")
+def download_shipments_dps_packinglist(body: ShipmentBatchIdsIn):
+    """按勾选运单从 DPS 下载箱单发票（config.dps_packinglist_download）。"""
+    from ..services.shipment_dps_packinglist_download import build_dps_packinglist_download
+
+    try:
+        content, media_type, filename = build_dps_packinglist_download(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_packinglist_download。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
 
 
 @router.post(

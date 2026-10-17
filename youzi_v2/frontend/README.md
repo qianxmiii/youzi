@@ -75,6 +75,7 @@ python .cursor/skills/ui-ux-pro-max/scripts/search.py "<页面描述>" --design-
 
 | 配置键 | 用途 |
 |--------|------|
+| `dps_authorization` | DPS 共用 Bearer（运单查询、明细状态、货箱下载等） |
 | `shipment_queryByPerson` | 查全部运单（url 内筛选条件 + 自动 `pageNum`） |
 | `shipment_queryByOrder` | 按运单号查（追加 `odds` + `pageNum`） |
 

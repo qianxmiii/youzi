@@ -10,7 +10,7 @@ import ShipmentTrackingTimeReview from '@/components/shipments/ShipmentTrackingT
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import {
   isDisplayableRouteStatus,
-  routeStatusBadgeClass,
+  resolveShipmentListStatusDisplay,
   routeStatusLabelZh,
 } from '@/constants/shipmentRouteStatus'
 import type { Shipment } from '@/types/shipment'
@@ -92,6 +92,28 @@ const routeStatusText = computed(() => {
   return routeStatusLabelZh(routeStatusCode.value, props.routeStatusLabelByCode)
 })
 
+/** 与运单列表状态列一致：粗状态已签收时不被「轨迹签收」顶替 */
+const headerStatusDisplay = computed(() => {
+  const s = props.shipment
+  if (!s) return null
+  return resolveShipmentListStatusDisplay({
+    statusCode: s.statusCode,
+    routeStatus: s.routeStatus,
+    routeStatusLabelByCode: props.routeStatusLabelByCode,
+    coarseStatusLabel: statusLabel,
+  })
+})
+
+const headerStatusTitle = computed(() => {
+  const s = props.shipment
+  if (!s) return ''
+  const tip = headerStatusDisplay.value?.tipExtra || ''
+  const waybillHint = s.waybillId?.trim()
+    ? `${tip}点击更新明细状态`
+    : `${tip}无 DPS 运单 ID，需先更新运单`
+  return syncingRouteStatus.value ? '正在更新明细状态…' : waybillHint
+})
+
 function openTrackUrl() {
   const url = transferNumber.value?.url
   if (!url) return
@@ -145,21 +167,18 @@ async function syncRouteStatus() {
               {{ shipment.shipmentNo }}
             </h2>
             <button
+              v-if="headerStatusDisplay"
               type="button"
               class="route-status-btn"
               :class="[
-                routeStatusCode
-                  ? ['shipment-status-badge', routeStatusBadgeClass(routeStatusCode)]
+                headerStatusDisplay.label !== '无明细状态'
+                  ? ['shipment-status-badge', headerStatusDisplay.toneClass]
                   : 'route-status-btn--empty',
                 { 'route-status-btn--loading': syncingRouteStatus },
               ]"
               :disabled="syncingRouteStatus"
-              :title="
-                shipment.waybillId?.trim()
-                  ? '点击更新明细状态'
-                  : '无 DPS 运单 ID，需先更新运单'
-              "
-              :aria-label="`明细状态 ${routeStatusText}，点击更新`"
+              :title="headerStatusTitle"
+              :aria-label="`状态 ${headerStatusDisplay.label}，点击更新明细`"
               @click="syncRouteStatus"
             >
               <RefreshCw
@@ -168,7 +187,7 @@ async function syncRouteStatus() {
                 :stroke-width="ICON_STROKE"
                 aria-hidden="true"
               />
-              {{ routeStatusText }}
+              {{ headerStatusDisplay.label }}
             </button>
             <VipStarBadge v-if="shipment.isVip" size="md" />
           </div>

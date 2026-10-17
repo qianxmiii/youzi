@@ -79,6 +79,8 @@
 | 全程时效可计算率 | 同时有 `ATD` 和 `signed_time` 的票数 / 总票数 | 全程统计样本覆盖率 |
 | 异常率 | 异常票数 / 可计算票数 | 时效稳定性 |
 
+**异常期排除（已实现）**：若运单在 `shipment_exception_events` 中**任一段**异常持续 **超过 7 个自然日**（未关闭则计至当前），则**不计入**海运时效、到港后送仓时效、全程实际时效的样本（均值/P50/最快最慢等）；该票仍计入总票数与签收率，明细行标记 `异常期超7天(不计入时效)`。开船偏差、ETA 偏差、预计送仓偏差不受影响。
+
 ## 统计维度
 
 首版筛选维度：
@@ -179,6 +181,10 @@ KPI 卡片：
 渠道时效排行
 承运商时效排行
 ```
+
+渠道分组的 `label`（概览「渠道全程时效排行」、`byChannel`、交叉表 `channelLabel`）取 `channel_codes.name_zh`，按 `channel_code` 与 `dps_channel_name` 反查；无匹配时回退 code。
+
+承运商相关分组的 `label`（概览排行、`byCarrier`、交叉表 `carrierLabel`）取码表 `carrier_codes.name_zh`，按运单 `carrier_code` 与 `carrier_id` 反查；无匹配时回退 code。
 
 首版可以先用表格和简单条形分布，后续再加入趋势折线图、箱线图等。
 

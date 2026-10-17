@@ -9,7 +9,11 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 import requests
 
-from .shipment_query_config import QUERY_BY_ORDER_KEY, _read_auth
+from .shipment_query_config import (
+    QUERY_BY_ORDER_KEY,
+    load_config_json,
+    resolve_dps_authorization,
+)
 
 CONFIG_KEY = "dps_route_status_query"
 DEFAULT_TIMEOUT = 30
@@ -21,12 +25,9 @@ def load_waybill_route_info_config(config_path: Path) -> dict[str, Any]:
     """
     读取明细状态轨迹查询配置（config.json → dps_route_status_query）。
     - url：必填，完整接口地址（勿写入业务代码）
-    - Authorization：可省略，缺省复用 shipment_queryByOrder
+    - Authorization：可省略，缺省使用 config 根级 dps_authorization
     """
-    if not config_path.is_file():
-        raise FileNotFoundError(f"未找到配置文件：{config_path}")
-    with config_path.open("r", encoding="utf-8") as f:
-        config: dict[str, Any] = json.load(f)
+    config = load_config_json(config_path)
 
     block = config.get(CONFIG_KEY)
     if not isinstance(block, dict):
@@ -37,7 +38,7 @@ def load_waybill_route_info_config(config_path: Path) -> dict[str, Any]:
 
     return {
         "url": (block.get("url") or "").strip(),
-        "authorization": _read_auth(block) or _read_auth(order_block),
+        "authorization": resolve_dps_authorization(config, block, order_block),
         "timeout": int(block.get("timeout") or DEFAULT_TIMEOUT),
     }
 
@@ -47,9 +48,7 @@ def require_waybill_route_info_config(config_path: Path) -> dict[str, Any]:
     if not cfg["url"]:
         raise ValueError(f"config.json 缺少 {CONFIG_KEY}.url")
     if not cfg["authorization"]:
-        raise ValueError(
-            f"config.json 缺少 Authorization（{CONFIG_KEY} 或 {QUERY_BY_ORDER_KEY}）"
-        )
+        raise ValueError("config.json 缺少 dps_authorization（或块内 Authorization）")
     return cfg
 
 

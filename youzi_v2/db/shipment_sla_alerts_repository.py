@@ -18,6 +18,7 @@ from .shipment_sla import (
     STATUS_IGNORED,
     STATUS_OPEN,
     STATUS_RESOLVED,
+    alert_type_display_label,
     compute_days_in_transit,
     days_until_due,
     is_delivered,
@@ -39,13 +40,6 @@ from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 
 EXCEPTION_CODES_TABLE = "shipment_exception_codes"
 CARRIER_CODES_TABLE = "carrier_codes"
-
-ALERT_TYPE_LABELS: dict[str, str] = {
-    "DELIVERY_TIME": "运输时效",
-    "WAREHOUSE_NO_DEPARTURE": "入库未开船",
-    "ARRIVAL_NO_DELIVERY": "到港未送仓",
-    "DEST_WAREHOUSE_NO_DISPATCH": "到仓未派送",
-}
 
 _RISK_RANK = {
     "severe_overdue": 0,
@@ -113,7 +107,10 @@ def _merge_alerts_by_shipment(items: list[dict[str, Any]]) -> list[dict[str, Any
         types.sort(key=lambda t: _ALERT_TYPE_RANK.get(t, 99))
         primary["alertTypes"] = types
         primary["relatedAlertIds"] = related
-        primary["alertTypeLabels"] = [ALERT_TYPE_LABELS.get(t, t) for t in types]
+        rs = (primary.get("routeStatus") or "").strip()
+        primary["alertTypeLabels"] = [
+            alert_type_display_label(t, route_status=rs) for t in types
+        ]
         merged.append(primary)
     # 合并后：已跟进整组排最后，组内再按严重度
     merged.sort(key=_alert_list_sort_key)
@@ -276,6 +273,9 @@ def _alert_to_api(
     due_day = parse_date(row["due_date"])
     today = date.today()
     days_delta = days_until_due(today, due_day) if due_day else None
+    route_status = ""
+    if "route_status" in row.keys():
+        route_status = (row["route_status"] or "").strip()
     out: dict[str, Any] = {
         "id": row["id"],
         "shipmentId": row["shipment_id"],
@@ -283,10 +283,16 @@ def _alert_to_api(
         "alertType": row["alert_type"],
         "alertTypes": [row["alert_type"]] if row["alert_type"] else [],
         "alertTypeLabels": (
-            [ALERT_TYPE_LABELS.get(row["alert_type"], row["alert_type"])]
+            [
+                alert_type_display_label(
+                    row["alert_type"],
+                    route_status=route_status,
+                )
+            ]
             if row["alert_type"]
             else []
         ),
+        "routeStatus": route_status or None,
         "relatedAlertIds": [row["id"]] if row["id"] else [],
         "riskLevel": row["risk_level"],
         "status": row["status"],
@@ -326,9 +332,6 @@ def _alert_to_api(
     delivered_time = ""
     if "delivered_time" in row.keys():
         delivered_time = (row["delivered_time"] or "").strip()
-    route_status = ""
-    if "route_status" in row.keys():
-        route_status = (row["route_status"] or "").strip()
     latest_tracking_time = ""
     if "latest_tracking_time" in row.keys():
         latest_tracking_time = (row["latest_tracking_time"] or "").strip()

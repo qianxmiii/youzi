@@ -33,7 +33,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <header class="glass-header grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-3 px-6">
+  <header class="glass-header grid h-14 shrink-0 grid-cols-[minmax(0,1fr)_minmax(0,2.5fr)_minmax(0,1fr)] items-center gap-3 px-6">
     <div class="flex min-w-0 items-center gap-3 justify-self-start">
       <button
         type="button"
@@ -59,7 +59,7 @@ onMounted(async () => {
       </div>
     </div>
 
-    <WorldClockBar class="justify-self-center" />
+    <WorldClockBar class="min-w-0 w-full max-w-full justify-self-stretch" />
 
     <div class="relative z-20 flex shrink-0 items-center gap-2 justify-self-end">
       <AppTodoBell />

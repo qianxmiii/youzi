@@ -58,7 +58,11 @@ export interface PerformanceGroupRow {
 
 export interface PerformanceCarrierChannelRow {
   carrierCode: string
+  /** 承运商中文名（码表）；无则与 carrierCode 相同 */
+  carrierLabel?: string
   channelCode: string
+  /** 渠道中文名（码表）；无则与 channelCode 相同 */
+  channelLabel?: string
   totalCount: number
   signedCount: number
   seaTransit: PerformanceMetricBlock
@@ -177,7 +181,7 @@ export async function getShipmentPerformanceDetails(
 export async function exportShipmentPerformanceCsv(
   params: ShipmentPerformanceQueryParams = {},
 ): Promise<Blob> {
-  return api<Blob>('/api/v1/statistics/shipment-performance/export', {
+  return api<Blob, 'blob'>('/api/v1/statistics/shipment-performance/export', {
     query: buildPerformanceQuery(params),
     responseType: 'blob',
   })

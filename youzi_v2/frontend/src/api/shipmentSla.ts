@@ -72,6 +72,7 @@ export interface ShipmentSlaAlert {
   warehouseEntryTime?: string | null
   expectedDeliveryTime?: string | null
   deliveredTime?: string | null
+  routeStatus?: string | null
   exceptionCode?: string | null
   exceptionNameZh?: string | null
   exceptionDurationSeconds?: number | null

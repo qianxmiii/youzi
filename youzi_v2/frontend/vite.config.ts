@@ -18,10 +18,15 @@ export default defineConfig({
       '/api': {
         target: 'http://127.0.0.1:3001',
         changeOrigin: true,
+        // DPS 同步等长请求；与前端 ofetch timeout 对齐，避免代理先断连导致 Failed to fetch
+        timeout: 600_000,
+        proxyTimeout: 600_000,
       },
       '/legacy': {
         target: 'http://127.0.0.1:3001',
         changeOrigin: true,
+        timeout: 600_000,
+        proxyTimeout: 600_000,
       },
     },
   },

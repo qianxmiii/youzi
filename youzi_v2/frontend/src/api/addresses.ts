@@ -117,5 +117,5 @@ export async function exportAddressesExcel(params?: {
   if (params?.search?.trim()) q.search = params.search.trim()
   if (params?.addressType?.trim()) q.addressType = params.addressType.trim()
   if (params?.countryCode?.trim()) q.countryCode = params.countryCode.trim()
-  return api<Blob>(`${API_BASE}/export`, { query: q, responseType: 'blob' })
+  return api<Blob, 'blob'>(`${API_BASE}/export`, { query: q, responseType: 'blob' })
 }

@@ -1,6 +1,13 @@
 __pycache__/
 **/__pycache__/
 *.py[cod]
+
+# 测试运行缓存（tests/*.py 源码仍提交 Git）
+tests/__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+
 data/
 temp/
 **/*.db

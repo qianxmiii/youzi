@@ -13,10 +13,16 @@ from typing import Any, Callable
 from ..schemas.shipment_performance_statistics import ShipmentPerformanceQuery
 from .connection import Database
 from .datetime_util import DATETIME_FMT, normalize_tracking_time
+from .shipment_exception_events_table import TABLE_NAME as EXCEPTION_EVENTS_TABLE
 from .shipments_table import TABLE_NAME
+
+CARRIER_CODES_TABLE = "carrier_codes"
+CHANNEL_CODES_TABLE = "channel_codes"
 
 MAX_ANALYSIS_ROWS = 20_000
 POST_ARRIVAL_SLOW_DAYS = 7
+# 任一段异常持续超过该天数 → 海运/全程/到港后送仓时效样本排除（仍计入总票数）
+LONG_EXCEPTION_EXCLUDE_TRANSIT_DAYS = 7
 
 DATE_BASIS_COLUMNS = {
     "atd": "atd",
@@ -46,6 +52,19 @@ def _parse_date_only(raw: str | None) -> datetime | None:
         except ValueError:
             continue
     return None
+
+
+def _exception_episode_calendar_days(
+    opened_time: str | None,
+    closed_time: str | None,
+) -> int:
+    start = _parse_date_only(opened_time)
+    if not start:
+        return 0
+    end = _parse_date_only(closed_time) if (closed_time or "").strip() else datetime.now()
+    if not end:
+        return 0
+    return max(0, (end.date() - start.date()).days)
 
 
 def _day_diff(end_raw: str | None, start_raw: str | None) -> int | None:
@@ -119,6 +138,8 @@ def _extreme_full_transit(
 
 def _anomaly_flags(row: dict[str, Any]) -> list[str]:
     flags: list[str] = []
+    if row.get("transit_stats_excluded"):
+        flags.append("异常期超7天(不计入时效)")
     eta_dev = row.get("eta_deviation_days")
     if eta_dev is not None and eta_dev > 0:
         flags.append("晚到港")
@@ -131,6 +152,16 @@ def _anomaly_flags(row: dict[str, Any]) -> list[str]:
     return flags
 
 
+def _code_table_display_label(key: str, name_by_key: dict[str, str]) -> str:
+    if key == "(空)":
+        return key
+    raw = (key or "").strip()
+    if not raw:
+        return "(空)"
+    zh = name_by_key.get(raw.upper())
+    return zh or raw
+
+
 class ShipmentPerformanceStatisticsRepository:
     def __init__(self, database: Database) -> None:
         self._database = database
@@ -138,6 +169,52 @@ class ShipmentPerformanceStatisticsRepository:
     @property
     def _conn(self) -> sqlite3.Connection:
         return self._database.conn
+
+    def _load_carrier_name_by_key(self) -> dict[str, str]:
+        """code / carrier_id（DPS）→ 中文名，与运单列表承运商展示一致。"""
+        out: dict[str, str] = {}
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT code, carrier_id, name_zh
+                FROM {CARRIER_CODES_TABLE}
+                WHERE COALESCE(is_active, 1) = 1
+                """
+            ).fetchall()
+        for row in rows:
+            zh = (row["name_zh"] or "").strip()
+            if not zh:
+                continue
+            code = (row["code"] or "").strip()
+            carrier_id = (row["carrier_id"] or "").strip()
+            if code:
+                out[code.upper()] = zh
+            if carrier_id:
+                out[carrier_id.upper()] = zh
+        return out
+
+    def _load_channel_name_by_key(self) -> dict[str, str]:
+        """code / dps_channel_name → 中文名，与运单列表渠道展示一致。"""
+        out: dict[str, str] = {}
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT code, dps_channel_name, name_zh
+                FROM {CHANNEL_CODES_TABLE}
+                WHERE COALESCE(is_active, 1) = 1
+                """
+            ).fetchall()
+        for row in rows:
+            zh = (row["name_zh"] or "").strip()
+            if not zh:
+                continue
+            code = (row["code"] or "").strip()
+            dps_name = (row["dps_channel_name"] or "").strip()
+            if code:
+                out[code.upper()] = zh
+            if dps_name:
+                out[dps_name.upper()] = zh
+        return out
 
     def _normalize_query(self, params: ShipmentPerformanceQuery) -> ShipmentPerformanceQuery:
         basis = (params.date_basis or "atd").strip().lower()
@@ -210,8 +287,52 @@ class ShipmentPerformanceStatisticsRepository:
             rows = rows[:MAX_ANALYSIS_ROWS]
         return rows, truncated
 
-    def _enrich_row(self, row: sqlite3.Row) -> dict[str, Any]:
+    def _shipment_nos_with_long_exception(
+        self,
+        shipment_nos: list[str],
+        *,
+        min_days: int = LONG_EXCEPTION_EXCLUDE_TRANSIT_DAYS,
+    ) -> set[str]:
+        nos = [n.strip() for n in shipment_nos if n and str(n).strip()]
+        if not nos:
+            return set()
+        excluded: set[str] = set()
+        chunk = 400
+        with self._database.lock:
+            for i in range(0, len(nos), chunk):
+                part = nos[i : i + chunk]
+                placeholders = ",".join("?" for _ in part)
+                events = self._conn.execute(
+                    f"""
+                    SELECT shipment_no, opened_time, closed_time
+                    FROM {EXCEPTION_EVENTS_TABLE}
+                    WHERE shipment_no IN ({placeholders})
+                    """,
+                    part,
+                ).fetchall()
+                for ev in events:
+                    days = _exception_episode_calendar_days(
+                        ev["opened_time"],
+                        ev["closed_time"],
+                    )
+                    if days > min_days:
+                        excluded.add(str(ev["shipment_no"] or "").strip())
+        return {n for n in excluded if n}
+
+    def _enrich_row(
+        self,
+        row: sqlite3.Row,
+        *,
+        transit_stats_excluded: bool = False,
+    ) -> dict[str, Any]:
         signed = (row["delivered_time"] or "").strip() or None
+        sea = _day_diff(row["ata"], row["atd"])
+        post = _day_diff(row["delivered_time"], row["ata"])
+        full = _day_diff(row["delivered_time"], row["atd"])
+        if transit_stats_excluded:
+            sea = None
+            post = None
+            full = None
         metrics = {
             "shipment_id": str(row["id"]),
             "shipment_no": str(row["shipment_no"] or ""),
@@ -227,10 +348,11 @@ class ShipmentPerformanceStatisticsRepository:
             "signed_time": signed,
             "departure_deviation_days": _day_diff(row["atd"], row["etd"]),
             "eta_deviation_days": _day_diff(row["ata"], row["eta"]),
-            "sea_transit_days": _day_diff(row["ata"], row["atd"]),
-            "post_arrival_days": _day_diff(row["delivered_time"], row["ata"]),
-            "full_transit_days": _day_diff(row["delivered_time"], row["atd"]),
+            "sea_transit_days": sea,
+            "post_arrival_days": post,
+            "full_transit_days": full,
             "delivery_deviation_days": _day_diff(row["delivered_time"], row["expected_delivery_time"]),
+            "transit_stats_excluded": transit_stats_excluded,
         }
         metrics["anomaly_flags"] = _anomaly_flags(metrics)
         metrics["is_anomaly"] = bool(metrics["anomaly_flags"])
@@ -287,7 +409,13 @@ class ShipmentPerformanceStatisticsRepository:
         out.sort(key=lambda x: (-x["totalCount"], x["label"]))
         return out
 
-    def _overview(self, rows: list[dict[str, Any]]) -> dict[str, Any]:
+    def _overview(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        carrier_name_by_key: dict[str, str] | None = None,
+        channel_name_by_key: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
         total = len(rows)
         signed = sum(1 for r in rows if r.get("signed_time"))
         sea_vals = [float(r["sea_transit_days"]) for r in rows if r.get("sea_transit_days") is not None]
@@ -305,13 +433,17 @@ class ShipmentPerformanceStatisticsRepository:
             if r.get("full_transit_days") is not None or r.get("sea_transit_days") is not None
         )
 
+        channel_names = channel_name_by_key or {}
         by_channel = self._aggregate_group(
             rows,
             lambda r: r.get("channel_code") or "(空)",
+            lambda _item, key: _code_table_display_label(key, channel_names),
         )
+        carrier_names = carrier_name_by_key or {}
         by_carrier = self._aggregate_group(
             rows,
             lambda r: r.get("carrier_code") or "(空)",
+            lambda _item, key: _code_table_display_label(key, carrier_names),
         )
 
         def rank_key(item: dict[str, Any]) -> tuple[float, int]:
@@ -350,13 +482,21 @@ class ShipmentPerformanceStatisticsRepository:
             "carrierRanking": carrier_ranking,
         }
 
-    def _by_carrier_channel(self, rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    def _by_carrier_channel(
+        self,
+        rows: list[dict[str, Any]],
+        *,
+        carrier_name_by_key: dict[str, str] | None = None,
+        channel_name_by_key: dict[str, str] | None = None,
+    ) -> list[dict[str, Any]]:
         buckets: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
         for row in rows:
             carrier = row.get("carrier_code") or "(空)"
             channel = row.get("channel_code") or "(空)"
             buckets[(carrier, channel)].append(row)
 
+        carrier_names = carrier_name_by_key or {}
+        channel_names = channel_name_by_key or {}
         out: list[dict[str, Any]] = []
         for (carrier, channel), items in buckets.items():
             total = len(items)
@@ -368,7 +508,9 @@ class ShipmentPerformanceStatisticsRepository:
             out.append(
                 {
                     "carrierCode": carrier,
+                    "carrierLabel": _code_table_display_label(carrier, carrier_names),
                     "channelCode": channel,
+                    "channelLabel": _code_table_display_label(channel, channel_names),
                     "totalCount": total,
                     "signedCount": signed,
                     "seaTransit": _metric_block(sea_vals),
@@ -380,18 +522,48 @@ class ShipmentPerformanceStatisticsRepository:
         out.sort(key=lambda x: (-x["totalCount"], x["carrierCode"], x["channelCode"]))
         return out
 
+    def _enrich_rows(self, raw_rows: list[sqlite3.Row]) -> list[dict[str, Any]]:
+        nos = [str(r["shipment_no"] or "") for r in raw_rows]
+        excluded = self._shipment_nos_with_long_exception(nos)
+        return [
+            self._enrich_row(
+                r,
+                transit_stats_excluded=(str(r["shipment_no"] or "").strip() in excluded),
+            )
+            for r in raw_rows
+        ]
+
     def analyze(self, params: ShipmentPerformanceQuery) -> dict[str, Any]:
         query = self._normalize_query(params)
         raw_rows, truncated = self._fetch_rows(query)
-        rows = [self._enrich_row(r) for r in raw_rows]
+        rows = self._enrich_rows(raw_rows)
+        carrier_names = self._load_carrier_name_by_key()
+        channel_names = self._load_channel_name_by_key()
+        channel_label_fn = lambda _item, key: _code_table_display_label(key, channel_names)
         return {
             "filters": query.model_dump(by_alias=True),
             "truncated": truncated,
             "analyzedCount": len(rows),
-            "overview": self._overview(rows),
-            "byChannel": self._aggregate_group(rows, lambda r: r.get("channel_code") or "(空)"),
-            "byCarrier": self._aggregate_group(rows, lambda r: r.get("carrier_code") or "(空)"),
-            "byCarrierChannel": self._by_carrier_channel(rows),
+            "overview": self._overview(
+                rows,
+                carrier_name_by_key=carrier_names,
+                channel_name_by_key=channel_names,
+            ),
+            "byChannel": self._aggregate_group(
+                rows,
+                lambda r: r.get("channel_code") or "(空)",
+                channel_label_fn,
+            ),
+            "byCarrier": self._aggregate_group(
+                rows,
+                lambda r: r.get("carrier_code") or "(空)",
+                lambda _item, key: _code_table_display_label(key, carrier_names),
+            ),
+            "byCarrierChannel": self._by_carrier_channel(
+                rows,
+                carrier_name_by_key=carrier_names,
+                channel_name_by_key=channel_names,
+            ),
             "byCustomer": self._aggregate_group(
                 rows,
                 lambda r: r.get("customer") or "(空)",
@@ -402,7 +574,7 @@ class ShipmentPerformanceStatisticsRepository:
     def _load_enriched_rows(self, params: ShipmentPerformanceQuery) -> tuple[list[dict[str, Any]], bool]:
         query = self._normalize_query(params)
         raw_rows, truncated = self._fetch_rows(query)
-        return [self._enrich_row(r) for r in raw_rows], truncated
+        return self._enrich_rows(raw_rows), truncated
 
     def details(
         self,
@@ -452,6 +624,7 @@ class ShipmentPerformanceStatisticsRepository:
                 "fullTransitDays": r.get("full_transit_days"),
                 "deliveryDeviationDays": r.get("delivery_deviation_days"),
                 "anomalyFlags": r.get("anomaly_flags") or [],
+                "transitStatsExcluded": bool(r.get("transit_stats_excluded")),
             }
             for r in page_rows
         ]

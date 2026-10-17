@@ -62,6 +62,29 @@ def pick_latest_node(nodes: list[dict[str, Any]]) -> dict[str, Any] | None:
     )
 
 
+def extract_atd_ata_from_nodes(nodes: list[dict[str, Any]]) -> dict[str, str]:
+    """明细 301/306 节点最早 nodeTime → atd / ata（供空字段回写）。"""
+    atd: str | None = None
+    ata: str | None = None
+    for node in nodes:
+        code = map_dps_route_status(node.get("status"))
+        raw_time = normalize_tracking_time(str(node.get("nodeTime") or ""))
+        if not raw_time:
+            continue
+        if code == "DEPARTED_POL":
+            if atd is None or raw_time < atd:
+                atd = raw_time
+        elif code == "ARRIVED_POD":
+            if ata is None or raw_time < ata:
+                ata = raw_time
+    out: dict[str, str] = {}
+    if atd:
+        out["atd"] = atd
+    if ata:
+        out["ata"] = ata
+    return out
+
+
 def extract_route_milestone_times(nodes: list[dict[str, Any]]) -> dict[str, str]:
     """从节点列表提取 202/306/502 等关键节点的最早时间 → 本地字段。"""
     earliest: dict[str, str] = {}
@@ -161,6 +184,13 @@ def sync_route_status_by_waybill_ids(
                 SLA_FIELD_DEST_TRANSIT_TIME: "routeDestTransitWarehouseTime",
             }[field]
             if time_val != _opt_str(ship.get(camel)):
+                patch[field] = time_val
+
+        for field, time_val in extract_atd_ata_from_nodes(nodes).items():
+            api_key = "atd" if field == "atd" else "ata"
+            if _opt_str(ship.get(api_key)):
+                continue
+            if time_val != _opt_str(ship.get(api_key)):
                 patch[field] = time_val
 
         edd = _opt_str(

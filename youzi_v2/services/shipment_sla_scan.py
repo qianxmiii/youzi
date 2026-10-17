@@ -15,6 +15,7 @@ from ..db.shipment_sla import (
     ALERT_WAREHOUSE_NO_DEPARTURE,
     build_event_key,
     compute_arrival_no_delivery_context,
+    alert_type_display_label,
     compute_dest_warehouse_no_dispatch_context,
     compute_due_context,
     compute_risk_level,
@@ -40,16 +41,13 @@ RISK_LABEL = {
     "severe_overdue": "严重超时",
 }
 
-ALERT_TYPE_LABEL = {
-    ALERT_DELIVERY_TIME: "运输时效",
-    ALERT_WAREHOUSE_NO_DEPARTURE: "入库未开船",
-    ALERT_ARRIVAL_NO_DELIVERY: "到港未送仓",
-    ALERT_DEST_WAREHOUSE_NO_DISPATCH: "到仓未派送",
-}
-
-
-def _alert_log_label(alert_type: str, risk_level: str) -> str:
-    type_label = ALERT_TYPE_LABEL.get(alert_type, alert_type)
+def _alert_log_label(
+    alert_type: str,
+    risk_level: str,
+    *,
+    route_status: str | None = None,
+) -> str:
+    type_label = alert_type_display_label(alert_type, route_status=route_status)
     risk_label = RISK_LABEL.get(risk_level, risk_level)
     if alert_type == ALERT_DELIVERY_TIME:
         return risk_label

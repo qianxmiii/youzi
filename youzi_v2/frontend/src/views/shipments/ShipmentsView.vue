@@ -41,6 +41,9 @@ import {
   closeShipmentExceptions,
   createShipment,
   deleteShipment,
+  downloadShipmentsDpsCargoData,
+  downloadShipmentsDpsMarkData,
+  downloadShipmentsDpsPackinglist,
   exportShipmentsExcel,
   getShipment,
   getShipmentFilterOptions,
@@ -73,10 +76,7 @@ import { Layers } from 'lucide-vue-next'
 import { shipmentGroupRuleSelectOptions, sortShipmentGroupEnabledRules } from '@/constants/shipmentGroupRules'
 import { ICON_STROKE } from '@/constants/icons'
 import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
-import {
-  isDisplayableRouteStatus,
-  routeStatusBadgeClass,
-} from '@/constants/shipmentRouteStatus'
+import { resolveShipmentListStatusDisplay } from '@/constants/shipmentRouteStatus'
 import {
   DEFAULT_SHIPMENT_VISIBLE_COLUMNS,
   SHIPMENT_COLUMN_STORAGE_KEY,
@@ -101,9 +101,9 @@ import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 import {
   formatShipmentDetailSummaryCopyText,
-  formatShipmentDetailSummaryWithCustomerNoCopyText,
   formatShipmentTrackingNumbersCopyText,
   joinEqualsParts,
+  shipmentDetailIdentifierPartsForCopy,
 } from '@/utils/shipmentCopyFormat'
 import { formatLastMileTooltip, resolveLastMileTracking } from '@/utils/lastMileTracking'
 import {
@@ -112,7 +112,6 @@ import {
   FRESHNESS_LABEL,
   isCarrierTrackingNewerThanInternal,
   trackingFreshnessLevel,
-  type TrackingFreshnessBucket,
   type TrackingFreshnessStats,
 } from '@/utils/trackingFreshness'
 import { notifyTrackingSyncResult } from '@/utils/trackingSyncNotify'
@@ -130,9 +129,10 @@ const exporting = ref(false)
 const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
 const syncingDps = ref(false)
+const downloadingDpsExport = ref(false)
 const syncingRouteStatus = ref(false)
 /** 列表状态列单行点击刷新明细状态 */
-const syncingRouteStatusRowId = ref<number | null>(null)
+const syncingRouteStatusRowId = ref<string | null>(null)
 const carrierDaily = ref<TrackingSyncDailyStats | null>(null)
 const freshnessStats = ref<TrackingFreshnessStats | null>(null)
 const filterNoInternalTracking = ref(false)
@@ -1199,7 +1199,7 @@ function applyRouteRouteStatusFunnel() {
     filterRouteStatus.value = null
     return
   }
-  const code = raw.toUpperCase()
+  const code = (raw || '').toUpperCase()
   if (code === ROUTE_STATUS_ALL) {
     filterRouteStatus.value = null
     missingRouteStatus.value = false
@@ -1995,10 +1995,69 @@ async function handleSyncSelectedFromDps() {
     await loadList()
     await loadFilterOptions()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : 'DPS 更新失败')
+    const raw = apiErrorMessage(e, 'DPS 更新失败')
+    const hint =
+      /failed to fetch|network|fetch/i.test(raw) || (e instanceof TypeError && !raw)
+        ? '（请确认后端 3001 已启动、config.json 合法且含 dps_authorization；开发环境需重启 Vite 以应用代理超时）'
+        : ''
+    message.error(`${raw}${hint}`)
   } finally {
     syncingDps.value = false
   }
+}
+
+async function runDpsExportDownload(
+  loader: (ids: string[]) => Promise<{ blob: Blob; filename: string }>,
+  successText: string,
+  fallbackError: string,
+) {
+  if (!selectedRows.value.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const ids = selectedRows.value.map((r) => r.id)
+  downloadingDpsExport.value = true
+  try {
+    const { blob, filename } = await loader(ids)
+    downloadBlob(blob, filename)
+    message.success(successText)
+  } catch (e) {
+    message.error(apiErrorMessage(e, fallbackError), { duration: 8000 })
+  } finally {
+    downloadingDpsExport.value = false
+  }
+}
+
+function handleDownloadSelectedCargoData() {
+  void runDpsExportDownload(
+    downloadShipmentsDpsCargoData,
+    '货箱数据已下载',
+    '下载货箱数据失败',
+  )
+}
+
+function handleDownloadSelectedMarkData() {
+  void runDpsExportDownload(downloadShipmentsDpsMarkData, '唛头已下载', '下载唛头失败')
+}
+
+function handleDownloadSelectedPackinglist() {
+  void runDpsExportDownload(
+    downloadShipmentsDpsPackinglist,
+    '箱单发票已下载',
+    '下载箱单发票失败',
+  )
+}
+
+const downloadDropdownOptions: DropdownOption[] = [
+  { label: '货箱', key: 'cargo' },
+  { label: '唛头', key: 'mark' },
+  { label: '箱单发票', key: 'packinglist' },
+]
+
+function handleDownloadMenuSelect(key: string | number) {
+  if (key === 'cargo') handleDownloadSelectedCargoData()
+  else if (key === 'mark') handleDownloadSelectedMarkData()
+  else if (key === 'packinglist') handleDownloadSelectedPackinglist()
 }
 
 async function applySyncedShipmentRow(row: Shipment) {
@@ -2128,32 +2187,6 @@ async function copySelectedShipmentNos() {
   }
 }
 
-async function copySelectedRefShipmentNos() {
-  const rows = selectedRows.value
-  if (!rows.length) {
-    message.warning('请先勾选运单')
-    return
-  }
-  const nos = rows
-    .map((row) => displayField(row.refShipmentNo).trim())
-    .filter(Boolean)
-  if (!nos.length) {
-    message.warning('所选运单无关联单号')
-    return
-  }
-  try {
-    await navigator.clipboard.writeText(nos.join('\n'))
-    const skipped = rows.length - nos.length
-    message.success(
-      skipped > 0
-        ? `已复制 ${nos.length} 个关联单号（${skipped} 条无关联单号已跳过）`
-        : `已复制 ${nos.length} 个关联单号`,
-    )
-  } catch {
-    message.error('复制失败，请检查浏览器权限')
-  }
-}
-
 function displayField(value: string | number | null | undefined): string {
   if (value === null || value === undefined || value === '') return ''
   return String(value)
@@ -2170,16 +2203,14 @@ function formatCtnsField(ctns: number | null | undefined): string {
   return `${ctns}ctns`
 }
 
-/** 复制格式：运单号 [= 关联单号] [= 客户订单号] [= 货件号] [= 地址代码] [= 件数ctns] → 物流时间 → 物流轨迹 */
+/** 复制格式：运单号 + 标识段 + 地址 + 件数 → 物流时间 → 物流轨迹 */
 function formatTrackingCopyBlock(
   row: Shipment,
   tracking: { desc: string; time: string },
 ): string {
   const head = joinEqualsParts([
     row.shipmentNo,
-    row.refShipmentNo,
-    row.customerNo,
-    row.customerShipmentId,
+    ...shipmentDetailIdentifierPartsForCopy(row),
     row.addressCode,
     formatCtnsField(row.ctns),
   ])
@@ -2260,39 +2291,14 @@ async function copySelectedShipmentDetailSummary() {
   }
 }
 
-async function copySelectedShipmentDetailSummaryWithCustomerNo() {
-  const rows = selectedRows.value
-  if (!rows.length) {
-    message.warning('请先勾选运单')
-    return
-  }
-  const text = formatShipmentDetailSummaryWithCustomerNoCopyText(rows)
-  if (!text) {
-    message.warning('无可复制内容')
-    return
-  }
-  try {
-    await navigator.clipboard.writeText(text)
-    message.success(`已复制 ${rows.length} 条运单明细（关联单号）`)
-  } catch {
-    message.error('复制失败，请检查浏览器权限')
-  }
-}
-
 const copyDropdownOptions: DropdownOption[] = [
-  { label: '运单号', key: 'shipmentNos' },
-  { label: '关联单号', key: 'refShipmentNos' },
   { label: '运单明细', key: 'detailSummary' },
-  { label: '运单明细（关联单号）', key: 'detailSummaryCustomerNo' },
   { label: '最新轨迹', key: 'latestTracking' },
   { label: '转单号', key: 'trackingNumbers' },
 ]
 
 function handleCopyMenuSelect(key: string | number) {
-  if (key === 'shipmentNos') void copySelectedShipmentNos()
-  else if (key === 'refShipmentNos') void copySelectedRefShipmentNos()
-  else if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
-  else if (key === 'detailSummaryCustomerNo') void copySelectedShipmentDetailSummaryWithCustomerNo()
+  if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
 }
@@ -2398,26 +2404,12 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     render: (row) => {
       const busy = syncingRouteStatusRowId.value === row.id
       const hasWaybill = Boolean(row.waybillId?.trim())
-      const route = (row.routeStatus || '').trim()
-      let label: string
-      let toneClass: string
-      let tipExtra = ''
-      if (isDisplayableRouteStatus(route)) {
-        label = routeStatusLabel(route)
-        toneClass = routeStatusBadgeClass(route)
-        const coarseCode = row.statusCode || 'UNKNOWN'
-        const coarse = statusLabel[coarseCode] || coarseCode
-        if (coarse && coarse !== label) tipExtra = `粗状态：${coarse}；`
-      } else {
-        const code = row.statusCode || 'UNKNOWN'
-        label = statusLabel[code] || code
-        toneClass =
-          code === 'DELIVERED'
-            ? 'shipment-status-badge--success'
-            : code === 'INSPECTION'
-              ? 'shipment-status-badge--warning'
-              : 'shipment-status-badge--default'
-      }
+      const { label, toneClass, tipExtra } = resolveShipmentListStatusDisplay({
+        statusCode: row.statusCode,
+        routeStatus: row.routeStatus,
+        routeStatusLabelByCode: routeStatusLabelByCode.value,
+        coarseStatusLabel: statusLabel,
+      })
       const title = busy
         ? '正在更新明细状态…'
         : hasWaybill
@@ -3102,6 +3094,20 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         >
           更新选中运单
         </NButton>
+        <NDropdown
+          trigger="hover"
+          :options="downloadDropdownOptions"
+          @select="handleDownloadMenuSelect"
+        >
+          <NButton
+            size="small"
+            :loading="downloadingDpsExport"
+            title="DPS 货箱 / 唛头 / 箱单发票（需 waybillId）"
+            @click="handleDownloadSelectedCargoData"
+          >
+            下载
+          </NButton>
+        </NDropdown>
         <NDropdown trigger="hover" :options="groupDropdownOptions" @select="handleGroupMenuSelect">
           <NButton size="small" :loading="groupActionSubmitting" @click="openGroupAction('create')">
             分组

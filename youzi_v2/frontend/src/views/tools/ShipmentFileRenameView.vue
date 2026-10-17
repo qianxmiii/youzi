@@ -95,7 +95,7 @@ async function pickFolder() {
   }
   try {
     const picker = (
-      window as Window & {
+      window as unknown as Window & {
         showDirectoryPicker: (opts?: { mode?: 'read' | 'readwrite' }) => Promise<FileSystemDirectoryHandle>
       }
     ).showDirectoryPicker

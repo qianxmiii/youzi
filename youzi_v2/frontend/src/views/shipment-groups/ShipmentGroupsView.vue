@@ -51,7 +51,6 @@ import {
 } from '@/constants/shipmentGroupRules'
 import {
   dateOnlyToTimestamp,
-  formatDateOnlyForApi,
   formatTimestampForApi,
   parseDateTimeInput,
 } from '@/utils/formatDateTime'

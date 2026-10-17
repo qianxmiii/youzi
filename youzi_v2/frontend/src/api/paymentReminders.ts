@@ -125,7 +125,7 @@ const REMINDER_EXPORT_MAX = 10_000
 export async function exportPaymentRemindersExcel(
   params?: PaymentReminderListParams,
 ): Promise<Blob> {
-  return api<Blob>('/api/v1/shipments/payment-reminders/export', {
+  return api<Blob, 'blob'>('/api/v1/shipments/payment-reminders/export', {
     query: buildReminderQuery({
       ...params,
       limit: Math.min(params?.limit ?? REMINDER_EXPORT_MAX, REMINDER_EXPORT_MAX),

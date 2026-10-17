@@ -35,7 +35,7 @@ const chips = computed(() => {
 <template>
   <div
     v-if="visible"
-    class="world-clock-bar hidden min-w-0 items-center justify-center gap-1.5 md:flex"
+    class="world-clock-bar scrollbar-subtle hidden min-w-0 items-center justify-start gap-1.5 md:flex"
   >
     <NTooltip trigger="hover">
       <template #trigger>
@@ -72,9 +72,12 @@ const chips = computed(() => {
 <style scoped>
 .world-clock-bar {
   flex: 1;
-  max-width: min(40rem, 55vw);
-  overflow: hidden;
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
   padding: 0 0.25rem;
+  -webkit-overflow-scrolling: touch;
 }
 
 .world-clock-bar__gear {

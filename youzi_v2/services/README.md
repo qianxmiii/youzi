@@ -16,7 +16,7 @@ Youzi v2 业务服务层
 |------|------|
 | `tracking_sync.py` | 轨迹同步编排 |
 | `tracking_sync_scheduler.py` | 定时任务调度（含订阅 ETA 到港每日提醒） |
-| `carrier_tracking_sync.py` | 承运商轨迹拉取 |
+| `carrier_tracking_sync.py` | 承运商轨迹拉取（支持 vendor `fallbackVendor` 链） |
 | `carrier_vendors.py` | 读取 config.json 承运商配置 |
 | `wecom_webhook.py` | 企业微信通知（Webhook 或智能机器人 bot_id+secret） |
 | `wecom_aibot_ws.py` | 智能机器人 WebSocket 认证与 `aibot_send_msg` |
@@ -26,10 +26,16 @@ Youzi v2 业务服务层
 | `shipment_copy_format.py` | 运单明细复制文案（与前端 `shipmentCopyFormat.ts` 对齐，企微「明细」回复复用） |
 | `wecom_aibot_shipment_refresh.py` | 查单前刷新明细状态与内外部轨迹 |
 | `wecom_subscription_push.py` | 运单订阅更新（轨迹/ETA 提醒）同步推企微 |
-| `shipment_query_config.py` | DPS 运单查询：`queryByPerson` 全量 / `queryByOrder` 按 odd，自动翻页 |
+| `shipment_query_config.py` | DPS 运单查询、`dps_authorization` 解析、`queryByPerson` / `queryByOrder` 自动翻页 |
+| `dps_data_download.py` | DPS 货箱重量尺寸下载（`config.dps_data_download`，参数 `ids`） |
+| `shipment_dps_cargo_download.py` | 勾选运单批量下载货箱数据（单票/zip） |
+| `dps_mark_download.py` | DPS 唛头（单票 / 批量） |
+| `shipment_dps_mark_download.py` | 勾选运单下载唛头 |
+| `dps_packinglist_download.py` | DPS 箱单发票 |
+| `shipment_dps_packinglist_download.py` | 勾选运单下载箱单发票 |
 | `shipment_dps_sync.py` | DPS 运单全量同步至本地表（计划任务，默认关） |
 | `dps_waybill_route_info.py` | DPS 明细状态轨迹查询（URL 仅读 config `dps_route_status_query`） |
-| `shipment_dps_route_status_sync.py` | 轻量回写 `route_status`（更新选中/全部明细状态） |
+| `shipment_dps_route_status_sync.py` | 轻量回写 `route_status`、阶段 `route_*_time`；301/306 且 ATD/ATA 空时回写开船/到港时间 |
 | `shipment_route_status_exception.py` | 206/402 清关异常自动开/关 |
 | `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`） |
 | `shipment_dps_sync_fields.py` | 同步字段白名单（`config/shipment_dps_sync_fields.json`） |

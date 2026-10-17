@@ -55,6 +55,12 @@
       "onInsert": true,
       "onUpdate": true
     },
+    "charged_weight": {
+      "label": "计费重",
+      "dpsSource": "chargedWeight / chargeWeight 等（行或 params）；无值则不写入",
+      "onInsert": true,
+      "onUpdate": true
+    },
     "product_name": {
       "label": "品名",
       "dpsSource": "params.productName",
@@ -62,7 +68,7 @@
       "onUpdate": true
     },
     "origin_warehouse_code": {
-      "label": "交货仓库",
+      "label": "收货仓",
       "dpsSource": "receiveWarehouseName",
       "onInsert": true,
       "onUpdate": true
@@ -110,10 +116,10 @@
       "onUpdate": false
     },
     "status_code": {
-      "label": "粗状态",
-      "dpsSource": "signingTime→DELIVERED；有 commerceWaybillRouteInfo.status→IN_TRANSIT（忽略 markVos/601）",
+      "label": "运单 Status",
+      "dpsSource": "行字段 status（0/01/1/2/3/4）；signingTime→3；不用明细 route.status 推断",
       "onInsert": true,
-      "onUpdate": false
+      "onUpdate": true
     },
     "route_status": {
       "label": "轨迹明细状态",

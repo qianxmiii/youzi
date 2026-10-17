@@ -46,6 +46,8 @@ def build_scheduled_task_config(database: Database) -> dict:
         or archive.get("groupAutoArchiveEnabled")
         or zipcode.get("zipcodeBackfillEnabled")
         or dps_sync.get("dpsShipmentSyncEnabled")
+        or dps_sync.get("dpsShipmentSyncPickupEnabled")
+        or dps_sync.get("dpsShipmentSyncWarehousedEnabled")
         or exception_followup.get("exceptionFollowupEnabled")
         or sla_scan.get("slaScanEnabled")
     )
@@ -77,6 +79,16 @@ def builtin_scheduled_tasks(
     dps_schedule = (
         "已关闭"
         if not dps_settings.enabled
+        else f"每 {DPS_SYNC_INTERVAL_HOURS:g} 小时（约 1 天）"
+    )
+    dps_pickup_schedule = (
+        "已关闭"
+        if not dps_settings.pickup_enabled
+        else f"每 {DPS_SYNC_INTERVAL_HOURS:g} 小时（约 1 天）"
+    )
+    dps_warehoused_schedule = (
+        "已关闭"
+        if not dps_settings.warehoused_enabled
         else f"每 {DPS_SYNC_INTERVAL_HOURS:g} 小时（约 1 天）"
     )
     eff_start, eff_end = dps_settings.effective_transit_time_range()
@@ -154,6 +166,26 @@ def builtin_scheduled_tasks(
             "description": (
                 f"从 config.json shipment_queryByPerson 按发运时间拉取运单并 upsert 至本地；"
                 f"默认时间范围当月（当前 {eff_start} ~ {eff_end}）；默认关闭。"
+            ),
+        },
+        {
+            "id": "dps-shipment-sync-pickup",
+            "name": "DPS 提货中运单同步",
+            "source": "dps-shipment-sync-pickup",
+            "schedule": dps_pickup_schedule,
+            "description": (
+                f"从 config.json shipment_queryByPerson_pickup 拉取「提货中」运单（DPS Status 01）；"
+                f"GET 请求，时间参数为 orderTimeStart/End（与计划任务日期共用，当前 {eff_start} ~ {eff_end}）；默认关闭。"
+            ),
+        },
+        {
+            "id": "dps-shipment-sync-warehoused",
+            "name": "DPS 已入仓运单同步",
+            "source": "dps-shipment-sync-warehoused",
+            "schedule": dps_warehoused_schedule,
+            "description": (
+                f"从 config.json shipment_queryByPerson_warehoused 拉取「已入仓」运单（Status 1 等）；"
+                f"GET + orderTimeStart/End（当前 {eff_start} ~ {eff_end}）；默认关闭。"
             ),
         },
     ]

@@ -79,7 +79,12 @@ def _normalize_dps_waybill_ids(dps_waybill_ids: str | list[str]) -> list[str]:
     return parts
 
 
-def build_dps_data_download_url(base_url: str, dps_waybill_ids: str | list[str]) -> str:
+def build_dps_data_download_url(
+    base_url: str,
+    dps_waybill_ids: str | list[str],
+    *,
+    extra_query: dict[str, str] | None = None,
+) -> str:
     """在配置 URL 上设置查询参数 ids（多个 DPS id 用英文逗号拼接）。"""
     parts = _normalize_dps_waybill_ids(dps_waybill_ids)
     if not parts:
@@ -89,12 +94,19 @@ def build_dps_data_download_url(base_url: str, dps_waybill_ids: str | list[str])
     if not base:
         raise ValueError(f"{CONFIG_KEY}.url 为空")
     parsed = urlparse(base)
+    reserved = {_IDS_PARAM}
+    if extra_query:
+        reserved.update(extra_query.keys())
     existing = [
         (k, v)
         for k, v in parse_qsl(parsed.query, keep_blank_values=True)
-        if k != _IDS_PARAM
+        if k not in reserved
     ]
     pairs = [*existing, (_IDS_PARAM, ids_value)]
+    if extra_query:
+        for key, value in extra_query.items():
+            if key and value is not None and str(value).strip():
+                pairs.append((key, str(value).strip()))
     query = urlencode(pairs)
     return urlunparse(parsed._replace(query=query))
 

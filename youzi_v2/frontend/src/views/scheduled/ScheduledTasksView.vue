@@ -25,6 +25,8 @@ import {
   runZipcodeBackfill,
   runExceptionFollowup,
   runDpsShipmentSync,
+  runDpsShipmentSyncPickup,
+  runDpsShipmentSyncWarehoused,
   runDpsRouteStatusSync,
   updateScheduledTasksSettings,
 } from '@/api/scheduledTasks'
@@ -48,6 +50,8 @@ const runningGroupArchive = ref(false)
 const runningZipcodeBackfill = ref(false)
 const runningExceptionFollowup = ref(false)
 const runningDpsShipmentSync = ref(false)
+const runningDpsShipmentSyncPickup = ref(false)
+const runningDpsShipmentSyncWarehoused = ref(false)
 const runningDpsRouteStatusSync = ref(false)
 const overview = ref<ScheduledTaskOverview | null>(null)
 const jobs = ref<TrackingSyncJobRecord[]>([])
@@ -66,6 +70,8 @@ const form = reactive<ScheduledSyncSettingsUpdate>({
   groupAutoArchiveEnabled: false,
   zipcodeBackfillEnabled: false,
   dpsShipmentSyncEnabled: false,
+  dpsShipmentSyncPickupEnabled: false,
+  dpsShipmentSyncWarehousedEnabled: false,
   dpsShipmentSyncTransitTimeStart: '',
   dpsShipmentSyncTransitTimeEnd: '',
   exceptionFollowupEnabled: false,
@@ -165,6 +171,8 @@ function applyConfigFromOverview(data: ScheduledTaskOverview) {
   form.groupAutoArchiveEnabled = c.groupAutoArchiveEnabled ?? false
   form.zipcodeBackfillEnabled = c.zipcodeBackfillEnabled ?? false
   form.dpsShipmentSyncEnabled = c.dpsShipmentSyncEnabled ?? false
+  form.dpsShipmentSyncPickupEnabled = c.dpsShipmentSyncPickupEnabled ?? false
+  form.dpsShipmentSyncWarehousedEnabled = c.dpsShipmentSyncWarehousedEnabled ?? false
   form.dpsShipmentSyncTransitTimeStart = c.dpsShipmentSyncTransitTimeStart ?? ''
   form.dpsShipmentSyncTransitTimeEnd = c.dpsShipmentSyncTransitTimeEnd ?? ''
   form.exceptionFollowupEnabled = c.exceptionFollowupEnabled ?? false
@@ -313,6 +321,18 @@ async function onRunExceptionFollowup() {
   }
 }
 
+function dpsSyncResultMessage(res: Awaited<ReturnType<typeof runDpsShipmentSync>>, label: string) {
+  if (res.skipped) {
+    message.warning(res.reason || '已跳过')
+  } else if (res.error) {
+    message.error(res.error)
+  } else {
+    message.success(
+      `${label}：新增 ${res.created}、更新 ${res.updated}（远程 ${res.remoteTotal ?? res.total} 单）`,
+    )
+  }
+}
+
 async function onRunDpsShipmentSync() {
   runningDpsShipmentSync.value = true
   try {
@@ -320,20 +340,44 @@ async function onRunDpsShipmentSync() {
       transitTimeStart: dpsTransitTimeStartForApi(),
       transitTimeEnd: dpsTransitTimeEndForApi(),
     })
-    if (res.skipped) {
-      message.warning(res.reason || '已跳过')
-    } else if (res.error) {
-      message.error(res.error)
-    } else {
-      message.success(
-        `DPS 同步完成：新增 ${res.created}、更新 ${res.updated}（远程 ${res.remoteTotal ?? res.total} 单）`,
-      )
-    }
+    dpsSyncResultMessage(res, 'DPS 运单同步完成')
     await load()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '执行失败')
   } finally {
     runningDpsShipmentSync.value = false
+  }
+}
+
+async function onRunDpsShipmentSyncPickup() {
+  runningDpsShipmentSyncPickup.value = true
+  try {
+    const res = await runDpsShipmentSyncPickup({
+      transitTimeStart: dpsTransitTimeStartForApi(),
+      transitTimeEnd: dpsTransitTimeEndForApi(),
+    })
+    dpsSyncResultMessage(res, 'DPS 提货中同步完成')
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningDpsShipmentSyncPickup.value = false
+  }
+}
+
+async function onRunDpsShipmentSyncWarehoused() {
+  runningDpsShipmentSyncWarehoused.value = true
+  try {
+    const res = await runDpsShipmentSyncWarehoused({
+      transitTimeStart: dpsTransitTimeStartForApi(),
+      transitTimeEnd: dpsTransitTimeEndForApi(),
+    })
+    dpsSyncResultMessage(res, 'DPS 已入仓同步完成')
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningDpsShipmentSyncWarehoused.value = false
   }
 }
 
@@ -526,13 +570,39 @@ onMounted(load)
             </NFormItem>
             <NFormItem label="DPS 运单同步">
               <NSpace vertical :size="8" class="w-full max-w-3xl">
-                <NSpace align="center">
+                <NSpace align="center" wrap>
                   <NSwitch v-model:value="form.dpsShipmentSyncEnabled" />
-                  <span class="text-xs text-[var(--color-muted)]">每日批处理（约 24 小时，默认关闭）</span>
+                  <span class="text-xs text-[var(--color-muted)]">在途/全量 queryByPerson</span>
                   <NButton size="tiny" :loading="runningDpsShipmentSync" @click="onRunDpsShipmentSync">
                     立即执行
                   </NButton>
                 </NSpace>
+                <NSpace align="center" wrap>
+                  <NSwitch v-model:value="form.dpsShipmentSyncPickupEnabled" />
+                  <span class="text-xs text-[var(--color-muted)]">提货中 queryByPerson_pickup</span>
+                  <NButton
+                    size="tiny"
+                    :loading="runningDpsShipmentSyncPickup"
+                    @click="onRunDpsShipmentSyncPickup"
+                  >
+                    立即执行
+                  </NButton>
+                </NSpace>
+                <NSpace align="center" wrap>
+                  <NSwitch v-model:value="form.dpsShipmentSyncWarehousedEnabled" />
+                  <span class="text-xs text-[var(--color-muted)]">已入仓 queryByPerson_warehoused</span>
+                  <NButton
+                    size="tiny"
+                    :loading="runningDpsShipmentSyncWarehoused"
+                    @click="onRunDpsShipmentSyncWarehoused"
+                  >
+                    立即执行
+                  </NButton>
+                </NSpace>
+                <p class="text-[10px] text-[var(--color-muted)]">
+                  三项均为每日批处理（约 24 小时，默认关闭）。在途用发运时间 transitTime；提货中/已入仓用下单时间
+                  orderTime（日期控件共用）。
+                </p>
                 <NSpace align="center" wrap>
                   <span class="text-xs text-[var(--color-fg-secondary)]">发运开始</span>
                   <NDatePicker

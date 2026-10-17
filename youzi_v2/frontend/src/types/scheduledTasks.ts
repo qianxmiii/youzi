@@ -38,6 +38,14 @@ export interface ScheduledTaskConfig {
 
   dpsShipmentSyncLastFinished?: string | null
 
+  dpsShipmentSyncPickupEnabled?: boolean
+
+  dpsShipmentSyncPickupLastFinished?: string | null
+
+  dpsShipmentSyncWarehousedEnabled?: boolean
+
+  dpsShipmentSyncWarehousedLastFinished?: string | null
+
   exceptionFollowupEnabled?: boolean
 
   exceptionFollowupLastFinished?: string | null
@@ -73,6 +81,10 @@ export interface ScheduledSyncSettingsUpdate {
   dpsShipmentSyncTransitTimeStart?: string | null
 
   dpsShipmentSyncTransitTimeEnd?: string | null
+
+  dpsShipmentSyncPickupEnabled?: boolean
+
+  dpsShipmentSyncWarehousedEnabled?: boolean
 
   exceptionFollowupEnabled?: boolean
 

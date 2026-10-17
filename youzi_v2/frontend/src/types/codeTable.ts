@@ -5,6 +5,7 @@ export interface CodeTableMeta {
   hasChannelFields?: boolean
   hasCarrierFields?: boolean
   hasRouteStatusFields?: boolean
+  hasExceptionPhaseFields?: boolean
 }
 
 export interface CodeTableRow {
@@ -20,6 +21,7 @@ export interface CodeTableRow {
   dpsChannelName?: string
   carrierId?: string
   dpsStatus?: string
+  phaseCategory?: string
   createdTime: string
   updatedTime: string
 }
@@ -46,6 +48,7 @@ export interface CodeTablePayload {
   dpsChannelName?: string
   carrierId?: string
   dpsStatus?: string
+  phaseCategory?: string
 }
 
 export interface CodeTableImportResult {

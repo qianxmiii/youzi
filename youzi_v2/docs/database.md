@@ -66,9 +66,10 @@ erDiagram
 | address_code | TEXT | 地址编码 |
 | delivery_address | TEXT | 派送地址 |
 | ctns | INTEGER | 件数 |
+| charged_weight | REAL | 计费重 kg（DPS 同步 `chargedWeight` 等） |
 | zipcode | TEXT | 邮编 |
 | product_name | TEXT | 品名 |
-| origin_warehouse_code | TEXT | 起运仓 |
+| origin_warehouse_code | TEXT | 收货仓（DPS `receiveWarehouseName`） |
 | supplier_name | TEXT | 供应商 |
 | carrier_code | TEXT | 承运商 |
 | carrier_id | TEXT | 承运商侧 ID |

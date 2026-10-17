@@ -51,6 +51,11 @@ import {
   routeStatusLabelZh,
 } from '@/constants/shipmentRouteStatus'
 import {
+  shipmentExceptionPhaseFilterOptions,
+  shipmentExceptionPhaseLabel,
+  type ShipmentExceptionPhase,
+} from '@/constants/shipmentExceptionPhase'
+import {
   renderSlaTimelinessBadge,
   renderTimelinessStatusSelectLabel,
   toneForAlertType,
@@ -82,6 +87,7 @@ const filterStatus = ref<string | null>(null)
 /** 未勾选：仅无当前异常码的货件；勾选：仅存在异常码的货件 */
 const filterOnlyExceptionShipments = ref(false)
 const filterExceptionCode = ref<string | null>(null)
+const filterExceptionPhase = ref<ShipmentExceptionPhase | ''>('')
 const filterChannelCode = ref<string | null>(null)
 const filterShowHistory = ref(false)
 const search = ref('')
@@ -98,6 +104,7 @@ const filterOptions = ref<ShipmentFilterOptions>({
   channelCodes: [],
   channelNameZhs: [],
   channelCategories: [],
+  originWarehouseCodes: [],
   statusCodes: [],
   routeStatuses: [],
   exceptionCodes: [],
@@ -134,12 +141,17 @@ const statusOptions = [
   { label: '已忽略', value: 'ignored' },
 ]
 
-const exceptionFilterOptions = computed(() =>
-  Object.entries(exceptionLabelByCode.value).map(([code, nameZh]) => ({
-    label: nameZh,
-    value: code,
-  })),
-)
+const exceptionFilterOptions = computed(() => {
+  const phase = filterExceptionPhase.value
+  const types = filterOptions.value.exceptionTypes.filter((t) => {
+    if (!phase) return true
+    return (t.phaseCategory || 'post_port') === phase
+  })
+  return types.map((t) => ({
+    label: phase ? t.nameZh : `${shipmentExceptionPhaseLabel(t.phaseCategory)} · ${t.nameZh}`,
+    value: t.code,
+  }))
+})
 
 const channelCodeOptions = computed(() =>
   buildChannelSelectOptions(filterOptions.value.channels, filterOptions.value.channelCodes),
@@ -505,6 +517,7 @@ async function load() {
       status: filterStatus.value || undefined,
       hasException: filterOnlyExceptionShipments.value,
       exceptionCode: filterExceptionCode.value || undefined,
+      exceptionPhase: filterExceptionPhase.value || undefined,
       channelCode: filterChannelCode.value || undefined,
       search: search.value.trim() || undefined,
       limit: pageSize.value,
@@ -1115,6 +1128,7 @@ watch(
     filterStatus,
     filterOnlyExceptionShipments,
     filterExceptionCode,
+    filterExceptionPhase,
     filterChannelCode,
     filterShowHistory,
   ],
@@ -1126,6 +1140,9 @@ watch(
       ...(filterStatus.value ? { status: filterStatus.value } : {}),
       ...(filterOnlyExceptionShipments.value ? { hasException: 'true' } : {}),
       ...(filterExceptionCode.value ? { exceptionCode: filterExceptionCode.value } : {}),
+      ...(filterExceptionPhase.value
+        ? { exceptionPhase: filterExceptionPhase.value }
+        : {}),
       ...(filterChannelCode.value ? { channelCode: filterChannelCode.value } : {}),
     },
   })
@@ -1134,6 +1151,14 @@ watch(
 )
 
 watch([page, pageSize], load)
+
+watch(filterExceptionPhase, () => {
+  const code = filterExceptionCode.value
+  if (!code) return
+  if (!exceptionFilterOptions.value.some((o) => o.value === code)) {
+    filterExceptionCode.value = null
+  }
+})
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(search, () => {
@@ -1261,6 +1286,13 @@ onMounted(() => {
         >
           仅异常货件
         </NCheckbox>
+        <NSelect
+          v-model:value="filterExceptionPhase"
+          :options="[...shipmentExceptionPhaseFilterOptions]"
+          placeholder="异常大类"
+          class="sla-exceptions-filter-select"
+          size="small"
+        />
         <NSelect
           v-model:value="filterExceptionCode"
           :options="exceptionFilterOptions"

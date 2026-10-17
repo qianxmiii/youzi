@@ -112,6 +112,7 @@ _UPDATABLE = (
     "address_code",
     "delivery_address",
     "ctns",
+    "charged_weight",
     "zipcode",
     "product_name",
     "origin_warehouse_code",
@@ -196,6 +197,11 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "addressCode": row["address_code"],
         "deliveryAddress": row["delivery_address"],
         "ctns": row["ctns"],
+        "chargedWeight": (
+            float(row["charged_weight"])
+            if "charged_weight" in row.keys() and row["charged_weight"] is not None
+            else None
+        ),
         "zipcode": row["zipcode"],
         "productName": row["product_name"],
         "originWarehouseCode": row["origin_warehouse_code"],
@@ -311,6 +317,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "addressCode": "address_code",
         "deliveryAddress": "delivery_address",
         "ctns": "ctns",
+        "chargedWeight": "charged_weight",
         "productName": "product_name",
         "originWarehouseCode": "origin_warehouse_code",
         "supplierName": "supplier_name",
@@ -472,6 +479,7 @@ class ShipmentsRepository:
         updated_to: str | None = None,
         customer_no: str | None = None,
         destination_port_code: str | None = None,
+        origin_warehouse_code: str | None = None,
         address_keyword: str | None = None,
         missing_etd: bool | None = None,
         missing_atd: bool | None = None,
@@ -485,11 +493,16 @@ class ShipmentsRepository:
         delivery_risk: str | None = None,
         sort_by: str | None = None,
         sort_order: str | None = None,
+        workspace: str | None = None,
         limit: int = 100,
         offset: int = 0,
     ) -> dict[str, Any]:
         limit = max(1, min(limit, 500))
         offset = max(0, offset)
+        if workspace:
+            from .shipment_order_status import validate_workspace
+
+            workspace = validate_workspace(workspace)
         conditions: list[str] = []
         params: list[Any] = []
         cleaned_nos = list(
@@ -541,9 +554,20 @@ class ShipmentsRepository:
                 """
                 )
                 params.extend([tq, tq, tq, tq])
+        if workspace:
+            from .shipment_order_status import workspace_status_filter_sql
+
+            ws_frag, ws_params = workspace_status_filter_sql(workspace, alias="s")
+            if ws_frag:
+                conditions.append(ws_frag)
+                params.extend(ws_params)
         if status_code and status_code.strip():
-            conditions.append("s.status_code = ?")
-            params.append(status_code.strip())
+            from .shipment_order_status import status_code_filter_sql
+
+            sc_frag, sc_params = status_code_filter_sql(status_code.strip(), alias="s")
+            if sc_frag:
+                conditions.append(sc_frag)
+                params.extend(sc_params)
         if route_status and route_status.strip():
             conditions.append("s.route_status = ?")
             params.append(route_status.strip().upper())
@@ -576,6 +600,9 @@ class ShipmentsRepository:
         if destination_port_code and destination_port_code.strip():
             conditions.append("s.destination_port_code = ?")
             params.append(destination_port_code.strip())
+        if origin_warehouse_code and origin_warehouse_code.strip():
+            conditions.append("s.origin_warehouse_code = ?")
+            params.append(origin_warehouse_code.strip())
         if address_keyword and address_keyword.strip():
             q = f"%{address_keyword.strip()}%"
             conditions.append(
@@ -904,7 +931,7 @@ class ShipmentsRepository:
             ).fetchall()
             exception_defs = self._conn.execute(
                 """
-                SELECT code, name_zh FROM shipment_exception_codes
+                SELECT code, name_zh, phase_category FROM shipment_exception_codes
                 WHERE is_active = 1
                 ORDER BY sort_order, code
                 """
@@ -943,6 +970,13 @@ class ShipmentsRepository:
                 INNER JOIN {CHANNEL_CODES_TABLE} cc ON s.channel_code = cc.code
                 WHERE cc.category IS NOT NULL AND TRIM(cc.category) != ''
                 ORDER BY cc.category
+                """
+            ).fetchall()
+            origin_wh_rows = self._conn.execute(
+                f"""
+                SELECT DISTINCT origin_warehouse_code AS v FROM {TABLE_NAME}
+                WHERE origin_warehouse_code IS NOT NULL AND TRIM(origin_warehouse_code) != ''
+                ORDER BY origin_warehouse_code
                 """
             ).fetchall()
             group_rows = self._conn.execute(
@@ -994,6 +1028,7 @@ class ShipmentsRepository:
             "channelCodes": [c["code"] for c in channels] or out["channel_code"],
             "channelNameZhs": [str(r["v"]) for r in channel_name_rows],
             "channelCategories": [str(r["v"]) for r in channel_category_rows],
+            "originWarehouseCodes": [str(r["v"]) for r in origin_wh_rows],
             "statusCodes": out["status_code"],
             "routeStatuses": [
                 {
@@ -1005,7 +1040,14 @@ class ShipmentsRepository:
             ],
             "exceptionCodes": [str(r["v"]) for r in exc_in_use],
             "exceptionTypes": [
-                {"code": str(r["code"]), "nameZh": str(r["name_zh"] or r["code"])}
+                {
+                    "code": str(r["code"]),
+                    "nameZh": str(r["name_zh"] or r["code"]),
+                    "phaseCategory": str(
+                        r["phase_category"] if "phase_category" in r.keys() else "post_port"
+                    )
+                    or "post_port",
+                }
                 for r in exception_defs
             ],
             "groups": [

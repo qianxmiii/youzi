@@ -29,6 +29,7 @@ import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackin
 import ShipmentFilterSummaryBar from '@/components/shipments/ShipmentFilterSummaryBar.vue'
 import ShipmentAdvancedFilterDrawer from '@/components/shipments/ShipmentAdvancedFilterDrawer.vue'
 import ShipmentColumnSettingsDrawer from '@/components/shipments/ShipmentColumnSettingsDrawer.vue'
+import ShipmentDpsExportProgressModal from '@/components/shipments/ShipmentDpsExportProgressModal.vue'
 import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
 import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
@@ -41,10 +42,7 @@ import {
   closeShipmentExceptions,
   createShipment,
   deleteShipment,
-  downloadShipmentsDpsCargoData,
-  downloadShipmentsDpsMarkData,
-  downloadShipmentsDpsPackinglist,
-  downloadShipmentsDpsWarehouseform,
+  previewReceiveWarehouseEntry,
   exportShipmentsExcel,
   getShipment,
   getShipmentFilterOptions,
@@ -75,9 +73,25 @@ import type { Shipment, ShipmentBatchResult, ShipmentPayload } from '@/types/shi
 import type { ShipmentGroupBatchMode, ShipmentGroupFilterOption, ShipmentGroupRuleInput } from '@/types/shipmentGroup'
 import { Layers } from 'lucide-vue-next'
 import { shipmentGroupRuleSelectOptions, sortShipmentGroupEnabledRules } from '@/constants/shipmentGroupRules'
+import {
+  SHIPMENT_EXCEPTION_PHASE_POST_PORT,
+  SHIPMENT_EXCEPTION_PHASE_PRE_PORT,
+  shipmentExceptionPhaseLabel,
+} from '@/constants/shipmentExceptionPhase'
 import { ICON_STROKE } from '@/constants/icons'
 import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
 import { resolveShipmentListStatusDisplay } from '@/constants/shipmentRouteStatus'
+import {
+  applyPreportListColumnKeys,
+  defaultStatusFilterForWorkspace,
+  PRE_PORT_STATUS_CODES,
+  PREPORT_EXCLUDED_COLUMN_KEYS,
+  SHIPMENT_STATUS_LABEL_ZH,
+  dpsPreportStatusBadgeClass,
+  shipmentStatusLabel,
+  TRANSIT_STATUS_CODES,
+  type ShipmentWorkspace,
+} from '@/constants/shipmentWorkspace'
 import {
   DEFAULT_SHIPMENT_VISIBLE_COLUMNS,
   SHIPMENT_COLUMN_STORAGE_KEY,
@@ -99,8 +113,14 @@ import { useDictLabels } from '@/composables/useDictLabels'
 import { dateOnlyToTimestamp, formatRelativeTime } from '@/utils/formatDateTime'
 import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { parseBatchSearchTokens } from '@/utils/parseBatchSearch'
+import {
+  DPS_EXPORT_TITLES,
+  runDpsExportJob,
+  type DpsExportJobType,
+} from '@/utils/dpsExportWithProgress'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 import {
+  formatPreportShipmentDataCopyText,
   formatShipmentDetailSummaryCopyText,
   formatShipmentTrackingNumbersCopyText,
   joinEqualsParts,
@@ -120,6 +140,25 @@ import { apiErrorMessage } from '@/utils/apiError'
 
 const route = useRoute()
 const router = useRouter()
+
+const shipmentWorkspace = computed((): ShipmentWorkspace => {
+  const meta = route.meta.shipmentWorkspace
+  return meta === 'preport' ? 'preport' : 'transit'
+})
+const isPreportWorkspace = computed(() => shipmentWorkspace.value === 'preport')
+
+function workspaceDefaultStatus(): string | null {
+  return defaultStatusFilterForWorkspace(shipmentWorkspace.value)
+}
+
+const pageTitle = computed(() =>
+  isPreportWorkspace.value ? '港前运单' : '在途运单',
+)
+const pageSubtitle = computed(() =>
+  isPreportWorkspace.value
+    ? '核对与下载（已下单 / 提货中 / 已入仓 / 已取消）'
+    : '轨迹与明细状态（转运中 / 已签收）',
+)
 const message = useMessage()
 const dialog = useDialog()
 const { loadDictTypes, dictLabel } = useDictLabels()
@@ -131,6 +170,11 @@ const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
 const syncingDps = ref(false)
 const downloadingDpsExport = ref(false)
+const dpsExportProgressShow = ref(false)
+const dpsExportProgressTitle = ref('正在下载')
+const dpsExportProgressMessage = ref('准备中…')
+const dpsExportProgressPercent = ref(0)
+const dpsExportProgressFailed = ref(false)
 const syncingRouteStatus = ref(false)
 /** 列表状态列单行点击刷新明细状态 */
 const syncingRouteStatusRowId = ref<string | null>(null)
@@ -150,8 +194,7 @@ const advExactShipmentNo = ref('')
 const advContainerNos = ref('')
 const advBillNos = ref('')
 const advCustomerShipmentIds = ref('')
-const DEFAULT_STATUS_FILTER = 'IN_TRANSIT'
-const filterStatus = ref<string | null>(DEFAULT_STATUS_FILTER)
+const filterStatus = ref<string | null>(null)
 const filterRouteStatus = ref<string | null>(null)
 const filterCustomer = ref<string | null>(null)
 const filterChannelCode = ref<string | null>(null)
@@ -165,6 +208,7 @@ const filterChannelNameZh = ref<string | null>(null)
 const filterChannelCategory = ref<string | null>(null)
 const filterCustomerNo = ref('')
 const filterDestinationPort = ref<string | null>(null)
+const filterOriginWarehouseCode = ref<string | null>(null)
 const filterAddressKeyword = ref<string | null>(null)
 const filterVesselVoyage = ref<string | null>(null)
 const filterStaleDays = ref<number | null>(null)
@@ -208,6 +252,17 @@ function loadVisibleColumnKeys(): string[] {
 }
 
 const visibleColumnKeys = ref<string[]>(loadVisibleColumnKeys())
+
+const preportExcludedColumnKeySet = new Set<string>(PREPORT_EXCLUDED_COLUMN_KEYS)
+
+const tableVisibleColumnKeys = computed(() => {
+  if (!isPreportWorkspace.value) return visibleColumnKeys.value
+  const filtered = visibleColumnKeys.value.filter(
+    (key) => !preportExcludedColumnKeySet.has(key),
+  )
+  return applyPreportListColumnKeys(filtered)
+})
+
 const filterOptions = ref<ShipmentFilterOptions>({
   customers: [],
   carrierCodes: [],
@@ -217,6 +272,7 @@ const filterOptions = ref<ShipmentFilterOptions>({
   channels: [],
   channelNameZhs: [],
   channelCategories: [],
+  originWarehouseCodes: [],
   statusCodes: [],
   routeStatuses: [],
   exceptionCodes: [],
@@ -458,7 +514,7 @@ function toggleStaleDaysFilter(days: 7 | 14) {
   } else {
     filterStaleDays.value = days
     filterNoInternalTracking.value = false
-    filterStatus.value = DEFAULT_STATUS_FILTER
+    filterStatus.value = workspaceDefaultStatus()
   }
   onFiltersChanged()
 }
@@ -471,12 +527,7 @@ function toggleStale14Filter() {
   toggleStaleDaysFilter(14)
 }
 
-const statusLabel: Record<string, string> = {
-  IN_TRANSIT: '转运中',
-  DELIVERED: '已签收',
-  INSPECTION: '查验',
-  UNKNOWN: '未知',
-}
+const statusLabel: Record<string, string> = { ...SHIPMENT_STATUS_LABEL_ZH }
 
 const routeStatusLabelByCode = computed(() => {
   const m: Record<string, string> = {}
@@ -777,12 +828,15 @@ const exceptionColumns: DataTableColumns<Shipment> = [
   },
 ]
 
-const statusOptions = computed(() =>
-  filterOptions.value.statusCodes.map((code) => ({
-    label: statusLabel[code] || code,
-    value: code,
-  })),
-)
+const statusOptions = computed(() => {
+  const allowed = isPreportWorkspace.value ? PRE_PORT_STATUS_CODES : TRANSIT_STATUS_CODES
+  return filterOptions.value.statusCodes
+    .filter((code) => allowed.has(code))
+    .map((code) => ({
+      label: statusLabel[code] || code,
+      value: code,
+    }))
+})
 
 const routeStatusOptions = computed(() =>
   (filterOptions.value.routeStatuses || []).map((t) => ({
@@ -791,9 +845,17 @@ const routeStatusOptions = computed(() =>
   })),
 )
 
+const exceptionTypesForWorkspace = computed(() => {
+  const types = filterOptions.value.exceptionTypes
+  const phase = isPreportWorkspace.value
+    ? SHIPMENT_EXCEPTION_PHASE_PRE_PORT
+    : SHIPMENT_EXCEPTION_PHASE_POST_PORT
+  return types.filter((t) => (t.phaseCategory || SHIPMENT_EXCEPTION_PHASE_POST_PORT) === phase)
+})
+
 const exceptionFilterOptions = computed(() =>
-  filterOptions.value.exceptionTypes.map((t) => ({
-    label: t.nameZh,
+  exceptionTypesForWorkspace.value.map((t) => ({
+    label: `${shipmentExceptionPhaseLabel(t.phaseCategory)} · ${t.nameZh}`,
     value: t.code,
   })),
 )
@@ -811,6 +873,9 @@ const staleOptions = [
 
 const customerOptions = computed(() =>
   filterOptions.value.customers.map((v) => ({ label: v, value: v })),
+)
+const originWarehouseOptions = computed(() =>
+  (filterOptions.value.originWarehouseCodes || []).map((v) => ({ label: v, value: v })),
 )
 const carrierOptions = computed(() =>
   buildCarrierSelectOptions(
@@ -872,6 +937,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   filterChannelCategory: filterChannelCategory.value,
   filterCustomerNo: filterCustomerNo.value,
   filterDestinationPort: filterDestinationPort.value,
+  filterOriginWarehouseCode: filterOriginWarehouseCode.value,
   filterAddressKeyword: filterAddressKeyword.value,
   filterVesselVoyage: filterVesselVoyage.value,
   filterVipOnly: filterVipOnly.value,
@@ -903,6 +969,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   deliveryRisk: deliveryRisk.value,
   advancedTimes: advancedTimes.value,
   shipmentNoSearchActive: batchShipmentSearchActive.value,
+  workspace: shipmentWorkspace.value,
 }))
 
 const filterSummaryTags = computed(() =>
@@ -1076,7 +1143,7 @@ watch([searchShipmentNo, searchKeyword, searchTrackingContent], () => {
     }
   } else if (statusClearedByBatchSearch) {
     statusClearedByBatchSearch = false
-    filterStatus.value = DEFAULT_STATUS_FILTER
+    filterStatus.value = workspaceDefaultStatus()
   }
   page.value = 1
   if (searchTimer) clearTimeout(searchTimer)
@@ -1164,6 +1231,29 @@ function readRouteStatusCode(): string | null {
   const raw = Array.isArray(q) ? q[0] : q
   const code = (raw || '').trim().toUpperCase()
   return code || null
+}
+
+/** 工作台深链等已清空状态筛选时，勿再套默认「转运中」 */
+function routeDisablesDefaultStatusFilter(): boolean {
+  if (readRouteShipmentNo()) return true
+  if (readRouteQueryString('deliveredFrom') || readRouteQueryString('deliveredTo')) return true
+  if (readRouteQueryString('vesselVoyage')) return true
+  const timeFieldRaw = readRouteQueryString('timeField')
+  if (timeFieldRaw && (readRouteQueryString('timeFrom') || readRouteQueryString('timeTo'))) {
+    return true
+  }
+  if (readRouteQueryString('routeStatus') || readRouteBool('missingRouteStatus')) return true
+  return false
+}
+
+function resolveFilterStatusAfterRoute(): void {
+  const fromQuery = readRouteStatusCode()
+  if (fromQuery) {
+    filterStatus.value = fromQuery
+    return
+  }
+  if (routeDisablesDefaultStatusFilter()) return
+  filterStatus.value = workspaceDefaultStatus()
 }
 
 function applyRouteStatusFilter() {
@@ -1345,17 +1435,42 @@ watch(missingRouteStatus, (v) => {
   if (v) filterRouteStatus.value = null
 })
 
+watch(shipmentWorkspace, (next, prev) => {
+  if (next === prev) return
+  resolveFilterStatusAfterRoute()
+  filterRouteStatus.value = null
+  filterNoInternalTracking.value = false
+  filterNoCarrierTracking.value = false
+  filterCarrierAheadOfInternal.value = false
+  filterPendingTrackingTimeReview.value = false
+  filterStaleDays.value = null
+  page.value = 1
+  checkedRowKeys.value = []
+  if (!isPreportWorkspace.value) {
+    void loadFreshnessStats()
+    void loadCarrierDailyStats()
+  } else {
+    freshnessStats.value = null
+    carrierDaily.value = null
+    selectedSystemView.value = null
+    filterHasTrackingNumber.value = false
+  }
+  void loadList()
+})
+
 onMounted(async () => {
   applyRouteShipmentNoToSearch()
   applyRouteStatusFilter()
   applyRouteExceptionFilter()
   applyRouteWorkbenchFilters()
   applyRouteRouteStatusFunnel()
+  resolveFilterStatusAfterRoute()
   await Promise.all([
     loadDictTypes('country_code'),
     loadFilterOptions(),
-    loadCarrierDailyStats(),
-    loadFreshnessStats(),
+    ...(isPreportWorkspace.value
+      ? []
+      : [loadCarrierDailyStats(), loadFreshnessStats()]),
   ])
   await loadList()
 })
@@ -1597,7 +1712,7 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
 
 function resetFilterValues() {
   selectedSystemView.value = null
-  filterStatus.value = DEFAULT_STATUS_FILTER
+  filterStatus.value = workspaceDefaultStatus()
   filterRouteStatus.value = null
   filterException.value = null
   filterPaymentStatus.value = null
@@ -1614,6 +1729,7 @@ function resetFilterValues() {
   filterChannelCategory.value = null
   filterCustomerNo.value = ''
   filterDestinationPort.value = null
+  filterOriginWarehouseCode.value = null
   filterAddressKeyword.value = null
   filterVesselVoyage.value = null
   filterNoInternalTracking.value = false
@@ -1677,7 +1793,7 @@ function removeFilterTag(key: string) {
       searchTrackingContent.value = ''
       break
     case 'filterStatus':
-      filterStatus.value = DEFAULT_STATUS_FILTER
+      filterStatus.value = workspaceDefaultStatus()
       break
     case 'filterRouteStatus':
       filterRouteStatus.value = null
@@ -1712,6 +1828,9 @@ function removeFilterTag(key: string) {
       break
     case 'filterDestinationPort':
       filterDestinationPort.value = null
+      break
+    case 'filterOriginWarehouseCode':
+      filterOriginWarehouseCode.value = null
       break
     case 'filterAddressKeyword':
       filterAddressKeyword.value = null
@@ -2034,22 +2153,48 @@ async function handleSyncSelectedFromDps() {
   }
 }
 
+function resetDpsExportProgressUi(title: string) {
+  dpsExportProgressTitle.value = title
+  dpsExportProgressMessage.value = '任务已创建…'
+  dpsExportProgressPercent.value = 0
+  dpsExportProgressFailed.value = false
+  dpsExportProgressShow.value = true
+}
+
 async function runDpsExportDownload(
-  loader: (ids: string[]) => Promise<{ blob: Blob; filename: string }>,
+  exportType: DpsExportJobType,
   successText: string,
   fallbackError: string,
+  options?: { shipmentIds?: string[]; splitSpec?: string },
 ) {
-  if (!selectedRows.value.length) {
+  const ids = options?.shipmentIds?.length
+    ? options.shipmentIds
+    : selectedRows.value.map((r) => r.id)
+  if (!ids.length) {
     message.warning('请先勾选运单')
     return
   }
-  const ids = selectedRows.value.map((r) => r.id)
+  resetDpsExportProgressUi(DPS_EXPORT_TITLES[exportType] || '下载')
   downloadingDpsExport.value = true
   try {
-    const { blob, filename } = await loader(ids)
+    const { blob, filename } = await runDpsExportJob(exportType, ids, {
+      splitSpec: options?.splitSpec,
+      onProgress: (st) => {
+        dpsExportProgressMessage.value = st.message || '处理中…'
+        dpsExportProgressPercent.value = st.progress
+        dpsExportProgressFailed.value = st.failed
+      },
+    })
     downloadBlob(blob, filename)
+    dpsExportProgressPercent.value = 100
+    dpsExportProgressMessage.value = '下载完成'
     message.success(successText)
+    window.setTimeout(() => {
+      dpsExportProgressShow.value = false
+    }, 600)
   } catch (e) {
+    dpsExportProgressFailed.value = true
+    dpsExportProgressMessage.value = apiErrorMessage(e, fallbackError)
     message.error(apiErrorMessage(e, fallbackError), { duration: 8000 })
   } finally {
     downloadingDpsExport.value = false
@@ -2057,44 +2202,117 @@ async function runDpsExportDownload(
 }
 
 function handleDownloadSelectedCargoData() {
-  void runDpsExportDownload(
-    downloadShipmentsDpsCargoData,
-    '货箱数据已下载',
-    '下载货箱数据失败',
-  )
+  void runDpsExportDownload('cargo', '货箱数据已下载', '下载货箱数据失败')
 }
 
 function handleDownloadSelectedMarkData() {
-  void runDpsExportDownload(downloadShipmentsDpsMarkData, '唛头已下载', '下载唛头失败')
+  void runDpsExportDownload('mark', '唛头已下载', '下载唛头失败')
+}
+
+const markSplitSpecInput = ref('')
+
+function handleDownloadSelectedMarkSplit() {
+  if (selectedCount.value !== 1) {
+    message.warning('唛头（拆分）仅支持单票下载，请只勾选 1 条运单')
+    return
+  }
+  const row = selectedRows.value[0]
+  markSplitSpecInput.value = ''
+  const ctnsHint = row.ctns != null ? `运单件数 ${row.ctns}，` : ''
+  dialog.create({
+    title: `唛头（拆分）· ${row.shipmentNo}`,
+    content: () =>
+      h('div', { class: 'space-y-2 pt-1' }, [
+        h(
+          'p',
+          { class: 'text-xs leading-relaxed text-[var(--color-text-secondary)]' },
+          `${ctnsHint}按各工厂件数用空格或逗号分隔（如 1 2 2 → 3 份 PDF）。唛头 PDF 须为一页一件，合计页数须与拆分之和一致。`,
+        ),
+        h(NInput, {
+          value: markSplitSpecInput.value,
+          placeholder: '例如 1 2 2',
+          clearable: true,
+          onUpdateValue: (v: string) => {
+            markSplitSpecInput.value = v
+          },
+        }),
+      ]),
+    positiveText: '下载 zip',
+    negativeText: '取消',
+    onPositiveClick: () => {
+      const spec = markSplitSpecInput.value.trim()
+      if (!spec) {
+        message.warning('请填写拆分件数')
+        return false
+      }
+      void runDpsExportDownload('markSplit', '拆分唛头已下载', '下载拆分唛头失败', {
+        shipmentIds: [row.id],
+        splitSpec: spec,
+      })
+    },
+  })
 }
 
 function handleDownloadSelectedPackinglist() {
-  void runDpsExportDownload(
-    downloadShipmentsDpsPackinglist,
-    '箱单发票已下载',
-    '下载箱单发票失败',
-  )
+  void runDpsExportDownload('packinglist', '箱单发票已下载', '下载箱单发票失败')
 }
 
 function handleDownloadSelectedWarehouseform() {
-  void runDpsExportDownload(
-    downloadShipmentsDpsWarehouseform,
-    '排仓单已下载',
-    '下载排仓单失败',
-  )
+  void runDpsExportDownload('warehouseform', '排仓单已下载', '下载排仓单失败')
+}
+
+async function handleDownloadSelectedWarehouseEntry(format: 'xlsx' | 'pdf') {
+  if (!selectedRows.value.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const ids = selectedRows.value.map((r) => r.id)
+  const isPdf = format === 'pdf'
+  try {
+    const preview = await previewReceiveWarehouseEntry(ids)
+    dialog.info({
+      title: `进仓单${isPdf ? '（PDF）' : ''} · ${preview.warehouseLabel || preview.warehouseKey}`,
+      content: () =>
+        h(
+          'div',
+          {
+            class: 'whitespace-pre-wrap text-sm leading-relaxed max-h-80 overflow-y-auto',
+          },
+          preview.addressBlock,
+        ),
+      positiveText: isPdf ? '下载 PDF' : '下载进仓单',
+      negativeText: '取消',
+      onPositiveClick: () => {
+        void runDpsExportDownload(
+          isPdf ? 'warehouseEntryPdf' : 'warehouseEntry',
+          isPdf ? '进仓单 PDF 已下载' : '进仓单已下载',
+          isPdf ? '下载进仓单 PDF 失败' : '下载进仓单失败',
+          { shipmentIds: ids },
+        )
+      },
+    })
+  } catch (e) {
+    message.error(apiErrorMessage(e, '无法预览收货地址'), { duration: 8000 })
+  }
 }
 
 const downloadDropdownOptions: DropdownOption[] = [
   { label: '货箱', key: 'cargo' },
   { label: '唛头', key: 'mark' },
+  { label: '唛头（拆分）', key: 'markSplit' },
   { label: '箱单发票', key: 'packinglist' },
+  { label: '进仓单', key: 'warehouseEntry' },
+  { label: '进仓单（PDF）', key: 'warehouseEntryPdf' },
   { label: '排仓单', key: 'warehouseform' },
 ]
 
 function handleDownloadMenuSelect(key: string | number) {
   if (key === 'cargo') handleDownloadSelectedCargoData()
   else if (key === 'mark') handleDownloadSelectedMarkData()
+  else if (key === 'markSplit') handleDownloadSelectedMarkSplit()
   else if (key === 'packinglist') handleDownloadSelectedPackinglist()
+  else if (key === 'warehouseEntry') void handleDownloadSelectedWarehouseEntry('xlsx')
+  else if (key === 'warehouseEntryPdf') void handleDownloadSelectedWarehouseEntry('pdf')
   else if (key === 'warehouseform') handleDownloadSelectedWarehouseform()
 }
 
@@ -2329,14 +2547,38 @@ async function copySelectedShipmentDetailSummary() {
   }
 }
 
-const copyDropdownOptions: DropdownOption[] = [
-  { label: '运单明细', key: 'detailSummary' },
-  { label: '最新轨迹', key: 'latestTracking' },
-  { label: '转单号', key: 'trackingNumbers' },
-]
+async function copySelectedPreportShipmentData() {
+  const rows = selectedRows.value
+  if (!rows.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const text = formatPreportShipmentDataCopyText(rows)
+  if (!text) {
+    message.warning('无可复制内容')
+    return
+  }
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success(`已复制 ${rows.length} 条运单数据`)
+  } catch {
+    message.error('复制失败，请检查浏览器权限')
+  }
+}
+
+const copyDropdownOptions = computed((): DropdownOption[] => {
+  const items: DropdownOption[] = [
+    { label: '运单明细', key: 'detailSummary' },
+    ...(isPreportWorkspace.value ? [{ label: '数据', key: 'preportData' }] : []),
+    { label: '最新轨迹', key: 'latestTracking' },
+    { label: '转单号', key: 'trackingNumbers' },
+  ]
+  return items
+})
 
 function handleCopyMenuSelect(key: string | number) {
   if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
+  else if (key === 'preportData') void copySelectedPreportShipmentData()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
 }
@@ -2394,8 +2636,17 @@ const exceptionDropdownOptions: DropdownOption[] = [
 ]
 
 function handleExceptionMenuSelect(key: string | number) {
-  if (key === 'open') exceptionOpenShow.value = true
-  else if (key === 'close') exceptionCloseShow.value = true
+  if (key === 'open') {
+    if (!exceptionTypesForWorkspace.value.length) {
+      message.warning(
+        isPreportWorkspace.value
+          ? '暂无港前异常类型，请在后台码表「运单异常」中新增并设为港前'
+          : '暂无港后异常类型，请在后台码表「运单异常」中维护',
+      )
+      return
+    }
+    exceptionOpenShow.value = true
+  } else if (key === 'close') exceptionCloseShow.value = true
 }
 
 async function onFileSelected(ev: Event) {
@@ -2440,6 +2691,19 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     align: 'center',
     ellipsis: { tooltip: true },
     render: (row) => {
+      if (isPreportWorkspace.value) {
+        const label = shipmentStatusLabel(row.statusCode)
+        return h(
+          'span',
+          {
+            class: [
+              'shipment-status-badge',
+              dpsPreportStatusBadgeClass(row.statusCode),
+            ],
+          },
+          label,
+        )
+      }
       const busy = syncingRouteStatusRowId.value === row.id
       const hasWaybill = Boolean(row.waybillId?.trim())
       const { label, toneClass, tipExtra } = resolveShipmentListStatusDisplay({
@@ -2573,6 +2837,23 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     ellipsis: { tooltip: true },
     render: (row) => displayField(row.zipcode) || '—',
   },
+  chargedWeight: {
+    title: '计费重',
+    key: 'chargedWeight',
+    width: 80,
+    align: 'center',
+    render: (row) => {
+      const v = row.chargedWeight
+      if (v == null || Number.isNaN(v)) {
+        return h('span', { class: 'shipment-charged-weight shipment-charged-weight--empty' }, '—')
+      }
+      const n = Number(v)
+      const text = Number.isInteger(n)
+        ? String(n)
+        : String(Number(n.toFixed(3)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''))
+      return h('span', { class: 'shipment-charged-weight' }, text)
+    },
+  },
   supplierName: {
     title: '供应商',
     key: 'supplierName',
@@ -2630,7 +2911,7 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     render: (row) => displayField(row.productName) || '—',
   },
   originWarehouseCode: {
-    title: '起运仓',
+    title: '收货仓',
     key: 'originWarehouseCode',
     width: 96,
     ellipsis: { tooltip: true },
@@ -2754,7 +3035,7 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
 const columns = computed<DataTableColumns<Shipment>>(() => {
   const defs = optionalColumnDefs.value
   const statusCol = defs.statusCode
-  const dynamicCols = visibleColumnKeys.value
+  const dynamicCols = tableVisibleColumnKeys.value
     .filter((key) => key !== 'statusCode')
     .map((key) => defs[key])
     .filter((col): col is DataTableColumns<Shipment>[number] => Boolean(col))
@@ -2825,39 +3106,41 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   <div class="flex h-full min-h-0 flex-col gap-3">
     <div class="shrink-0 flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="page-h2">运单管理</h2>
+        <h2 class="page-h2">{{ pageTitle }}</h2>
         <p class="page-subtitle">
-          共 {{ total }} 条
+          {{ pageSubtitle }} · 共 {{ total }} 条
           <span v-if="batchShipmentSearchActive" class="text-violet-400">
             · 批量运单号 {{ shipmentNoTokens.length }} 个
           </span>
         </p>
       </div>
       <NSpace align="center">
-        <NButton
-          size="small"
-          :loading="syncingTracking"
-          title="同步转运中、未知、查验；已签收不查"
-          @click="handleSyncTracking()"
-        >
-          更新全部内部轨迹
-        </NButton>
-        <NButton
-          size="small"
-          :loading="syncingCarrier"
-          title="仅同步转运中运单，已签收不查"
-          @click="handleSyncCarrierTracking()"
-        >
-          更新全部承运商轨迹
-        </NButton>
-        <NButton
-          size="small"
-          :loading="syncingRouteStatus"
-          title="按 waybillId 拉取全部运单明细状态（需已有 DPS 运单 ID）"
-          @click="handleSyncAllRouteStatus"
-        >
-          更新全部明细状态
-        </NButton>
+        <template v-if="!isPreportWorkspace">
+          <NButton
+            size="small"
+            :loading="syncingTracking"
+            title="同步转运中、未知、查验；已签收不查"
+            @click="handleSyncTracking()"
+          >
+            更新全部内部轨迹
+          </NButton>
+          <NButton
+            size="small"
+            :loading="syncingCarrier"
+            title="仅同步转运中运单，已签收不查"
+            @click="handleSyncCarrierTracking()"
+          >
+            更新全部承运商轨迹
+          </NButton>
+          <NButton
+            size="small"
+            :loading="syncingRouteStatus"
+            title="按 waybillId 拉取全部运单明细状态（需已有 DPS 运单 ID）"
+            @click="handleSyncAllRouteStatus"
+          >
+            更新全部明细状态
+          </NButton>
+        </template>
         <NButton type="primary" size="small" @click="openCreate">新增运单</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
         <NButton size="small" :loading="exporting" @click="handleExport">导出运单</NButton>
@@ -2873,6 +3156,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     />
 
     <ShipmentTrackingFreshnessBar
+      v-if="!isPreportWorkspace"
       :stats="freshnessStats"
       :no-internal-active="filterNoInternalTracking"
       :no-carrier-active="filterNoCarrierTracking"
@@ -2916,6 +3200,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             </span>
           </div>
           <NInput
+            v-if="!isPreportWorkspace"
             v-model:value="searchTrackingContent"
             placeholder="轨迹搜索"
             clearable
@@ -2935,6 +3220,18 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             @update:value="onFiltersChanged"
           />
           <NSelect
+            v-if="isPreportWorkspace"
+            v-model:value="filterOriginWarehouseCode"
+            :options="originWarehouseOptions"
+            placeholder="收货仓"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-if="!isPreportWorkspace"
             v-model:value="filterRouteStatus"
             :options="routeStatusOptions"
             placeholder="明细状态"
@@ -2983,6 +3280,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             @update:value="onHasExceptionFilterChange"
           />
           <NCheckbox
+            v-if="!isPreportWorkspace"
             v-model:checked="filterHasTrackingNumber"
             size="small"
             class="shrink-0"
@@ -3009,6 +3307,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             </span>
           </NButton>
           <NSelect
+            v-if="!isPreportWorkspace"
             :value="selectedSystemView"
             :options="systemViewOptions"
             placeholder="系统视图"
@@ -3099,31 +3398,33 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             批量修改
           </NButton>
         </NDropdown>
-        <NButton
-          size="small"
-          :loading="syncingTracking"
-          title="含已签收；以 DPS 接口全量覆盖本地轨迹（删除源端已删节点）"
-          @click="handleSyncSelectedInternal"
-        >
-          更新选中内部轨迹
-        </NButton>
-        <NButton
-          size="small"
-          type="primary"
-          :loading="syncingCarrier"
-          title="含已签收；按勾选运单号同步"
-          @click="handleSyncSelectedCarrier"
-        >
-          更新选中承运商轨迹
-        </NButton>
-        <NButton
-          size="small"
-          :loading="syncingRouteStatus"
-          title="按 waybillId 拉 DPS 明细状态接口（需已有 DPS 运单 ID）"
-          @click="handleSyncSelectedRouteStatus"
-        >
-          更新选中明细状态
-        </NButton>
+        <template v-if="!isPreportWorkspace">
+          <NButton
+            size="small"
+            :loading="syncingTracking"
+            title="含已签收；以 DPS 接口全量覆盖本地轨迹（删除源端已删节点）"
+            @click="handleSyncSelectedInternal"
+          >
+            更新选中内部轨迹
+          </NButton>
+          <NButton
+            size="small"
+            type="primary"
+            :loading="syncingCarrier"
+            title="含已签收；按勾选运单号同步"
+            @click="handleSyncSelectedCarrier"
+          >
+            更新选中承运商轨迹
+          </NButton>
+          <NButton
+            size="small"
+            :loading="syncingRouteStatus"
+            title="按 waybillId 拉 DPS 明细状态接口（需已有 DPS 运单 ID）"
+            @click="handleSyncSelectedRouteStatus"
+          >
+            更新选中明细状态
+          </NButton>
+        </template>
         <NButton
           size="small"
           :loading="syncingDps"
@@ -3198,7 +3499,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     <ShipmentExceptionOpenModal
       :show="exceptionOpenShow"
       :count="selectedCount"
-      :exception-types="filterOptions.exceptionTypes"
+      :exception-types="exceptionTypesForWorkspace"
       @close="exceptionOpenShow = false"
       @confirm="handleOpenException"
     />
@@ -3292,6 +3593,15 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     <ShipmentColumnSettingsDrawer
       v-model:show="columnSettingsShow"
       v-model:visible-keys="visibleColumnKeys"
+      :excluded-keys="isPreportWorkspace ? PREPORT_EXCLUDED_COLUMN_KEYS : undefined"
+    />
+
+    <ShipmentDpsExportProgressModal
+      v-model:show="dpsExportProgressShow"
+      :title="dpsExportProgressTitle"
+      :message="dpsExportProgressMessage"
+      :progress="dpsExportProgressPercent"
+      :failed="dpsExportProgressFailed"
     />
   </div>
 </template>
@@ -3649,6 +3959,20 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 .shipments-data-table :deep(.shipment-status-badge--teal) {
   color: var(--tag-teal-fg);
   background: var(--tag-teal-bg);
+}
+
+.shipments-data-table :deep(.shipment-charged-weight) {
+  display: block;
+  width: 100%;
+  text-align: center;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--tag-orange-fg);
+}
+
+.shipments-data-table :deep(.shipment-charged-weight--empty) {
+  font-weight: 400;
+  color: var(--color-muted);
 }
 
 .shipments-data-table :deep(.shipment-status-badge--indigo) {

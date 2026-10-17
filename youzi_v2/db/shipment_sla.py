@@ -138,7 +138,8 @@ def is_delivered(row: dict[str, Any]) -> bool:
     """异常跟踪待办退出：明细 TRACK_SIGNED，或粗状态/签收时间已签收。"""
     if _route_status_of(row) == SLA_DELIVERED_ROUTE_STATUS:
         return True
-    if _coarse_status_of(row) == "DELIVERED":
+    coarse = _coarse_status_of(row)
+    if coarse in ("DELIVERED", "3"):
         return True
     return bool(_row_time(row, "delivered_time", "deliveredTime"))
 
@@ -173,7 +174,7 @@ def sql_sla_delivered(column: str = "route_status") -> str:
     delivered_time_col = f"{prefix}delivered_time" if prefix else "delivered_time"
     return (
         f"(UPPER(TRIM(COALESCE({column}, ''))) = '{SLA_DELIVERED_ROUTE_STATUS}' "
-        f"OR UPPER(TRIM(COALESCE({status_code_col}, ''))) = 'DELIVERED' "
+        f"OR UPPER(TRIM(COALESCE({status_code_col}, ''))) IN ('DELIVERED', '3') "
         f"OR ({delivered_time_col} IS NOT NULL AND TRIM({delivered_time_col}) != ''))"
     )
 

@@ -19,7 +19,7 @@
     "转单号": "tracking_number",
     "供应商": "supplier_name",
     "品名": "product_name",
-    "交货仓库": "origin_warehouse_code",
+    "收货仓": "origin_warehouse_code",
     "ETD": "etd",
     "ATD": "atd",
     "ETA": "eta",
@@ -32,7 +32,9 @@
     "Amazon ID": "customer_shipment_id",
     "Amazon Reference ID": "amazon_ref_id",
     "仓库代码": "address_code",
-    "收件人邮编": "zipcode"
+    "收件人邮编": "zipcode",
+    "交货仓库": "origin_warehouse_code",
+    "起运仓": "origin_warehouse_code"
   },
   "export_only_fields": [
     "latest_tracking_time",

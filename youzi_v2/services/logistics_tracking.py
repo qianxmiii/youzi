@@ -150,10 +150,10 @@ def shipment_no_from_api_item(item: dict[str, Any]) -> str:
     return (item.get("odd") or item.get("tracking_number") or "").strip()
 
 
-# 内部物流 API data[].status：2=转运中，3=已签收
+# 内部物流 API data[].status：与 DPS 运单 Status 2/3 对齐
 _INTERNAL_API_STATUS: dict[str, str] = {
-    "2": "IN_TRANSIT",
-    "3": "DELIVERED",
+    "2": "2",
+    "3": "3",
 }
 
 
@@ -168,9 +168,9 @@ def status_code_from_api_item(item: dict[str, Any]) -> str | None:
 
 def status_label_from_api_item(item: dict[str, Any]) -> str:
     code = status_code_from_api_item(item)
-    if code == "IN_TRANSIT":
+    if code == "2":
         return "转运中"
-    if code == "DELIVERED":
+    if code == "3":
         return "已签收"
     raw = item.get("status")
     return f"status={raw}" if raw is not None else ""

@@ -80,7 +80,7 @@ uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001
 
 ## 定时任务
 
-Uvicorn 启动后默认开启后台轨迹同步（内部 + 承运商，仅 `IN_TRANSIT` 运单）。
+Uvicorn 启动后默认开启后台轨迹同步（内部 + 承运商，仅**在途**运单：`status_code` 为 `2` / `IN_TRANSIT` 等，**不含**港前 DPS Status 0/01/1/4）。
 
 不依赖后端常驻时，可用系统计划任务：
 
@@ -99,22 +99,35 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 - 内部轨迹：`base_url`，由 `services/logistics_tracking.py` 读取
 - 运单查询（DPS 销售助理接口）：
   - **`dps_authorization`**（推荐）：根级 DPS Bearer，供 `shipment_queryByPerson`、`shipment_queryByOrder`、`dps_route_status_query`、`dps_data_download` 等共用（仍兼容各块内 `Authorization`）
-  - **`shipment_queryByPerson`**：查全部运单（url 内已带 `salesAssistantId`、`status` 等筛选），代码注入 `pageNum`、`transitTimeStart`、`transitTimeEnd`（默认当月）
+  - **`shipment_queryByPerson`**：查全部/在途运单（url 内已带筛选），代码注入 `pageNum`、`transitTimeStart`、`transitTimeEnd`（默认当月）
+  - **`shipment_queryByPerson_pickup`**：提货中（Status 01 等）；**GET**；代码注入 `orderTimeStart` / `orderTimeEnd`（非 transitTime）
+  - **`shipment_queryByPerson_warehoused`**：已入仓（Status 1 等）；**GET**；同上 `orderTimeStart` / `orderTimeEnd`
+  - 可选块内 `"timeRange": "transit" | "order" | "none"` 覆盖默认（pickup/warehoused 默认 `order`）
   - **`shipment_queryByOrder`**：按运单号查，拼接 `odds`（多单空格 → `%20`）+ `pageNum`
   - **`dps_route_status_query`**（明细状态轻量同步必填）：仅含 `url`（完整接口地址）；**url 只写在本文件**，业务代码/文档不得写真实地址
-  - **`dps_data_download`**（货箱）：exportBox；**POST** + `?ids=` 单个 waybillId；多票逐票请求后 zip（**`YYYYMMDDHHmmss.zip`**）；**单票**保存名为 DPS 响应 `Content-Disposition` 原名（无则回退 `{运单号}_data.ext`），zip 内仍为 `{运单号}_data.ext`
+  - **`dps_data_download`**（货箱）：exportBox；**POST** + `?ids=` 单个 waybillId；**单票**保存为 `{运单号}_data.ext`；**多票**各文件重命名后装入文件夹 `{N}票数据_{YYYYMMDDHHmmss}/`，压缩包名为 **`{N}票数据_{YYYYMMDDHHmmss}.zip`**
   - **`dps_mark_download`**（单个唛头）：**POST** + `?id=waybillId&type=2`（`type` 可在块内配置，默认 `2`）；**单票**用 DPS 原名（无则回退 `{运单号}_mark.ext`）
   - **`dps_batchmark_download`**（多个唛头）：**POST**，JSON body 为 waybillId **数组**；多票包名 `{YYYYMMDDHHmmss}.ext`
   - **`dps_packinglist_download`**（箱单发票）：**POST** + URL **`?ids=`** waybillId（多票英文逗号拼接，如 `2109884564244705282,2109884627163459585`，无 body）；单票保存 **`{运单号}_箱单发票.ext`**，多票文件名沿用 DPS 原名
   - **`dps_warehouseform_download`**（排仓单）：**POST** + URL **`?ids=`** waybillId（多票英文逗号拼接，如 `2099310173320552449,2109884564244705282`，无 body）；**每批最多 50 个 id**，勾选超过 50 票时后端自动分批请求，多批结果打包 zip；单票 **`{运单号}_排仓单.ext`**
+  - **进仓单（模板）**：`youzi_v2/config/templates/warehouse_entry_template.xlsx`（可选根配置 **`warehouse_entry_template`** 指向其它 xlsx）；按占位符 `{日期}` `{收货仓}` `{收货地址}` `{运单号}` `{合计件数}` 等填充勾选运单；收货地址来自 **`dps_warehouse`**；文件名 **`{N}票进仓单_{YYYYMMDD}.xlsx`**（不依赖 DPS 下载）
+  - **进仓单（PDF）**：与 Excel 下载 **同一份临时 xlsx**（同一模板填充），再转为 PDF，版式与 xlsx 一致；文件名 **`{N}票进仓单_{YYYYMMDD}.pdf`**。**Windows**：本机安装 Microsoft Excel + `pip install pywin32`（`requirements.txt` 在 win32 平台会自动带上）。**Linux**：安装 LibreOffice，或设置 **`YOUZI_LIBREOFFICE`** 指向 `soffice` 可执行文件
+  - **`dps_warehouse`**：收货地址多行文本，键 **`SHENZHEN`** / **`YIWU`**（与进仓单预览、表头一致）
+  - **`dps_warehouse_entry_remarks`**（可选）：特殊备注栏 `{特殊备注}`，按仓键字符串，如 `"SHENZHEN": "…"`, `"YIWU": "…"`
   - 响应 `{ code, msg, total, rows }`，按 `total` 与 `pageSize`（默认 10）自动翻页。见 `services/shipment_query_config.py`
-  - **DPS 运单同步批处理**（计划任务页）：从 `shipment_queryByPerson` 拉取并 upsert 至本地 `shipments`；`transitTimeStart` / `transitTimeEnd` 可配置，默认当月；**默认关闭**，约 24 小时执行一次。见 `services/shipment_dps_sync.py`
+  - **DPS 运单同步批处理**（计划任务页）：`shipment_queryByPerson` / `_pickup` / `_warehoused` 三项可分别开关，共用发运时间范围；**默认均关闭**，约 24 小时各执行一次。见 `services/shipment_dps_sync.py`
   - **同步哪些字段**：`youzi_v2/config/shipment_dps_sync_fields.json`（`onInsert` / `onUpdate`）；映射逻辑见 `services/shipment_dps_mapper.py`（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`）
 
 ```json
 "dps_authorization": "Bearer <token>",
 "shipment_queryByPerson": {
   "url": "https://.../customPageSalesAssistant?pageSize=10&salesAssistantId=...&status=3"
+},
+"shipment_queryByPerson_pickup": {
+  "url": "https://.../customPageSalesAssistant?pageSize=10&salesAssistantId=...&status=01"
+},
+"shipment_queryByPerson_warehoused": {
+  "url": "https://.../customPageSalesAssistant?pageSize=10&salesAssistantId=...&status=1"
 },
 "shipment_queryByOrder": {
   "url": "https://.../customPageSalesAssistant?pageSize=10&orderByColumn=createTime&isAsc=asc"
@@ -142,6 +155,15 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 "dps_warehouseform_download": {
   "url": "<排仓单 URL>",
   "method": "POST"
+},
+"dps_warehouse_entry_download": {
+  "url": "<进仓单 URL，可省略以复用排仓单>",
+  "method": "POST",
+  "warehouseQueryParam": "warehouseCode"
+},
+"dps_warehouse": {
+  "SHENZHEN": "<深圳仓收货地址，多行文本>",
+  "YIWU": "<义乌仓收货地址，多行文本>"
 }
 ```
 

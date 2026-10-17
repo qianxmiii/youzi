@@ -41,6 +41,18 @@ class ScheduledTaskConfig(BaseModel):
     dps_shipment_sync_last_finished: str | None = Field(
         default=None, alias="dpsShipmentSyncLastFinished"
     )
+    dps_shipment_sync_pickup_enabled: bool = Field(
+        default=False, alias="dpsShipmentSyncPickupEnabled"
+    )
+    dps_shipment_sync_pickup_last_finished: str | None = Field(
+        default=None, alias="dpsShipmentSyncPickupLastFinished"
+    )
+    dps_shipment_sync_warehoused_enabled: bool = Field(
+        default=False, alias="dpsShipmentSyncWarehousedEnabled"
+    )
+    dps_shipment_sync_warehoused_last_finished: str | None = Field(
+        default=None, alias="dpsShipmentSyncWarehousedLastFinished"
+    )
     exception_followup_enabled: bool = Field(default=False, alias="exceptionFollowupEnabled")
     exception_followup_last_finished: str | None = Field(
         default=None, alias="exceptionFollowupLastFinished"
@@ -78,6 +90,12 @@ class ScheduledSyncSettingsUpdate(BaseModel):
     )
     dps_shipment_sync_transit_time_end: str | None = Field(
         default=None, alias="dpsShipmentSyncTransitTimeEnd"
+    )
+    dps_shipment_sync_pickup_enabled: bool | None = Field(
+        default=None, alias="dpsShipmentSyncPickupEnabled"
+    )
+    dps_shipment_sync_warehoused_enabled: bool | None = Field(
+        default=None, alias="dpsShipmentSyncWarehousedEnabled"
     )
     exception_followup_enabled: bool | None = Field(
         default=None, alias="exceptionFollowupEnabled"

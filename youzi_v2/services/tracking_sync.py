@@ -9,6 +9,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
+from ..db.shipment_order_status import PRE_PORT_STATUSES
 from ..db.shipments_repository import ShipmentsRepository
 from ..db.tracking_logs_repository import TrackingLogsRepository
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
@@ -41,6 +42,17 @@ def _delivered_time_for_status(
 ) -> str | None:
     """Legacy：签收时间改由 tracking_time_writeback 根据内部轨迹回写。"""
     return None
+
+
+def _tracking_api_status_for_row(
+    stored_status: str | None,
+    api_status: str | None,
+) -> str | None:
+    """港前 Status（0/01/1/4）不被内部轨迹报文覆盖。"""
+    stored = (stored_status or "").strip()
+    if stored in PRE_PORT_STATUSES:
+        return None
+    return api_status
 
 
 def sync_all_tracking(
@@ -177,8 +189,9 @@ def _sync_all_tracking_body(
             not_found += 1
             continue
 
-        api_status = status_code_from_api_item(item)
+        raw_api_status = status_code_from_api_item(item)
         stored_status = (row.get("status_code") or "").strip()
+        api_status = _tracking_api_status_for_row(stored_status, raw_api_status)
         status_label = status_label_from_api_item(item)
 
         logs = logs_from_api_item(item)

@@ -12,7 +12,7 @@
 
 ## 概述
 
-仓库地址簿管理**起运仓 / 海外仓**等仓库级地址，供运单填写 `origin_warehouse_code` 及后续扩展使用。前端入口：`/addresses` 页中的仓库地址 Tab（`AddressesView.vue`）。
+仓库地址簿管理**国内收货仓 / 海外仓**等仓库级地址，可与运单 `origin_warehouse_code`（收货仓）对照使用。前端入口：`/addresses` 页中的仓库地址 Tab（`AddressesView.vue`）。
 
 数据表：`addresses_warehouse`（`db/addresses_warehouse_table.py`）。
 
@@ -78,7 +78,7 @@ curl -O "http://127.0.0.1:3001/api/addresses-warehouse/export"
 
 ## 在运单中的使用
 
-运单表 `shipments.origin_warehouse_code` 存储起运仓编码，与仓库地址簿编码对应（逻辑关联，非强制 FK）。运单表单中可选择或手工输入仓库编码。
+运单表 `shipments.origin_warehouse_code` 存储**收货仓**（DPS `receiveWarehouseName`，如「深圳仓」）；可与仓库地址簿编码对应（逻辑关联，非强制 FK）。运单表单中可手工输入或由 DPS 同步写入。
 
 ## 注意事项
 

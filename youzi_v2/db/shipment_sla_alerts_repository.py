@@ -36,6 +36,7 @@ from .shipment_sla_alerts_table import TABLE_NAME
 from .shipment_sla_alert_followups_table import TABLE_NAME as FOLLOWUPS_TABLE
 from .channel_sla_rules_table import TABLE_NAME as RULES_TABLE
 from .shipment_exception_events_table import TABLE_NAME as EXCEPTION_EVENTS_TABLE
+from .shipment_exception_phase import PHASE_POST_PORT, PHASE_PRE_PORT
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 
 EXCEPTION_CODES_TABLE = "shipment_exception_codes"
@@ -796,6 +797,7 @@ class ShipmentSlaAlertsRepository:
         carrier_code: str | None = None,
         customer: str | None = None,
         search: str | None = None,
+        exception_phase: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -834,6 +836,18 @@ class ShipmentSlaAlertsRepository:
         if exception_code:
             conditions.append("s.exception_code = ?")
             params.append(exception_code.strip().upper())
+        phase = (exception_phase or "").strip().lower()
+        if phase == PHASE_PRE_PORT:
+            conditions.append("ec.phase_category = ?")
+            params.append(PHASE_PRE_PORT)
+        elif phase == PHASE_POST_PORT:
+            conditions.append(
+                f"""(
+                  (s.exception_code IS NULL OR TRIM(s.exception_code) = '')
+                  OR COALESCE(ec.phase_category, '{PHASE_POST_PORT}') = ?
+                )"""
+            )
+            params.append(PHASE_POST_PORT)
         if search:
             q = f"%{search.strip()}%"
             conditions.append("(a.shipment_no LIKE ? OR s.customer LIKE ?)")

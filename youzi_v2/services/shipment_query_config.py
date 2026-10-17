@@ -15,12 +15,24 @@ import requests
 from ..db.datetime_util import DATETIME_FMT
 
 QUERY_BY_PERSON_KEY = "shipment_queryByPerson"
+QUERY_BY_PERSON_PICKUP_KEY = "shipment_queryByPerson_pickup"
+QUERY_BY_PERSON_WAREHOUSED_KEY = "shipment_queryByPerson_warehoused"
 QUERY_BY_ORDER_KEY = "shipment_queryByOrder"
 DPS_AUTHORIZATION_KEY = "dps_authorization"
 QUERY_PARAM = "odds"
 PAGE_NUM_PARAM = "pageNum"
 TRANSIT_TIME_START_PARAM = "transitTimeStart"
 TRANSIT_TIME_END_PARAM = "transitTimeEnd"
+ORDER_TIME_START_PARAM = "orderTimeStart"
+ORDER_TIME_END_PARAM = "orderTimeEnd"
+
+PersonQueryTimeRange = Literal["transit", "order", "none"]
+
+_DEFAULT_TIME_RANGE_BY_BLOCK: dict[str, PersonQueryTimeRange] = {
+    QUERY_BY_PERSON_KEY: "transit",
+    QUERY_BY_PERSON_PICKUP_KEY: "order",
+    QUERY_BY_PERSON_WAREHOUSED_KEY: "order",
+}
 DEFAULT_PAGE_SIZE = 10
 DEFAULT_TIMEOUT = 30
 MAX_PAGES = 500
@@ -107,6 +119,19 @@ def _page_size_from_block(block: dict[str, Any], url: str) -> int:
     return DEFAULT_PAGE_SIZE
 
 
+def _resolve_person_query_time_range(
+    block_key: str,
+    block: dict[str, Any] | None,
+) -> PersonQueryTimeRange:
+    if isinstance(block, dict):
+        raw = block.get("timeRange") or block.get("time_range")
+        if isinstance(raw, str):
+            key = raw.strip().lower()
+            if key in ("transit", "order", "none"):
+                return key  # type: ignore[return-value]
+    return _DEFAULT_TIME_RANGE_BY_BLOCK.get(block_key, "transit")
+
+
 def _load_query_block(config_path: Path, block_key: str) -> dict[str, Any]:
     config = load_config_json(config_path)
     block = config.get(block_key)
@@ -115,18 +140,31 @@ def _load_query_block(config_path: Path, block_key: str) -> dict[str, Any]:
             "url": "",
             "authorization": resolve_dps_authorization(config),
             "pageSize": DEFAULT_PAGE_SIZE,
+            "timeRange": _DEFAULT_TIME_RANGE_BY_BLOCK.get(block_key, "transit"),
+            "method": "GET",
         }
     url = (block.get("url") or "").strip()
+    method = str(block.get("method") or "GET").strip().upper()
+    if method != "GET":
+        method = "GET"
     return {
         "url": url,
         "authorization": resolve_dps_authorization(config, block),
         "pageSize": _page_size_from_block(block, url),
+        "timeRange": _resolve_person_query_time_range(block_key, block),
+        "method": method,
     }
 
 
 def load_shipment_query_by_person_config(config_path: Path) -> dict[str, Any]:
     """查询全部运单（按销售助理等条件，url 内已带筛选参数）。"""
-    return _load_query_block(config_path, QUERY_BY_PERSON_KEY)
+    return load_shipment_query_by_person_block_config(config_path, QUERY_BY_PERSON_KEY)
+
+
+def load_shipment_query_by_person_block_config(
+    config_path: Path, block_key: str
+) -> dict[str, Any]:
+    return _load_query_block(config_path, block_key)
 
 
 def load_shipment_query_by_order_config(config_path: Path) -> dict[str, Any]:
@@ -135,12 +173,18 @@ def load_shipment_query_by_order_config(config_path: Path) -> dict[str, Any]:
 
 
 def require_shipment_query_by_person_config(config_path: Path) -> dict[str, Any]:
-    cfg = load_shipment_query_by_person_config(config_path)
+    return require_shipment_query_by_person_block_config(config_path, QUERY_BY_PERSON_KEY)
+
+
+def require_shipment_query_by_person_block_config(
+    config_path: Path, block_key: str
+) -> dict[str, Any]:
+    cfg = load_shipment_query_by_person_block_config(config_path, block_key)
     if not cfg["url"]:
-        raise ValueError(f"config.json 的 {QUERY_BY_PERSON_KEY}.url 未配置")
+        raise ValueError(f"config.json 的 {block_key}.url 未配置")
     if not cfg["authorization"]:
         raise ValueError(
-            "config.json 缺少 dps_authorization（或 shipment_queryByPerson.Authorization）"
+            f"config.json 缺少 dps_authorization（或 {block_key}.Authorization）"
         )
     return cfg
 
@@ -218,14 +262,20 @@ def build_shipment_query_by_person_url(
     page_num: int = 1,
     transit_time_start: str | None = None,
     transit_time_end: str | None = None,
+    block_key: str = QUERY_BY_PERSON_KEY,
+    time_range: PersonQueryTimeRange | None = None,
 ) -> str:
-    """全部运单列表：注入 pageNum、transitTimeStart、transitTimeEnd。"""
+    """
+    全部运单列表：GET 查询串注入 pageNum + 时间范围。
+    在途 queryByPerson 用 transitTimeStart/End；港前 pickup/warehoused 默认 orderTimeStart/End。
+    """
     base = (base_url or "").strip()
     if not base:
-        raise ValueError(f"{QUERY_BY_PERSON_KEY}.url 为空")
+        raise ValueError(f"{block_key}.url 为空")
     if page_num < 1:
         raise ValueError("pageNum 须 >= 1")
 
+    mode = time_range or _DEFAULT_TIME_RANGE_BY_BLOCK.get(block_key, "transit")
     start, end = resolve_transit_time_range(transit_time_start, transit_time_end)
     parsed = urlparse(base)
     existing = _strip_query_keys(
@@ -233,15 +283,25 @@ def build_shipment_query_by_person_url(
         PAGE_NUM_PARAM,
         TRANSIT_TIME_START_PARAM,
         TRANSIT_TIME_END_PARAM,
-        "orderTimeStart",
-        "orderTimeEnd",
+        ORDER_TIME_START_PARAM,
+        ORDER_TIME_END_PARAM,
     )
-    pairs = [
-        *existing,
-        (TRANSIT_TIME_START_PARAM, start),
-        (TRANSIT_TIME_END_PARAM, end),
-        (PAGE_NUM_PARAM, str(page_num)),
-    ]
+    pairs: list[tuple[str, str]] = [*existing]
+    if mode == "transit":
+        pairs.extend(
+            [
+                (TRANSIT_TIME_START_PARAM, start),
+                (TRANSIT_TIME_END_PARAM, end),
+            ]
+        )
+    elif mode == "order":
+        pairs.extend(
+            [
+                (ORDER_TIME_START_PARAM, start),
+                (ORDER_TIME_END_PARAM, end),
+            ]
+        )
+    pairs.append((PAGE_NUM_PARAM, str(page_num)))
     query = urlencode(pairs, quote_via=quote)
     return urlunparse(parsed._replace(query=query))
 
@@ -317,8 +377,12 @@ def _request_shipment_query_url(
     authorization: str,
     *,
     timeout: int,
+    method: str = "GET",
 ) -> tuple[Any, str | None]:
-    headers: dict[str, str] = {}
+    """DPS customPageSalesAssistant 列表仅支持 GET（查询参数在 URL 上）。"""
+    if (method or "GET").upper() != "GET":
+        return None, "运单列表查询仅支持 GET"
+    headers: dict[str, str] = {"Accept": "application/json"}
     if authorization:
         headers["Authorization"] = authorization
     try:
@@ -337,8 +401,11 @@ def _fetch_page(
     authorization: str,
     *,
     timeout: int,
+    method: str = "GET",
 ) -> tuple[dict[str, Any] | None, str | None]:
-    data, err = _request_shipment_query_url(url, authorization, timeout=timeout)
+    data, err = _request_shipment_query_url(
+        url, authorization, timeout=timeout, method=method
+    )
     if err:
         return None, err
     if not isinstance(data, dict):
@@ -356,16 +423,24 @@ def query_shipments_by_person_page(
     transit_time_start: str | None = None,
     transit_time_end: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
+    block_key: str = QUERY_BY_PERSON_KEY,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """查询全部运单（单页）。"""
-    cfg = require_shipment_query_by_person_config(config_path)
+    cfg = require_shipment_query_by_person_block_config(config_path, block_key)
     url = build_shipment_query_by_person_url(
         cfg["url"],
         page_num=page_num,
         transit_time_start=transit_time_start,
         transit_time_end=transit_time_end,
+        block_key=block_key,
+        time_range=cfg.get("timeRange"),
     )
-    return _fetch_page(url, cfg["authorization"], timeout=timeout)
+    return _fetch_page(
+        url,
+        cfg["authorization"],
+        timeout=timeout,
+        method=str(cfg.get("method") or "GET"),
+    )
 
 
 def query_shipments_by_order_page(
@@ -427,9 +502,10 @@ def query_shipments_by_person(
     transit_time_start: str | None = None,
     transit_time_end: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
+    block_key: str = QUERY_BY_PERSON_KEY,
 ) -> tuple[dict[str, Any] | None, str | None]:
     """查询全部运单，按 total 自动翻页。"""
-    cfg = require_shipment_query_by_person_config(config_path)
+    cfg = require_shipment_query_by_person_block_config(config_path, block_key)
     page_size = int(cfg.get("pageSize") or DEFAULT_PAGE_SIZE)
     start, end = resolve_transit_time_range(transit_time_start, transit_time_end)
 
@@ -440,6 +516,7 @@ def query_shipments_by_person(
             transit_time_start=start,
             transit_time_end=end,
             timeout=timeout,
+            block_key=block_key,
         )
 
     result, err = _query_all_pages(page_size=page_size, fetch_page=fetch_page)
@@ -467,11 +544,9 @@ def query_shipments_by_order(
     return _query_all_pages(page_size=page_size, fetch_page=fetch_page)
 
 
-# 兼容旧名
+# 兼容旧名（发运时间范围函数；orderTime* 与 transitTime* 为不同查询参数）
 default_order_time_range = default_transit_time_range
 resolve_order_time_range = resolve_transit_time_range
-ORDER_TIME_START_PARAM = TRANSIT_TIME_START_PARAM
-ORDER_TIME_END_PARAM = TRANSIT_TIME_END_PARAM
 query_shipments = query_shipments_by_order
 query_shipments_page = query_shipments_by_order_page
 

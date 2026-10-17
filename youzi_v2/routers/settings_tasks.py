@@ -59,6 +59,16 @@ def update_scheduled_tasks_settings(body: ScheduledSyncSettingsUpdate):
             _database,
             enabled=body.dps_shipment_sync_enabled,
         )
+    if body.dps_shipment_sync_pickup_enabled is not None:
+        save_shipment_dps_sync_pickup_enabled(
+            _database,
+            enabled=body.dps_shipment_sync_pickup_enabled,
+        )
+    if body.dps_shipment_sync_warehoused_enabled is not None:
+        save_shipment_dps_sync_warehoused_enabled(
+            _database,
+            enabled=body.dps_shipment_sync_warehoused_enabled,
+        )
     if (
         body.dps_shipment_sync_transit_time_start is not None
         or body.dps_shipment_sync_transit_time_end is not None
@@ -146,6 +156,42 @@ def run_scheduled_tasks_dps_shipment_sync(
     body: ShipmentDpsSyncRunRequest | None = Body(None),
 ):
     result = run_shipment_dps_sync_batch(
+        shipments_repo,
+        LOGISTICS_CONFIG_PATH,
+        transit_time_start=body.transit_time_start if body else None,
+        transit_time_end=body.transit_time_end if body else None,
+        force=True,
+        trigger="manual",
+    )
+    return ShipmentDpsSyncRunResult(**result)
+
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-dps-shipment-sync-pickup",
+    response_model=ShipmentDpsSyncRunResult,
+)
+def run_scheduled_tasks_dps_shipment_sync_pickup(
+    body: ShipmentDpsSyncRunRequest | None = Body(None),
+):
+    result = run_shipment_dps_sync_batch_pickup(
+        shipments_repo,
+        LOGISTICS_CONFIG_PATH,
+        transit_time_start=body.transit_time_start if body else None,
+        transit_time_end=body.transit_time_end if body else None,
+        force=True,
+        trigger="manual",
+    )
+    return ShipmentDpsSyncRunResult(**result)
+
+
+@router.post(
+    "/api/v1/scheduled-tasks/run-dps-shipment-sync-warehoused",
+    response_model=ShipmentDpsSyncRunResult,
+)
+def run_scheduled_tasks_dps_shipment_sync_warehoused(
+    body: ShipmentDpsSyncRunRequest | None = Body(None),
+):
+    result = run_shipment_dps_sync_batch_warehoused(
         shipments_repo,
         LOGISTICS_CONFIG_PATH,
         transit_time_start=body.transit_time_start if body else None,

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..db.shipment_order_status import STATUS_DELIVERED, normalize_dps_order_status
 from ..db.shipment_route_status import map_dps_route_status
 
 
@@ -21,6 +22,41 @@ def _opt_int(value: Any) -> int | None:
         return int(float(value))
     except (TypeError, ValueError):
         return None
+
+
+def _opt_float(value: Any) -> float | None:
+    if value is None or str(value).strip() == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+_DPS_CHARGED_WEIGHT_KEYS = (
+    "chargedWeight",
+    "chargeWeight",
+    "chargeableWeight",
+    "billingWeight",
+    "totalChargeWeight",
+    "chargeWeightTotal",
+    "charged_weight",
+    "charge_weight",
+)
+
+
+def extract_dps_charged_weight(
+    row: dict[str, Any],
+    params: dict[str, Any] | None = None,
+) -> float | None:
+    """DPS 计费重（kg）；行级或 params 内多键兼容。"""
+    p = params if isinstance(params, dict) else {}
+    for key in _DPS_CHARGED_WEIGHT_KEYS:
+        for source in (row, p):
+            val = _opt_float(source.get(key))
+            if val is not None:
+                return val
+    return None
 
 
 def _infer_platform_warehouse_type(
@@ -77,20 +113,38 @@ def map_dps_payment_status(value: Any) -> str | None:
     return None
 
 
+def _dps_row_order_status_raw(
+    row: dict[str, Any],
+    params: dict[str, Any] | None = None,
+) -> Any:
+    """DPS 运单 Status（0/01/1/2/3/4），勿与 commerceWaybillRouteInfo.status（明细）混淆。"""
+    for key in ("status", "orderStatus", "waybillStatus", "wayBillStatus"):
+        val = row.get(key)
+        if val is not None and str(val).strip() != "":
+            return val
+    if isinstance(params, dict):
+        for key in ("status", "orderStatus"):
+            val = params.get(key)
+            if val is not None and str(val).strip() != "":
+                return val
+    return None
+
+
 def map_dps_status(
     row: dict[str, Any],
     route: dict[str, Any],
     params: dict[str, Any] | None = None,
 ) -> str:
     """
-    粗状态：仅 signingTime → DELIVERED；有轨迹 status 则 IN_TRANSIT；否则 UNKNOWN。
-    不读 markVos / 601 / nodeDesc（601 只写入明细状态 route_status=TRACK_SIGNED）。
+    运单 Status：仅 DPS 行级 status（0/01/1/2/3/4）或 signingTime→3。
+    明细 route.status 只写入 route_status，不得推断整单转运中。
     """
-    del params  # 保留签名兼容；粗状态不再使用 markVos
+    del route
+    code = normalize_dps_order_status(_dps_row_order_status_raw(row, params))
+    if code:
+        return code
     if _opt_str(row.get("signingTime")):
-        return "DELIVERED"
-    if _opt_str(route.get("status")):
-        return "IN_TRANSIT"
+        return STATUS_DELIVERED
     return "UNKNOWN"
 
 
@@ -126,6 +180,7 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         "address_code": address_code,
         "zipcode": _opt_str(row.get("deliveryZip")),
         "ctns": _opt_int(row.get("totalCtns")) or _opt_int(params.get("ctnsTotal")),
+        "charged_weight": extract_dps_charged_weight(row, params),
         "product_name": _opt_str(params.get("productName")),
         "origin_warehouse_code": _opt_str(row.get("receiveWarehouseName")),
         "supplier_name": _opt_str(row.get("shipperCompanyName")),
@@ -140,7 +195,7 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         "latest_tracking_time": _opt_str(route.get("nodeTime"))
         or _opt_str(row.get("warehouseEntryTime")),
         "latest_tracking_desc": _opt_str(route.get("nodeDesc")),
-        "status_code": map_dps_status(row, route, params),
+        "status_code": map_dps_status(row, route, params=params),
         "route_status": route_status,
         "payment_status": map_dps_payment_status(row.get("clientVerifyStatus")),
         "address_type": map_dps_address_type(

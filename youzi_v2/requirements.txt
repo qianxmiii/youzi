@@ -7,6 +7,8 @@ requests
 websocket-client
 # 箱单转换 tools/product_import/generate_product_import.py
 openpyxl
+pywin32; sys_platform == "win32"
+pypdf
 xlrd==1.2.0
 xlwt
 xlutils

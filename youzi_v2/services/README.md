@@ -26,20 +26,29 @@ Youzi v2 业务服务层
 | `shipment_copy_format.py` | 运单明细复制文案（与前端 `shipmentCopyFormat.ts` 对齐，企微「明细」回复复用） |
 | `wecom_aibot_shipment_refresh.py` | 查单前刷新明细状态与内外部轨迹 |
 | `wecom_subscription_push.py` | 运单订阅更新（轨迹/ETA 提醒）同步推企微 |
-| `shipment_query_config.py` | DPS 运单查询、`dps_authorization` 解析、`queryByPerson` / `queryByOrder` 自动翻页 |
+| `shipment_query_config.py` | DPS 运单查询、`dps_authorization` 解析；`queryByPerson` / `_pickup` / `_warehoused` / `queryByOrder` 自动翻页 |
 | `dps_data_download.py` | DPS 货箱重量尺寸下载（`config.dps_data_download`，参数 `ids`） |
-| `shipment_dps_cargo_download.py` | 勾选运单批量下载货箱数据（单票/zip） |
+| `shipment_dps_cargo_download.py` | 勾选运单批量下载货箱（单票 `{单号}_data.ext`；多票 `{N}票数据_{时间}.zip`） |
 | `dps_mark_download.py` | DPS 唛头（单票 / 批量） |
 | `shipment_dps_mark_download.py` | 勾选运单下载唛头 |
+| `mark_pdf_split.py` | 唛头 PDF 按件数拆分命名 |
+| `shipment_dps_mark_split_download.py` | 单票唛头拆分 zip 下载 |
+| `dps_export_job.py` | DPS 导出异步任务与进度 |
 | `dps_packinglist_download.py` | DPS 箱单发票 |
 | `shipment_dps_packinglist_download.py` | 勾选运单下载箱单发票 |
 | `dps_warehouseform_download.py` | DPS 排仓单 |
 | `shipment_dps_warehouseform_download.py` | 勾选运单下载排仓单（超 50 分批） |
+| `dps_receive_warehouse.py` | 收货仓名称 → `dps_warehouse` 键（SHENZHEN/YIWU） |
+| `dps_warehouse_entry_download.py` | DPS 进仓单请求 |
+| `warehouse_entry_template.py` | 进仓单 xlsx 模板占位符填充 |
+| `warehouse_entry_xlsx_to_pdf.py` | 进仓单 xlsx → PDF（Excel COM / LibreOffice） |
+| `warehouse_entry_pdf.py` | 进仓单 PDF 编排（模板 xlsx + 转换） |
+| `shipment_dps_warehouse_entry_download.py` | 勾选运单进仓单 xlsx/PDF（`{N}票进仓单_{日期}`） |
 | `shipment_dps_sync.py` | DPS 运单全量同步至本地表（计划任务，默认关） |
 | `dps_waybill_route_info.py` | DPS 明细状态轨迹查询（URL 仅读 config `dps_route_status_query`） |
 | `shipment_dps_route_status_sync.py` | 轻量回写 `route_status`、阶段 `route_*_time`；301/306 且 ATD/ATA 空时回写开船/到港时间 |
 | `shipment_route_status_exception.py` | 206/402 清关异常自动开/关 |
-| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`） |
+| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（含 `charged_weight`←`chargedWeight`/`chargeWeight` 等） |
 | `shipment_dps_sync_fields.py` | 同步字段白名单（`config/shipment_dps_sync_fields.json`） |
 | `logistics_tracking.py` | 物流轨迹解析 |
 | `shipment_excel.py` | 运单 Excel 导入导出 |

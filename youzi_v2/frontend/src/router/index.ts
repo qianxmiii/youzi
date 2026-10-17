@@ -58,10 +58,16 @@ const router = createRouter({
           meta: { title: '地址簿' },
         },
         {
+          path: 'shipments/pre-port',
+          name: 'shipments-pre-port',
+          component: () => import('@/views/shipments/ShipmentsView.vue'),
+          meta: { title: '港前运单', shipmentWorkspace: 'preport' },
+        },
+        {
           path: 'shipments',
           name: 'shipments',
           component: () => import('@/views/shipments/ShipmentsView.vue'),
-          meta: { title: '运单管理' },
+          meta: { title: '在途运单', shipmentWorkspace: 'transit' },
         },
         {
           path: 'shipment-exceptions',

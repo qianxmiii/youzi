@@ -22,6 +22,7 @@ KNOWN_SYNC_FIELDS = frozenset(
         "address_code",
         "zipcode",
         "ctns",
+        "charged_weight",
         "product_name",
         "origin_warehouse_code",
         "supplier_name",

@@ -89,7 +89,7 @@
 | `ctns` | 件数/箱数（Excel 导入） | |
 | `zipcode` | 邮编 | |
 | `product_name` | 品名（文本） | |
-| `origin_warehouse_code` | 发货仓库 | |
+| `origin_warehouse_code` | 收货仓（DPS `receiveWarehouseName`） | |
 | `supplier_name` | 供应商（文本） | |
 | `carrier_code` | 承运商 | `carrier_codes` |
 | `customer_shipment_id` | 货件号 | |
@@ -180,7 +180,7 @@
 | `closed_time` | 结束（可空） |
 | `note` | 备注 |
 
-码表：`shipment_exception_codes`（查验中、掉件、暂扣、破损、运输超时、出口海关异常、进口清关异常等）。
+码表：`shipment_exception_codes`（`phase_category`：港前 `pre_port` / 港后 `post_port`；存量类型默认港后；查验中、掉件、暂扣、破损、运输超时、出口/进口海关异常等）。
 
 API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST .../close`（`closedTime` 可选）、`GET /api/v1/shipments/{id}/exception-events`。
 
@@ -274,7 +274,7 @@ API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST 
 | 转单号 | `tracking_number` |
 | 供应商 | `supplier_name` |
 | 品名 | `product_name` |
-| 交货仓库 | `origin_warehouse_code` |
+| 收货仓 | `origin_warehouse_code` |
 | ETD | `etd`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
 | ATD | `atd`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
 | ETA | `eta`（**仅导出**，导出为日期 `YYYY-MM-DD`） |

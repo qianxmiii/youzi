@@ -84,7 +84,9 @@ def carrier_no_tracking_eligible_sql(alias: str = "s") -> tuple[str, list]:
 
 def _in_transit_sql(alias: str = "s") -> str:
     p = f"{alias}." if alias else ""
-    return f"TRIM(COALESCE({p}status_code, '')) = '{IN_TRANSIT_STATUS}'"
+    return (
+        f"TRIM(COALESCE({p}status_code, '')) IN ('2', '{IN_TRANSIT_STATUS}')"
+    )
 
 
 def internal_stale_days_sql(min_days: int, alias: str = "s") -> tuple[str, list]:

@@ -13,7 +13,7 @@
 
 ## 概述
 
-运单（Shipment）是 Youzi v2 的核心业务对象，贯穿录入、在途跟踪、异常处理、海运节点与签收。前端入口：`/shipments`（`ShipmentsView.vue`）。
+运单（Shipment）是 Youzi v2 的核心业务对象，贯穿录入、在途跟踪、异常处理、海运节点与签收。前端按 DPS **Status** 拆为 **`/shipments/pre-port`（港前）** 与 **`/shipments`（在途）**，共用 `ShipmentsView.vue`；列表 API 传 `workspace=preport|transit`。
 
 ## 生命周期
 

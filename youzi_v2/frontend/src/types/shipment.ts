@@ -19,6 +19,8 @@ export interface Shipment {
   addressCode: string | null
   deliveryAddress: string | null
   ctns: number | null
+  /** 计费重 kg（DPS 同步） */
+  chargedWeight?: number | null
   zipcode: string | null
   productName: string | null
   originWarehouseCode: string | null
@@ -100,6 +102,7 @@ export interface ShipmentListResponse {
 export interface ShipmentExceptionType {
   code: string
   nameZh: string
+  phaseCategory?: 'pre_port' | 'post_port' | string
 }
 
 export interface ShipmentExceptionEvent {

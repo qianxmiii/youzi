@@ -126,6 +126,7 @@ export async function listShipmentSlaAlerts(params: {
   status?: string
   hasException?: boolean
   exceptionCode?: string
+  exceptionPhase?: 'pre_port' | 'post_port'
   channelCode?: string
   carrierCode?: string
   customer?: string
@@ -140,6 +141,7 @@ export async function listShipmentSlaAlerts(params: {
   if (params.status) query.status = params.status
   if (params.hasException != null) query.hasException = String(params.hasException)
   if (params.exceptionCode) query.exceptionCode = params.exceptionCode
+  if (params.exceptionPhase) query.exceptionPhase = params.exceptionPhase
   if (params.channelCode) query.channelCode = params.channelCode
   if (params.carrierCode) query.carrierCode = params.carrierCode
   if (params.customer) query.customer = params.customer

@@ -212,6 +212,21 @@ def _scheduler_tick(
         config_path,
         force=False,
         trigger="scheduled",
+        variant="default",
+    )
+    run_shipment_dps_sync_batch(
+        shipments_repo,
+        config_path,
+        force=False,
+        trigger="scheduled",
+        variant="pickup",
+    )
+    run_shipment_dps_sync_batch(
+        shipments_repo,
+        config_path,
+        force=False,
+        trigger="scheduled",
+        variant="warehoused",
     )
     scan_exception_followup_reminders(
         exception_followup_repo,
@@ -244,7 +259,10 @@ def start_tracking_sync_scheduler(
     settings = get_scheduled_sync_settings(database)
     group_archive_enabled = get_group_archive_settings(database).auto_archive_enabled
     zipcode_backfill_enabled = get_zipcode_backfill_settings(database).enabled
-    dps_sync_enabled = get_shipment_dps_sync_settings(database).enabled
+    dps_settings = get_shipment_dps_sync_settings(database)
+    dps_sync_enabled = dps_settings.enabled
+    dps_pickup_enabled = dps_settings.pickup_enabled
+    dps_warehoused_enabled = dps_settings.warehoused_enabled
     exception_followup_enabled = get_exception_followup_settings(database).enabled
     sla_scan_enabled = get_sla_scan_settings(database).enabled
     stop = threading.Event()
@@ -290,6 +308,10 @@ def start_tracking_sync_scheduler(
         f"邮编回写={'开' if zipcode_backfill_enabled else '关'}"
         f"(约24h)、"
         f"DPS运单={'开' if dps_sync_enabled else '关'}"
+        f"(约24h)、"
+        f"DPS提货中={'开' if dps_pickup_enabled else '关'}"
+        f"(约24h)、"
+        f"DPS已入仓={'开' if dps_warehoused_enabled else '关'}"
         f"(约24h)、"
         f"异常跟进={'开' if exception_followup_enabled else '关'}"
         f"(约24h)、"

@@ -113,7 +113,7 @@ onUnmounted(() => {
         aria-label="消息通知"
         title="消息通知"
       >
-        <BellIcon :filled="hasUnread" size="1.125rem" />
+        <BellIcon :filled="hasUnread" :size="18" />
         <span v-if="hasUnread" class="header-notify-badge" aria-hidden="true" />
       </button>
     </template>

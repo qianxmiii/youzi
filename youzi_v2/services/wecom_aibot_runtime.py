@@ -275,8 +275,17 @@ class WecomAibotRuntime:
             self._pending[req_id] = pending
         try:
             ws.send(json.dumps(frame, ensure_ascii=False))
-            if not pending.event.wait(timeout):
-                raise TimeoutError(f"等待 ack 超时 req_id={req_id}")
+            # 本方法运行于接收线程，等待期间也必须接收并分发 ACK/回调。
+            deadline = time.monotonic() + timeout
+            while not pending.event.is_set():
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise TimeoutError(f"等待 ack 超时 req_id={req_id}")
+                if self._stop.is_set():
+                    raise RuntimeError("长连接已停止")
+                msg = self._recv_json(ws, min(RECV_TIMEOUT_SEC, remaining))
+                if msg:
+                    self._handle_incoming(msg)
             if pending.ack is None:
                 raise RuntimeError(f"ack 为空 req_id={req_id}")
             errcode = int(pending.ack.get("errcode", -1))
@@ -297,7 +306,7 @@ class WecomAibotRuntime:
         except Exception as exc:
             raise RuntimeError(f"接收失败: {exc}") from exc
         if not raw:
-            return None
+            raise RuntimeError("WebSocket 连接已关闭")
         if isinstance(raw, bytes):
             raw = raw.decode("utf-8")
         data = json.loads(raw)

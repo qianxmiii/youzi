@@ -16,6 +16,7 @@ from ..db.datetime_util import DATETIME_FMT
 
 QUERY_BY_PERSON_KEY = "shipment_queryByPerson"
 QUERY_BY_ORDER_KEY = "shipment_queryByOrder"
+DPS_AUTHORIZATION_KEY = "dps_authorization"
 QUERY_PARAM = "odds"
 PAGE_NUM_PARAM = "pageNum"
 TRANSIT_TIME_START_PARAM = "transitTimeStart"
@@ -33,6 +34,60 @@ def _read_auth(block: dict[str, Any]) -> str:
         or block.get("authorization")
         or ""
     ).strip()
+
+
+def load_config_json(config_path: Path) -> dict[str, Any]:
+    if not config_path.is_file():
+        raise FileNotFoundError(f"未找到配置文件：{config_path}")
+    with config_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data if isinstance(data, dict) else {}
+
+
+def _normalize_dps_authorization(value: str) -> str:
+    text = (value or "").strip()
+    if not text:
+        return ""
+    lower = text.lower()
+    if lower.startswith("bearer ") or lower.startswith("basic "):
+        return text
+    return f"Bearer {text}"
+
+
+def resolve_dps_authorization(
+    config: dict[str, Any],
+    *fallback_blocks: dict[str, Any] | None,
+) -> str:
+    """
+    DPS 接口 Authorization：优先 config 根级 dps_authorization；
+    否则回退各块内 Authorization（兼容旧配置）。
+    """
+    root = config.get(DPS_AUTHORIZATION_KEY) or config.get("dpsAuthorization")
+    if isinstance(root, str) and root.strip():
+        return _normalize_dps_authorization(root)
+    for block in fallback_blocks:
+        if isinstance(block, dict):
+            auth = _read_auth(block)
+            if auth:
+                return _normalize_dps_authorization(auth)
+    return ""
+
+
+def require_dps_authorization_config(config_path: Path) -> str:
+    """要求已配置 DPS Authorization，否则抛出 ValueError。"""
+    config = load_config_json(config_path)
+    person = config.get(QUERY_BY_PERSON_KEY)
+    order = config.get(QUERY_BY_ORDER_KEY)
+    auth = resolve_dps_authorization(
+        config,
+        person if isinstance(person, dict) else None,
+        order if isinstance(order, dict) else None,
+    )
+    if not auth:
+        raise ValueError(
+            "config.json 缺少 dps_authorization（或 shipment_queryBy* 块内 Authorization）"
+        )
+    return auth
 
 
 def _page_size_from_block(block: dict[str, Any], url: str) -> int:
@@ -53,17 +108,18 @@ def _page_size_from_block(block: dict[str, Any], url: str) -> int:
 
 
 def _load_query_block(config_path: Path, block_key: str) -> dict[str, Any]:
-    if not config_path.is_file():
-        raise FileNotFoundError(f"未找到配置文件：{config_path}")
-    with config_path.open("r", encoding="utf-8") as f:
-        config: dict[str, Any] = json.load(f)
+    config = load_config_json(config_path)
     block = config.get(block_key)
     if not isinstance(block, dict):
-        return {"url": "", "authorization": "", "pageSize": DEFAULT_PAGE_SIZE}
+        return {
+            "url": "",
+            "authorization": resolve_dps_authorization(config),
+            "pageSize": DEFAULT_PAGE_SIZE,
+        }
     url = (block.get("url") or "").strip()
     return {
         "url": url,
-        "authorization": _read_auth(block),
+        "authorization": resolve_dps_authorization(config, block),
         "pageSize": _page_size_from_block(block, url),
     }
 
@@ -82,6 +138,10 @@ def require_shipment_query_by_person_config(config_path: Path) -> dict[str, Any]
     cfg = load_shipment_query_by_person_config(config_path)
     if not cfg["url"]:
         raise ValueError(f"config.json 的 {QUERY_BY_PERSON_KEY}.url 未配置")
+    if not cfg["authorization"]:
+        raise ValueError(
+            "config.json 缺少 dps_authorization（或 shipment_queryByPerson.Authorization）"
+        )
     return cfg
 
 
@@ -89,6 +149,10 @@ def require_shipment_query_by_order_config(config_path: Path) -> dict[str, Any]:
     cfg = load_shipment_query_by_order_config(config_path)
     if not cfg["url"]:
         raise ValueError(f"config.json 的 {QUERY_BY_ORDER_KEY}.url 未配置")
+    if not cfg["authorization"]:
+        raise ValueError(
+            "config.json 缺少 dps_authorization（或 shipment_queryByOrder.Authorization）"
+        )
     return cfg
 
 

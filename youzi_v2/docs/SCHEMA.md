@@ -48,6 +48,7 @@
 | `WAREHOUSE_IN` | 202 | 入库 |
 | `DEPARTED_POL` | 301 | 离开起运港 |
 | `ARRIVED_POD` | 306 | 到达目的港 |
+| `TRUCK_DISPATCH_APPOINTED` | 509 | 卡派已约仓 |
 | `LAST_MILE_HANDOVER` | 510 | 快递派-已交仓 |
 | `TRACK_SIGNED` | 601 | 轨迹签收 |
 

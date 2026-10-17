@@ -126,23 +126,39 @@ export function joinEqualsParts(
   return parts.map(cell).filter(Boolean).join(' = ')
 }
 
-/** 单行：运单号 = 货件号 = 派送仓库（空则邮编）= 件数ctns（缺段跳过） */
+function normCopyKey(value: string): string {
+  return value.trim().toUpperCase()
+}
+
+/** 关联单号、客户编号、货件号；关联单号与货件号相同（忽略大小写）只保留一处 */
+export function shipmentDetailIdentifierPartsForCopy(row: Shipment): string[] {
+  const ref = cell(row.refShipmentNo)
+  const customerNo = cell(row.customerNo)
+  const shipmentId = cell(row.customerShipmentId)
+  const refSameAsShipment =
+    Boolean(ref && shipmentId) && normCopyKey(ref) === normCopyKey(shipmentId)
+
+  const parts: string[] = []
+  const seen = new Set<string>()
+  const add = (value: string) => {
+    if (!value) return
+    const key = normCopyKey(value)
+    if (seen.has(key)) return
+    seen.add(key)
+    parts.push(value)
+  }
+
+  add(ref)
+  add(customerNo)
+  if (!refSameAsShipment) add(shipmentId)
+  return parts
+}
+
+/** 单行：运单号 = [关联单号] [= 客户编号] [= 货件号] = 仓库（空则邮编）= Nctns */
 export function formatShipmentDetailSummaryLine(row: Shipment): string {
   return joinEqualsParts([
     row.shipmentNo,
-    row.customerShipmentId,
-    warehouseOrZipForCopy(row),
-    formatCtnsForCopy(row.ctns),
-  ])
-}
-
-/** 单行：运单号 = 关联单号 = 客户编号 = 货件号 = 派送仓库（空则邮编）= 件数ctns（缺段跳过） */
-export function formatShipmentDetailSummaryWithCustomerNoLine(row: Shipment): string {
-  return joinEqualsParts([
-    row.shipmentNo,
-    row.refShipmentNo,
-    row.customerNo,
-    row.customerShipmentId,
+    ...shipmentDetailIdentifierPartsForCopy(row),
     warehouseOrZipForCopy(row),
     formatCtnsForCopy(row.ctns),
   ])
@@ -162,25 +178,10 @@ export function formatShipmentDetailSummaryWithTrackingBlock(row: Shipment): str
   return tn ? `${head}\n${tn}` : head
 }
 
-/** 明细（含关联单号）+ 转单号 */
-export function formatShipmentDetailSummaryWithCustomerNoAndTrackingBlock(
-  row: Shipment,
-): string {
-  const head = formatShipmentDetailSummaryWithCustomerNoLine(row)
-  const tn = formatShipmentTrackingNumberSuffixLine(row)
-  return tn ? `${head}\n${tn}` : head
-}
-
 /** 多行运单明细摘要（不含转单号），运单之间空一行 */
 export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
   return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n\n')
-}
-
-/** 多行运单明细（含关联单号，不含转单号），运单之间空一行 */
-export function formatShipmentDetailSummaryWithCustomerNoCopyText(rows: Shipment[]): string {
-  if (!rows.length) return ''
-  return rows.map((row) => formatShipmentDetailSummaryWithCustomerNoLine(row)).join('\n\n')
 }
 
 /**

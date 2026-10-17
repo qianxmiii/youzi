@@ -10,6 +10,7 @@ export const ROUTE_STATUS_BADGE_TONE: Record<string, string> = {
   ARRIVED_POD: 'violet',
   IMPORT_CUSTOMS_EXCEPTION: 'rose',
   DEST_TRANSIT_WAREHOUSE: 'cyan',
+  TRUCK_DISPATCH_APPOINTED: 'warning',
   LAST_MILE_HANDOVER: 'orange',
   TRACK_SIGNED: 'success',
 }
@@ -24,6 +25,7 @@ export const ROUTE_STATUS_LABEL_ZH: Record<string, string> = {
   ARRIVED_POD: '到达目的港',
   IMPORT_CUSTOMS_EXCEPTION: '进口清关异常',
   DEST_TRANSIT_WAREHOUSE: '到达目的国中转仓库',
+  TRUCK_DISPATCH_APPOINTED: '卡派已约仓',
   LAST_MILE_HANDOVER: '快递派-已交仓',
   TRACK_SIGNED: '轨迹签收',
 }
@@ -46,4 +48,50 @@ export function routeStatusBadgeClass(code: string | null | undefined): string {
   const key = (code || '').trim().toUpperCase()
   const tone = ROUTE_STATUS_BADGE_TONE[key] || 'default'
   return `shipment-status-badge--${tone}`
+}
+
+/** 运单列表「状态」列：粗状态已签收时优先显示已签收（601 轨迹签收仅作明细，不顶替粗状态）。 */
+export function resolveShipmentListStatusDisplay(input: {
+  statusCode?: string | null
+  routeStatus?: string | null
+  routeStatusLabelByCode?: Record<string, string> | null
+  coarseStatusLabel: Record<string, string>
+}): { label: string; toneClass: string; tipExtra: string } {
+  const coarse = (input.statusCode || 'UNKNOWN').trim().toUpperCase()
+  const route = (input.routeStatus || '').trim().toUpperCase()
+
+  if (coarse === 'DELIVERED') {
+    let tipExtra = ''
+    if (isDisplayableRouteStatus(route)) {
+      tipExtra = `明细：${routeStatusLabelZh(route, input.routeStatusLabelByCode)}；`
+    }
+    return {
+      label: input.coarseStatusLabel['DELIVERED'] || '已签收',
+      toneClass: 'shipment-status-badge--success',
+      tipExtra,
+    }
+  }
+
+  if (isDisplayableRouteStatus(route)) {
+    const label = routeStatusLabelZh(route, input.routeStatusLabelByCode)
+    const coarseLabel = input.coarseStatusLabel[coarse] || coarse
+    const tipExtra =
+      coarseLabel && coarseLabel !== label ? `粗状态：${coarseLabel}；` : ''
+    return {
+      label,
+      toneClass: routeStatusBadgeClass(route),
+      tipExtra,
+    }
+  }
+
+  return {
+    label: input.coarseStatusLabel[coarse] || coarse,
+    toneClass:
+      coarse === 'DELIVERED'
+        ? 'shipment-status-badge--success'
+        : coarse === 'INSPECTION'
+          ? 'shipment-status-badge--warning'
+          : 'shipment-status-badge--default',
+    tipExtra: '',
+  }
 }

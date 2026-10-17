@@ -25,6 +25,7 @@ from .carrier_vendors import (
     build_vendor_maps,
     carrier_vendor_unassigned_reason,
     detect_platform,
+    fetch_carrier_tracking_for_shipment_row,
     fetch_tracking_batch,
     fetch_tracking_one,
     fetch_txfba_batch_for_rows,
@@ -35,7 +36,7 @@ from .carrier_vendors import (
     fetch_qiyun_batch_for_rows,
     fetch_yorky_batch_for_rows,
     load_vendors_config,
-    resolve_vendor_for_row,
+    resolve_vendor_chain_for_row,
     unpack_carrier_fetch,
     wy_should_update_carrier_order_no,
 )
@@ -107,13 +108,13 @@ def sync_carrier_tracking(
     unassigned = 0
     errors: list[str] = []
     for row in rows:
-        vendor = resolve_vendor_for_row(
+        chain = resolve_vendor_chain_for_row(
             row,
             vendor_by_name,
             vendor_by_id,
             code_to_carrier_id=code_to_carrier_id,
         )
-        if vendor is None:
+        if not chain:
             unassigned += 1
             sn = row.get("shipment_no") or ""
             reason = carrier_vendor_unassigned_reason(
@@ -123,8 +124,11 @@ def sync_carrier_tracking(
             errors.append(err_line)
             out_log(f"[承运商轨迹] {err_line}")
             continue
+        vendor = chain[0]
         name = vendor["name"]
-        by_vendor.setdefault(name, []).append({**row, "_vendor": vendor})
+        by_vendor.setdefault(name, []).append(
+            {**row, "_vendor": vendor, "_vendor_chain": chain}
+        )
 
     updated = 0
     skipped = 0
@@ -176,6 +180,36 @@ def sync_carrier_tracking(
                 logs, err, carrier_id, outer_tn, all_tns = unpack_carrier_fetch(
                     tracking_map.get(sn, ([], "未返回", None, None, None))
                 )
+                vendor_chain = row.get("_vendor_chain") or [vendor]
+                if not logs and len(vendor_chain) > 1:
+                    for alt_vendor in vendor_chain[1:]:
+                        alt_name = (alt_vendor.get("name") or "").strip() or "备用"
+                        (
+                            alt_logs,
+                            alt_err,
+                            alt_cid,
+                            alt_tn,
+                            alt_all,
+                        ) = fetch_carrier_tracking_for_shipment_row(
+                            row,
+                            alt_vendor,
+                            log=out_log,
+                        )
+                        if alt_logs:
+                            out_log(
+                                f"[承运商轨迹] {sn} 主系统「{vendor_name}」无轨迹，"
+                                f"备用「{alt_name}」返回 {len(alt_logs)} 条"
+                            )
+                            logs = alt_logs
+                            err = alt_err
+                            carrier_id = alt_cid or carrier_id
+                            outer_tn = alt_tn or outer_tn
+                            all_tns = alt_all or all_tns
+                            break
+                        if alt_err:
+                            out_log(
+                                f"[承运商轨迹] {sn} 备用「{alt_name}」未命中：{alt_err}"
+                            )
                 cid = (carrier_id or "").strip()
                 if cid:
                     existing_cid = (row.get("carrier_id") or "").strip()

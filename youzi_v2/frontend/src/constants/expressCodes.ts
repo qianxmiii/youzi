@@ -2,8 +2,7 @@
 
 export type ExpressCode = 'UPS' | 'FEDEX' | 'DPD' | 'CWE' | 'USPS' | 'DHL'
 
-export const EXPRESS_CODE_OPTIONS: { label: string; value: ExpressCode | null }[] = [
-  { label: '自动识别', value: null },
+export const EXPRESS_CODE_OPTIONS: { label: string; value: ExpressCode }[] = [
   { label: 'UPS', value: 'UPS' },
   { label: 'FedEx', value: 'FEDEX' },
   { label: 'DPD', value: 'DPD' },
@@ -13,8 +12,8 @@ export const EXPRESS_CODE_OPTIONS: { label: string; value: ExpressCode | null }[
 ]
 
 /** 批量修改：不修改 / 清空 / 指定快递 */
-export const EXPRESS_CODE_BATCH_OPTIONS: { label: string; value: string | null }[] = [
+export const EXPRESS_CODE_BATCH_OPTIONS: { label: string; value: string }[] = [
   { label: '不修改', value: '__UNCHANGED__' },
-  { label: '自动识别（清空）', value: null },
-  ...EXPRESS_CODE_OPTIONS.filter((o) => o.value !== null),
+  { label: '自动识别（清空）', value: '__AUTO__' },
+  ...EXPRESS_CODE_OPTIONS,
 ]

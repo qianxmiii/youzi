@@ -37,7 +37,7 @@ const { loadDictTypes, dictOptions } = useDictLabels()
 const addressTypeOptions = dictOptions('address_type')
 
 const statusCode = ref<string | null>(null)
-const paymentStatus = ref<string | null>(null)
+const paymentStatus = ref<ShipmentPayload['paymentStatus']>(null)
 const customer = ref('')
 const customerNo = ref('')
 const refShipmentNo = ref('')
@@ -106,7 +106,7 @@ function buildUpdates(): Partial<ShipmentPayload> | null {
   if (countryCode.value) updates.countryCode = countryCode.value
   if (carrierCode.value) updates.carrierCode = carrierCode.value
   if (expressCodePick.value !== '__UNCHANGED__') {
-    updates.expressCode = expressCodePick.value
+    updates.expressCode = expressCodePick.value === '__AUTO__' ? null : expressCodePick.value
   }
   if (addressType.value) updates.addressType = addressType.value
   if (addressCode.value.trim()) updates.addressCode = addressCode.value.trim()

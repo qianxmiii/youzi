@@ -279,8 +279,20 @@ const customerColumns = computed((): DataTableColumns<PerformanceGroupRow> => {
 })
 
 const carrierChannelColumns: DataTableColumns<PerformanceCarrierChannelRow> = [
-  { title: '承运商', key: 'carrierCode', minWidth: 100 },
-  { title: '渠道', key: 'channelCode', minWidth: 100 },
+  {
+    title: '承运商',
+    key: 'carrierLabel',
+    minWidth: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => row.carrierLabel?.trim() || row.carrierCode,
+  },
+  {
+    title: '渠道',
+    key: 'channelLabel',
+    minWidth: 120,
+    ellipsis: { tooltip: true },
+    render: (row) => row.channelLabel?.trim() || row.channelCode,
+  },
   { title: '总票数', key: 'totalCount', width: 88, align: 'right' },
   { title: '已签收', key: 'signedCount', width: 88, align: 'right' },
   {
@@ -510,6 +522,11 @@ function handleSearch() {
   void loadAnalysis()
 }
 
+async function handleRefresh() {
+  await loadFilterOptions()
+  await loadAnalysis()
+}
+
 function handleReset() {
   resetFilters()
   void loadAnalysis()
@@ -585,6 +602,13 @@ onMounted(async () => {
           运输时效分析：海运时效、到港后送仓、全程时效与送仓偏差；默认按 ATD 口径筛选。
         </p>
       </div>
+      <NButton
+        size="small"
+        :loading="loading || loadingDetails"
+        @click="handleRefresh"
+      >
+        刷新
+      </NButton>
     </div>
 
     <section class="panel p-4">

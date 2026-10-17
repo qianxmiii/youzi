@@ -339,6 +339,68 @@ def build_vendor_maps(
     return by_name, by_id
 
 
+def lookup_vendor_by_key(
+    key: str,
+    vendor_by_name: dict[str, dict[str, Any]],
+    vendor_by_id: dict[str, dict[str, Any]],
+) -> dict[str, Any] | None:
+    k = (key or "").strip()
+    if not k:
+        return None
+    if k in vendor_by_id:
+        return vendor_by_id[k]
+    if k in vendor_by_name:
+        return vendor_by_name[k]
+    lower = k.lower()
+    for name, vendor in vendor_by_name.items():
+        if name.lower() == lower:
+            return vendor
+    return None
+
+
+def _fallback_vendor_keys(vendor: dict[str, Any]) -> list[str]:
+    refs: list[str] = []
+    for field in ("fallbackVendor", "fallbackVendorName", "trackFallbackVendor"):
+        val = vendor.get(field)
+        if isinstance(val, str) and val.strip():
+            refs.append(val.strip())
+    for raw in vendor.get("fallbackVendors") or vendor.get("trackFallbackVendors") or []:
+        if isinstance(raw, str) and raw.strip():
+            refs.append(raw.strip())
+    return refs
+
+
+def resolve_vendor_chain_for_row(
+    row: dict[str, str],
+    vendor_by_name: dict[str, dict[str, Any]],
+    vendor_by_id: dict[str, dict[str, Any]] | None = None,
+    *,
+    code_to_carrier_id: dict[str, str] | None = None,
+) -> list[dict[str, Any]]:
+    """主 vendor + config 声明的备用 vendor（如前系统查不到再查森磊2）。"""
+    primary = resolve_vendor_for_row(
+        row,
+        vendor_by_name,
+        vendor_by_id,
+        code_to_carrier_id=code_to_carrier_id,
+    )
+    if primary is None:
+        return []
+    by_id = vendor_by_id or {}
+    chain: list[dict[str, Any]] = [primary]
+    seen_names: set[str] = {(primary.get("name") or "").strip()}
+    for key in _fallback_vendor_keys(primary):
+        alt = lookup_vendor_by_key(key, vendor_by_name, by_id)
+        if alt is None:
+            continue
+        alt_name = (alt.get("name") or "").strip()
+        if not alt_name or alt_name in seen_names:
+            continue
+        seen_names.add(alt_name)
+        chain.append(alt)
+    return chain
+
+
 def resolve_vendor_for_row(
     row: dict[str, str],
     vendor_by_name: dict[str, dict[str, Any]],
@@ -1733,6 +1795,63 @@ def fetch_tracking_batch(
     for num in cleaned:
         out[num] = fetch_tracking_one(num, vendor, timeout=timeout)
     return out
+
+
+def fetch_carrier_tracking_for_shipment_row(
+    row: dict[str, str],
+    vendor: dict[str, Any],
+    *,
+    timeout: int = DEFAULT_TIMEOUT,
+    log: LogFn | None = None,
+) -> CarrierFetch:
+    """单票拉承运商轨迹（供同步批处理后的备用 vendor 重试）。"""
+    sn = (row.get("shipment_no") or "").strip()
+    if not sn:
+        return _carrier_fail("缺少运单号")
+    platform = detect_platform(vendor)
+    if platform == "txfba":
+        raw = fetch_txfba_batch_for_rows([row], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    elif platform == "wy":
+        raw = fetch_wy_batch_for_rows([row], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    elif platform == "yorky":
+        raw = fetch_yorky_batch_for_rows([row], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    elif platform == "juren":
+        raw = fetch_juren_batch_for_rows([row], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    elif platform == "qiyun":
+        raw = fetch_qiyun_batch_for_rows([row], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    elif platform == "olt":
+        raw = fetch_olt_batch_for_rows([row], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    elif platform == "haojie":
+        raw = fetch_haojie_batch_for_rows([row], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    elif platform in ("topda", "huawell_cms"):
+        raw = fetch_tracking_batch([sn], vendor, timeout=timeout, log=log).get(
+            sn,
+            ([], "未返回", None, None, None),
+        )
+    else:
+        raw = fetch_tracking_one(sn, vendor, timeout=timeout)
+    return unpack_carrier_fetch(raw)
 
 
 def fetch_tracking_one(

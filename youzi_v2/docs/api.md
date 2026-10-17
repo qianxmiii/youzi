@@ -115,6 +115,9 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
 | POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
 | POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200） |
+| POST | `/download-dps-cargo-data` | DPS 货箱（`dps_data_download`）；body: 本地运单 `ids`，最多 50 |
+| POST | `/download-dps-mark-data` | DPS 唛头（1 票 `dps_mark_download`，多票 `dps_batchmark_download`）；body: 本地运单 `ids` |
+| POST | `/download-dps-packinglist` | DPS 箱单发票（`dps_packinglist_download`，转发为 `?ids=` 逗号拼接 waybillId）；单票 `{运单号}_箱单发票.ext`，多票 DPS 原名 |
 | POST | `/sync-route-status-from-dps` | 明细状态：按 `waybillId` 调 `config.dps_route_status_query`；`shipmentNos` 可选（最多 200），空则全部 |
 | GET | `/tracking-freshness-stats` | 轨迹新鲜度统计 |
 | GET | `/tracking-sync/daily-stats` | 日同步统计 |

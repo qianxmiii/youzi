@@ -85,6 +85,7 @@ const filterOptions = ref<ShipmentFilterOptions>({
   channelNameZhs: [],
   channelCategories: [],
   statusCodes: [],
+  routeStatuses: [],
   exceptionCodes: [],
   exceptionTypes: [],
   groups: [],
@@ -265,7 +266,11 @@ function alertTypeLabel(row: ShipmentSlaAlert): string {
   const t = (row.alertType || '').trim()
   if (t === 'WAREHOUSE_NO_DEPARTURE') return '入库未开船'
   if (t === 'ARRIVAL_NO_DELIVERY') return '到港未送仓'
-  if (t === 'DEST_WAREHOUSE_NO_DISPATCH') return '到仓未派送'
+  if (t === 'DEST_WAREHOUSE_NO_DISPATCH') {
+    const rs = (row.routeStatus || '').trim().toUpperCase()
+    if (rs === 'TRUCK_DISPATCH_APPOINTED') return '约仓未派送'
+    return '到仓未派送'
+  }
   if (t === 'DELIVERY_TIME') return '运输时效'
   return t || '运输时效'
 }

@@ -20,9 +20,14 @@ server/*.db
 # 产品导入脚本生成的临时文件
 temp/
 
+# 测试文件
+youzi_v2/tests/
+
 # youzi_v2：本地 SQLite、上传与生成文件（勿提交 Git）
 youzi_v2/__pycache__/
 youzi_v2/**/__pycache__/
+youzi_v2/tests/__pycache__/
+youzi_v2/.pytest_cache/
 youzi_v2/data/
 youzi_v2/**/*.db
 youzi_v2/temp/

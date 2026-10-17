@@ -23,11 +23,11 @@
             异常开启 → 处理 → 异常关闭
 ```
 
-粗状态存 `shipments.status_code`（码表 `shipment_status_codes`）；DPS 轨迹明细状态存 `shipments.route_status`（码表 `shipment_route_status_codes`，来自 `commerceWaybillRouteInfo.status`）。粗状态仅在有 `signingTime` 时为 `DELIVERED`，**不**因 601 / `markVos` 判签收；601 只映射为明细状态 `TRACK_SIGNED`。
+粗状态存 `shipments.status_code`（码表 `shipment_status_codes`）；DPS 轨迹明细状态存 `shipments.route_status`（码表 `shipment_route_status_codes`，来自 `commerceWaybillRouteInfo.status`）。粗状态：`signingTime` 或内部轨迹 API `status=3` → `DELIVERED`；**不**因 601 / `markVos` 单独判粗状态签收（601 只映射明细 `TRACK_SIGNED`）。运单列表「状态」列：**粗状态已为已签收时显示「已签收」**，悬停可见明细（如轨迹签收）；仅明细 601 而粗状态仍转运中时显示「轨迹签收」。
 
-异常跟踪的签收判断以明细状态 `TRACK_SIGNED` 为准；阶段卡点起算分别为 202 入库 / 306 到港 / 502 到中转仓节点时间（同步写入对应 `route_*_time` 字段）。不以粗状态 `DELIVERED` / `delivered_time` / `ATA` / `warehouse_entry_time` 作卡点起算。
+异常跟踪**待办退出**（不再出现在默认列表）：明细 `TRACK_SIGNED`，或粗状态 `DELIVERED` / 有 `delivered_time`（与运单列表「已签收」一致）。**阶段卡点起算**仍以明细节点时间为准（202 入库 / 306 到港 / 502 到中转仓，写入 `route_*_time`），不以粗状态或 `ATA` / `warehouse_entry_time` 起算。
 
-DPS 同步后：明细状态 206/402 自动开启清关异常；最新关键节点离开这两类时自动解除（不覆盖掉件等人工异常）。工作台首页有未签收明细状态漏斗，点击可跳转运单列表。详见 [design/shipment-route-status-design.md](./design/shipment-route-status-design.md)。
+DPS 同步后：明细状态 206/402 自动开启清关异常；最新关键节点离开这两类时自动解除（不覆盖掉件等人工异常）。异常跟踪中「到仓未派送」预警在明细为 **509 卡派已约仓** 时展示为 **约仓未派送**。**更新明细状态**（`dps_route_status_query`）时除 `route_status` 与阶段 `route_*_time` 外，若轨迹含 **301/306** 且本地 **ATD/ATA 为空**，按节点最早时间回写 `atd`/`ata`（不覆盖已有值）。工作台首页有未签收明细状态漏斗，点击可跳转运单列表。详见 [design/shipment-route-status-design.md](./design/shipment-route-status-design.md)。
 
 ## 数据录入
 
@@ -62,7 +62,7 @@ curl -X POST "http://127.0.0.1:3001/api/v1/shipments/sync-tracking" \
   -d '{"shipment_ids": ["uuid-here"]}'
 ```
 
-承运商配置在根目录 `config/config.json` 的 `vendors` 数组。
+承运商配置在根目录 `config/config.json` 的 `vendors` 数组。运单 `carrier_code` 匹配主 vendor；若主 vendor 配置了 **`fallbackVendor`** / **`fallbackVendors`**（如森磊 → 森磊2），同步承运商轨迹时主系统查不到轨迹会依次尝试备用系统。
 
 **WY（wy-express）**
 

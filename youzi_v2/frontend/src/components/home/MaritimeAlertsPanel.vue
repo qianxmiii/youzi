@@ -31,7 +31,7 @@ import { markAllShipmentTrackingNotificationsRead } from '@/api/shipmentSubscrip
 import type { ShipmentGroupNotification } from '@/types/shipmentGroup'
 import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 import { maritimeStatusTagType } from '@/types/vesselSchedule'
-import MaritimeAlertStatCards from '@/components/home/MaritimeAlertStatCards.vue'
+import MaritimeAlertStatCards, { type MaritimeStatCard } from '@/components/home/MaritimeAlertStatCards.vue'
 import ShipmentGroupAlertCard from '@/components/shipments/ShipmentGroupAlertCard.vue'
 import { hasDeliveredKeyword, splitDeliveredHighlight } from '@/utils/highlightDelivered'
 import { usePendingTrackingTimeReviewCount } from '@/composables/usePendingTrackingTimeReviewCount'
@@ -84,7 +84,7 @@ onMounted(() => {
   void refreshPendingTrackingTimeReviewCount()
 })
 
-const alertCards = computed(() => {
+const alertCards = computed((): MaritimeStatCard[] => {
   const c = data.value?.counts
   if (!c) return []
   return [
@@ -205,12 +205,6 @@ const quickLinks = computed(() => [
 
 function goQuickLink(path: string) {
   router.push(path)
-}
-
-function groupDisplayLabel(n: ShipmentGroupNotification): string {
-  const name = n.groupName?.trim()
-  if (name) return name
-  return formatGroupNoDisplay(n.groupNo) || '分组'
 }
 
 async function dismissGroupNotification(n: ShipmentGroupNotification) {

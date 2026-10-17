@@ -65,7 +65,7 @@ const pageSize = ref(50)
 
 const scope = ref<QuoteScope>('todo')
 const filterCustomer = ref<string | null>(null)
-const filterIsNewCustomer = ref<boolean | null>(null)
+const filterIsNewCustomer = ref<'new' | 'existing' | null>(null)
 const search = ref('')
 const customerOptions = ref<{ label: string; value: string }[]>([])
 
@@ -192,7 +192,7 @@ async function load() {
     const res = await listQuoteOpportunities({
       scope: scope.value,
       customer: filterCustomer.value || undefined,
-      isNewCustomer: filterIsNewCustomer.value ?? undefined,
+      isNewCustomer: filterIsNewCustomer.value == null ? undefined : filterIsNewCustomer.value === 'new',
       search: search.value.trim() || undefined,
       limit: pageSize.value,
       offset: (page.value - 1) * pageSize.value,
@@ -589,8 +589,8 @@ onMounted(() => {
         <NSelect
           v-model:value="filterIsNewCustomer"
           :options="[
-            { label: '新客户', value: true },
-            { label: '旧客户', value: false },
+            { label: '新客户', value: 'new' },
+            { label: '旧客户', value: 'existing' },
           ]"
           clearable
           placeholder="客户类型"

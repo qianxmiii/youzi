@@ -23,6 +23,8 @@ const ICON_MAP: Record<ShipmentGroupAlertRuleKind, Component> = {
   delivery: CalendarClock,
   payment: CircleDollarSign,
   arrival: Ship,
+  exception: TriangleAlert,
+  sla: CalendarClock,
   default: TriangleAlert,
 }
 

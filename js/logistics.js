@@ -2303,6 +2303,12 @@ function loadQuoteHistory() {
 /**
  * 渲染报价历史记录表格
  */
+function escapeQuoteHistoryText(value) {
+    return String(value ?? '').replace(/[&<>"']/g, ch => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    })[ch]);
+}
+
 function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
     const tbody = document.getElementById('quoteHistoryTableBody');
     if (!tbody) return;
@@ -2325,27 +2331,27 @@ function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
         let feeInfo = [];
         if (record.hasPickupFee && (record.pickupFeeRmb > 0 || record.pickupFeeUsd > 0)) {
             const fees = [];
-            if (record.pickupFeeRmb > 0) fees.push(`¥${record.pickupFeeRmb}`);
-            if (record.pickupFeeUsd > 0) fees.push(`$${record.pickupFeeUsd}`);
+            if (record.pickupFeeRmb > 0) fees.push(`¥${escapeQuoteHistoryText(record.pickupFeeRmb)}`);
+            if (record.pickupFeeUsd > 0) fees.push(`$${escapeQuoteHistoryText(record.pickupFeeUsd)}`);
             feeInfo.push(`<span class="badge bg-info">提货费: ${fees.join(' / ')}</span>`);
         }
         if (record.hasDeliveryFee && (record.deliveryFeeRmb > 0 || record.deliveryFeeUsd > 0)) {
             const fees = [];
-            if (record.deliveryFeeRmb > 0) fees.push(`¥${record.deliveryFeeRmb}`);
-            if (record.deliveryFeeUsd > 0) fees.push(`$${record.deliveryFeeUsd}`);
+            if (record.deliveryFeeRmb > 0) fees.push(`¥${escapeQuoteHistoryText(record.deliveryFeeRmb)}`);
+            if (record.deliveryFeeUsd > 0) fees.push(`$${escapeQuoteHistoryText(record.deliveryFeeUsd)}`);
             feeInfo.push(`<span class="badge bg-primary">派送费: ${fees.join(' / ')}</span>`);
         }
         if (record.isOverlength && record.overlengthFee > 0) {
-            feeInfo.push(`<span class="badge bg-warning">超长: ¥${record.overlengthFee}/箱</span>`);
+            feeInfo.push(`<span class="badge bg-warning">超长: ¥${escapeQuoteHistoryText(record.overlengthFee)}/箱</span>`);
         }
         if (record.isOversize && record.oversizeFee > 0) {
-            feeInfo.push(`<span class="badge bg-warning">超尺寸: ¥${record.oversizeFee}/箱</span>`);
+            feeInfo.push(`<span class="badge bg-warning">超尺寸: ¥${escapeQuoteHistoryText(record.oversizeFee)}/箱</span>`);
         }
         if (record.isOverweight && record.overweightFee > 0) {
-            feeInfo.push(`<span class="badge bg-danger">超重: ¥${record.overweightFee}/箱</span>`);
+            feeInfo.push(`<span class="badge bg-danger">超重: ¥${escapeQuoteHistoryText(record.overweightFee)}/箱</span>`);
         }
         if (record.isMOQ && record.moqValue > 0) {
-            feeInfo.push(`<span class="badge bg-secondary">MOQ: ${record.moqValue}kg</span>`);
+            feeInfo.push(`<span class="badge bg-secondary">MOQ: ${escapeQuoteHistoryText(record.moqValue)}kg</span>`);
         }
         
         // 构建运费、偏远、带电等状态信息
@@ -2370,27 +2376,29 @@ function renderQuoteHistoryTable(history, page = 1, pageSize = 10) {
         const statusInfoHtml = statusInfo.join(' ');
         
         row.innerHTML = `
-            <td>${normalizeQuoteHistoryTimestamp(record.timestamp)}</td>
-            <td>${record.address}</td>
-            <td>${record.country}</td>
-            <td>${record.quantity}</td>
-            <td>${record.weight}</td>
-            <td>${record.volume}</td>
-            <td>${record.priceUsd}</td>
+            <td>${escapeQuoteHistoryText(normalizeQuoteHistoryTimestamp(record.timestamp))}</td>
+            <td>${escapeQuoteHistoryText(record.address)}</td>
+            <td>${escapeQuoteHistoryText(record.country)}</td>
+            <td>${escapeQuoteHistoryText(record.quantity)}</td>
+            <td>${escapeQuoteHistoryText(record.weight)}</td>
+            <td>${escapeQuoteHistoryText(record.volume)}</td>
+            <td>${escapeQuoteHistoryText(record.priceUsd)}</td>
             <td>
-                <div style="font-weight: bold; font-size: 1.1rem; color: #dc3545; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">$${record.totalPriceUsd}</div>
+                <div style="font-weight: bold; font-size: 1.1rem; color: #dc3545; text-shadow: 1px 1px 2px rgba(0,0,0,0.1);">$${escapeQuoteHistoryText(record.totalPriceUsd)}</div>
                 <div style="margin-top: 2px;">${statusInfoHtml}</div>
                 <div style="margin-top: 2px;">${feeInfoHtml}</div>
             </td>
             <td>
-                <button class="btn btn-sm btn-outline-primary" onclick="loadQuoteToForm('${record.id}')" title="加载到表单">
+                <button class="btn btn-sm btn-outline-primary" data-quote-action="load" title="加载到表单">
                     <i class="bi bi-arrow-clockwise"></i>
                 </button>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteQuoteHistory('${record.id}')" title="删除">
+                <button class="btn btn-sm btn-outline-danger" data-quote-action="delete" title="删除">
                     <i class="bi bi-trash"></i>
                 </button>
             </td>
         `;
+        row.querySelector('[data-quote-action="load"]').addEventListener('click', () => loadQuoteToForm(record.id));
+        row.querySelector('[data-quote-action="delete"]').addEventListener('click', () => deleteQuoteHistory(record.id));
         tbody.appendChild(row);
     });
     

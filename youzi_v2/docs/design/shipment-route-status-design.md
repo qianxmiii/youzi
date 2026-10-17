@@ -17,13 +17,14 @@ DPS `params.commerceWaybillRouteInfo.status` 提供比「转运中 / 已签收�
 
 **不使用** `markVos`、`nodeDesc` 含 signed、或 `status=601` 判定粗状态签收。601 仅映射明细状态 `TRACK_SIGNED`。
 
-异常跟踪（运输时效）的「已签收」以 `route_status = TRACK_SIGNED` 为准，不以粗状态 `DELIVERED` / `delivered_time` 为准。阶段卡点起算时间由明细状态同步回写：
+异常跟踪（运输时效）**待办退出**：`route_status = TRACK_SIGNED`，或粗状态 `DELIVERED` / 有 `delivered_time`。阶段卡点**起算**仍以明细节点时间为准（不由粗状态起算）。明细状态同步回写：
 
-| 预警 | DPS / 明细状态 | 本地时间字段 |
-|------|----------------|--------------|
+| 预警 / 用途 | DPS / 明细状态 | 本地时间字段 |
+|-------------|----------------|--------------|
 | 入库未开船 | 202 `WAREHOUSE_IN` | `route_warehouse_in_time` |
 | 到港未送仓 | 306 `ARRIVED_POD` | `route_arrived_pod_time` |
 | 到仓未派送 | 502 `DEST_TRANSIT_WAREHOUSE` | `route_dest_transit_warehouse_time` |
+| 开船 / 到港（空则回写） | 301 `DEPARTED_POL` / 306 `ARRIVED_POD` | `atd` / `ata`（仅当库内对应字段为空时，取节点最早 `nodeTime`） |
 
 ## 明细状态映射
 
@@ -31,6 +32,7 @@ DPS `params.commerceWaybillRouteInfo.status` 提供比「转运中 / 已签收�
 
 | DPS status | code | 说明 |
 |------------|------|------|
+| 509 | `TRUCK_DISPATCH_APPOINTED` | 卡派已约仓 |
 | 510 | `LAST_MILE_HANDOVER` | 快递派-已交仓（≠ 签收） |
 | 601 | `TRACK_SIGNED` | 轨迹签收（≠ 粗状态 DELIVERED） |
 
@@ -57,6 +59,10 @@ DPS `status=100`（信息传递）**不是**业务关键节点：
 - 仅清关类异常会被后续关键节点自动解除
 - 实现：`services/shipment_route_status_exception.py`，在 DPS 运单同步 upsert 后调用
 
+## 时效预警展示（到仓未派送细分）
+
+预警类型仍为 `DEST_WAREHOUSE_NO_DISPATCH`（到中转仓后超时未交仓/签收）。若运单当前明细为 **509** `TRUCK_DISPATCH_APPOINTED`，列表/异常跟踪展示 **约仓未派送**（`alert_type_display_label`）。
+
 ## 轻量同步（推荐日常刷新明细状态）
 
 - 接口完整 URL **仅**写在仓库根 `config/config.json` → `dps_route_status_query.url`（勿提交、勿写进业务代码/文档）
@@ -64,7 +70,7 @@ DPS `status=100`（信息传递）**不是**业务关键节点：
 - 后端：`POST /api/v1/shipments/sync-route-status-from-dps`（勾选或全量）；批处理：`POST /api/v1/scheduled-tasks/run-dps-route-status-sync`
 - UI：运单管理「更新选中明细状态 / 更新全部明细状态」、列表状态列点击、轨迹抽屉徽章点击；计划任务「更新全部明细状态」
 - 从节点列表按 `nodeTime` 倒序取首个**关键** `status` 写入 `route_status`，并联动清关异常
-- Authorization 可写在同块，或复用 `shipment_queryByOrder`
+- Authorization 使用 config 根级 **`dps_authorization`**（兼容块内 `Authorization`）
 - 无 `waybillId` 的单会跳过，需先「更新选中运单」补 ID
 
 ## 同步配置

@@ -342,7 +342,7 @@ export async function exportShipmentsExcel(params: ListShipmentsParams): Promise
     limit: Math.min(params.limit ?? SHIPMENT_EXPORT_MAX, SHIPMENT_EXPORT_MAX),
     offset: 0,
   })
-  return api<Blob>('/api/v1/shipments/export', {
+  return api<Blob, 'blob'>('/api/v1/shipments/export', {
     query: q,
     responseType: 'blob',
   })
@@ -403,6 +403,102 @@ export interface ShipmentDpsRouteStatusSyncResult {
 }
 
 /** 按 waybillId 拉 DPS 明细状态接口（轻量）；不传则更新全部有 waybillId 的运单 */
+function parseDownloadFilename(disposition: string | null): string {
+  if (!disposition) return '货箱数据.zip'
+  const star = disposition.match(/filename\*=UTF-8''([^;]+)/i)
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1])
+    } catch {
+      return star[1]
+    }
+  }
+  const plain = disposition.match(/filename="?([^";]+)"?/i)
+  return plain?.[1] || '货箱数据.zip'
+}
+
+async function readBlobApiError(e: unknown, fallback = '下载失败'): Promise<never> {
+  const err = e as {
+    data?: Blob
+    response?: { _data?: Blob }
+    message?: string
+  }
+  const blob =
+    err?.data instanceof Blob
+      ? err.data
+      : err?.response?._data instanceof Blob
+        ? err.response._data
+        : null
+  if (blob) {
+    const text = await blob.text().catch(() => '')
+    try {
+      const parsed = JSON.parse(text) as { detail?: unknown }
+      if (typeof parsed.detail === 'string' && parsed.detail.trim()) {
+        throw new Error(parsed.detail)
+      }
+    } catch (inner) {
+      if (!(inner instanceof SyntaxError)) throw inner
+    }
+    if (text.trim()) {
+      throw new Error(text.slice(0, 500))
+    }
+  }
+  throw new Error(err?.message?.trim() || fallback)
+}
+
+async function downloadShipmentsDpsBlob(
+  path: string,
+  shipmentIds: string[],
+  fallbackError: string,
+): Promise<{ blob: Blob; filename: string }> {
+  try {
+    const response = await api.raw<Blob, 'blob'>(path, {
+      method: 'POST',
+      body: { ids: shipmentIds },
+      responseType: 'blob',
+      timeout: 600_000,
+    })
+    const blob = response._data as Blob
+    const filename = parseDownloadFilename(response.headers.get('content-disposition'))
+    return { blob, filename }
+  } catch (e) {
+    return readBlobApiError(e, fallbackError)
+  }
+}
+
+/** DPS 货箱（dps_data_download）；单票 {单号}_data.ext，多票 zip */
+export async function downloadShipmentsDpsCargoData(
+  shipmentIds: string[],
+): Promise<{ blob: Blob; filename: string }> {
+  return downloadShipmentsDpsBlob(
+    '/api/v1/shipments/download-dps-cargo-data',
+    shipmentIds,
+    '下载货箱数据失败',
+  )
+}
+
+/** DPS 唛头（单票 dps_mark_download，多票 dps_batchmark_download） */
+export async function downloadShipmentsDpsMarkData(
+  shipmentIds: string[],
+): Promise<{ blob: Blob; filename: string }> {
+  return downloadShipmentsDpsBlob(
+    '/api/v1/shipments/download-dps-mark-data',
+    shipmentIds,
+    '下载唛头失败',
+  )
+}
+
+/** DPS 箱单发票（dps_packinglist_download）；单票重命名为 {运单号}_箱单发票 */
+export async function downloadShipmentsDpsPackinglist(
+  shipmentIds: string[],
+): Promise<{ blob: Blob; filename: string }> {
+  return downloadShipmentsDpsBlob(
+    '/api/v1/shipments/download-dps-packinglist',
+    shipmentIds,
+    '下载箱单发票失败',
+  )
+}
+
 export async function syncShipmentsRouteStatusFromDps(
   shipmentNos?: string[],
 ): Promise<ShipmentDpsRouteStatusSyncResult> {

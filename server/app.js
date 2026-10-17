@@ -78,8 +78,8 @@ const ROOT = path.join(__dirname, '..');
 app.use(cors());
 app.use(express.json({ limit: '1mb' }));
 
-// 静态资源：项目根目录（index.html、js/、css/ 等）
-app.use(express.static(ROOT));
+// 仅开放页面所需资源；配置、数据库、日志及私有数据不属于静态资源。
+require('./public-assets')(app, ROOT);
 
 // ---------- 报价历史 API ----------
 app.get('/api/quote-history', (req, res) => {
@@ -179,10 +179,11 @@ app.get('/api/*', (req, res) => {
   res.status(404).json({ error: 'Not Found' });
 });
 
-// 其余 GET 回退到 index（单页应用；静态文件已在 express.static 中处理）
-app.get('*', (req, res) => {
+app.get(['/', '/index.html'], (req, res) => {
   res.sendFile(path.join(ROOT, 'index.html'));
 });
+
+app.use((req, res) => res.status(404).send('Not Found'));
 
 app.listen(PORT, () => {
   console.log(`youzi server: http://localhost:${PORT}`);

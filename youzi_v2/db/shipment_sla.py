@@ -16,6 +16,9 @@ ALERT_WAREHOUSE_NO_DEPARTURE = "WAREHOUSE_NO_DEPARTURE"
 ALERT_ARRIVAL_NO_DELIVERY = "ARRIVAL_NO_DELIVERY"
 ALERT_DEST_WAREHOUSE_NO_DISPATCH = "DEST_WAREHOUSE_NO_DISPATCH"
 
+LABEL_DEST_WAREHOUSE_NO_DISPATCH = "到仓未派送"
+LABEL_TRUCK_APPOINTMENT_NO_DISPATCH = "约仓未派送"
+
 WAREHOUSE_NO_DEPARTURE_DAYS = 7
 ARRIVAL_NO_DELIVERY_DAYS = 5
 DEST_WAREHOUSE_NO_DISPATCH_DAYS = 5
@@ -32,7 +35,7 @@ TERMINAL_STATUSES = frozenset({STATUS_CONVERTED, STATUS_IGNORED, STATUS_RESOLVED
 DEFAULT_WARNING_DAYS = 3
 DEFAULT_SEVERE_OVERDUE_DAYS = 7
 
-# 异常跟踪「已签收」以明细状态为准（≠ 粗状态 DELIVERED / delivered_time）
+# 异常跟踪完结：明细 TRACK_SIGNED，或粗状态 DELIVERED / 有 delivered_time（与运单列表「已签收」对齐）
 SLA_DELIVERED_ROUTE_STATUS = "TRACK_SIGNED"
 # 到港未送仓兑现：已到中转仓 / 已交仓 / 轨迹签收
 SLA_ARRIVAL_FULFILLED_ROUTE_STATUSES = frozenset(
@@ -50,6 +53,27 @@ SLA_FIELD_DEST_TRANSIT_TIME = "route_dest_transit_warehouse_time"
 
 # 不参与异常跟踪扫描/待办/列表的渠道（与 shipments.channel_code 一致）
 SLA_EXCLUDED_CHANNEL_CODES = frozenset({"FC-整柜"})
+
+
+def alert_type_display_label(
+    alert_type: str,
+    *,
+    route_status: str | None = None,
+) -> str:
+    """时效预警展示名；到仓未派送 + 明细 509 显示为约仓未派送。"""
+    key = (alert_type or "").strip()
+    if key == ALERT_DEST_WAREHOUSE_NO_DISPATCH:
+        rs = (route_status or "").strip().upper()
+        if rs == "TRUCK_DISPATCH_APPOINTED":
+            return LABEL_TRUCK_APPOINTMENT_NO_DISPATCH
+        return LABEL_DEST_WAREHOUSE_NO_DISPATCH
+    static = {
+        ALERT_DELIVERY_TIME: "运输时效",
+        ALERT_WAREHOUSE_NO_DEPARTURE: "入库未开船",
+        ALERT_ARRIVAL_NO_DELIVERY: "到港未送仓",
+        ALERT_DEST_WAREHOUSE_NO_DISPATCH: LABEL_DEST_WAREHOUSE_NO_DISPATCH,
+    }
+    return static.get(key, key)
 
 
 def is_sla_excluded_channel(channel_code: str | None) -> bool:
@@ -104,9 +128,17 @@ def _row_time(row: dict[str, Any], *keys: str) -> str:
     return ""
 
 
+def _coarse_status_of(row: dict[str, Any]) -> str:
+    return (row.get("status_code") or row.get("statusCode") or "").strip().upper()
+
+
 def is_delivered(row: dict[str, Any]) -> bool:
-    """异常跟踪签收判断：明细状态 TRACK_SIGNED。"""
-    return _route_status_of(row) == SLA_DELIVERED_ROUTE_STATUS
+    """异常跟踪待办退出：明细 TRACK_SIGNED，或粗状态/签收时间已签收。"""
+    if _route_status_of(row) == SLA_DELIVERED_ROUTE_STATUS:
+        return True
+    if _coarse_status_of(row) == "DELIVERED":
+        return True
+    return bool(_row_time(row, "delivered_time", "deliveredTime"))
 
 
 def is_arrival_fulfilled(row: dict[str, Any]) -> bool:
@@ -127,12 +159,25 @@ def is_dest_dispatch_fulfilled(row: dict[str, Any]) -> bool:
     return _route_status_of(row) in SLA_DEST_DISPATCH_FULFILLED_ROUTE_STATUSES
 
 
+def _sql_table_prefix_from_route_column(route_status_column: str) -> str:
+    if "." in route_status_column:
+        return route_status_column.rsplit(".", 1)[0] + "."
+    return ""
+
+
 def sql_sla_delivered(column: str = "route_status") -> str:
-    return f"UPPER(TRIM(COALESCE({column}, ''))) = '{SLA_DELIVERED_ROUTE_STATUS}'"
+    prefix = _sql_table_prefix_from_route_column(column)
+    status_code_col = f"{prefix}status_code" if prefix else "status_code"
+    delivered_time_col = f"{prefix}delivered_time" if prefix else "delivered_time"
+    return (
+        f"(UPPER(TRIM(COALESCE({column}, ''))) = '{SLA_DELIVERED_ROUTE_STATUS}' "
+        f"OR UPPER(TRIM(COALESCE({status_code_col}, ''))) = 'DELIVERED' "
+        f"OR ({delivered_time_col} IS NOT NULL AND TRIM({delivered_time_col}) != ''))"
+    )
 
 
 def sql_sla_not_delivered(column: str = "route_status") -> str:
-    return f"UPPER(TRIM(COALESCE({column}, ''))) != '{SLA_DELIVERED_ROUTE_STATUS}'"
+    return f"NOT ({sql_sla_delivered(column)})"
 
 
 def match_channel_rule(

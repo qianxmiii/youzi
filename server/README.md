@@ -12,6 +12,11 @@ npm start
 
 浏览器访问：**http://localhost:3000**（页面和接口同源，无需 CORS 跨域）。
 
+静态服务仅开放首页、`js/`、`css/`、`img/`、`font/` 以及页面引用的公开数据脚本和 `config/style.js`。
+本地配置、数据库、日志、`data/private_data.js` 不通过静态服务提供；地址数据由现有后端接口加载。
+
+安全回归测试：在 `server/` 执行 `npm test`，覆盖静态文件访问边界与报价历史 HTML 注入。
+
 ## 接口说明
 
 - **报价历史**

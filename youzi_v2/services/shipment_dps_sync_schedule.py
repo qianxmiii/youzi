@@ -8,8 +8,15 @@ from ..db.connection import Database
 from ..db.datetime_util import DATETIME_FMT
 from .shipment_dps_sync_settings import (
     DPS_SYNC_INTERVAL_HOURS,
+    DpsSyncVariant,
     get_shipment_dps_sync_settings,
 )
+
+_VARIANT_LABEL: dict[DpsSyncVariant, str] = {
+    "default": "DPS 运单同步",
+    "pickup": "DPS 提货中运单同步",
+    "warehoused": "DPS 已入仓运单同步",
+}
 
 
 def _parse_finished_at(raw: str | None) -> datetime | None:
@@ -33,12 +40,16 @@ def _format_duration(delta: timedelta) -> str:
     return f"{s}秒"
 
 
-def should_run_scheduled_dps_sync(database: Database) -> tuple[bool, str | None]:
+def should_run_scheduled_dps_sync(
+    database: Database,
+    variant: DpsSyncVariant = "default",
+) -> tuple[bool, str | None]:
     settings = get_shipment_dps_sync_settings(database)
-    if not settings.enabled:
-        return False, "DPS 运单同步已关闭"
+    label = _VARIANT_LABEL[variant]
+    if not settings.enabled_for_variant(variant):
+        return False, f"{label}已关闭"
 
-    finished = _parse_finished_at(settings.last_finished)
+    finished = _parse_finished_at(settings.last_finished_for_variant(variant))
     if finished is None:
         return True, None
 
@@ -48,7 +59,7 @@ def should_run_scheduled_dps_sync(database: Database) -> tuple[bool, str | None]
         remain = need - elapsed
         return (
             False,
-            f"距上次 DPS 运单同步 {_format_duration(elapsed)}，"
+            f"距上次{label} {_format_duration(elapsed)}，"
             f"未满 {DPS_SYNC_INTERVAL_HOURS:g} 小时（约 {_format_duration(remain)} 后可执行）",
         )
     return True, None

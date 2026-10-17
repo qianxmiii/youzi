@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { NButton, NDatePicker, NForm, NFormItem, NInput, NModal, NSelect } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
+import { shipmentExceptionPhaseLabel } from '@/constants/shipmentExceptionPhase'
 import type { ShipmentExceptionType } from '@/types/shipment'
 import { formatTimestampForApi, nowTimestamp } from '@/utils/formatDateTime'
 
@@ -20,7 +21,10 @@ const openedAt = ref<number | null>(null)
 const note = ref('')
 
 const options = computed(() =>
-  props.exceptionTypes.map((t) => ({ label: t.nameZh, value: t.code })),
+  props.exceptionTypes.map((t) => ({
+    label: `${shipmentExceptionPhaseLabel(t.phaseCategory)} · ${t.nameZh}`,
+    value: t.code,
+  })),
 )
 
 watch(

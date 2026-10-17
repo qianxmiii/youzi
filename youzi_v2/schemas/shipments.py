@@ -39,6 +39,10 @@ class ShipmentRecordIn(BaseModel):
     ctns: int | None = Field(
         default=None, validation_alias=AliasChoices("ctns", "pieceCount", "piece_count")
     )
+    charged_weight: float | None = Field(
+        default=None,
+        validation_alias=AliasChoices("chargedWeight", "charged_weight"),
+    )
     zipcode: str | None = None
     product_name: str | None = Field(
         default=None, validation_alias=AliasChoices("productName", "product_name")
@@ -160,6 +164,10 @@ class ShipmentUpdateIn(BaseModel):
     ctns: int | None = Field(
         default=None, validation_alias=AliasChoices("ctns", "pieceCount", "piece_count")
     )
+    charged_weight: float | None = Field(
+        default=None,
+        validation_alias=AliasChoices("chargedWeight", "charged_weight"),
+    )
     zipcode: str | None = None
     product_name: str | None = Field(
         default=None, validation_alias=AliasChoices("productName", "product_name")
@@ -270,6 +278,64 @@ class ShipmentBatchIdsIn(BaseModel):
         max_length=200,
         validation_alias=AliasChoices("ids", "shipmentIds"),
     )
+
+
+class DpsExportJobCreateIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    export_type: str = Field(
+        ...,
+        validation_alias=AliasChoices("exportType", "export_type"),
+        description="cargo|mark|markSplit|packinglist|warehouseform|warehouseEntry|warehouseEntryPdf",
+    )
+    ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        validation_alias=AliasChoices("ids", "shipmentIds"),
+    )
+    split_spec: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("splitSpec", "split_spec"),
+    )
+
+
+class ShipmentMarkSplitDownloadIn(BaseModel):
+    """单票唛头拆分：segments 为各工厂件数，如 [1, 2, 2]。"""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=1,
+        validation_alias=AliasChoices("ids", "shipmentIds"),
+    )
+    segments: list[int] | None = Field(default=None, min_length=1, max_length=100)
+    split_spec: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("splitSpec", "split_spec"),
+        description="空格/逗号分隔件数，如 1 2 2",
+    )
+
+    @field_validator("segments")
+    @classmethod
+    def _segments_positive(cls, v: list[int] | None) -> list[int] | None:
+        if v is None:
+            return None
+        for n in v:
+            if n <= 0:
+                raise ValueError("拆分件数须为正整数")
+        return v
+
+    def resolved_segments(self) -> list[int]:
+        from ..services.mark_pdf_split import parse_mark_split_segments
+
+        if self.segments:
+            return parse_mark_split_segments(self.segments)
+        if self.split_spec and self.split_spec.strip():
+            return parse_mark_split_segments(self.split_spec)
+        raise ValueError("请提供 segments 或 splitSpec（如 1 2 2）")
 
 
 class ShipmentBatchUpdateIn(BaseModel):

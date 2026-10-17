@@ -121,7 +121,7 @@ function groupPendingCount(groupLabel: string) {
         <div class="truncate text-sm font-semibold tracking-tight text-[var(--color-fg-emphasis)]">
           Youzi
         </div>
-        <div class="text-[11px] text-[var(--color-muted)]">v2 · 迁移中</div>
+        <div class="text-[11px] text-[var(--color-muted)]">v2</div>
       </div>
     </div>
 

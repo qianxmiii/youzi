@@ -9,6 +9,7 @@ import sqlite3
 from typing import Iterable
 
 from .datetime_util import now_str
+from .shipment_exception_phase import DEFAULT_EXCEPTION_PHASE, PHASE_POST_PORT
 from .shipment_route_status import ROUTE_STATUS_SEEDS
 
 # (table_name, optional extra columns in CREATE)
@@ -25,7 +26,10 @@ _CODE_TABLE_DEFS: list[tuple[str, str]] = [
         "port_type TEXT NOT NULL DEFAULT 'both',",
     ),
     ("shipment_status_codes", ""),
-    ("shipment_exception_codes", ""),
+    (
+        "shipment_exception_codes",
+        "phase_category TEXT NOT NULL DEFAULT 'post_port',",
+    ),
     (
         "shipment_route_status_codes",
         "dps_status TEXT NOT NULL DEFAULT '',",
@@ -33,8 +37,14 @@ _CODE_TABLE_DEFS: list[tuple[str, str]] = [
 ]
 
 _STATUS_SEEDS: list[tuple[str, str, str, int]] = [
-    ("IN_TRANSIT", "转运中", "In transit", 10),
-    ("DELIVERED", "已签收", "Delivered", 20),
+    ("0", "已下单", "Ordered", 0),
+    ("01", "提货中", "Picking up", 1),
+    ("1", "已入仓", "In warehouse", 2),
+    ("2", "转运中", "In transit", 10),
+    ("3", "已签收", "Delivered", 20),
+    ("4", "已取消", "Cancelled", 90),
+    ("IN_TRANSIT", "转运中(旧)", "In transit (legacy)", 11),
+    ("DELIVERED", "已签收(旧)", "Delivered (legacy)", 21),
     ("INSPECTION", "查验", "Inspection", 30),
     ("UNKNOWN", "未知", "Unknown", 99),
 ]
@@ -94,10 +104,12 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
     _migrate_channel_codes(conn)
     _migrate_carrier_codes(conn)
     _migrate_route_status_codes(conn)
+    _migrate_exception_codes(conn)
 
 
 def seed_if_empty(conn: sqlite3.Connection) -> None:
     _seed_status_codes(conn)
+    _sync_status_codes(conn)
     _seed_exception_codes(conn)
     _sync_exception_codes(conn)
     _sync_route_status_codes(conn)
@@ -170,6 +182,52 @@ def _seed_status_codes(conn: sqlite3.Connection) -> None:
     )
 
 
+def _sync_status_codes(conn: sqlite3.Connection) -> None:
+    """补齐 DPS 运单状态码；0/01/1/2/3/4 同步中文名（如 01→提货中）。"""
+    table = "shipment_status_codes"
+    now = now_str()
+    dps_codes = frozenset({"0", "01", "1", "2", "3", "4"})
+    for code, zh, en, order in _STATUS_SEEDS:
+        conn.execute(
+            f"""
+            INSERT OR IGNORE INTO {table} (
+                code, name_zh, name_en, sort_order, is_active, created_time, updated_time
+            ) VALUES (?, ?, ?, ?, 1, ?, ?)
+            """,
+            (code, zh, en, order, now, now),
+        )
+        if code in dps_codes:
+            conn.execute(
+                f"""
+                UPDATE {table}
+                SET name_zh = ?, name_en = ?, sort_order = ?, updated_time = ?
+                WHERE code = ?
+                """,
+                (zh, en, order, now, code),
+            )
+
+
+def _migrate_exception_codes(conn: sqlite3.Connection) -> None:
+    cols = {
+        row[1] for row in conn.execute("PRAGMA table_info(shipment_exception_codes)").fetchall()
+    }
+    if "phase_category" not in cols:
+        conn.execute(
+            """
+            ALTER TABLE shipment_exception_codes
+            ADD COLUMN phase_category TEXT NOT NULL DEFAULT 'post_port'
+            """
+        )
+    conn.execute(
+        """
+        UPDATE shipment_exception_codes
+        SET phase_category = ?
+        WHERE phase_category IS NULL OR TRIM(phase_category) = ''
+        """,
+        (PHASE_POST_PORT,),
+    )
+
+
 def _sync_exception_codes(conn: sqlite3.Connection) -> None:
     """补齐新增异常类型（不覆盖已有记录）。"""
     table = "shipment_exception_codes"
@@ -178,10 +236,11 @@ def _sync_exception_codes(conn: sqlite3.Connection) -> None:
         conn.execute(
             f"""
             INSERT OR IGNORE INTO {table} (
-                code, name_zh, name_en, sort_order, is_active, created_time, updated_time
-            ) VALUES (?, ?, ?, ?, 1, ?, ?)
+                code, name_zh, name_en, phase_category, sort_order, is_active,
+                created_time, updated_time
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)
             """,
-            (code, zh, en, order, now, now),
+            (code, zh, en, DEFAULT_EXCEPTION_PHASE, order, now, now),
         )
 
 
@@ -194,10 +253,14 @@ def _seed_exception_codes(conn: sqlite3.Connection) -> None:
     conn.executemany(
         f"""
         INSERT INTO {table} (
-            code, name_zh, name_en, sort_order, is_active, created_time, updated_time
-        ) VALUES (?, ?, ?, ?, 1, ?, ?)
+            code, name_zh, name_en, phase_category, sort_order, is_active,
+            created_time, updated_time
+        ) VALUES (?, ?, ?, ?, ?, 1, ?, ?)
         """,
-        [(code, zh, en, order, now, now) for code, zh, en, order in _EXCEPTION_SEEDS],
+        [
+            (code, zh, en, DEFAULT_EXCEPTION_PHASE, order, now, now)
+            for code, zh, en, order in _EXCEPTION_SEEDS
+        ],
     )
 
 

@@ -341,7 +341,7 @@ function handleSubmit() {
         <NFormItem label="邮编">
           <NInput v-model:value="form.zipcode" />
         </NFormItem>
-        <NFormItem label="交货仓库">
+        <NFormItem label="收货仓">
           <NInput v-model:value="form.originWarehouseCode" />
         </NFormItem>
         <NFormItem label="供应商">

@@ -2,13 +2,10 @@
 
 from __future__ import annotations
 
-# 内部轨迹：导入默认为 UNKNOWN，同步后由 API 回写状态；已签收不再拉取
-INTERNAL_TRACKING_SYNC_STATUS_CODES: frozenset[str] = frozenset(
-    {"IN_TRANSIT", "UNKNOWN", "INSPECTION"}
+from youzi_v2.db.shipment_order_status import (
+    CARRIER_TRACKING_SYNC_STATUSES,
+    INTERNAL_TRACKING_SYNC_STATUSES,
 )
-
-# 承运商轨迹：仅转运中仍在途
-CARRIER_TRACKING_SYNC_STATUS_CODES: frozenset[str] = frozenset({"IN_TRANSIT"})
 
 
 def _status_in_sql(codes: frozenset[str], alias: str = "") -> str:
@@ -22,10 +19,11 @@ def internal_tracking_sync_eligible_sql(
     *,
     include_delivered: bool = False,
 ) -> str:
-    codes = INTERNAL_TRACKING_SYNC_STATUS_CODES
+    codes = set(INTERNAL_TRACKING_SYNC_STATUSES)
     if include_delivered:
-        codes = codes | frozenset({"DELIVERED"})
-    return _status_in_sql(codes, alias)
+        codes.add("3")
+        codes.add("DELIVERED")
+    return _status_in_sql(frozenset(codes), alias)
 
 
 def carrier_tracking_sync_eligible_sql(
@@ -33,7 +31,8 @@ def carrier_tracking_sync_eligible_sql(
     *,
     include_delivered: bool = False,
 ) -> str:
-    codes = CARRIER_TRACKING_SYNC_STATUS_CODES
+    codes = set(CARRIER_TRACKING_SYNC_STATUSES)
     if include_delivered:
-        codes = codes | frozenset({"DELIVERED"})
-    return _status_in_sql(codes, alias)
+        codes.add("3")
+        codes.add("DELIVERED")
+    return _status_in_sql(frozenset(codes), alias)

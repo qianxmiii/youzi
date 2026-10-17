@@ -13,16 +13,32 @@ from .shipment_dps_mapper import dps_row_to_shipment
 from .shipment_dps_sync_fields import filter_dps_payload, get_dps_sync_fields_config
 from .shipment_dps_sync_schedule import should_run_scheduled_dps_sync
 from .shipment_dps_sync_settings import (
+    DpsSyncVariant,
     get_shipment_dps_sync_settings,
     record_shipment_dps_sync_finished,
 )
 from .shipment_query_config import (
+    QUERY_BY_PERSON_KEY,
+    QUERY_BY_PERSON_PICKUP_KEY,
+    QUERY_BY_PERSON_WAREHOUSED_KEY,
     normalize_shipment_nos,
     query_shipments_by_order,
     query_shipments_by_person,
     resolve_transit_time_range,
     shipment_odd,
 )
+
+_DPS_SYNC_LOG_LABEL: dict[DpsSyncVariant, str] = {
+    "default": "DPS运单同步",
+    "pickup": "DPS提货中运单同步",
+    "warehoused": "DPS已入仓运单同步",
+}
+
+_DPS_SYNC_PERSON_KEY: dict[DpsSyncVariant, str] = {
+    "default": QUERY_BY_PERSON_KEY,
+    "pickup": QUERY_BY_PERSON_PICKUP_KEY,
+    "warehoused": QUERY_BY_PERSON_WAREHOUSED_KEY,
+}
 from .shipment_route_status_exception import apply_customs_exception_from_route_status
 from .shipment_sla_scan import maybe_resolve_alerts_after_delivery
 
@@ -275,17 +291,20 @@ def run_shipment_dps_sync_batch(
     force: bool = False,
     trigger: str = "manual",
     log: LogFn | None = None,
+    variant: DpsSyncVariant = "default",
 ) -> dict[str, Any]:
     database = shipments_repo._database
+    log_tag = _DPS_SYNC_LOG_LABEL[variant]
+    person_key = _DPS_SYNC_PERSON_KEY[variant]
 
     def out(msg: str) -> None:
         if log:
             log(msg)
 
     if not force:
-        ok, reason = should_run_scheduled_dps_sync(database)
+        ok, reason = should_run_scheduled_dps_sync(database, variant=variant)
         if not ok:
-            out(f"[DPS运单同步] 跳过：{reason}")
+            out(f"[{log_tag}] 跳过：{reason}")
             return {
                 "skipped": True,
                 "reason": reason,
@@ -296,7 +315,7 @@ def run_shipment_dps_sync_batch(
             }
 
     if not _lock.acquire(blocking=False):
-        out("[DPS运单同步] 跳过：上一轮仍在进行")
+        out(f"[{log_tag}] 跳过：上一轮 DPS 运单同步仍在进行")
         return {
             "skipped": True,
             "reason": "DPS 运单同步进行中",
@@ -313,14 +332,15 @@ def run_shipment_dps_sync_batch(
     )
 
     try:
-        out(f"[DPS运单同步] 开始 {start} ~ {end}（触发：{trigger}）")
+        out(f"[{log_tag}] 开始 {start} ~ {end}（触发：{trigger}）")
         parsed, err = query_shipments_by_person(
             config_path,
             transit_time_start=start,
             transit_time_end=end,
+            block_key=person_key,
         )
         if err:
-            out(f"[DPS运单同步] 失败：{err}")
+            out(f"[{log_tag}] 失败：{err}")
             return {
                 "skipped": False,
                 "error": err,
@@ -336,12 +356,12 @@ def run_shipment_dps_sync_batch(
         total = int(parsed.get("total") or len(rows))
         stats = _upsert_dps_rows(shipments_repo, rows, log=log)
         out(
-            f"[DPS运单同步] 完成 remote={total} 写入={stats['created'] + stats['updated']} "
+            f"[{log_tag}] 完成 remote={total} 写入={stats['created'] + stats['updated']} "
             f"新增={stats['created']} 更新={stats['updated']} "
             f"无变化={stats['unchanged']} 失败={stats['failed']}"
         )
         if trigger == "scheduled" or force:
-            record_shipment_dps_sync_finished(database)
+            record_shipment_dps_sync_finished(database, variant=variant)
         return {
             "skipped": False,
             "transitTimeStart": start,
@@ -353,3 +373,23 @@ def run_shipment_dps_sync_batch(
         }
     finally:
         _lock.release()
+
+
+def run_shipment_dps_sync_batch_pickup(
+    shipments_repo: ShipmentsRepository,
+    config_path: Path,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    return run_shipment_dps_sync_batch(
+        shipments_repo, config_path, variant="pickup", **kwargs
+    )
+
+
+def run_shipment_dps_sync_batch_warehoused(
+    shipments_repo: ShipmentsRepository,
+    config_path: Path,
+    **kwargs: Any,
+) -> dict[str, Any]:
+    return run_shipment_dps_sync_batch(
+        shipments_repo, config_path, variant="warehoused", **kwargs
+    )

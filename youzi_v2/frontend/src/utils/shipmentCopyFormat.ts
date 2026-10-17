@@ -21,7 +21,7 @@ export const SHIPMENT_DETAIL_COPY_HEADERS = [
   '转单号',
   '供应商',
   '品名',
-  '交货仓库',
+  '收货仓',
   '内部轨迹时间',
   '内部最新轨迹',
 ] as const
@@ -113,6 +113,31 @@ function formatCtnsForCopy(ctns: number | null | undefined): string {
   return `${ctns}ctns`
 }
 
+function formatChargedWeightKgForCopy(value: number | null | undefined): string {
+  if (value === null || value === undefined || Number.isNaN(Number(value))) return ''
+  const n = Number(value)
+  if (Number.isInteger(n)) return String(n)
+  return String(Number(n.toFixed(3)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''))
+}
+
+/** 港前复制：英文客户 Chargeweight，中文客户 计费重 */
+export function isEnglishShipmentCopyContext(row: Shipment): boolean {
+  if (row.customerLang === 'en') return true
+  if (row.customerLang === 'zh') return false
+  const name = (row.customer || '').trim()
+  if (!name) return false
+  return !/[\u4e00-\u9fff]/.test(name)
+}
+
+export function formatChargedWeightCopyLine(row: Shipment): string {
+  const kg = formatChargedWeightKgForCopy(row.chargedWeight ?? null)
+  if (!kg) return ''
+  if (isEnglishShipmentCopyContext(row)) {
+    return `Chargeweight: ${kg}kg`
+  }
+  return `计费重: ${kg}kg`
+}
+
 function warehouseOrZipForCopy(row: Shipment): string {
   const warehouse = cell(row.addressCode)
   if (warehouse) return warehouse
@@ -164,6 +189,17 @@ export function formatShipmentDetailSummaryLine(row: Shipment): string {
   ])
 }
 
+/** 运单明细摘要 + 可选第二行计费重（港前） */
+export function formatShipmentDetailSummaryBlock(
+  row: Shipment,
+  options?: { appendChargedWeight?: boolean },
+): string {
+  const head = formatShipmentDetailSummaryLine(row)
+  if (!options?.appendChargedWeight) return head
+  const cw = formatChargedWeightCopyLine(row)
+  return cw ? `${head}\n${cw}` : head
+}
+
 /** 转单号行：`-- FedEx 876457312498`；无转单号时返回空 */
 export function formatShipmentTrackingNumberSuffixLine(row: Shipment): string {
   const info = resolveLastMileTracking(row)
@@ -182,6 +218,14 @@ export function formatShipmentDetailSummaryWithTrackingBlock(row: Shipment): str
 export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
   return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n\n')
+}
+
+/** 港前「复制 → 数据」：运单明细摘要 + 换行 + 计费重（无计费重仍保留摘要行） */
+export function formatPreportShipmentDataCopyText(rows: Shipment[]): string {
+  if (!rows.length) return ''
+  return rows
+    .map((row) => formatShipmentDetailSummaryBlock(row, { appendChargedWeight: true }))
+    .join('\n\n')
 }
 
 /**

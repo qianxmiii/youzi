@@ -84,6 +84,30 @@ export async function runDpsShipmentSync(
   })
 }
 
+export async function runDpsShipmentSyncPickup(
+  body?: ShipmentDpsSyncRunRequest,
+): Promise<ShipmentDpsSyncRunResult> {
+  return api<ShipmentDpsSyncRunResult>(
+    '/api/v1/scheduled-tasks/run-dps-shipment-sync-pickup',
+    {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    },
+  )
+}
+
+export async function runDpsShipmentSyncWarehoused(
+  body?: ShipmentDpsSyncRunRequest,
+): Promise<ShipmentDpsSyncRunResult> {
+  return api<ShipmentDpsSyncRunResult>(
+    '/api/v1/scheduled-tasks/run-dps-shipment-sync-warehoused',
+    {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+    },
+  )
+}
+
 /** 批处理：更新全部明细状态 */
 export async function runDpsRouteStatusSync(): Promise<ShipmentDpsRouteStatusSyncResult> {
   return api<ShipmentDpsRouteStatusSyncResult>(

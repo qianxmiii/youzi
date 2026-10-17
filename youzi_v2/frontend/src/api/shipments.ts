@@ -50,10 +50,11 @@ export interface ShipmentFilterOptions {
   channelCodes: string[]
   channelNameZhs: string[]
   channelCategories: string[]
+  originWarehouseCodes: string[]
   statusCodes: string[]
   routeStatuses: ShipmentRouteStatusOption[]
   exceptionCodes: string[]
-  exceptionTypes: { code: string; nameZh: string }[]
+  exceptionTypes: { code: string; nameZh: string; phaseCategory?: string }[]
   groups: ShipmentGroupFilterOption[]
 }
 
@@ -87,6 +88,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.vesselVoyage?.trim()) q.vesselVoyage = params.vesselVoyage.trim()
   if (params.customerNo?.trim()) q.customerNo = params.customerNo.trim()
   if (params.destinationPortCode?.trim()) q.destinationPortCode = params.destinationPortCode.trim()
+  if (params.originWarehouseCode?.trim()) q.originWarehouseCode = params.originWarehouseCode.trim()
   if (params.addressKeyword?.trim()) q.addressKeyword = params.addressKeyword.trim()
   if (params.timeField?.trim()) q.timeField = params.timeField.trim()
   if (params.timeFrom?.trim()) q.timeFrom = params.timeFrom.trim()
@@ -140,6 +142,9 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   }
   if (params.limit != null) q.limit = String(params.limit)
   if (params.offset != null) q.offset = String(params.offset)
+  if (params.workspace === 'preport' || params.workspace === 'transit') {
+    q.workspace = params.workspace
+  }
   return q
 }
 
@@ -173,6 +178,7 @@ export interface ListShipmentsParams {
   vesselVoyage?: string
   customerNo?: string
   destinationPortCode?: string
+  originWarehouseCode?: string
   addressKeyword?: string
   timeField?: string
   timeFrom?: string
@@ -220,6 +226,8 @@ export interface ListShipmentsParams {
   sortOrder?: 'asc' | 'desc'
   limit?: number
   offset?: number
+  /** 港前 preport / 在途 transit；与 DPS Status 工作台划分一致 */
+  workspace?: 'preport' | 'transit'
 }
 
 export async function listShipments(params: ListShipmentsParams): Promise<ShipmentListResponse> {
@@ -403,7 +411,7 @@ export interface ShipmentDpsRouteStatusSyncResult {
 }
 
 /** 按 waybillId 拉 DPS 明细状态接口（轻量）；不传则更新全部有 waybillId 的运单 */
-function parseDownloadFilename(disposition: string | null): string {
+export function parseDownloadFilename(disposition: string | null): string {
   if (!disposition) return '货箱数据.zip'
   const star = disposition.match(/filename\*=UTF-8''([^;]+)/i)
   if (star?.[1]) {
@@ -417,7 +425,7 @@ function parseDownloadFilename(disposition: string | null): string {
   return plain?.[1] || '货箱数据.zip'
 }
 
-async function readBlobApiError(e: unknown, fallback = '下载失败'): Promise<never> {
+export async function readBlobApiError(e: unknown, fallback = '下载失败'): Promise<never> {
   const err = e as {
     data?: Blob
     response?: { _data?: Blob }
@@ -488,6 +496,29 @@ export async function downloadShipmentsDpsMarkData(
   )
 }
 
+/** 单票唛头拆分；splitSpec 如「1 2 2」→ zip {运单号}_{总件数}ctns.zip */
+export async function downloadShipmentsDpsMarkSplit(
+  shipmentId: string,
+  splitSpec: string,
+): Promise<{ blob: Blob; filename: string }> {
+  try {
+    const response = await api.raw<Blob, 'blob'>(
+      '/api/v1/shipments/download-dps-mark-data-split',
+      {
+        method: 'POST',
+        body: { ids: [shipmentId], splitSpec: splitSpec.trim() },
+        responseType: 'blob',
+        timeout: 600_000,
+      },
+    )
+    const blob = response._data as Blob
+    const filename = parseDownloadFilename(response.headers.get('content-disposition'))
+    return { blob, filename }
+  } catch (e) {
+    return readBlobApiError(e, '下载拆分唛头失败')
+  }
+}
+
 /** DPS 箱单发票（dps_packinglist_download）；单票重命名为 {运单号}_箱单发票 */
 export async function downloadShipmentsDpsPackinglist(
   shipmentIds: string[],
@@ -507,6 +538,49 @@ export async function downloadShipmentsDpsWarehouseform(
     '/api/v1/shipments/download-dps-warehouseform',
     shipmentIds,
     '下载排仓单失败',
+  )
+}
+
+export interface ReceiveWarehouseEntryPreview {
+  warehouseKey: string
+  warehouseLabel: string
+  address: string
+  addressBlock: string
+  shipmentCount: number
+}
+
+/** 进仓单下载前预览收货地址（config.dps_warehouse） */
+export async function previewReceiveWarehouseEntry(
+  shipmentIds: string[],
+): Promise<ReceiveWarehouseEntryPreview> {
+  return api<ReceiveWarehouseEntryPreview>(
+    '/api/v1/shipments/receive-warehouse-entry-preview',
+    {
+      method: 'POST',
+      body: { ids: shipmentIds },
+    },
+  )
+}
+
+/** DPS 进仓单；文件名 {N}票进仓单_{YYYYMMDD}，表头含收货地址 */
+export async function downloadShipmentsDpsWarehouseEntry(
+  shipmentIds: string[],
+): Promise<{ blob: Blob; filename: string }> {
+  return downloadShipmentsDpsBlob(
+    '/api/v1/shipments/download-dps-warehouse-entry',
+    shipmentIds,
+    '下载进仓单失败',
+  )
+}
+
+/** 进仓单 PDF；文件名 {N}票进仓单_{YYYYMMDD}.pdf */
+export async function downloadShipmentsDpsWarehouseEntryPdf(
+  shipmentIds: string[],
+): Promise<{ blob: Blob; filename: string }> {
+  return downloadShipmentsDpsBlob(
+    '/api/v1/shipments/download-dps-warehouse-entry-pdf',
+    shipmentIds,
+    '下载进仓单 PDF 失败',
   )
 }
 

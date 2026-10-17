@@ -7,6 +7,7 @@ from typing import Any
 
 from .channel_seeds import CHANNEL_CATEGORIES
 from .code_tables import list_code_tables
+from .shipment_exception_phase import DEFAULT_EXCEPTION_PHASE, normalize_exception_phase
 from .connection import Database
 from .datetime_util import now_str
 from .shipments_repository import ShipmentsRepository
@@ -47,6 +48,7 @@ def list_table_meta() -> list[dict[str, Any]]:
             "hasChannelFields": name == "channel_codes",
             "hasCarrierFields": name == "carrier_codes",
             "hasRouteStatusFields": name == "shipment_route_status_codes",
+            "hasExceptionPhaseFields": name == "shipment_exception_codes",
         }
         for name in sorted(_ALLOWED_TABLES)
     ]
@@ -75,6 +77,10 @@ def _row_to_api(table: str, row: sqlite3.Row) -> dict[str, Any]:
         out["carrierId"] = row["carrier_id"] if "carrier_id" in row.keys() else ""
     if table == "shipment_route_status_codes":
         out["dpsStatus"] = row["dps_status"] if "dps_status" in row.keys() else ""
+    if table == "shipment_exception_codes":
+        out["phaseCategory"] = (
+            row["phase_category"] if "phase_category" in row.keys() else DEFAULT_EXCEPTION_PHASE
+        ) or DEFAULT_EXCEPTION_PHASE
     return out
 
 
@@ -259,6 +265,25 @@ class CodeTablesRepository:
                         now,
                     ),
                 )
+            elif t == "shipment_exception_codes":
+                self._conn.execute(
+                    f"""
+                    INSERT INTO {t} (
+                        code, name_zh, name_en, phase_category,
+                        sort_order, is_active, created_time, updated_time
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        code,
+                        payload["name_zh"],
+                        payload["name_en"],
+                        payload["phase_category"],
+                        payload["sort_order"],
+                        payload["is_active"],
+                        now,
+                        now,
+                    ),
+                )
             else:
                 self._conn.execute(
                     f"""
@@ -334,6 +359,9 @@ class CodeTablesRepository:
         if t == "shipment_route_status_codes":
             sets.insert(2, "dps_status = ?")
             vals.insert(2, payload["dps_status"])
+        if t == "shipment_exception_codes":
+            sets.insert(2, "phase_category = ?")
+            vals.insert(2, payload["phase_category"])
         vals.append(c)
         replaced = 0
         with self._database.lock:
@@ -459,6 +487,11 @@ class CodeTablesRepository:
             if not dps:
                 raise ValueError("dpsStatus（DPS status 数字）不能为空")
             out["dps_status"] = dps
+        if table == "shipment_exception_codes":
+            phase_raw = data.get("phase_category") or data.get("phaseCategory")
+            out["phase_category"] = normalize_exception_phase(
+                phase_raw if phase_raw is not None else DEFAULT_EXCEPTION_PHASE
+            )
         return out
 
     def lookup_carrier_code_by_id(self, carrier_id: str) -> str | None:

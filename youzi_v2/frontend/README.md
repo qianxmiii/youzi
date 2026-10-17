@@ -31,7 +31,9 @@ Youzi v2 前端 — Vue 3 SPA
 | 路径 | 页面 | 状态 |
 |------|------|------|
 | `/` | 工作台（明细状态 / 今日重点 / 待办 / 近期到港 / 运输概览） | ✅ |
-| `/shipments` | 运单管理 | ✅ |
+| `/shipments/pre-port` | 港前运单（核对与下载；列表含收货仓、计费重列；可按收货仓筛选） | ✅ |
+| 运单列表 · 下载 | DPS 导出（货箱/唛头/拆分等）弹窗显示 **进度条 + 当前步骤** | ✅ |
+| `/shipments` | 在途运单（默认筛「转运中」，可看已签收与轨迹） | ✅ |
 | `/vessel-schedules` | 船期监控 | ✅ |
 | `/addresses` | 地址簿 | ✅ |
 | `/statistics` | 统计管理 | ✅ |
@@ -76,7 +78,9 @@ python .cursor/skills/ui-ux-pro-max/scripts/search.py "<页面描述>" --design-
 | 配置键 | 用途 |
 |--------|------|
 | `dps_authorization` | DPS 共用 Bearer（运单查询、明细状态、货箱下载等） |
-| `shipment_queryByPerson` | 查全部运单（url 内筛选条件 + 自动 `pageNum`） |
+| `shipment_queryByPerson` | 查全部/在途运单（url 内筛选 + 自动 `pageNum`） |
+| `shipment_queryByPerson_pickup` | 提货中（计划任务 DPS 提货中同步） |
+| `shipment_queryByPerson_warehoused` | 已入仓（计划任务 DPS 已入仓同步） |
 | `shipment_queryByOrder` | 按运单号查（追加 `odds` + `pageNum`） |
 
 ```python

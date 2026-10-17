@@ -425,7 +425,7 @@ def _build_overview(*, database: Database, today: date | None = None) -> dict[st
             database.conn.execute(
                 f"""
                 SELECT COUNT(*) AS c FROM {SHIPMENTS_TABLE}
-                WHERE UPPER(TRIM(COALESCE(status_code, ''))) = 'IN_TRANSIT'
+                WHERE TRIM(COALESCE(status_code, '')) IN ('2', 'IN_TRANSIT')
                   AND (delivered_time IS NULL OR TRIM(delivered_time) = '')
                 """
             ).fetchone()["c"]

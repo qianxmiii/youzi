@@ -102,23 +102,30 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/` | 列表（筛选、分页；含 `statusCode`、`routeStatus`、`missingRouteStatus`、`groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应含 `routeStatus`） |
+| GET | `/` | 列表（筛选、分页；含 `workspace`（`preport` 港前 / `transit` 在途，与 DPS Status 划分一致，未传 `statusCode` 时按工作台限定范围）、`statusCode`、`routeStatus`、`originWarehouseCode`（收货仓精确匹配）、`missingRouteStatus`、`groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应含 `routeStatus`） |
 | GET | `/{item_id}` | 单条详情 |
 | POST | `/` | 新建 |
 | PUT | `/{item_id}` | 更新运单字段 |
 | DELETE | `/{item_id}` | 删除 |
 | POST | `/batch-delete` | 批量删除 |
 | PATCH | `/batch-update` | 批量更新字段 |
-| GET | `/filter-options` | 筛选项（含 `groups`、`routeStatuses`：`{ code, nameZh, dpsStatus }`） |
+| GET | `/filter-options` | 筛选项（含 `originWarehouseCodes`、`groups`、`routeStatuses`：`{ code, nameZh, dpsStatus }`） |
 | GET | `/export` | Excel 导出 |
 | POST | `/import` | Excel 导入 |
 | POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
 | POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
 | POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200） |
-| POST | `/download-dps-cargo-data` | DPS 货箱（`dps_data_download`）；body: 本地运单 `ids`，最多 50 |
-| POST | `/download-dps-mark-data` | DPS 唛头（1 票 `dps_mark_download`，多票 `dps_batchmark_download`）；body: 本地运单 `ids` |
+| POST | `/download-dps-cargo-data` | DPS 货箱（`dps_data_download`）；body: 本地运单 `ids`，最多 50；单票 `{运单号}_data.ext`，多票 `{N}票数据_{YYYYMMDDHHmmss}.zip`（内含同名文件夹与各票 `_data` 文件） |
+| POST | `/dps-export-jobs` | 异步 DPS 导出（body: `exportType`、`ids`、可选 `splitSpec`）；返回 `jobId`，轮询 `GET /dps-export-jobs/{id}`，完成后 `GET …/download` |
+| GET | `/dps-export-jobs/{job_id}` | 导出进度 `{ progress, message, done, failed }` |
+| GET | `/dps-export-jobs/{job_id}/download` | 导出完成后的文件 |
+| POST | `/download-dps-mark-data` | DPS 唛头（1 票 `dps_mark_download`，多票 `dps_batchmark_download`）；body: 本地运单 `ids`（前端下载菜单已改用 `/dps-export-jobs` 以展示进度） |
+| POST | `/download-dps-mark-data-split` | **单票**唛头 PDF 按件数拆分；body: `ids`（长度 1）、`splitSpec`（如 `1 2 2`）或 `segments`；包内 `{运单号}_{起-止}_{n}ctns.pdf`（单页为 `{运单号}_{序号}_{n}ctns.pdf`），zip `{运单号}_{总件数}ctns.zip` |
 | POST | `/download-dps-packinglist` | DPS 箱单发票（`dps_packinglist_download`，转发为 `?ids=` 逗号拼接 waybillId）；单票 `{运单号}_箱单发票.ext`，多票 DPS 原名 |
 | POST | `/download-dps-warehouseform` | DPS 排仓单（`dps_warehouseform_download`，`?ids=` 逗号拼接；勾选超过 50 票自动分批请求，多批打包 zip）；单票 `{运单号}_排仓单.ext` |
+| POST | `/receive-warehouse-entry-preview` | 进仓单预览：收货仓键、`config.dps_warehouse` 收货地址文案（勾选运单须同一收货仓） |
+| POST | `/download-dps-warehouse-entry` | 进仓单（`warehouse_entry_template.xlsx` 模板填充 + `dps_warehouse` 收货地址）；**`{N}票进仓单_{YYYYMMDD}.xlsx`** |
+| POST | `/download-dps-warehouse-entry-pdf` | 进仓单 PDF（先按模板生成 xlsx 再转 PDF，与 Excel 下载版式一致）；**`{N}票进仓单_{YYYYMMDD}.pdf`**；无 Excel/LibreOffice 转换能力时 503 |
 | POST | `/sync-route-status-from-dps` | 明细状态：按 `waybillId` 调 `config.dps_route_status_query`；`shipmentNos` 可选（最多 200），空则全部 |
 | GET | `/tracking-freshness-stats` | 轨迹新鲜度统计 |
 | GET | `/tracking-sync/daily-stats` | 日同步统计 |
@@ -163,7 +170,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/shipment-sla-alerts` | 预警列表（`scope=todo` 默认待办：未签收且 open/acknowledged，**按运单合并只保留最严重一条**；已跟进整组排最后，组内按严重度；`scope=all` 含历史且逐条，同样已跟进在后；筛选见 `riskLevel` / `alertType` 等） |
+| GET | `/api/v1/shipment-sla-alerts` | 预警列表（`scope=todo` 默认待办：未签收且 open/acknowledged，**按运单合并只保留最严重一条**；已跟进整组排最后，组内按严重度；`scope=all` 含历史且逐条，同样已跟进在后；筛选见 `riskLevel` / `alertType`、`exceptionPhase`（`pre_port` 港前 / `post_port` 港后，港后含仅时效预警无人工异常码的单）等） |
 | GET | `/api/v1/shipment-sla-alerts/summary` | 工作台摘要计数（`pendingOpen` 按运单号去重） |
 | GET | `/api/v1/shipment-sla-alerts/todo-notifications` | 顶栏待办（已超时/严重超时且 open；按运单合并，`pendingCount` 按运单去重；项含 `alertTypes` / `relatedAlertIds`） |
 | POST | `/api/v1/shipment-sla-alerts/evaluate` | 手动触发扫描（含孤儿清理、重绑、同单同类型去重） |
@@ -180,7 +187,8 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 **列表示例**
 
 ```bash
-curl "http://127.0.0.1:3001/api/v1/shipments?limit=20&statusCode=IN_TRANSIT&routeStatus=TRACK_SIGNED"
+curl "http://127.0.0.1:3001/api/v1/shipments?limit=20&workspace=transit&statusCode=2&routeStatus=TRACK_SIGNED"
+curl "http://127.0.0.1:3001/api/v1/shipments?limit=20&workspace=preport"
 ```
 
 **Excel 导入**
@@ -365,7 +373,9 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 | PUT | `/api/v1/scheduled-tasks/settings` | 更新同步配置 |
 | GET | `/api/v1/scheduled-tasks/jobs` | 同步任务历史 |
 | POST | `/api/v1/scheduled-tasks/run-*-sync` | 手动触发同步 |
-| POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync` | DPS 运单全量同步（body 可选 `transitTimeStart` / `transitTimeEnd`，默认当月） |
+| POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync` | DPS 运单全量同步（`shipment_queryByPerson`；body 可选发运时间，默认当月） |
+| POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync-pickup` | DPS **提货中**同步（`shipment_queryByPerson_pickup`；发运时间与主任务共用配置） |
+| POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync-warehoused` | DPS **已入仓**同步（`shipment_queryByPerson_warehoused`；发运时间与主任务共用配置） |
 | POST | `/api/v1/scheduled-tasks/run-dps-route-status-sync` | 更新全部明细状态（有 `waybillId` 的运单；无 body） |
 | POST | `/api/v1/notifications/wecom/test` | 企业微信通知测试（详见 [wecom-aibot.md](./wecom-aibot.md)；body 可选 `{ "content": "..." }`） |
 

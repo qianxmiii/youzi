@@ -526,7 +526,7 @@ def sync_shipments_from_dps(body: ShipmentDpsSyncByOrderRequest):
 def download_shipments_dps_cargo_data(body: ShipmentBatchIdsIn):
     """
     按勾选运单从 DPS 下载货箱重量尺寸数据（config.dps_data_download，参数 ids=waybill_id）。
-    单票文件名为 {运单号}_data.ext；多票打包为 zip。
+    单票 {运单号}_data.ext；多票 zip 内文件夹 + {N}票数据_{时间}.zip。
     """
     from ..services.shipment_dps_cargo_download import build_dps_cargo_data_download
 
@@ -550,6 +550,56 @@ def download_shipments_dps_cargo_data(body: ShipmentBatchIdsIn):
     return Response(
         content=content,
         media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+@router.post("/api/v1/shipments/dps-export-jobs")
+def create_dps_export_job(body: DpsExportJobCreateIn):
+    """异步 DPS 导出（前端轮询进度，完成后 GET …/download）。"""
+    from ..services.dps_export_job import build_export_runner, start_dps_export_job
+
+    try:
+        runner = build_export_runner(
+            body.export_type,
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+            split_spec=body.split_spec,
+        )
+        job_id = start_dps_export_job(runner)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return {"jobId": job_id}
+
+
+@router.get("/api/v1/shipments/dps-export-jobs/{job_id}")
+def get_dps_export_job_status(job_id: str):
+    from ..services.dps_export_job import get_job
+
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="导出任务不存在或已过期")
+    return job.to_public_dict()
+
+
+@router.get("/api/v1/shipments/dps-export-jobs/{job_id}/download")
+def download_dps_export_job_file(job_id: str):
+    from ..services.dps_export_job import get_job
+
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="导出任务不存在或已过期")
+    if job.status == "failed":
+        raise HTTPException(status_code=400, detail=job.error or "导出失败")
+    if job.status != "done" or not job.content or not job.filename:
+        raise HTTPException(status_code=409, detail="导出尚未完成")
+    encoded = quote(job.filename)
+    return Response(
+        content=job.content,
+        media_type=job.media_type or "application/octet-stream",
         headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
     )
 
@@ -585,6 +635,40 @@ def download_shipments_dps_mark_data(body: ShipmentBatchIdsIn):
     )
 
 
+@router.post("/api/v1/shipments/download-dps-mark-data-split")
+def download_shipments_dps_mark_data_split(body: ShipmentMarkSplitDownloadIn):
+    """
+    单票唛头按工厂件数拆分（仅 1 票；PDF 每页一件）。
+    拆分文件：{运单号}_{开始-结束}_{件数}ctns.pdf（单页仅写序号）；压缩包：{运单号}_{总件数}ctns.zip
+    """
+    from ..services.shipment_dps_mark_split_download import build_dps_mark_split_download
+
+    try:
+        segments = body.resolved_segments()
+        content, media_type, filename = build_dps_mark_split_download(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids[0],
+            segments,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_mark_download。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
 @router.post("/api/v1/shipments/download-dps-packinglist")
 def download_shipments_dps_packinglist(body: ShipmentBatchIdsIn):
     """按勾选运单从 DPS 下载箱单发票（config.dps_packinglist_download）。"""
@@ -601,6 +685,94 @@ def download_shipments_dps_packinglist(body: ShipmentBatchIdsIn):
             status_code=503,
             detail=f"{exc}。请在 config/config.json 配置 dps_packinglist_download。",
         ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+@router.post("/api/v1/shipments/receive-warehouse-entry-preview")
+def preview_shipments_receive_warehouse_entry(body: ShipmentBatchIdsIn):
+    """进仓单下载前预览：收货仓键、config.dps_warehouse 收货地址文案。"""
+    from ..services.shipment_dps_warehouse_entry_download import (
+        preview_receive_warehouse_for_shipments,
+    )
+
+    try:
+        return preview_receive_warehouse_for_shipments(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_warehouse。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/shipments/download-dps-warehouse-entry")
+def download_shipments_dps_warehouse_entry(body: ShipmentBatchIdsIn):
+    """按勾选运单下载进仓单（收货地址写入表头；文件名 {N}票进仓单_{YYYYMMDD}）。"""
+    from ..services.shipment_dps_warehouse_entry_download import (
+        build_dps_warehouse_entry_download,
+    )
+
+    try:
+        content, media_type, filename = build_dps_warehouse_entry_download(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请放置 youzi_v2/config/templates/warehouse_entry_template.xlsx 并配置 dps_warehouse。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
+@router.post("/api/v1/shipments/download-dps-warehouse-entry-pdf")
+def download_shipments_dps_warehouse_entry_pdf(body: ShipmentBatchIdsIn):
+    """按勾选运单下载进仓单 PDF（明细与 Excel 版一致；文件名 {N}票进仓单_{YYYYMMDD}.pdf）。"""
+    from ..services.shipment_dps_warehouse_entry_download import (
+        build_dps_warehouse_entry_pdf_download,
+    )
+
+    try:
+        content, media_type, filename = build_dps_warehouse_entry_pdf_download(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请配置 dps_warehouse / 进仓单模板，并安装 Excel+pywin32 或 LibreOffice（见 docs/deployment.md）。",
+        ) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:

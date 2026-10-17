@@ -37,6 +37,7 @@ export interface ShipmentFilterQueryInput {
   filterChannelCategory: string | null
   filterCustomerNo: string | null
   filterDestinationPort: string | null
+  filterOriginWarehouseCode: string | null
   filterAddressKeyword: string | null
   filterVesselVoyage: string | null
   filterVipOnly: boolean
@@ -69,6 +70,7 @@ export interface ShipmentFilterQueryInput {
   advancedTimes: ShipmentAdvancedTimeRanges
   /** true 时不传 statusCode（用于多号精确搜索 ≥2） */
   shipmentNoSearchActive: boolean
+  workspace?: 'preport' | 'transit'
 }
 
 export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListShipmentsParams {
@@ -101,6 +103,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
   const noInternal = input.filterNoInternalTracking || input.filterNoTracking
 
   return {
+    ...(input.workspace ? { workspace: input.workspace } : {}),
     ...(tokens.length ? { shipmentNos: tokens } : {}),
     ...(exactShipmentTokens.length ? { exactShipmentNos: exactShipmentTokens } : {}),
     ...(containerTokens.length ? { containerNos: containerTokens } : {}),
@@ -129,6 +132,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
     channelNameZh: input.filterChannelNameZh || undefined,
     channelCategory: input.filterChannelCategory || undefined,
     destinationPortCode: input.filterDestinationPort || undefined,
+    originWarehouseCode: input.filterOriginWarehouseCode || undefined,
     addressKeyword: input.filterAddressKeyword || undefined,
     vesselVoyage: input.filterVesselVoyage || undefined,
     internalFreshness: noInternal ? 'none' : undefined,
@@ -274,6 +278,12 @@ export function buildShipmentFilterSummaryTags(
   }
   if (input.filterDestinationPort) {
     tags.push({ key: 'filterDestinationPort', label: `目的港 = ${input.filterDestinationPort}` })
+  }
+  if (input.filterOriginWarehouseCode) {
+    tags.push({
+      key: 'filterOriginWarehouseCode',
+      label: `收货仓 = ${input.filterOriginWarehouseCode}`,
+    })
   }
   if (input.filterAddressKeyword) {
     tags.push({ key: 'filterAddressKeyword', label: `地址 = ${input.filterAddressKeyword}` })

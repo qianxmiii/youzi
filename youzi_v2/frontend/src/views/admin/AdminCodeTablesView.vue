@@ -25,6 +25,7 @@ import {
 } from '@/api/codeTables'
 import CodeTableFormModal from '@/components/admin/CodeTableFormModal.vue'
 import ChannelsView from '@/views/channels/ChannelsView.vue'
+import { shipmentExceptionPhaseLabel } from '@/constants/shipmentExceptionPhase'
 import type { CodeTableMeta, CodeTablePayload, CodeTableRow } from '@/types/codeTable'
 
 const CHANNEL_CODES_TABLE = 'channel_codes'
@@ -53,6 +54,9 @@ const hasPortType = computed(() => activeMeta.value?.hasPortType ?? false)
 const hasChannelFields = computed(() => activeMeta.value?.hasChannelFields ?? false)
 const hasCarrierFields = computed(() => activeMeta.value?.hasCarrierFields ?? false)
 const hasRouteStatusFields = computed(() => activeMeta.value?.hasRouteStatusFields ?? false)
+const hasExceptionPhaseFields = computed(
+  () => activeMeta.value?.hasExceptionPhaseFields ?? false,
+)
 
 async function loadTables() {
   const res = await listCodeTableTypes()
@@ -222,6 +226,14 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       render: (row) => row.dpsStatus || '—',
     })
   }
+  if (hasExceptionPhaseFields.value) {
+    cols.push({
+      title: '异常大类',
+      key: 'phaseCategory',
+      width: 88,
+      render: (row) => shipmentExceptionPhaseLabel(row.phaseCategory),
+    })
+  }
   if (hasChannelFields.value) {
     cols.push(
       { title: '国家', key: 'country', width: 88, render: (row) => row.country || '—' },
@@ -377,6 +389,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
         :has-channel-fields="hasChannelFields"
         :has-carrier-fields="hasCarrierFields"
         :has-route-status-fields="hasRouteStatusFields"
+        :has-exception-phase-fields="hasExceptionPhaseFields"
         :initial="editingRow"
         @close="modalShow = false"
         @submit="handleFormSubmit"

@@ -11,14 +11,26 @@ import {
 const show = defineModel<boolean>('show', { default: false })
 const visibleKeys = defineModel<string[]>('visibleKeys', { required: true })
 
+const props = withDefaults(
+  defineProps<{
+    /** 当前工作台不展示的列（不出现在勾选列表） */
+    excludedKeys?: readonly string[]
+  }>(),
+  { excludedKeys: () => [] },
+)
+
+const excludedKeySet = computed(() => new Set(props.excludedKeys))
+
 const grouped = computed(() =>
   SHIPMENT_LIST_COLUMN_GROUPS.map((g) => ({
     group: g.group,
-    items: g.keys.map((key) => ({
-      key,
-      label: SHIPMENT_COLUMN_LABELS[key] || key,
-    })),
-  })),
+    items: g.keys
+      .filter((key) => !excludedKeySet.value.has(key))
+      .map((key) => ({
+        key,
+        label: SHIPMENT_COLUMN_LABELS[key] || key,
+      })),
+  })).filter((g) => g.items.length > 0),
 )
 
 function toggle(key: string, checked: boolean) {

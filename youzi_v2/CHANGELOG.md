@@ -4,6 +4,39 @@
 
 ## 2026-10-18
 
+### 新增
+
+- **运单异常大类**：码表 `shipment_exception_codes.phase_category`（港前 `pre_port` / 港后 `post_port`）；存量类型默认港后；异常跟踪可筛大类，后台码表可维护
+- **计划任务 · DPS 港前同步**：「提货中」(`shipment_queryByPerson_pickup`)、「已入仓」(`shipment_queryByPerson_warehoused`) 独立定时/手动同步，与原有 `shipment_queryByPerson` 共用发运时间范围
+- **运单工作台**：侧栏「港前运单」(`/shipments/pre-port`) 与「在途运单」(`/shipments`)；按 DPS Status 划分（港前 0/01/1/4，在途 2/3）；`workspace` 与 `statusCode` 同时生效；启动时将旧码 `IN_TRANSIT`/`DELIVERED` 迁移为 `2`/`3`；港前页隐藏轨迹新鲜度与批量轨迹/明细状态同步
+
+### 修改
+
+- **港前运单状态**：DPS `01` 展示为「提货中」（非「已提货」）；港前列表状态徽章区分提货中（橙）/ 已入仓（青绿）/ 已下单 / 已取消
+- **在途运单列表**：进入 `/shipments` 时状态筛选默认 **转运中**（DPS `2`）；工作台深链（本周签收、船名航次、明细状态漏斗等）仍不强制默认状态
+- **港前运单**：筛选栏隐藏「系统视图」下拉与「快递派」勾选（时效/轨迹类筛选仅保留在在途页）；列表与列设置隐藏「承运商」「承运商轨迹」「内部轨迹」「付款状态」
+- **下载货箱**：单票固定 `{运单号}_data.ext`；多票各文件重命名后装入 `{N}票数据_{时间}` 文件夹并打 `{N}票数据_{时间}.zip`
+- **运单计费重**：新增 `charged_weight` / API `chargedWeight`；「更新选中运单」从 DPS 有值时写入；港前列表「邮编」后展示计费重列；港前「复制 → 数据」（独立于运单明细）为摘要 + 换行 + 计费重（英文 `Chargeweight: …kg` / 中文 `计费重: …kg`）；港前列居中加粗橙色强调
+- **港前运单 · 异常**：标记异常仅可选港前大类类型；在途页仅可选港后类型
+- **运单字段文案**：`originWarehouseCode` / DPS `receiveWarehouseName` 统一展示为「收货仓」（列表、表单、筛选、复制明细表头、Excel 导入导出）；旧表头「交货仓库」「起运仓」导入仍兼容
+- **港前运单列表**：固定展示「收货仓」列（位于「派送仓库」前；数据来自 DPS 同步）
+- **运单下载 · 进仓单**：下拉「进仓单」；按 `warehouse_entry_template.xlsx` 填充占位符（深圳仓/义乌仓 → `dps_warehouse` 收货地址）；文件名 `{N}票进仓单_{YYYYMMDD}`，不再依赖 DPS 进仓单接口
+- **运单下载 · 进度**：DPS 导出（货箱/唛头/拆分/箱单等）改为异步任务 + 弹窗进度条（轮询 `/dps-export-jobs`）
+- **运单下载 · 唛头（拆分）**：仅单票；输入各工厂件数（如 `1 2 2`）按 PDF 页拆分，zip `{运单号}_{总件数}ctns.zip`；段内文件 `{运单号}_{起-止}_{n}ctns.pdf`，仅 1 页时 `{运单号}_{序号}_{n}ctns.pdf`
+- **港前运单**：筛选栏增加「收货仓」（`originWarehouseCode`）
+- **进仓单**：明细「派送仓库/派送地址」为空时写入 **——**
+- **运单下载 · 进仓单（PDF）**：下拉「进仓单（PDF）」；先按模板生成与 Excel 下载相同的 xlsx，再转 PDF；文件名 `{N}票进仓单_{YYYYMMDD}.pdf`；Windows 需 Excel + pywin32，或安装 LibreOffice（见 `docs/deployment.md`）
+
+### 移除
+
+- **运单下载 · 唛头（Word）**：下线 PDF→docx 下载及相关 API；依赖 `pdf2docx`、`python-docx` 已从 `requirements.txt` 移除（唛头仍用 DPS 原 PDF / 拆分 zip）
+
+### 修复
+
+- **进仓单 PDF**：改为「模板 xlsx → PDF」；移除 `fpdf2` 手绘版式
+- **DPS 港前同步**：`queryByPerson_pickup` / `_warehoused` 改为 GET + 注入 **orderTimeStart/End**（不再误用 transitTime 导致空列表）
+- **DPS 运单 Status**：同步时不再用明细 `route.status` 误判为转运中；`status_code` 更新单允许覆盖；内部轨迹同步不覆盖港前 0/01/1/4
+
 ### 修改
 
 - **异常跟踪**：「时效状态」列与筛选项用色标区分（即将超时 / 已超时 / 严重超时及阶段卡点类型）

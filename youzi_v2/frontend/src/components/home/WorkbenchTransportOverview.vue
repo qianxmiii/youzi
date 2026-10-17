@@ -43,7 +43,7 @@ const cards = computed<TransportCard[]>(() => {
       key: 'inTransit',
       label: '在途',
       count: o?.inTransit ?? 0,
-      to: { path: '/shipments', query: { statusCode: 'IN_TRANSIT' } },
+      to: { path: '/shipments', query: { statusCode: '2' } },
     },
     {
       key: 'inspection',

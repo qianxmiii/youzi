@@ -66,6 +66,7 @@ def get_shipment_list_filters(
     updated_to: str | None = Query(None, alias="updatedTo"),
     customer_no: str | None = Query(None, alias="customerNo"),
     destination_port_code: str | None = Query(None, alias="destinationPortCode"),
+    origin_warehouse_code: str | None = Query(None, alias="originWarehouseCode"),
     address_keyword: str | None = Query(None, alias="addressKeyword"),
     missing_etd: bool | None = Query(None, alias="missingEtd"),
     missing_atd: bool | None = Query(None, alias="missingAtd"),
@@ -79,6 +80,7 @@ def get_shipment_list_filters(
     delivery_risk: str | None = Query(None, alias="deliveryRisk"),
     sort_by: str | None = Query(None, alias="sortBy"),
     sort_order: str | None = Query(None, alias="sortOrder"),
+    workspace: str | None = Query(None, alias="workspace"),
 ) -> dict:
     return {
         "search": search,
@@ -137,6 +139,7 @@ def get_shipment_list_filters(
         "updated_to": updated_to,
         "customer_no": customer_no,
         "destination_port_code": destination_port_code,
+        "origin_warehouse_code": origin_warehouse_code,
         "address_keyword": address_keyword,
         "missing_etd": missing_etd,
         "missing_atd": missing_atd,
@@ -150,6 +153,7 @@ def get_shipment_list_filters(
         "delivery_risk": delivery_risk,
         "sort_by": sort_by,
         "sort_order": sort_order,
+        "workspace": workspace,
     }
 
 

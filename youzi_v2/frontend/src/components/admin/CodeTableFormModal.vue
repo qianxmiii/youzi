@@ -20,6 +20,7 @@ const props = defineProps<{
   hasChannelFields?: boolean
   hasCarrierFields?: boolean
   hasRouteStatusFields?: boolean
+  hasExceptionPhaseFields?: boolean
   initial: CodeTableRow | null
 }>()
 
@@ -39,6 +40,11 @@ const categoryOptions = ['快船', '普船', '卡航', '铁路', '空运'].map((
   value: c,
 }))
 
+const exceptionPhaseOptions = [
+  { label: '港后', value: 'post_port' },
+  { label: '港前', value: 'pre_port' },
+]
+
 const form = reactive<CodeTablePayload>({
   code: '',
   nameZh: '',
@@ -52,6 +58,7 @@ const form = reactive<CodeTablePayload>({
   dpsChannelName: '',
   carrierId: '',
   dpsStatus: '',
+  phaseCategory: 'post_port',
 })
 
 const title = computed(() => (props.mode === 'create' ? '新增码表项' : '修改码表项'))
@@ -73,6 +80,7 @@ watch(
       form.dpsChannelName = props.initial.dpsChannelName || ''
       form.carrierId = props.initial.carrierId || ''
       form.dpsStatus = props.initial.dpsStatus || ''
+      form.phaseCategory = props.initial.phaseCategory || 'post_port'
     } else {
       form.code = ''
       form.nameZh = ''
@@ -86,6 +94,7 @@ watch(
       form.dpsChannelName = ''
       form.carrierId = ''
       form.dpsStatus = ''
+      form.phaseCategory = 'post_port'
     }
   },
   { immediate: true },
@@ -148,6 +157,9 @@ function handleSubmit() {
           v-model:value="form.dpsStatus"
           placeholder="commerceWaybillRouteInfo.status，如 601"
         />
+      </NFormItem>
+      <NFormItem v-if="hasExceptionPhaseFields" label="异常大类">
+        <NSelect v-model:value="form.phaseCategory" :options="exceptionPhaseOptions" />
       </NFormItem>
       <NFormItem label="排序">
         <NInputNumber v-model:value="form.sortOrder" :min="0" class="w-full" />

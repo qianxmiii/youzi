@@ -25,6 +25,7 @@ CREATE TABLE {TABLE_NAME} (
     address_code TEXT,
     delivery_address TEXT,
     ctns INTEGER,
+    charged_weight REAL,
     zipcode TEXT,
     product_name TEXT,
     origin_warehouse_code TEXT,
@@ -112,6 +113,8 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE {TABLE_NAME} RENAME COLUMN piece_count TO ctns")
         else:
             conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN ctns INTEGER")
+    if "charged_weight" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN charged_weight REAL")
     if "latest_tracking_time" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN latest_tracking_time TEXT")
     if "latest_tracking_desc" not in cols:
@@ -211,6 +214,9 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_latest_carrier_time "
         f"ON {TABLE_NAME}(latest_carrier_time)"
     )
+    from .shipment_order_status import migrate_legacy_shipment_status_codes
+
+    migrate_legacy_shipment_status_codes(conn)
     _backfill_tracking_summary(conn)
 
 

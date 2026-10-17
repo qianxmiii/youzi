@@ -106,6 +106,7 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
   - **`dps_mark_download`**（单个唛头）：**POST** + `?id=waybillId&type=2`（`type` 可在块内配置，默认 `2`）；**单票**用 DPS 原名（无则回退 `{运单号}_mark.ext`）
   - **`dps_batchmark_download`**（多个唛头）：**POST**，JSON body 为 waybillId **数组**；多票包名 `{YYYYMMDDHHmmss}.ext`
   - **`dps_packinglist_download`**（箱单发票）：**POST** + URL **`?ids=`** waybillId（多票英文逗号拼接，如 `2109884564244705282,2109884627163459585`，无 body）；单票保存 **`{运单号}_箱单发票.ext`**，多票文件名沿用 DPS 原名
+  - **`dps_warehouseform_download`**（排仓单）：**POST** + URL **`?ids=`** waybillId（多票英文逗号拼接，如 `2099310173320552449,2109884564244705282`，无 body）；**每批最多 50 个 id**，勾选超过 50 票时后端自动分批请求，多批结果打包 zip；单票 **`{运单号}_排仓单.ext`**
   - 响应 `{ code, msg, total, rows }`，按 `total` 与 `pageSize`（默认 10）自动翻页。见 `services/shipment_query_config.py`
   - **DPS 运单同步批处理**（计划任务页）：从 `shipment_queryByPerson` 拉取并 upsert 至本地 `shipments`；`transitTimeStart` / `transitTimeEnd` 可配置，默认当月；**默认关闭**，约 24 小时执行一次。见 `services/shipment_dps_sync.py`
   - **同步哪些字段**：`youzi_v2/config/shipment_dps_sync_fields.json`（`onInsert` / `onUpdate`）；映射逻辑见 `services/shipment_dps_mapper.py`（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`）
@@ -137,11 +138,15 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 "dps_packinglist_download": {
   "url": "<箱单发票 URL>",
   "method": "POST"
+},
+"dps_warehouseform_download": {
+  "url": "<排仓单 URL>",
+  "method": "POST"
 }
 ```
 
 明细状态轻量同步：`POST /api/v1/shipments/sync-route-status-from-dps`（可选 `shipmentNos`，空则全部）；批处理 `POST /api/v1/scheduled-tasks/run-dps-route-status-sync`。按运单 `waybill_id` 请求配置 URL 并回写 `route_status`。
-- 承运商：`vendors` 数组，由 `services/carrier_vendors.py` 按 `platform` 读取；同一承运商多套系统时可在主 vendor 配置 **`fallbackVendor": "森磊2"`**（或 `fallbackVendors` 数组），主系统无轨迹时按序尝试备用
+- 承运商：`vendors` 数组，由 `services/carrier_vendors.py` 按 `platform` 读取；同一承运商多套系统时可在主 vendor 配置 **`fallbackVendor": "SENLEI2"`**（或 `fallbackVendors` 数组），主系统无轨迹时按序尝试备用
 - 企业微信（可选）：`config.json` → `wecom_webhook`（智能机器人长连接 / Webhook 推送、@ 查运单、测试 API）。**完整说明见 [wecom-aibot.md](./wecom-aibot.md)**；凭证勿提交 Git。
 
 - 说明：根目录 `config/README.md`

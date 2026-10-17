@@ -10,6 +10,10 @@ export const SHIPMENT_TIME_FIELD_OPTIONS = [
   { label: '入仓时间', value: 'warehouseEntryTime' },
   { label: '预计送仓', value: 'expectedDeliveryTime' },
   { label: '签收时间', value: 'deliveredTime' },
+  { label: '异常开始', value: 'exceptionOpenedTime' },
+  { label: '到中转仓', value: 'routeDestTransitWarehouseTime' },
+  { label: '快递交仓', value: 'routeLastMileHandoverTime' },
+  { label: '轨迹签收', value: 'routeTrackSignedTime' },
   { label: '更新时间', value: 'updatedTime' },
 ] as const
 

@@ -65,7 +65,7 @@ curl http://127.0.0.1:3001/api/v1/health
 - `todos.items`：异常 / 催款 / 轨迹审批合并，同票合并展示，统一优先级后截断
 - `arrivals.items`：ETA 今天～今天+3 天且无 ATA；按日分组、按船名航次+目的港+ETA 聚合
 - `overview`：在途（`IN_TRANSIT` 未签收）、查验中（`exception_code=INSPECTION`）、已到港未签收、本周签收（本地周一～周日）
-- `routeStatus`：未签收运单按关键明细状态计数；`missingCount` 为空或信息传递；点击跳转 `/shipments?routeStatus=…&notDelivered=true`
+- `routeStatus`：未签收运单按关键明细状态计数；`missingCount` 为空或信息传递；`todayItems` 为今日动态（7 项：离港 ATD、到港 ATA、内签收 `delivered_time`、异常开始、到中转仓/快递交仓/轨迹签收明细节点时间，均本地自然日）；点击跳转运单列表日期或 `timeField` 筛选
 
 ```bash
 curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6"
@@ -118,6 +118,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/download-dps-cargo-data` | DPS 货箱（`dps_data_download`）；body: 本地运单 `ids`，最多 50 |
 | POST | `/download-dps-mark-data` | DPS 唛头（1 票 `dps_mark_download`，多票 `dps_batchmark_download`）；body: 本地运单 `ids` |
 | POST | `/download-dps-packinglist` | DPS 箱单发票（`dps_packinglist_download`，转发为 `?ids=` 逗号拼接 waybillId）；单票 `{运单号}_箱单发票.ext`，多票 DPS 原名 |
+| POST | `/download-dps-warehouseform` | DPS 排仓单（`dps_warehouseform_download`，`?ids=` 逗号拼接；勾选超过 50 票自动分批请求，多批打包 zip）；单票 `{运单号}_排仓单.ext` |
 | POST | `/sync-route-status-from-dps` | 明细状态：按 `waybillId` 调 `config.dps_route_status_query`；`shipmentNos` 可选（最多 200），空则全部 |
 | GET | `/tracking-freshness-stats` | 轨迹新鲜度统计 |
 | GET | `/tracking-sync/daily-stats` | 日同步统计 |

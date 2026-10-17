@@ -69,6 +69,7 @@ DPS `status=100`（信息传递）**不是**业务关键节点：
 - 本地字段：`shipments.waybill_id` ← DPS 整单 `id`
 - 后端：`POST /api/v1/shipments/sync-route-status-from-dps`（勾选或全量）；批处理：`POST /api/v1/scheduled-tasks/run-dps-route-status-sync`
 - UI：运单管理「更新选中明细状态 / 更新全部明细状态」、列表状态列点击、轨迹抽屉徽章点击；计划任务「更新全部明细状态」
+- **与内部轨迹**：轻量同步只写 `route_status`、阶段时间、ATD/ATA（空时）、预计送仓等；**不**覆盖 `latest_tracking_time` / `latest_tracking_desc`（列表「内部轨迹」列仍来自内部轨迹 API / `internal_tracking_logs`）
 - 从节点列表按 `nodeTime` 倒序取首个**关键** `status` 写入 `route_status`，并联动清关异常
 - Authorization 使用 config 根级 **`dps_authorization`**（兼容块内 `Authorization`）
 - 无 `waybillId` 的单会跳过，需先「更新选中运单」补 ID

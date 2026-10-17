@@ -11,11 +11,17 @@ import WorkbenchRouteStatusFunnel from '@/components/home/WorkbenchRouteStatusFu
 
 const message = useMessage()
 const loading = ref(false)
+const refreshing = ref(false)
 const data = ref<WorkbenchOverview | null>(null)
 const loadError = ref('')
 
 async function load(opts: { silent?: boolean } = {}) {
-  if (!opts.silent) loading.value = true
+  if (opts.silent) {
+    if (refreshing.value) return
+    refreshing.value = true
+  } else {
+    loading.value = true
+  }
   loadError.value = ''
   try {
     const next = await getWorkbenchOverview({ todoLimit: 8, arrivalLimit: 6 })
@@ -25,9 +31,12 @@ async function load(opts: { silent?: boolean } = {}) {
     loadError.value = msg
     if (!data.value) {
       message.error(msg)
+    } else if (opts.silent) {
+      message.error(msg, { duration: 4000 })
     }
   } finally {
     loading.value = false
+    refreshing.value = false
   }
 }
 
@@ -40,7 +49,8 @@ onMounted(() => {
   <div class="scrollbar-subtle flex h-full min-h-0 w-full flex-col gap-4 overflow-y-auto">
     <WorkbenchHeader
       :generated-at="data?.generatedAt"
-      :loading="loading"
+      :refreshing="refreshing"
+      :disabled="loading && !data"
       @refresh="load({ silent: true })"
     />
 

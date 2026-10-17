@@ -614,6 +614,35 @@ def download_shipments_dps_packinglist(body: ShipmentBatchIdsIn):
     )
 
 
+@router.post("/api/v1/shipments/download-dps-warehouseform")
+def download_shipments_dps_warehouseform(body: ShipmentBatchIdsIn):
+    """按勾选运单从 DPS 下载排仓单（config.dps_warehouseform_download，?ids= 逗号拼接，超 50 分批）。"""
+    from ..services.shipment_dps_warehouseform_download import build_dps_warehouseform_download
+
+    try:
+        content, media_type, filename = build_dps_warehouseform_download(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+        )
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 dps_warehouseform_download。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    encoded = quote(filename)
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
+
 @router.post(
     "/api/v1/shipments/sync-route-status-from-dps",
     response_model=ShipmentDpsRouteStatusSyncResult,

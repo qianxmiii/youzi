@@ -2,15 +2,32 @@
 
 按日期倒序记录 youzi_v2 的代码与文档变更。
 
+## 2026-10-18
+
+### 修改
+
+- **异常跟踪**：「时效状态」列与筛选项用色标区分（即将超时 / 已超时 / 严重超时及阶段卡点类型）
+- **明细状态同步**：不再把 DPS 明细节点写入 `latest_tracking_*`，避免运单列表「内部轨迹」列被覆盖后显示为空
+- **轨迹抽屉**：标题运单号点击复制
+- **异常跟踪**：运单号左固定；「跟进状态」与「操作」一并右固定，横向滚动宽度按列宽合计，避免跟进列被操作列遮挡
+- **异常跟踪**：「有无异常」改为「仅异常货件」勾选；默认未选（无当前异常码货件），勾选后只显示有异常码货件
+- **异常跟踪**：列表新增「明细状态」列（与运单列表色标一致，数据来自预警关联运单 `route_status`）
+- **异常跟踪**：行内「已跟进 / 已解决 / 转异常 / 忽略」合并为悬停下拉，按钮默认展示「已跟进」（已跟进态带次数）
+- **工作台**：「今日动态」保留离港/到港/内签收/异常，并增加到中转仓、快递交仓、轨迹签收（601）共 7 项
+- **工作台**：右上角刷新改为胶囊按钮并带说明；静默刷新时显示「更新中」与成功提示，不再无反馈
+- **DPS 明细状态同步**：回写 `route_last_mile_handover_time`、`route_track_signed_time`；运单列表可按明细节点时间筛选
+- **运单列表**：支持 URL 深链 `atdFrom`/`ataFrom`、`hasException`+`timeField=exceptionOpenedTime`、明细节点 `timeField`
+
 ## 2026-10-17
 
 ### 新增
 
-- **运单管理 · 下载**：下拉「货箱 / 唛头 / 箱单发票」；箱单发票 `dps_packinglist_download` 为 **POST + `?ids=`**（多票逗号拼接），单票 `{运单号}_箱单发票.ext`，多票 DPS 原名
+- **运单管理 · 下载**：下拉「货箱 / 唛头 / 箱单发票 / 排仓单」；排仓单 `dps_warehouseform_download` 为 **POST + `?ids=`**（逗号拼接 waybillId，**每批最多 50**，超出自动多批请求后 zip）；单票 `{运单号}_排仓单.ext`
+- **运单管理 · 下载**：箱单发票 `dps_packinglist_download` 为 **POST + `?ids=`**（多票逗号拼接），单票 `{运单号}_箱单发票.ext`，多票 DPS 原名
 
 ### 修改
 
-- **承运商轨迹**：`vendors` 主项可配置 `fallbackVendor` / `fallbackVendors`；主系统无轨迹时按序尝试备用（如森磊 → 森磊2）
+- **承运商轨迹**：`vendors` 主项可配置 `fallbackVendor` / `fallbackVendors`；主系统无轨迹时按序尝试备用（如SENLEI → SENLEI2）
 - **顶栏世界时间**：时区较多时改为横向滚动展示，避免末个城市时间被裁切
 - **DPS 配置**：`shipment_queryByPerson` / `shipment_queryByOrder` / 明细状态 / 货箱下载等共用根级 **`dps_authorization`**（仍兼容各块内 `Authorization`）；缺省时接口返回 503 而非无响应；裸 token 自动补 `Bearer `
 - **开发代理**：Vite `/api` 代理超时与 DPS 长同步对齐（10 分钟），减少 `Failed to fetch`

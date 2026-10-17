@@ -44,6 +44,7 @@ import {
   downloadShipmentsDpsCargoData,
   downloadShipmentsDpsMarkData,
   downloadShipmentsDpsPackinglist,
+  downloadShipmentsDpsWarehouseform,
   exportShipmentsExcel,
   getShipment,
   getShipmentFilterOptions,
@@ -1225,10 +1226,29 @@ function readRouteQueryString(key: string): string | null {
   return text || null
 }
 
-/** 工作台深链：已到港未签收 / 本周签收 / 船名航次 */
+function applyAdvancedRangeFromQuery(
+  key: keyof ReturnType<typeof emptyAdvancedTimeRanges>,
+  fromKey: string,
+  toKey: string,
+) {
+  const fromRaw = readRouteQueryString(fromKey)
+  const toRaw = readRouteQueryString(toKey)
+  if (!fromRaw && !toRaw) return
+  const fromTs = dateOnlyToTimestamp(fromRaw)
+  const toTs = dateOnlyToTimestamp(toRaw ?? fromRaw)
+  if (fromTs == null) return
+  advancedTimes.value = {
+    ...advancedTimes.value,
+    [key]: [fromTs, toTs ?? fromTs],
+  }
+  filterStatus.value = null
+}
+
+/** 工作台深链：已到港未签收 / 本周签收 / 今日 ATD·ATA·签收 / 船名航次 */
 function applyRouteWorkbenchFilters() {
   if (readRouteBool('hasAta')) hasAta.value = true
   if (readRouteBool('notDelivered')) notDelivered.value = true
+  if (readRouteBool('hasException')) filterHasException.value = true
 
   const vessel = readRouteQueryString('vesselVoyage')
   if (vessel) {
@@ -1236,23 +1256,23 @@ function applyRouteWorkbenchFilters() {
     filterStatus.value = null
   }
 
-  const deliveredFrom = readRouteQueryString('deliveredFrom')
-  const deliveredTo = readRouteQueryString('deliveredTo')
-  if (deliveredFrom || deliveredTo) {
-    const fromTs = dateOnlyToTimestamp(deliveredFrom)
-    const toTs = dateOnlyToTimestamp(deliveredTo)
-    if (fromTs != null && toTs != null) {
-      advancedTimes.value = {
-        ...advancedTimes.value,
-        delivered: [fromTs, toTs],
+  applyAdvancedRangeFromQuery('delivered', 'deliveredFrom', 'deliveredTo')
+  applyAdvancedRangeFromQuery('atd', 'atdFrom', 'atdTo')
+  applyAdvancedRangeFromQuery('ata', 'ataFrom', 'ataTo')
+
+  const timeFieldRaw = readRouteQueryString('timeField')
+  const timeFrom = readRouteQueryString('timeFrom')
+  const timeTo = readRouteQueryString('timeTo')
+  if (timeFieldRaw && (timeFrom || timeTo)) {
+    const allowed = new Set(SHIPMENT_TIME_FIELD_OPTIONS.map((o) => o.value))
+    if (allowed.has(timeFieldRaw as ShipmentTimeField)) {
+      timeField.value = timeFieldRaw as ShipmentTimeField
+      const fromTs = dateOnlyToTimestamp(timeFrom)
+      const toTs = dateOnlyToTimestamp(timeTo ?? timeFrom)
+      if (fromTs != null) {
+        timeRange.value = [fromTs, toTs ?? fromTs]
+        filterStatus.value = null
       }
-      filterStatus.value = null
-    } else if (fromTs != null) {
-      advancedTimes.value = {
-        ...advancedTimes.value,
-        delivered: [fromTs, fromTs],
-      }
-      filterStatus.value = null
     }
   }
 }
@@ -1293,6 +1313,14 @@ watch(
       route.query.notDelivered,
       route.query.deliveredFrom,
       route.query.deliveredTo,
+      route.query.atdFrom,
+      route.query.atdTo,
+      route.query.ataFrom,
+      route.query.ataTo,
+      route.query.hasException,
+      route.query.timeField,
+      route.query.timeFrom,
+      route.query.timeTo,
       route.query.vesselVoyage,
     ] as const,
   () => {
@@ -2048,16 +2076,26 @@ function handleDownloadSelectedPackinglist() {
   )
 }
 
+function handleDownloadSelectedWarehouseform() {
+  void runDpsExportDownload(
+    downloadShipmentsDpsWarehouseform,
+    '排仓单已下载',
+    '下载排仓单失败',
+  )
+}
+
 const downloadDropdownOptions: DropdownOption[] = [
   { label: '货箱', key: 'cargo' },
   { label: '唛头', key: 'mark' },
   { label: '箱单发票', key: 'packinglist' },
+  { label: '排仓单', key: 'warehouseform' },
 ]
 
 function handleDownloadMenuSelect(key: string | number) {
   if (key === 'cargo') handleDownloadSelectedCargoData()
   else if (key === 'mark') handleDownloadSelectedMarkData()
   else if (key === 'packinglist') handleDownloadSelectedPackinglist()
+  else if (key === 'warehouseform') handleDownloadSelectedWarehouseform()
 }
 
 async function applySyncedShipmentRow(row: Shipment) {

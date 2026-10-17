@@ -377,7 +377,7 @@ def resolve_vendor_chain_for_row(
     *,
     code_to_carrier_id: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """主 vendor + config 声明的备用 vendor（如前系统查不到再查森磊2）。"""
+    """主 vendor + config 声明的备用 vendor（如前系统查不到再查SENLEI2）。"""
     primary = resolve_vendor_for_row(
         row,
         vendor_by_name,

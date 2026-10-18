@@ -329,6 +329,31 @@ def _day_group_for_eta(eta_dt: datetime, *, today: date) -> str:
     return "later"
 
 
+def _eta_day_api_range(eta_dt: datetime) -> tuple[str, str]:
+    day = eta_dt.date().isoformat()
+    return f"{day} 00:00:00", f"{day} 23:59:59"
+
+
+def _arrival_bucket_shipments_href(
+    *,
+    vessel: str,
+    dest: str,
+    eta_dt: datetime,
+) -> str:
+    """近期到港卡片 → 运单列表（与聚合维度一致：ETA 日 + 目的港 + 船名航次）。"""
+    eta_from, eta_to = _eta_day_api_range(eta_dt)
+    parts = [
+        "notDelivered=true",
+        f"etaFrom={quote(eta_from)}",
+        f"etaTo={quote(eta_to)}",
+    ]
+    if dest:
+        parts.append(f"destinationPortCode={quote(dest)}")
+    if vessel and vessel != "—":
+        parts.append(f"vesselVoyage={quote(vessel)}")
+    return f"/shipments?{'&'.join(parts)}"
+
+
 def _build_arrivals(
     *,
     database: Database,
@@ -392,10 +417,10 @@ def _build_arrivals(
                 "eta": eta_raw or None,
                 "shipmentCount": 0,
                 "isSubscribedPort": dest.lower() in subscribed_names if dest else False,
-                "href": (
-                    f"/shipments?vesselVoyage={quote(vessel)}"
-                    if vessel and vessel != "—"
-                    else "/vessel-schedules?maritimeStatus=arriving_soon"
+                "href": _arrival_bucket_shipments_href(
+                    vessel=vessel,
+                    dest=dest,
+                    eta_dt=eta_dt,
                 ),
                 "_eta_dt": eta_dt,
             }

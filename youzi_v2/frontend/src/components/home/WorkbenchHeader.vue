@@ -38,7 +38,7 @@ function onRefresh() {
     <div class="min-w-0">
       <h1 class="page-h2">物流工作台</h1>
       <p class="page-subtitle mt-1 workbench-header__meta">
-        明细状态、今日动态、待办与运输概览
+        全量掌控在途状态、时效预警及关键节点卡点
       </p>
     </div>
 
@@ -49,7 +49,7 @@ function onRefresh() {
             class="workbench-header__time tabular-nums"
             :title="generatedAt || undefined"
           >
-            更新 {{ formatUpdated(generatedAt) }}
+            数据更新于 {{ formatUpdated(generatedAt) }}
           </span>
         </template>
         <span class="text-xs">
@@ -76,7 +76,7 @@ function onRefresh() {
           </button>
         </template>
         <span class="text-xs leading-relaxed">
-          重新拉取工作台数据（明细状态、今日动态、待办、到港等）<br />
+          重新拉取工作台数据（明细状态、今日动态、到港等）<br />
           不整页空白，仅更新数字与列表
         </span>
       </NTooltip>

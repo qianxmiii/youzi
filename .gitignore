@@ -21,7 +21,8 @@ server/*.db
 temp/
 
 # 测试文件
-youzi_v2/tests/
+*/tests/
+*/*/tests/
 
 # youzi_v2：本地 SQLite、上传与生成文件（勿提交 Git）
 youzi_v2/__pycache__/

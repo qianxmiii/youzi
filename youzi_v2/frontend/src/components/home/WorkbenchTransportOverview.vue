@@ -76,7 +76,7 @@ function go(to: { path: string; query?: Record<string, string> }) {
 </script>
 
 <template>
-  <section>
+  <section class="panel px-4 py-3.5">
     <div class="mb-2.5 flex items-center justify-between gap-2">
       <h2 class="section-h2">运输概览</h2>
       <button

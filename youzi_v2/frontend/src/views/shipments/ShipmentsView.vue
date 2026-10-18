@@ -1346,9 +1346,16 @@ function applyRouteWorkbenchFilters() {
     filterStatus.value = null
   }
 
+  const destPort = readRouteQueryString('destinationPortCode')
+  if (destPort) {
+    filterDestinationPort.value = destPort
+    filterStatus.value = null
+  }
+
   applyAdvancedRangeFromQuery('delivered', 'deliveredFrom', 'deliveredTo')
   applyAdvancedRangeFromQuery('atd', 'atdFrom', 'atdTo')
   applyAdvancedRangeFromQuery('ata', 'ataFrom', 'ataTo')
+  applyAdvancedRangeFromQuery('eta', 'etaFrom', 'etaTo')
 
   const timeFieldRaw = readRouteQueryString('timeField')
   const timeFrom = readRouteQueryString('timeFrom')
@@ -1412,6 +1419,9 @@ watch(
       route.query.timeFrom,
       route.query.timeTo,
       route.query.vesselVoyage,
+      route.query.destinationPortCode,
+      route.query.etaFrom,
+      route.query.etaTo,
     ] as const,
   () => {
     applyRouteWorkbenchFilters()

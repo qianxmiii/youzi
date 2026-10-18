@@ -77,9 +77,12 @@ function go(card: FocusCard) {
 </script>
 
 <template>
-  <section>
+  <section class="panel px-4 py-3.5">
     <div class="mb-2.5 flex items-center justify-between gap-2">
-      <h2 class="section-h2">今日重点</h2>
+      <div>
+        <h2 class="section-h2 !text-[var(--color-fg-emphasis)]">今日重点</h2>
+        <p class="page-subtitle mt-1 hidden sm:block">待办审批、催款与到港预警</p>
+      </div>
       <button
         v-if="error && !loading"
         type="button"

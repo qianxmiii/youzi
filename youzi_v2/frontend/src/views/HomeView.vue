@@ -4,9 +4,7 @@ import { useMessage } from 'naive-ui'
 import { getWorkbenchOverview, type WorkbenchOverview } from '@/api/workbench'
 import WorkbenchHeader from '@/components/home/WorkbenchHeader.vue'
 import WorkbenchFocusMetrics from '@/components/home/WorkbenchFocusMetrics.vue'
-import WorkbenchTodoList from '@/components/home/WorkbenchTodoList.vue'
 import WorkbenchArrivalTimeline from '@/components/home/WorkbenchArrivalTimeline.vue'
-import WorkbenchTransportOverview from '@/components/home/WorkbenchTransportOverview.vue'
 import WorkbenchRouteStatusFunnel from '@/components/home/WorkbenchRouteStatusFunnel.vue'
 
 const message = useMessage()
@@ -24,7 +22,7 @@ async function load(opts: { silent?: boolean } = {}) {
   }
   loadError.value = ''
   try {
-    const next = await getWorkbenchOverview({ todoLimit: 8, arrivalLimit: 6 })
+    const next = await getWorkbenchOverview({ todoLimit: 1, arrivalLimit: 8 })
     data.value = next
   } catch (e) {
     const msg = e instanceof Error ? e.message : '加载失败'
@@ -58,6 +56,7 @@ onMounted(() => {
       :module="data?.routeStatus ?? null"
       :loading="loading"
       :error="data?.routeStatus?.available === false ? data?.routeStatus?.error : null"
+      :exception-stuck="data?.focus?.pendingExceptions ?? 0"
       @retry="load()"
     />
 
@@ -68,45 +67,12 @@ onMounted(() => {
       @retry="load()"
     />
 
-    <div class="workbench-main">
-      <WorkbenchTodoList
-        :items="data?.todos?.items ?? []"
-        :loading="loading"
-        :available="data?.todos?.available"
-        :error="data?.todos?.error"
-        @retry="load()"
-      />
-      <WorkbenchArrivalTimeline
-        :items="data?.arrivals?.items ?? []"
-        :loading="loading"
-        :available="data?.arrivals?.available"
-        :error="data?.arrivals?.error"
-        @retry="load()"
-      />
-    </div>
-
-    <WorkbenchTransportOverview
-      :overview="data?.overview ?? null"
+    <WorkbenchArrivalTimeline
+      :items="data?.arrivals?.items ?? []"
       :loading="loading"
-      :error="data?.overview?.available === false ? data?.overview?.error : null"
+      :available="data?.arrivals?.available"
+      :error="data?.arrivals?.error"
       @retry="load()"
     />
   </div>
 </template>
-
-<style scoped>
-.workbench-main {
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-@media (min-width: 960px) {
-  .workbench-main {
-    display: grid;
-    grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
-    gap: 1rem;
-    align-items: stretch;
-  }
-}
-</style>

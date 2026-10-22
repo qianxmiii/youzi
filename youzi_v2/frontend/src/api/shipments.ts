@@ -45,6 +45,7 @@ export interface ShipmentFilterOptions {
   customers: string[]
   carriers: ShipmentCarrierFilterOption[]
   carrierCodes: string[]
+  supplierNames: string[]
   channels: ShipmentChannelFilterOption[]
   countryCodes: string[]
   channelCodes: string[]
@@ -81,6 +82,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   if (params.fclOnly === true) q.fclOnly = 'true'
   if (params.fclOnly === false) q.fclOnly = 'false'
   if (params.carrierCode?.trim()) q.carrierCode = params.carrierCode.trim()
+  if (params.supplierName?.trim()) q.supplierName = params.supplierName.trim()
   if (params.countryCode?.trim()) q.countryCode = params.countryCode.trim()
   if (params.channelCode?.trim()) q.channelCode = params.channelCode.trim()
   if (params.channelNameZh?.trim()) q.channelNameZh = params.channelNameZh.trim()
@@ -128,6 +130,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
   }
   if (params.noTracking) q.noTracking = 'true'
   if (params.noZipcode) q.noZipcode = 'true'
+  if (params.missingAmazonRefs) q.missingAmazonRefs = 'true'
   if (params.hasTrackingNumber) q.hasTrackingNumber = 'true'
   if (params.groupId?.trim()) q.groupId = params.groupId.trim()
   if (params.groupNo?.trim()) q.groupNo = params.groupNo.trim()
@@ -171,6 +174,8 @@ export interface ListShipmentsParams {
   /** true=仅整柜（FC-整柜渠道或承运商整柜）；false=排除整柜 */
   fclOnly?: boolean
   carrierCode?: string
+  /** 供应商精确匹配 */
+  supplierName?: string
   countryCode?: string
   channelCode?: string
   channelNameZh?: string
@@ -216,6 +221,7 @@ export interface ListShipmentsParams {
   minStaleDays?: number
   noTracking?: boolean
   noZipcode?: boolean
+  missingAmazonRefs?: boolean
   hasTrackingNumber?: boolean
   groupId?: string
   groupNo?: string
@@ -276,12 +282,39 @@ export async function createShipment(payload: ShipmentPayload): Promise<Shipment
   return api<Shipment>('/api/v1/shipments', { method: 'POST', body: payload })
 }
 
+export interface AmzPushResult {
+  attempted: boolean
+  ok: boolean
+  skipped: boolean
+  reason?: string | null
+  message: string
+  originPort?: string | null
+  destinationPort?: string | null
+  retryAfterSec?: number | null
+  transportMode?: string | null
+}
+
+export type ShipmentUpdateResult = Shipment & { amzPush?: AmzPushResult }
+
+export async function previewShipmentAmzPush(
+  id: string,
+  destPort?: string,
+): Promise<AmzPushResult> {
+  return api<AmzPushResult>(`/api/v1/shipments/${id}/amz-push-preview`, {
+    query: destPort ? { destPort } : undefined,
+  })
+}
+
 export async function updateShipment(
   id: string,
-  payload: Partial<ShipmentPayload>,
-): Promise<Shipment> {
+  payload: Partial<ShipmentPayload> & {
+    amzPushOriginPort?: string | null
+    amzPushDestPort?: string | null
+    pushAmzUpdate?: boolean
+  },
+): Promise<ShipmentUpdateResult> {
   const { shipmentNo: _sn, ...body } = payload
-  return api<Shipment>(`/api/v1/shipments/${id}`, { method: 'PUT', body })
+  return api<ShipmentUpdateResult>(`/api/v1/shipments/${id}`, { method: 'PUT', body })
 }
 
 export async function deleteShipment(id: string): Promise<void> {
@@ -392,6 +425,14 @@ export async function syncShipmentsFromDps(
   return api<ShipmentDpsSyncByOrderResult>('/api/v1/shipments/sync-from-dps', {
     method: 'POST',
     body: { shipmentNos },
+    timeout: 600_000,
+  })
+}
+
+/** 港前：按运单号更新全部已下单、提货中、已入仓 */
+export async function syncPreportShipmentsFromDps(): Promise<ShipmentDpsSyncByOrderResult> {
+  return api<ShipmentDpsSyncByOrderResult>('/api/v1/shipments/sync-preport-from-dps', {
+    method: 'POST',
     timeout: 600_000,
   })
 }

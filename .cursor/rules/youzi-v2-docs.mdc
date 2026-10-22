@@ -1,11 +1,11 @@
 ---
-description: youzi_v2 代码变更必须同步更新文档
+description: youzi_v2 文档同步与精简更新记录规范
 alwaysApply: true
 ---
 
 # youzi_v2 文档同步规则
 
-所有开发、重构、Bug 修复均在 `youzi_v2/` 完成；**每次修改、新增、删除代码后，必须同步检查并更新相关文档**，任务结束前完成文档检查。
+所有开发、重构、Bug 修复均在 `youzi_v2/` 完成。每次代码变更后检查相关文档，仅更新受影响的内容；更新记录遵循 [changelog-policy.md](../../youzi_v2/docs/changelog-policy.md)，不要求每次编辑都追加 CHANGELOG。
 
 ## 文档位置
 
@@ -13,6 +13,7 @@ alwaysApply: true
 |------|------|
 | 项目总览 | `youzi_v2/README.md` |
 | 变更记录 | `youzi_v2/CHANGELOG.md` |
+| 记录规范与归档 | `youzi_v2/docs/changelog-policy.md`、`youzi_v2/docs/changelog/YYYY.md` |
 | 详细文档 | `youzi_v2/docs/`（见 `docs/README.md` 索引） |
 | 模块说明 | 各重要目录 `README.md`（`frontend/`、`db/`、`services/` 等） |
 
@@ -20,16 +21,18 @@ alwaysApply: true
 
 | 变更类型 | 必更新 |
 |----------|--------|
-| 新增功能 | 模块 README、根 README 功能列表、`CHANGELOG.md`；复杂功能加 `docs/*.md` |
-| 修改功能 | 模块 README、业务流程说明、`CHANGELOG.md` |
-| 修改数据库 | `docs/database.md`、表结构/ER 说明、模块 README、`CHANGELOG.md` |
-| 新增/变更 API | `docs/api.md`、模块 README、调用示例、`CHANGELOG.md` |
-| 重构 | 模块 README、`CHANGELOG.md`；架构变动更新 `docs/architecture.md` |
-| Bug 修复 | `CHANGELOG.md`；若涉及行为变更，同步模块 README |
+| 新增功能 | 更新受影响的模块 README、入口和详细说明；用户可感知时写 CHANGELOG |
+| 修改功能 | 更新受影响的业务流程与模块说明；有使用行为变化时写 CHANGELOG |
+| 修改数据库 | 更新 `docs/database.md`、相关表结构说明；迁移与兼容要求写入 CHANGELOG 升级说明 |
+| 新增/变更 API | 更新 `docs/api.md`、受影响模块与调用示例；影响使用或升级时写 CHANGELOG |
+| 重构 | 更新受影响的模块说明；架构变动更新 `docs/architecture.md`；纯内部重构不单列 CHANGELOG |
+| Bug 修复 | 重要或用户可感知的修复写 CHANGELOG；行为变化同步相关说明 |
+| 细碎样式、测试、文档勘误 | 检查文档一致性；无使用或升级影响时不新增 CHANGELOG 条目 |
 
 ## 质量要求
 
-- Markdown 格式，含目录与示例（代码片段 / curl）
+- 详细技术文档按需提供目录与示例；CHANGELOG 保持简短，不复制实现细节
+- 同日同功能合并，统一分类；保留升级事项，禁止实际报价、成本、客户数据和凭据；归档也适用统一规范
 - **与代码保持一致**，不允许过期内容；发现不一致时**优先修正文档**
 - 数据库、API、业务流程变更时，**禁止只改代码不改** `docs/database.md`、`docs/api.md` 及对应模块 README
 
@@ -37,7 +40,7 @@ alwaysApply: true
 
 1. 本次改动是否影响 API / 表结构 / 业务流程？
 2. 对应模块 README 与 `docs/` 是否已更新？
-3. `CHANGELOG.md` 是否已按日期记录（新增 / 修改 / 修复 / 重构）？
+3. 本次是否需要更新记录？需要时是否按规范合并、去重并保留升级说明？
 4. 根 `README.md` 模块列表或入口链接是否需要更新？
 
 完整规范见 `youzi_v2/docs/README.md`。

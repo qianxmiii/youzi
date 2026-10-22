@@ -42,6 +42,8 @@ import {
   settlementMethodLabel,
 } from '@/constants/paymentReminders'
 import { ICON_STROKE } from '@/constants/icons'
+import { resolveShipmentListStatusDisplay } from '@/constants/shipmentRouteStatus'
+import { SHIPMENT_STATUS_LABEL_ZH } from '@/constants/shipmentWorkspace'
 import { usePendingPaymentReminderCount } from '@/composables/usePendingPaymentReminderCount'
 import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { formatAbsoluteDateTime, formatRelativeTime } from '@/utils/formatDateTime'
@@ -105,13 +107,6 @@ const followupItems = ref<PaymentReminderFollowup[]>([])
 const trackingDrawerShow = ref(false)
 const trackingDrawerShipment = ref<Shipment | null>(null)
 const trackingDrawerTab = ref<'internal' | 'carrier'>('internal')
-
-const SHIPMENT_STATUS_LABEL: Record<string, string> = {
-  IN_TRANSIT: '转运中',
-  DELIVERED: '已签收',
-  INSPECTION: '查验',
-  UNKNOWN: '未知',
-}
 
 const selectedRows = computed(() =>
   items.value.filter((row) => checkedRowKeys.value.includes(row.shipmentId)),
@@ -509,15 +504,12 @@ function renderTrackingCell(row: PaymentReminderItem) {
 }
 
 function renderStatusCell(row: PaymentReminderItem) {
-  const code = (row.statusCode || 'UNKNOWN').trim().toUpperCase()
-  const label = SHIPMENT_STATUS_LABEL[code] || code
-  const tone =
-    code === 'DELIVERED'
-      ? 'shipment-status-badge--success'
-      : code === 'INSPECTION' || code === 'IN_TRANSIT'
-        ? 'shipment-status-badge--warning'
-        : 'shipment-status-badge--default'
-  return h('span', { class: ['shipment-status-badge', tone] }, label)
+  const { label, toneClass } = resolveShipmentListStatusDisplay({
+    statusCode: row.statusCode,
+    routeStatus: null,
+    coarseStatusLabel: SHIPMENT_STATUS_LABEL_ZH,
+  })
+  return h('span', { class: ['shipment-status-badge', toneClass] }, label)
 }
 
 function renderPaymentStatusCell(row: PaymentReminderItem) {
@@ -1143,6 +1135,11 @@ onMounted(() => {
 .payment-reminders-table :deep(.shipment-status-badge--success) {
   color: var(--tag-success-fg);
   background: var(--tag-success-bg);
+}
+
+.payment-reminders-table :deep(.shipment-status-badge--indigo) {
+  color: var(--tag-indigo-fg);
+  background: var(--tag-indigo-bg);
 }
 
 .payment-reminders-table :deep(.payment-reminders-shipment-no-cell) {

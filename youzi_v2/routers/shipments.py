@@ -306,6 +306,18 @@ def create_shipment(payload: ShipmentRecordIn):
     except sqlite3.IntegrityError as exc:
         raise HTTPException(status_code=409, detail="运单号已存在") from exc
 
+@router.get("/api/v1/shipments/{item_id}/amz-push-preview")
+def preview_shipment_amz_push(item_id: str, destPort: str | None = None):
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    from ..services.dps_update_amz import preview_amz_push
+
+    if destPort is not None:
+        row = {**row, "amzPushDestPort": destPort}
+    return preview_amz_push(shipments_repo._database, row, selected_dest_port=destPort)
+
+
 @router.put("/api/v1/shipments/{item_id}")
 def update_shipment(item_id: str, payload: ShipmentUpdateIn):
     try:
@@ -321,6 +333,19 @@ def update_shipment(item_id: str, payload: ShipmentUpdateIn):
             item_id,
             shipment_no=row.get("shipmentNo"),
         )
+    if payload.push_amz_update:
+        from ..services.dps_update_amz import push_amz_update
+
+        fresh = shipments_repo.get_by_id(item_id) or row
+        row = {**fresh, "amzPush": push_amz_update(
+            shipments_repo._database,
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            fresh,
+        )}
+        refreshed = shipments_repo.get_by_id(item_id)
+        if refreshed is not None:
+            row = {**refreshed, "amzPush": row["amzPush"]}
     return row
 
 @router.delete("/api/v1/shipments/{item_id}")
@@ -522,6 +547,42 @@ def sync_shipments_from_dps(body: ShipmentDpsSyncByOrderRequest):
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post(
+    "/api/v1/shipments/sync-preport-from-dps",
+    response_model=ShipmentDpsSyncByOrderResult,
+)
+def sync_preport_shipments_from_dps():
+    """
+    港前全部更新：已下单、提货中、已入仓（不含已取消）。
+    与「更新选中运单」相同，按运单号走 shipment_queryByOrder。
+    """
+    from ..services.shipment_dps_sync import run_shipment_dps_sync_preport_active
+
+    try:
+        result = run_shipment_dps_sync_preport_active(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+        )
+        try:
+            return ShipmentDpsSyncByOrderResult(**result)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=f"DPS 同步结果解析失败：{exc}",
+            ) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 shipment_queryByOrder。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/api/v1/shipments/download-dps-cargo-data")
 def download_shipments_dps_cargo_data(body: ShipmentBatchIdsIn):
     """
@@ -566,6 +627,10 @@ def create_dps_export_job(body: DpsExportJobCreateIn):
             LOGISTICS_CONFIG_PATH,
             body.ids,
             split_spec=body.split_spec,
+            rename_fields=body.rename_fields,
+            rename_separator=body.rename_separator,
+            rename_folder=body.rename_folder,
+            rename_country_lang=body.rename_country_lang,
         )
         job_id = start_dps_export_job(runner)
     except ValueError as exc:

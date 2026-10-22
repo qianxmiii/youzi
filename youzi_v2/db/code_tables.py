@@ -34,6 +34,16 @@ _CODE_TABLE_DEFS: list[tuple[str, str]] = [
         "shipment_route_status_codes",
         "dps_status TEXT NOT NULL DEFAULT '',",
     ),
+    (
+        "amz_update_port_rules",
+        "transport_mode TEXT NOT NULL DEFAULT '',\n"
+        "    country_code TEXT NOT NULL DEFAULT '',\n"
+        "    leg TEXT NOT NULL DEFAULT '',\n"
+        "    port_code TEXT NOT NULL DEFAULT '',\n"
+        "    rule_kind TEXT NOT NULL DEFAULT 'DEFAULT',\n"
+        "    match_text TEXT NOT NULL DEFAULT '',\n"
+        "    is_default INTEGER NOT NULL DEFAULT 0,",
+    ),
 ]
 
 _STATUS_SEEDS: list[tuple[str, str, str, int]] = [
@@ -57,6 +67,7 @@ _EXCEPTION_SEEDS: list[tuple[str, str, str, int]] = [
     ("TRANSIT_TIMEOUT", "运输超时", "Transit timeout", 50),
     ("EXPORT_CUSTOMS_EXCEPTION", "出口海关异常", "Export customs exception", 60),
     ("IMPORT_CUSTOMS_EXCEPTION", "进口清关异常", "Import customs exception", 70),
+    ("AMAZON_EXCEPTION", "亚马逊异常", "Amazon exception", 80),
 ]
 
 
@@ -114,6 +125,9 @@ def seed_if_empty(conn: sqlite3.Connection) -> None:
     _sync_exception_codes(conn)
     _sync_route_status_codes(conn)
     _seed_channel_codes(conn)
+    from .amz_update_port_rules import sync_amz_update_port_rules
+
+    sync_amz_update_port_rules(conn)
 
 
 def _migrate_route_status_codes(conn: sqlite3.Connection) -> None:

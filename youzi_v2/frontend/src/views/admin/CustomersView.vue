@@ -17,6 +17,7 @@ import { h, onMounted, ref, watch } from 'vue'
 import {
   createCustomer,
   deleteCustomer,
+  exportCustomersExcel,
   listCustomers,
   syncCustomersFromShipments,
   updateCustomer,
@@ -33,6 +34,7 @@ const message = useMessage()
 const dialog = useDialog()
 const loading = ref(false)
 const syncing = ref(false)
+const exporting = ref(false)
 const submitting = ref(false)
 const items = ref<Customer[]>([])
 const total = ref(0)
@@ -194,6 +196,32 @@ async function toggleVip(row: Customer, isVip: boolean) {
   } catch (e) {
     message.error(e instanceof Error ? e.message : '更新失败')
     await load()
+  }
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+async function handleExport() {
+  exporting.value = true
+  try {
+    const blob = await exportCustomersExcel({
+      search: search.value.trim() || undefined,
+      vipOnly: filterVipOnly.value || undefined,
+    })
+    const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').slice(0, 14)
+    downloadBlob(blob, `客户导出_${ts}.xlsx`)
+    message.success(`已导出 ${total.value} 条客户（当前筛选）`)
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '导出失败')
+  } finally {
+    exporting.value = false
   }
 }
 
@@ -381,9 +409,12 @@ onMounted(async () => {
           运单用户名为同步键；可直接修改客户名，有关联运单时会询问是否同步更新运单。客户语言用于 UPS/FedEx 等官网跳转。
         </p>
       </div>
-      <NButton size="small" type="primary" :loading="syncing" @click="handleSync">
-        从运单同步客户
-      </NButton>
+      <NSpace size="small">
+        <NButton size="small" :loading="exporting" @click="handleExport">导出 Excel</NButton>
+        <NButton size="small" type="primary" :loading="syncing" @click="handleSync">
+          从运单同步客户
+        </NButton>
+      </NSpace>
     </div>
 
     <div class="panel shrink-0 px-3 py-3">

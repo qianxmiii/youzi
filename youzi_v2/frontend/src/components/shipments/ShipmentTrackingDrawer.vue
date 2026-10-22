@@ -9,10 +9,14 @@ import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.
 import ShipmentTrackingTimeReview from '@/components/shipments/ShipmentTrackingTimeReview.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
 import {
-  isDisplayableRouteStatus,
   resolveShipmentListStatusDisplay,
   routeStatusLabelZh,
 } from '@/constants/shipmentRouteStatus'
+import {
+  SHIPMENT_STATUS_LABEL_ZH,
+  dpsPreportStatusBadgeClass,
+  shipmentStatusLabel,
+} from '@/constants/shipmentWorkspace'
 import type { Shipment } from '@/types/shipment'
 import { resolveLastMileTracking } from '@/utils/lastMileTracking'
 
@@ -38,19 +42,7 @@ const showModel = computed({
   set: (v: boolean) => emit('update:show', v),
 })
 
-const statusLabel: Record<string, string> = {
-  IN_TRANSIT: '转运中',
-  DELIVERED: '已签收',
-  INSPECTION: '查验',
-  UNKNOWN: '未知',
-}
-
-const statusBadgeClass: Record<string, string> = {
-  IN_TRANSIT: 'status-badge--transit',
-  DELIVERED: 'status-badge--delivered',
-  INSPECTION: 'status-badge--inspection',
-  UNKNOWN: 'status-badge--unknown',
-}
+const coarseStatusLabel: Record<string, string> = { ...SHIPMENT_STATUS_LABEL_ZH }
 
 const lastMile = computed(() =>
   props.shipment ? resolveLastMileTracking(props.shipment) : null,
@@ -80,18 +72,6 @@ const carrierText = computed(() => {
   return s.carrierCode?.trim() || '—'
 })
 
-const statusCode = computed(() => props.shipment?.statusCode?.trim().toUpperCase() || '')
-
-const routeStatusCode = computed(() => {
-  const code = props.shipment?.routeStatus?.trim().toUpperCase() || ''
-  return isDisplayableRouteStatus(code) ? code : ''
-})
-
-const routeStatusText = computed(() => {
-  if (!routeStatusCode.value) return '无明细状态'
-  return routeStatusLabelZh(routeStatusCode.value, props.routeStatusLabelByCode)
-})
-
 /** 与运单列表状态列一致：粗状态已签收时不被「轨迹签收」顶替 */
 const headerStatusDisplay = computed(() => {
   const s = props.shipment
@@ -100,7 +80,7 @@ const headerStatusDisplay = computed(() => {
     statusCode: s.statusCode,
     routeStatus: s.routeStatus,
     routeStatusLabelByCode: props.routeStatusLabelByCode,
-    coarseStatusLabel: statusLabel,
+    coarseStatusLabel,
   })
 })
 
@@ -224,12 +204,12 @@ async function syncRouteStatus() {
             <span v-else class="transfer-value">{{ transferNumber.number }}</span>
           </div>
 
-          <div v-if="statusCode" class="status-row">
+          <div v-if="shipment.statusCode?.trim()" class="status-row">
             <span
               class="status-badge"
-              :class="statusBadgeClass[statusCode] || 'status-badge--unknown'"
+              :class="dpsPreportStatusBadgeClass(shipment.statusCode)"
             >
-              {{ statusLabel[statusCode] || shipment.statusCode }}
+              {{ shipmentStatusLabel(shipment.statusCode) }}
             </span>
           </div>
         </div>

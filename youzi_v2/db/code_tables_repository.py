@@ -5,6 +5,7 @@ from __future__ import annotations
 import sqlite3
 from typing import Any
 
+from .amz_update_port_rules import LEGS, RULE_KINDS, TRANSPORT_MODES
 from .channel_seeds import CHANNEL_CATEGORIES
 from .code_tables import list_code_tables
 from .shipment_exception_phase import DEFAULT_EXCEPTION_PHASE, normalize_exception_phase
@@ -23,6 +24,7 @@ _TABLE_LABELS: dict[str, str] = {
     "shipment_status_codes": "运单状态",
     "shipment_exception_codes": "运单异常",
     "shipment_route_status_codes": "轨迹明细状态",
+    "amz_update_port_rules": "亚马逊推送港口",
 }
 
 _PORT_TYPES = frozenset({"origin", "destination", "both"})
@@ -49,6 +51,7 @@ def list_table_meta() -> list[dict[str, Any]]:
             "hasCarrierFields": name == "carrier_codes",
             "hasRouteStatusFields": name == "shipment_route_status_codes",
             "hasExceptionPhaseFields": name == "shipment_exception_codes",
+            "hasAmzPortRuleFields": name == "amz_update_port_rules",
         }
         for name in sorted(_ALLOWED_TABLES)
     ]
@@ -81,6 +84,14 @@ def _row_to_api(table: str, row: sqlite3.Row) -> dict[str, Any]:
         out["phaseCategory"] = (
             row["phase_category"] if "phase_category" in row.keys() else DEFAULT_EXCEPTION_PHASE
         ) or DEFAULT_EXCEPTION_PHASE
+    if table == "amz_update_port_rules":
+        out["transportMode"] = row["transport_mode"] if "transport_mode" in row.keys() else ""
+        out["countryCode"] = row["country_code"] if "country_code" in row.keys() else ""
+        out["leg"] = row["leg"] if "leg" in row.keys() else ""
+        out["portCode"] = row["port_code"] if "port_code" in row.keys() else ""
+        out["ruleKind"] = row["rule_kind"] if "rule_kind" in row.keys() else ""
+        out["matchText"] = row["match_text"] if "match_text" in row.keys() else ""
+        out["isDefault"] = bool(row["is_default"]) if "is_default" in row.keys() else False
     return out
 
 
@@ -284,6 +295,32 @@ class CodeTablesRepository:
                         now,
                     ),
                 )
+            elif t == "amz_update_port_rules":
+                self._conn.execute(
+                    f"""
+                    INSERT INTO {t} (
+                        code, name_zh, name_en, transport_mode, country_code, leg,
+                        port_code, rule_kind, match_text, is_default,
+                        sort_order, is_active, created_time, updated_time
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        code,
+                        payload["name_zh"],
+                        payload["name_en"],
+                        payload["transport_mode"],
+                        payload["country_code"],
+                        payload["leg"],
+                        payload["port_code"],
+                        payload["rule_kind"],
+                        payload["match_text"],
+                        payload["is_default"],
+                        payload["sort_order"],
+                        payload["is_active"],
+                        now,
+                        now,
+                    ),
+                )
             else:
                 self._conn.execute(
                     f"""
@@ -362,6 +399,25 @@ class CodeTablesRepository:
         if t == "shipment_exception_codes":
             sets.insert(2, "phase_category = ?")
             vals.insert(2, payload["phase_category"])
+        if t == "amz_update_port_rules":
+            sets[1:1] = [
+                "transport_mode = ?",
+                "country_code = ?",
+                "leg = ?",
+                "port_code = ?",
+                "rule_kind = ?",
+                "match_text = ?",
+                "is_default = ?",
+            ]
+            vals[1:1] = [
+                payload["transport_mode"],
+                payload["country_code"],
+                payload["leg"],
+                payload["port_code"],
+                payload["rule_kind"],
+                payload["match_text"],
+                payload["is_default"],
+            ]
         vals.append(c)
         replaced = 0
         with self._database.lock:
@@ -492,6 +548,31 @@ class CodeTablesRepository:
             out["phase_category"] = normalize_exception_phase(
                 phase_raw if phase_raw is not None else DEFAULT_EXCEPTION_PHASE
             )
+        if table == "amz_update_port_rules":
+            mode = (data.get("transport_mode") or data.get("transportMode") or "").strip().upper()
+            country = (data.get("country_code") or data.get("countryCode") or "").strip().upper()
+            leg = (data.get("leg") or "").strip().upper()
+            port_code = (data.get("port_code") or data.get("portCode") or "").strip().upper()
+            kind = (data.get("rule_kind") or data.get("ruleKind") or "").strip().upper()
+            match_text = (data.get("match_text") or data.get("matchText") or "").strip()
+            is_default = data.get("is_default", data.get("isDefault", False))
+            if isinstance(is_default, str):
+                is_default = is_default.strip().lower() in ("1", "true", "yes", "y", "是")
+            if mode not in TRANSPORT_MODES:
+                raise ValueError("transportMode 须为 AIR 或 SEA")
+            if leg not in LEGS:
+                raise ValueError("leg 须为 ORIGIN 或 DESTINATION")
+            if kind not in RULE_KINDS:
+                raise ValueError("ruleKind 无效")
+            if not port_code:
+                raise ValueError("portCode 不能为空")
+            out["transport_mode"] = mode
+            out["country_code"] = country
+            out["leg"] = leg
+            out["port_code"] = port_code
+            out["rule_kind"] = kind
+            out["match_text"] = match_text
+            out["is_default"] = 1 if is_default else 0
         return out
 
     def lookup_carrier_code_by_id(self, carrier_id: str) -> str | None:

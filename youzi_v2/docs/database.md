@@ -76,6 +76,9 @@ erDiagram
 | tracking_number | TEXT | 主跟踪号 |
 | customer_shipment_id | TEXT | 货件号 |
 | amazon_ref_id | TEXT | Amazon Ref |
+| amz_push_origin_port | TEXT | 补货件号窗口确认的起运港（空则用规则默认） |
+| amz_push_dest_port | TEXT | 补货件号窗口确认的目的港（空则用规则默认） |
+| amz_push_at | TEXT | 最近一次亚马逊推送时间（成败都写入，60 秒冷却） |
 | vessel_name, voyage_no, vessel_voyage | TEXT | 船名 / 航次 / 组合键 |
 | etd, eta, atd, ata | TEXT | 海运时间节点 |
 | origin_port_code, destination_port_code | TEXT | 起运港 / 目的港 |
@@ -274,6 +277,7 @@ erDiagram
 | 表/模块 | 说明 |
 |---------|------|
 | code_tables | 通用码表（国家、港口、状态等），见 `db/code_tables.py`；`carrier_codes.carrier_id` 存 DPS carrierId，反查 `carrier_code` |
+| amz_update_port_rules | 亚马逊推送港口（空运三字 / 海运五字），见 [design/dps-update-amz-design.md](./design/dps-update-amz-design.md) |
 | dict | 字典项，`db/dict_table.py` |
 | app_settings | 应用设置键值 |
 | quote_history | 报价历史（含提货费 / 派送费 / 超长费 / 超尺寸费 等） |

@@ -31,3 +31,19 @@ These rules apply to every Git commit and push in this repository.
     it to the current branch.
 11. Never use `--force` or `--force-with-lease` unless the user explicitly
     authorizes that exact operation.
+
+## Documentation and changelog rules
+
+These documentation rules apply to all work in `youzi_v2/`, independently of
+whether a commit is requested.
+
+- Follow [the changelog policy](youzi_v2/docs/changelog-policy.md) when editing
+  `youzi_v2/CHANGELOG.md` or its annual archives.
+- Check relevant documentation after code changes. Add changelog entries only
+  for completed user-visible changes or important upgrade requirements; do not
+  create an entry for every edit, internal refactor, or cosmetic adjustment.
+- Preserve migration, configuration, dependency, and compatibility requirements;
+  keep implementation details in the corresponding technical documentation.
+- Never put actual prices, costs, customer data, shipment identifiers, or secrets
+  in changelogs or archives. Keep this policy authoritative rather than copying
+  divergent versions into editor-specific rules.

@@ -24,6 +24,7 @@ from .shipment_list_filters import (
     append_keyword_search,
     append_missing_field,
     append_missing_route_status,
+    missing_amazon_refs_sql,
     append_not_delivered,
     append_time_range,
     append_unified_batch_number_search,
@@ -124,6 +125,8 @@ _UPDATABLE = (
     "express_code",
     "customer_shipment_id",
     "amazon_ref_id",
+    "amz_push_dest_port",
+    "amz_push_origin_port",
     "bill_of_lading_no",
     "container_no",
     "vessel_name",
@@ -227,6 +230,21 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         ),
         "customerShipmentId": row["customer_shipment_id"],
         "amazonRefId": row["amazon_ref_id"],
+        "amzPushDestPort": (
+            (row["amz_push_dest_port"] or "").strip()
+            if "amz_push_dest_port" in row.keys()
+            else ""
+        )
+        or None,
+        "amzPushOriginPort": (
+            (row["amz_push_origin_port"] or "").strip()
+            if "amz_push_origin_port" in row.keys()
+            else ""
+        )
+        or None,
+        "amzPushAt": (
+            row["amz_push_at"] if "amz_push_at" in row.keys() else None
+        ),
         "billOfLadingNo": (
             row["bill_of_lading_no"] if "bill_of_lading_no" in row.keys() else None
         ),
@@ -328,6 +346,8 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "expressCode": "express_code",
         "customerShipmentId": "customer_shipment_id",
         "amazonRefId": "amazon_ref_id",
+        "amzPushDestPort": "amz_push_dest_port",
+        "amzPushOriginPort": "amz_push_origin_port",
         "billOfLadingNo": "bill_of_lading_no",
         "containerNo": "container_no",
         "vesselName": "vessel_name",
@@ -437,6 +457,7 @@ class ShipmentsRepository:
         vip_only: bool | None = None,
         fcl_only: bool | None = None,
         carrier_code: str | None = None,
+        supplier_name: str | None = None,
         country_code: str | None = None,
         channel_code: str | None = None,
         channel_name_zh: str | None = None,
@@ -452,6 +473,7 @@ class ShipmentsRepository:
         min_stale_days: int | None = None,
         no_tracking: bool | None = None,
         no_zipcode: bool | None = None,
+        missing_amazon_refs: bool | None = None,
         has_tracking_number: bool | None = None,
         group_id: str | None = None,
         group_no: str | None = None,
@@ -630,6 +652,9 @@ class ShipmentsRepository:
             else:
                 conditions.append("s.carrier_code = ?")
                 params.append(cc)
+        if supplier_name and supplier_name.strip():
+            conditions.append("s.supplier_name = ?")
+            params.append(supplier_name.strip())
         if country_code and country_code.strip():
             conditions.append("s.country_code = ?")
             params.append(country_code.strip())
@@ -687,6 +712,8 @@ class ShipmentsRepository:
             params.extend(frag_params)
         if no_zipcode:
             conditions.append("(s.zipcode IS NULL OR TRIM(s.zipcode) = '')")
+        if missing_amazon_refs:
+            conditions.append(missing_amazon_refs_sql(alias="s"))
         if has_tracking_number is True:
             append_has_tracking_number(conditions)
         if group_id and group_id.strip():
@@ -889,6 +916,13 @@ class ShipmentsRepository:
                 WHERE review_status = 'pending_review'
                 """
             ).fetchone()["c"]
+            missing_amazon = self._conn.execute(
+                f"""
+                SELECT COUNT(*) AS c FROM {TABLE_NAME} s
+                WHERE TRIM(COALESCE(s.status_code, '')) IN ('2', 'IN_TRANSIT')
+                  AND {missing_amazon_refs_sql(alias="s")}
+                """
+            ).fetchone()["c"]
         return {
             "internal": {
                 "today": int(row["internal_today"] or 0),
@@ -906,11 +940,19 @@ class ShipmentsRepository:
             "pendingTrackingTimeReview": int(pending or 0),
             "internalStale7d": int(row["internal_stale_7d"] or 0),
             "internalStale14d": int(row["internal_stale_14d"] or 0),
+            "missingAmazonRefs": int(missing_amazon or 0),
         }
 
     def list_filter_options(self) -> dict[str, Any]:
         """运单表中去重后的筛选选项。"""
-        cols = ("customer", "carrier_code", "country_code", "channel_code", "status_code")
+        cols = (
+            "customer",
+            "carrier_code",
+            "country_code",
+            "channel_code",
+            "status_code",
+            "supplier_name",
+        )
         out: dict[str, list[str]] = {}
         with self._database.lock:
             for col in cols:
@@ -1023,6 +1065,7 @@ class ShipmentsRepository:
             "customers": out["customer"],
             "carriers": carriers,
             "carrierCodes": [c["code"] for c in carriers],
+            "supplierNames": out["supplier_name"],
             "channels": channels,
             "countryCodes": out["country_code"],
             "channelCodes": [c["code"] for c in channels] or out["channel_code"],
@@ -1322,6 +1365,24 @@ class ShipmentsRepository:
                 new_desc=latest_desc,
             )
 
+    def list_shipment_nos_by_status_codes(self, status_codes: list[str]) -> list[str]:
+        """按 status_code 精确列出运单号（TRIM 后匹配，保留 0 与 01 的区别）。"""
+        cleaned = list(dict.fromkeys(c.strip() for c in status_codes if c and str(c).strip()))
+        if not cleaned:
+            return []
+        placeholders = ", ".join("?" * len(cleaned))
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT shipment_no FROM {TABLE_NAME}
+                WHERE TRIM(shipment_no) != ''
+                  AND TRIM(COALESCE(status_code, '')) IN ({placeholders})
+                ORDER BY shipment_no
+                """,
+                cleaned,
+            ).fetchall()
+        return [str(r["shipment_no"]) for r in rows]
+
     def list_for_carrier_sync(
         self,
         shipment_nos: list[str] | None = None,
@@ -1374,6 +1435,18 @@ class ShipmentsRepository:
             }
             for r in rows
         ]
+
+    def touch_amz_push_at(self, item_id: str, pushed_at: str) -> None:
+        with self._database.lock:
+            self._conn.execute(
+                f"""
+                UPDATE {TABLE_NAME}
+                SET amz_push_at = ?, updated_time = ?
+                WHERE id = ?
+                """,
+                (pushed_at, pushed_at, item_id),
+            )
+            self._conn.commit()
 
     def get_by_id(self, item_id: str) -> dict[str, Any] | None:
         with self._database.lock:
@@ -1611,7 +1684,7 @@ class ShipmentsRepository:
         existing = self.get_by_shipment_no(shipment_no)
         if existing is None:
             if not payload.get("status_code"):
-                payload["status_code"] = "UNKNOWN"
+                payload["status_code"] = "0"
             return self.insert_row(payload), True
         # 更新：仅覆盖 Excel 中填写的字段，空单元格不写入
         update_payload = {

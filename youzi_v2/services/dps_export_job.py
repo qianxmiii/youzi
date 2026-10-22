@@ -12,6 +12,7 @@ from typing import Any, Callable, Literal
 from ..db.shipments_repository import ShipmentsRepository
 from .shipment_dps_cargo_download import build_dps_cargo_data_download
 from .shipment_dps_mark_download import build_dps_mark_data_download
+from .shipment_dps_mark_rename_download import build_dps_mark_rename_download
 from .shipment_dps_mark_split_download import build_dps_mark_split_download
 from .shipment_dps_packinglist_download import build_dps_packinglist_download
 from .shipment_dps_warehouse_entry_download import (
@@ -121,6 +122,10 @@ def build_export_runner(
     shipment_ids: list[str],
     *,
     split_spec: str | None = None,
+    rename_fields: list[str] | None = None,
+    rename_separator: str | None = None,
+    rename_folder: str | None = None,
+    rename_country_lang: str | None = None,
 ) -> Callable[[ProgressCallback], tuple[bytes, str, str]]:
     kind = (export_type or "").strip()
     ids = [x.strip() for x in shipment_ids if x and x.strip()]
@@ -142,6 +147,21 @@ def build_export_runner(
             )
 
         return run_split
+
+    if kind == "markRename":
+        def run_rename(cb: ProgressCallback) -> tuple[bytes, str, str]:
+            return build_dps_mark_rename_download(
+                repo,
+                config_path,
+                ids,
+                rename_fields,
+                rename_separator,
+                rename_folder,
+                rename_country_lang,
+                progress_cb=cb,
+            )
+
+        return run_rename
 
     labels_and_fns: dict[str, tuple[str, Callable[..., tuple[bytes, str, str]]]] = {
         "cargo": ("货箱数据", build_dps_cargo_data_download),

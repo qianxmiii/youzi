@@ -94,7 +94,7 @@ export const TOOL_REGISTRY: ToolDefinition[] = [
     route: '/tools/fba-box-code-expand',
     icon: 'box',
     inputSummary: '前缀与箱数 / 命名符 / 尾数位数',
-    outputSummary: '展开后的箱号列表',
+    outputSummary: '展开后的箱号列表，可复制或导出 Excel',
     status: 'active',
     badge: 'new',
     audience: '运营 / 仓配',

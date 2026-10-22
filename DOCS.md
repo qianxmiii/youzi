@@ -159,7 +159,7 @@ npm start
 #### 3.4 快递派查价
 
 - 华南 / 华东两张分区价格表（12KG、21KG+、45KG+…）
-- 页顶显示价目更新时间（`data/data_price.js` → `expressPricing.updatedAt`，改价时请同步更新日期）
+- 页顶显示价目更新时间（`data/data_price.js` → `expressPricing.updatedAt`，收到新价卡即更新日期，单价未变也要改）
 - 选择发货区域、渠道（美森正班/加班、普船、以星合德、空派等）
 - 根据报价页邮编与计费重显示参考单价（`tab.js` → `calculatePrice`）
 

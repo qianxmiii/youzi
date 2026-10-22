@@ -116,10 +116,12 @@ async function loadCarrierOptions() {
 }
 
 const statusOptions = [
-  { label: '转运中', value: 'IN_TRANSIT' },
-  { label: '已签收', value: 'DELIVERED' },
-  { label: '查验', value: 'INSPECTION' },
-  { label: '未知', value: 'UNKNOWN' },
+  { label: '已下单', value: '0' },
+  { label: '提货中', value: '01' },
+  { label: '已入仓', value: '1' },
+  { label: '转运中', value: '2' },
+  { label: '已签收', value: '3' },
+  { label: '已取消', value: '4' },
 ]
 
 watch(
@@ -176,7 +178,7 @@ watch(
         expectedDeliveryTime: props.initial.expectedDeliveryTime,
         warehouseEntryTime: props.initial.warehouseEntryTime,
         deliveredTime: props.initial.deliveredTime,
-        statusCode: props.initial.statusCode || 'UNKNOWN',
+        statusCode: props.initial.statusCode || '0',
         paymentStatus: props.initial.paymentStatus ?? null,
       }
       syncVoyageDatesFromForm()

@@ -1,0 +1,8 @@
+{
+  "manifest_version": 3,
+  "name": "柚子 · DPS 下单填表助手",
+  "version": "0.4.1",
+  "description": "在指定 DPS 新建运单页面填表和核对，仅在本人点击下单按钮后逐单触发网站下单。",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "action": {"default_popup": "popup.html", "default_title": "柚子下单填表助手"}
+}

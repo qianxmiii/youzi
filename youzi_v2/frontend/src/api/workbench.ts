@@ -33,7 +33,7 @@ export interface WorkbenchTodosModule {
   items: WorkbenchTodoItem[]
 }
 
-export type WorkbenchArrivalDayGroup = 'today' | 'tomorrow' | 'later'
+export type WorkbenchArrivalDayGroup = 'past' | 'today' | 'forward'
 
 export interface WorkbenchArrivalItem {
   dayGroup: WorkbenchArrivalDayGroup

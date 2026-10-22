@@ -1,3 +1,4 @@
+import { SHIPMENT_STATUS_LABEL_ZH, normalizeShipmentStatusCode } from '@/constants/shipmentWorkspace'
 import type { Shipment } from '@/types/shipment'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 import { resolveLastMileTracking } from '@/utils/lastMileTracking'
@@ -25,13 +26,6 @@ export const SHIPMENT_DETAIL_COPY_HEADERS = [
   '内部轨迹时间',
   '内部最新轨迹',
 ] as const
-
-const STATUS_LABEL: Record<string, string> = {
-  IN_TRANSIT: '转运中',
-  DELIVERED: '已签收',
-  INSPECTION: '查验',
-  UNKNOWN: '未知',
-}
 
 const COUNTRY_CODE_TO_ZH: Record<string, string> = {
   US: '美国',
@@ -73,11 +67,11 @@ function internalTrackingForCopy(row: Shipment): { time: string; desc: string } 
 }
 
 export function formatShipmentDetailTsvRow(row: Shipment): string {
-  const code = (row.statusCode || 'UNKNOWN').trim().toUpperCase()
+  const code = normalizeShipmentStatusCode(row.statusCode) || 'UNKNOWN'
   const tracking = internalTrackingForCopy(row)
   const cells = [
     row.shipmentNo,
-    STATUS_LABEL[code] || code,
+    SHIPMENT_STATUS_LABEL_ZH[code] || code,
     row.customerNo,
     row.refShipmentNo,
     row.customerShipmentId,
@@ -214,10 +208,10 @@ export function formatShipmentDetailSummaryWithTrackingBlock(row: Shipment): str
   return tn ? `${head}\n${tn}` : head
 }
 
-/** 多行运单明细摘要（不含转单号），运单之间空一行 */
+/** 多行运单明细摘要（不含转单号），运单之间只换行 */
 export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
-  return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n\n')
+  return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n')
 }
 
 /** 港前「复制 → 数据」：运单明细摘要 + 换行 + 计费重（无计费重仍保留摘要行） */

@@ -57,6 +57,7 @@ const hasRouteStatusFields = computed(() => activeMeta.value?.hasRouteStatusFiel
 const hasExceptionPhaseFields = computed(
   () => activeMeta.value?.hasExceptionPhaseFields ?? false,
 )
+const hasAmzPortRuleFields = computed(() => activeMeta.value?.hasAmzPortRuleFields ?? false)
 
 async function loadTables() {
   const res = await listCodeTableTypes()
@@ -226,6 +227,20 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       render: (row) => row.dpsStatus || '—',
     })
   }
+  if (hasAmzPortRuleFields.value) {
+    cols.push(
+      { title: '运输', key: 'transportMode', width: 72 },
+      { title: '国家', key: 'countryCode', width: 64 },
+      { title: '港口', key: 'portCode', width: 88 },
+      { title: '规则', key: 'ruleKind', width: 120 },
+      {
+        title: '匹配',
+        key: 'matchText',
+        width: 100,
+        render: (row) => row.matchText || '—',
+      },
+    )
+  }
   if (hasExceptionPhaseFields.value) {
     cols.push({
       title: '异常大类',
@@ -390,6 +405,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
         :has-carrier-fields="hasCarrierFields"
         :has-route-status-fields="hasRouteStatusFields"
         :has-exception-phase-fields="hasExceptionPhaseFields"
+        :has-amz-port-rule-fields="hasAmzPortRuleFields"
         :initial="editingRow"
         @close="modalShow = false"
         @submit="handleFormSubmit"

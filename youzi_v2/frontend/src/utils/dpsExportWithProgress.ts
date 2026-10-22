@@ -5,6 +5,7 @@ export type DpsExportJobType =
   | 'cargo'
   | 'mark'
   | 'markSplit'
+  | 'markRename'
   | 'packinglist'
   | 'warehouseform'
   | 'warehouseEntry'
@@ -32,6 +33,10 @@ export async function runDpsExportJob(
   shipmentIds: string[],
   options: {
     splitSpec?: string
+    renameFields?: string[]
+    renameSeparator?: string
+    renameFolder?: string
+    renameCountryLang?: 'en' | 'zh'
     onProgress: (status: DpsExportJobStatus) => void
   },
 ): Promise<{ blob: Blob; filename: string }> {
@@ -41,6 +46,10 @@ export async function runDpsExportJob(
       exportType,
       ids: shipmentIds,
       ...(options.splitSpec?.trim() ? { splitSpec: options.splitSpec.trim() } : {}),
+      ...(options.renameFields?.length ? { renameFields: options.renameFields } : {}),
+      ...(options.renameSeparator ? { renameSeparator: options.renameSeparator } : {}),
+      ...(options.renameFolder ? { renameFolder: options.renameFolder } : {}),
+      ...(options.renameCountryLang ? { renameCountryLang: options.renameCountryLang } : {}),
     },
   })
 
@@ -81,6 +90,7 @@ export const DPS_EXPORT_TITLES: Record<DpsExportJobType, string> = {
   cargo: '货箱数据',
   mark: '唛头',
   markSplit: '唛头（拆分）',
+  markRename: '唛头（重命名）',
   packinglist: '箱单发票',
   warehouseform: '排仓单',
   warehouseEntry: '进仓单',

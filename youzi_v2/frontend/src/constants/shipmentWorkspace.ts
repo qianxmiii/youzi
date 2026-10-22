@@ -20,6 +20,14 @@ export const PRE_PORT_STATUS_CODES = new Set([
   DPS_STATUS_CANCELLED,
 ])
 
+/** 港前状态筛选项顺序（含 0 已下单，不依赖库内是否已有该状态） */
+export const PRE_PORT_STATUS_FILTER_CODES: readonly string[] = [
+  DPS_STATUS_ORDERED,
+  DPS_STATUS_PICKED_UP,
+  DPS_STATUS_WAREHOUSE_IN,
+  DPS_STATUS_CANCELLED,
+]
+
 export const TRANSIT_STATUS_CODES = new Set([
   DPS_STATUS_IN_TRANSIT,
   DPS_STATUS_DELIVERED,
@@ -106,15 +114,29 @@ export function defaultStatusFilterForWorkspace(ws: ShipmentWorkspace): string |
   return ws === SHIPMENT_WORKSPACE_TRANSIT ? DPS_STATUS_IN_TRANSIT : null
 }
 
-export function shipmentStatusLabel(code: string | null | undefined): string {
-  const key = (code || '').trim()
+/** DPS statusCode 规范化（数字 0 不能走 `||` 判空；保留 01） */
+export function normalizeShipmentStatusCode(
+  code: string | number | null | undefined,
+): string {
+  if (code === null || code === undefined) return ''
+  const raw =
+    typeof code === 'number' && Number.isFinite(code)
+      ? String(Math.trunc(code))
+      : String(code).trim()
+  if (!raw) return ''
+  if (raw === '01') return DPS_STATUS_PICKED_UP
+  return raw
+}
+
+export function shipmentStatusLabel(code: string | number | null | undefined): string {
+  const key = normalizeShipmentStatusCode(code)
   if (!key) return '—'
   return SHIPMENT_STATUS_LABEL_ZH[key] || key
 }
 
 /** 港前 DPS Status 徽章色调（01 提货中 vs 1 已入仓 等） */
-export function dpsPreportStatusBadgeClass(code: string | null | undefined): string {
-  const key = (code || '').trim()
+export function dpsPreportStatusBadgeClass(code: string | number | null | undefined): string {
+  const key = normalizeShipmentStatusCode(code)
   switch (key) {
     case DPS_STATUS_ORDERED:
       return 'shipment-status-badge--sky'
@@ -124,6 +146,28 @@ export function dpsPreportStatusBadgeClass(code: string | null | undefined): str
       return 'shipment-status-badge--teal'
     case DPS_STATUS_CANCELLED:
       return 'shipment-status-badge--slate'
+    default:
+      return 'shipment-status-badge--default'
+  }
+}
+
+/** 粗状态徽章（无明细状态或催款等仅展示 statusCode 时） */
+export function coarseShipmentStatusBadgeClass(
+  code: string | number | null | undefined,
+): string {
+  const key = normalizeShipmentStatusCode(code)
+  if (PRE_PORT_STATUS_CODES.has(key)) {
+    return dpsPreportStatusBadgeClass(key)
+  }
+  switch (key) {
+    case DPS_STATUS_IN_TRANSIT:
+    case 'IN_TRANSIT':
+      return 'shipment-status-badge--indigo'
+    case DPS_STATUS_DELIVERED:
+    case 'DELIVERED':
+      return 'shipment-status-badge--success'
+    case 'INSPECTION':
+      return 'shipment-status-badge--warning'
     default:
       return 'shipment-status-badge--default'
   }

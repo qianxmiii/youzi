@@ -45,7 +45,7 @@ class WorkbenchTodosModule(BaseModel):
 class WorkbenchArrivalItem(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    day_group: str = Field("later", alias="dayGroup")
+    day_group: str = Field("forward", alias="dayGroup")
     vessel_voyage: str = Field("", alias="vesselVoyage")
     destination_port_code: str = Field("", alias="destinationPortCode")
     eta: str | None = None

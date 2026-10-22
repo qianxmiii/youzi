@@ -19,13 +19,13 @@ const emit = defineEmits<{
 const router = useRouter()
 
 const GROUP_LABEL: Record<WorkbenchArrivalDayGroup, string> = {
+  past: '往前三天内',
   today: '今天',
-  tomorrow: '明天',
-  later: '后天及以后',
+  forward: '往后三天内',
 }
 
 const grouped = computed(() => {
-  const order: WorkbenchArrivalDayGroup[] = ['today', 'tomorrow', 'later']
+  const order: WorkbenchArrivalDayGroup[] = ['past', 'today', 'forward']
   return order.map((key) => ({
     key,
     label: GROUP_LABEL[key],
@@ -90,7 +90,7 @@ function openAll() {
     <div class="arrival-panel__head">
       <div class="min-w-0">
         <h2 class="section-h2 !text-[var(--color-fg-emphasis)]">近期到港</h2>
-        <p class="page-subtitle mt-1">未来三天 ETA、按船名/目的港聚合</p>
+        <p class="page-subtitle mt-1">前后各三天 ETA、按船名/目的港聚合</p>
       </div>
       <button type="button" class="arrival-panel__all" @click="openAll">
         查看全部
@@ -112,7 +112,7 @@ function openAll() {
     </div>
     <div v-else-if="!hasAnyItems" class="arrival-empty">
       <Ship class="arrival-empty__icon h-9 w-9" :stroke-width="1.25" aria-hidden="true" />
-      <span>未来三天暂无到港</span>
+      <span>前后三天暂无到港</span>
     </div>
 
     <div v-else class="arrival-columns">

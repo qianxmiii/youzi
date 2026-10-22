@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { NButton, NInput, NInputNumber, useMessage } from 'naive-ui'
-import { ArrowLeft, Copy } from 'lucide-vue-next'
+import { ArrowLeft, Copy, Download } from 'lucide-vue-next'
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ICON_STROKE } from '@/constants/icons'
+import { buildFbaBoxCodesXlsx } from '@/utils/fbaBoxCodeExcel'
 import { generateFbaBoxCodes } from '@/utils/fbaBoxCodeGenerate'
 
 const message = useMessage()
@@ -20,6 +21,34 @@ const result = computed(() =>
 )
 
 const outputText = computed(() => result.value.codes.join('\n'))
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(url)
+}
+
+function exportExcel() {
+  const codes = result.value.codes
+  if (!codes.length) {
+    message.warning(result.value.errors[0] || '无可导出内容')
+    return
+  }
+  const bytes = buildFbaBoxCodesXlsx(codes)
+  const stamp = new Date()
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const name = `FBA箱号展开_${stamp.getFullYear()}${pad(stamp.getMonth() + 1)}${pad(stamp.getDate())}${pad(stamp.getHours())}${pad(stamp.getMinutes())}${pad(stamp.getSeconds())}.xlsx`
+  downloadBlob(
+    new Blob([bytes], {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    }),
+    name,
+  )
+  message.success(`已导出 ${codes.length} 行`)
+}
 
 async function copyOutput() {
   const text = outputText.value.trim()
@@ -107,12 +136,20 @@ async function copyOutput() {
               · {{ result.codes.length }} 行
             </span>
           </h2>
-          <NButton size="small" type="primary" :disabled="!result.codes.length" @click="copyOutput">
-            <template #icon>
-              <Copy class="h-3.5 w-3.5" :stroke-width="ICON_STROKE" />
-            </template>
-            复制
-          </NButton>
+          <div class="flex items-center gap-2">
+            <NButton size="small" :disabled="!result.codes.length" @click="exportExcel">
+              <template #icon>
+                <Download class="h-3.5 w-3.5" :stroke-width="ICON_STROKE" />
+              </template>
+              导出 Excel
+            </NButton>
+            <NButton size="small" type="primary" :disabled="!result.codes.length" @click="copyOutput">
+              <template #icon>
+                <Copy class="h-3.5 w-3.5" :stroke-width="ICON_STROKE" />
+              </template>
+              复制
+            </NButton>
+          </div>
         </div>
 
         <ul v-if="result.errors.length" class="space-y-1 text-xs text-amber-700">

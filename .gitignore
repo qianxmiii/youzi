@@ -1,6 +1,7 @@
 config.json
 # 本地私密配置
 config/config.json
+youzi_v2/order_assistant/extension/allowed-page.local.js
 config/*.local.json
 tracking_numbers.json
 tracking_results.json
@@ -87,3 +88,6 @@ node_modules/
 .idea/
 .vscode/
 *.code-workspace
+
+# Local quotation workbooks and generated comparison files
+/outputs/quote-query-1020/

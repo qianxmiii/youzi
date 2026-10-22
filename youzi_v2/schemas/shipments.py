@@ -115,7 +115,7 @@ class ShipmentRecordIn(BaseModel):
         default=None, validation_alias=AliasChoices("deliveredTime", "delivered_time")
     )
     status_code: str | None = Field(
-        default="UNKNOWN", validation_alias=AliasChoices("statusCode", "status_code")
+        default="0", validation_alias=AliasChoices("statusCode", "status_code")
     )
     route_status: str | None = Field(
         default=None, validation_alias=AliasChoices("routeStatus", "route_status")
@@ -261,8 +261,21 @@ class ShipmentUpdateIn(BaseModel):
             raise ValueError("paymentStatus 须为 UNPAID 或 PAID")
         return text
 
+    amz_push_dest_port: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("amzPushDestPort", "amz_push_dest_port"),
+    )
+    amz_push_origin_port: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("amzPushOriginPort", "amz_push_origin_port"),
+    )
+    push_amz_update: bool = Field(
+        default=False,
+        validation_alias=AliasChoices("pushAmzUpdate", "push_amz_update"),
+    )
+
     def to_payload(self) -> dict[str, Any]:
-        out = self.model_dump(exclude_none=True)
+        out = self.model_dump(exclude_none=True, exclude={"push_amz_update"})
         for name in ("carrier_id", "tracking_number"):
             if name in self.model_fields_set and getattr(self, name) is None:
                 out[name] = None
@@ -286,7 +299,7 @@ class DpsExportJobCreateIn(BaseModel):
     export_type: str = Field(
         ...,
         validation_alias=AliasChoices("exportType", "export_type"),
-        description="cargo|mark|markSplit|packinglist|warehouseform|warehouseEntry|warehouseEntryPdf",
+        description="cargo|mark|markSplit|markRename|packinglist|warehouseform|warehouseEntry|warehouseEntryPdf",
     )
     ids: list[str] = Field(
         ...,
@@ -297,6 +310,26 @@ class DpsExportJobCreateIn(BaseModel):
     split_spec: str | None = Field(
         default=None,
         validation_alias=AliasChoices("splitSpec", "split_spec"),
+    )
+    rename_fields: list[str] | None = Field(
+        default=None,
+        validation_alias=AliasChoices("renameFields", "rename_fields"),
+        description="唛头（重命名）字段顺序，如 shipmentNo, addressCode, ctns",
+    )
+    rename_separator: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("renameSeparator", "rename_separator"),
+        description="唛头（重命名）分隔符，如 -",
+    )
+    rename_folder: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("renameFolder", "rename_folder"),
+        description="唛头（重命名）文件夹字段；相同值放入同一目录，如 customerNo",
+    )
+    rename_country_lang: str | None = Field(
+        default=None,
+        validation_alias=AliasChoices("renameCountryLang", "rename_country_lang"),
+        description="唛头（重命名）国家字段语言：en（默认国家码缩写如 AU）或 zh（中文名）",
     )
 
 

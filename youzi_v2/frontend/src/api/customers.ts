@@ -96,3 +96,21 @@ export async function deleteCustomer(id: string): Promise<void> {
   await api(`/api/v1/customers/${id}`, { method: 'DELETE' })
 }
 
+const CUSTOMER_EXPORT_MAX = 10_000
+
+export async function exportCustomersExcel(params?: {
+  search?: string
+  vipOnly?: boolean
+}): Promise<Blob> {
+  const q: Record<string, string | number> = {
+    limit: CUSTOMER_EXPORT_MAX,
+    offset: 0,
+  }
+  if (params?.search?.trim()) q.search = params.search.trim()
+  if (params?.vipOnly === true) q.vipOnly = 'true'
+  return api<Blob, 'blob'>('/api/v1/customers/export', {
+    query: q,
+    responseType: 'blob',
+  })
+}
+

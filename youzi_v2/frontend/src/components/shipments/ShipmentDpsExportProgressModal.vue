@@ -26,10 +26,10 @@ const statusType = computed(() => (props.failed ? 'error' : clampedProgress.valu
     @update:show="$emit('update:show', $event)"
   >
     <div
-      class="w-[min(420px,calc(100vw-2rem))] rounded-xl border border-[var(--color-border)] bg-[var(--color-bg-elevated)] p-5 shadow-xl"
+      class="w-[min(420px,calc(100vw-2rem))] rounded-xl border border-[var(--color-border)] bg-[var(--color-elevated)] p-5 shadow-xl"
     >
-      <h3 class="text-base font-semibold text-[var(--color-text)]">{{ title }}</h3>
-      <p class="mt-2 min-h-[2.5rem] text-sm leading-relaxed text-[var(--color-text-secondary)]">
+      <h3 class="text-base font-semibold text-[var(--color-fg)]">{{ title }}</h3>
+      <p class="mt-2 min-h-[2.5rem] text-sm leading-relaxed text-[var(--color-fg-secondary)]">
         {{ message }}
       </p>
       <NProgress
@@ -47,7 +47,7 @@ const statusType = computed(() => (props.failed ? 'error' : clampedProgress.valu
       <button
         v-else
         type="button"
-        class="mt-4 w-full rounded-lg border border-[var(--color-border)] py-2 text-sm hover:bg-[var(--color-bg-muted)]"
+        class="mt-4 w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-btn-ghost-bg)] py-2 text-sm text-[var(--color-fg)] hover:bg-[var(--color-btn-ghost-hover)]"
         @click="emit('update:show', false)"
       >
         关闭

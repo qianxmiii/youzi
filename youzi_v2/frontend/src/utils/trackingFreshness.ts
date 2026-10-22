@@ -20,6 +20,7 @@ export interface TrackingFreshnessStats {
   pendingTrackingTimeReview: number
   internalStale7d: number
   internalStale14d: number
+  missingAmazonRefs: number
 }
 
 function startOfLocalDay(d: Date): Date {

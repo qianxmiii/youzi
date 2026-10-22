@@ -32,6 +32,7 @@ export interface ShipmentFilterQueryInput {
   timeField: ShipmentTimeField | null
   timeRange: [number, number] | null
   filterCarrier: string | null
+  filterSupplierName: string | null
   filterCountry: string | null
   filterChannelNameZh: string | null
   filterChannelCategory: string | null
@@ -49,6 +50,7 @@ export interface ShipmentFilterQueryInput {
   filterStaleDays: number | null
   filterNoTracking: boolean
   filterNoZipcode: boolean
+  filterMissingAmazonRefs: boolean
   filterHasTrackingNumber: boolean
   filterException: string | null
   filterPaymentStatus: string | null
@@ -127,6 +129,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
     vipOnly: input.filterVipOnly ? true : undefined,
     fclOnly: input.filterFclOnly,
     carrierCode: input.filterCarrier || undefined,
+    supplierName: input.filterSupplierName || undefined,
     countryCode: input.filterCountry || undefined,
     channelCode: input.filterChannelCode || undefined,
     channelNameZh: input.filterChannelNameZh || undefined,
@@ -144,6 +147,7 @@ export function buildShipmentFilterQuery(input: ShipmentFilterQueryInput): ListS
         ? undefined
         : staleDays,
     noZipcode: input.filterNoZipcode || undefined,
+    missingAmazonRefs: input.filterMissingAmazonRefs || undefined,
     hasTrackingNumber: input.filterHasTrackingNumber || undefined,
     groupId: input.filterGroupId || undefined,
     groupNo: input.filterGroupNo || undefined,
@@ -260,6 +264,9 @@ export function buildShipmentFilterSummaryTags(
   } else if (input.filterCarrier === CARRIER_FILTER_EMPTY) {
     tags.push({ key: 'filterCarrier', label: '承运商 = （未填写）' })
   }
+  if (input.filterSupplierName) {
+    tags.push({ key: 'filterSupplierName', label: `供应商 = ${input.filterSupplierName}` })
+  }
   if (input.filterCountry) {
     tags.push({ key: 'filterCountry', label: `国家 = ${ctx.countryLabel(input.filterCountry)}` })
   }
@@ -319,6 +326,9 @@ export function buildShipmentFilterSummaryTags(
   if (input.filterCarrierAheadOfInternal) tags.push({ key: 'filterCarrierAheadOfInternal', label: '承新于内' })
   if (input.filterPendingTrackingTimeReview) {
     tags.push({ key: 'filterPendingTrackingTimeReview', label: '待轨迹审批' })
+  }
+  if (input.filterMissingAmazonRefs) {
+    tags.push({ key: 'filterMissingAmazonRefs', label: '缺货件/预约号' })
   }
   if (input.filterGroupId) tags.push({ key: 'filterGroupId', label: `分组 = ${ctx.groupLabel(input.filterGroupId)}` })
   if (input.filterGroupNo) tags.push({ key: 'filterGroupNo', label: `分组编号 = ${input.filterGroupNo}` })

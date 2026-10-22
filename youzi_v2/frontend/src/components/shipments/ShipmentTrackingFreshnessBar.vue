@@ -10,12 +10,14 @@ const props = defineProps<{
   pendingReviewActive: boolean
   stale7Active: boolean
   stale14Active: boolean
+  missingAmazonActive: boolean
   filteredNoInternalCount?: number | null
   filteredNoCarrierCount?: number | null
   filteredPendingReviewCount?: number | null
   filteredCarrierAheadCount?: number | null
   filteredStale7Count?: number | null
   filteredStale14Count?: number | null
+  filteredMissingAmazonCount?: number | null
   carrierSyncHint?: string | null
 }>()
 
@@ -26,10 +28,18 @@ const emit = defineEmits<{
   togglePendingReview: []
   toggleStale7: []
   toggleStale14: []
+  toggleMissingAmazon: []
 }>()
 
 type QuickFilter = {
-  key: 'pendingReview' | 'carrierAhead' | 'stale7' | 'stale14' | 'noInternal' | 'noCarrier'
+  key:
+    | 'pendingReview'
+    | 'carrierAhead'
+    | 'stale7'
+    | 'stale14'
+    | 'noInternal'
+    | 'noCarrier'
+    | 'missingAmazon'
   label: string
   active: boolean
   count: number
@@ -44,6 +54,7 @@ const globalCarrierAheadCount = computed(() => props.stats?.carrierAheadOfIntern
 const globalPendingReviewCount = computed(() => props.stats?.pendingTrackingTimeReview ?? 0)
 const globalStale7Count = computed(() => props.stats?.internalStale7d ?? 0)
 const globalStale14Count = computed(() => props.stats?.internalStale14d ?? 0)
+const globalMissingAmazonCount = computed(() => props.stats?.missingAmazonRefs ?? 0)
 
 function displayCount(
   active: boolean,
@@ -122,6 +133,19 @@ const quickFilters = computed((): QuickFilter[] => [
     titleActive: `当前列表 ${displayCount(props.noCarrierActive, props.filteredNoCarrierCount, globalNoCarrierCount.value)} 单无承运商轨迹（不含整柜）；再点取消`,
     titleIdle: `全库 ${globalNoCarrierCount.value} 单无承运商轨迹（不含整柜）；再点筛选`,
   },
+  {
+    key: 'missingAmazon',
+    label: '缺货件/预约号',
+    active: props.missingAmazonActive,
+    count: displayCount(
+      props.missingAmazonActive,
+      props.filteredMissingAmazonCount,
+      globalMissingAmazonCount.value,
+    ),
+    titleActive: `当前列表 ${displayCount(props.missingAmazonActive, props.filteredMissingAmazonCount, globalMissingAmazonCount.value)} 单缺货件号或预约号；再点取消`,
+    titleIdle: `转运中 ${globalMissingAmazonCount.value} 单派送仓库为 4 位，且货件号或亚马逊预约号为空或只填了 1；再点筛选`,
+    tone: 'pending',
+  },
 ])
 
 function onToggle(key: QuickFilter['key']) {
@@ -130,7 +154,8 @@ function onToggle(key: QuickFilter['key']) {
   else if (key === 'stale7') emit('toggleStale7')
   else if (key === 'stale14') emit('toggleStale14')
   else if (key === 'noInternal') emit('toggleNoInternal')
-  else emit('toggleNoCarrier')
+  else if (key === 'noCarrier') emit('toggleNoCarrier')
+  else emit('toggleMissingAmazon')
 }
 </script>
 
@@ -138,7 +163,7 @@ function onToggle(key: QuickFilter['key']) {
   <div
     class="freshness-panel shrink-0 rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2"
   >
-    <div class="scrollbar-subtle flex min-w-0 items-center gap-2 overflow-x-auto whitespace-nowrap">
+    <div class="scrollbar-subtle flex min-w-0 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden whitespace-nowrap">
       <span class="shrink-0 text-xs font-semibold tracking-tight text-[var(--color-fg-emphasis)]">
         轨迹筛选
       </span>

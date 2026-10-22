@@ -35,6 +35,12 @@ export interface Shipment {
   expressCode?: string | null
   customerShipmentId: string | null
   amazonRefId: string | null
+  /** 补货件号窗口确认过的起运港，空则用规则默认 */
+  amzPushOriginPort?: string | null
+  /** 补货件号窗口确认过的目的港，空则用规则默认 */
+  amzPushDestPort?: string | null
+  /** 最近一次亚马逊推送时间，用于 60 秒冷却 */
+  amzPushAt?: string | null
   /** 海运提单号（DPS params.ladingBillNum） */
   billOfLadingNo: string | null
   /** 柜号 */
@@ -207,7 +213,7 @@ export function emptyShipmentForm(): ShipmentPayload {
     expectedDeliveryTime: null,
     warehouseEntryTime: null,
     deliveredTime: null,
-    statusCode: 'IN_TRANSIT',
+    statusCode: '0',
     paymentStatus: null,
   }
 }

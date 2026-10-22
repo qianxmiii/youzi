@@ -19,17 +19,18 @@ import {
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 import { useRoute, useRouter } from 'vue-router'
-import ShipmentGroupRuleIcon from '@/components/shipments/ShipmentGroupRuleIcon.vue'
 import ShipmentGroupActionModal from '@/components/shipments/ShipmentGroupActionModal.vue'
 import ShipmentGroupSuggestionsModal from '@/components/shipments/ShipmentGroupSuggestionsModal.vue'
 import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptionCloseModal.vue'
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
+import ShipmentAmazonRefModal from '@/components/shipments/ShipmentAmazonRefModal.vue'
 import ShipmentFilterSummaryBar from '@/components/shipments/ShipmentFilterSummaryBar.vue'
 import ShipmentAdvancedFilterDrawer from '@/components/shipments/ShipmentAdvancedFilterDrawer.vue'
 import ShipmentColumnSettingsDrawer from '@/components/shipments/ShipmentColumnSettingsDrawer.vue'
 import ShipmentDpsExportProgressModal from '@/components/shipments/ShipmentDpsExportProgressModal.vue'
+import ShipmentMarkRenameModal from '@/components/shipments/ShipmentMarkRenameModal.vue'
 import ShipmentBatchEditModal from '@/components/shipments/ShipmentBatchEditModal.vue'
 import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
@@ -55,6 +56,7 @@ import {
   batchUnsubscribeShipments,
   subscribeShipment,
   syncCarrierTracking,
+  syncPreportShipmentsFromDps,
   syncShipmentsFromDps,
   syncShipmentsRouteStatusFromDps,
   syncTracking,
@@ -69,22 +71,29 @@ import {
   removeShipmentGroupMembers,
 } from '@/api/shipmentGroups'
 import ShipmentFormModal from '@/components/shipments/ShipmentFormModal.vue'
-import type { Shipment, ShipmentBatchResult, ShipmentPayload } from '@/types/shipment'
+import type {
+  Shipment,
+  ShipmentBatchResult,
+  ShipmentDpsSyncByOrderResult,
+  ShipmentPayload,
+} from '@/types/shipment'
 import type { ShipmentGroupBatchMode, ShipmentGroupFilterOption, ShipmentGroupRuleInput } from '@/types/shipmentGroup'
-import { Layers } from 'lucide-vue-next'
-import { shipmentGroupRuleSelectOptions, sortShipmentGroupEnabledRules } from '@/constants/shipmentGroupRules'
+import { shipmentGroupRuleSelectOptions } from '@/constants/shipmentGroupRules'
 import {
   SHIPMENT_EXCEPTION_PHASE_POST_PORT,
   SHIPMENT_EXCEPTION_PHASE_PRE_PORT,
   shipmentExceptionPhaseLabel,
 } from '@/constants/shipmentExceptionPhase'
-import { ICON_STROKE } from '@/constants/icons'
 import { CARRIER_FILTER_EMPTY } from '@/constants/shipmentFilters'
-import { resolveShipmentListStatusDisplay } from '@/constants/shipmentRouteStatus'
+import {
+  resolveShipmentListStatusDisplay,
+  routeStatusLabelZh,
+} from '@/constants/shipmentRouteStatus'
 import {
   applyPreportListColumnKeys,
   defaultStatusFilterForWorkspace,
   PRE_PORT_STATUS_CODES,
+  PRE_PORT_STATUS_FILTER_CODES,
   PREPORT_EXCLUDED_COLUMN_KEYS,
   SHIPMENT_STATUS_LABEL_ZH,
   dpsPreportStatusBadgeClass,
@@ -203,6 +212,7 @@ const timeRange = ref<[number, number] | null>(null)
 const filterVipOnly = ref(false)
 const filterFclOnly = ref(false)
 const filterCarrier = ref<string | null>(null)
+const filterSupplierName = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannelNameZh = ref<string | null>(null)
 const filterChannelCategory = ref<string | null>(null)
@@ -213,6 +223,7 @@ const filterAddressKeyword = ref<string | null>(null)
 const filterVesselVoyage = ref<string | null>(null)
 const filterStaleDays = ref<number | null>(null)
 const filterNoZipcode = ref(false)
+const filterMissingAmazonRefs = ref(false)
 const filterHasTrackingNumber = ref(false)
 const filterException = ref<string | null>(null)
 const filterPaymentStatus = ref<string | null>(null)
@@ -242,7 +253,7 @@ function loadVisibleColumnKeys(): string[] {
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
       if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) {
-        return parsed.filter((key) => key !== 'statusCode')
+        return parsed.filter((key) => key !== 'statusCode' && key !== 'groups')
       }
     }
   } catch {
@@ -267,6 +278,7 @@ const filterOptions = ref<ShipmentFilterOptions>({
   customers: [],
   carrierCodes: [],
   carriers: [],
+  supplierNames: [],
   countryCodes: [],
   channelCodes: [],
   channels: [],
@@ -300,6 +312,9 @@ const trackingDrawerTab = ref<'internal' | 'carrier'>('internal')
 const modalShow = ref(false)
 const modalMode = ref<'create' | 'edit'>('edit')
 const editingRow = ref<Shipment | null>(null)
+const amazonRefShow = ref(false)
+const amazonRefRow = ref<Shipment | null>(null)
+const amazonRefSaving = ref(false)
 
 const fileInputRef = ref<HTMLInputElement | null>(null)
 const checkedRowKeys = ref<string[]>([])
@@ -387,72 +402,6 @@ const hasGroupFilterOptions = [
   { label: '无分组', value: 'no' },
 ]
 
-function goShipmentGroup(groupId: string) {
-  if (!groupId?.trim()) return
-  void router.push({ path: '/shipment-groups', query: { groupId: groupId.trim() } })
-}
-
-function renderGroupIconButton(
-  g: NonNullable<Shipment['groups']>[number],
-  child: ReturnType<typeof h>,
-) {
-  const groupNo = formatGroupNoDisplay(g.groupNo)
-  return h(
-    NTooltip,
-    { placement: 'top' },
-    {
-      trigger: () =>
-        h(
-          'button',
-          {
-            type: 'button',
-            class: 'shipment-group-rule-icon-btn',
-            onClick: (e: MouseEvent) => {
-              e.stopPropagation()
-              goShipmentGroup(g.groupId)
-            },
-          },
-          [child],
-        ),
-      default: () => groupNo,
-    },
-  )
-}
-
-function renderGroupIconCluster(g: NonNullable<Shipment['groups']>[number]) {
-  const rules = sortShipmentGroupEnabledRules(g.enabledRules ?? [])
-  if (!rules.length) {
-    return renderGroupIconButton(
-      g,
-      h(Layers, {
-        class: 'shipment-group-rule-icon__svg shipment-group-rule-icon--placeholder',
-        size: 14,
-        strokeWidth: ICON_STROKE,
-      }),
-    )
-  }
-  return h(
-    'span',
-    { class: 'shipment-group-icon-cluster' },
-    rules.map((ruleType) =>
-      renderGroupIconButton(g, h(ShipmentGroupRuleIcon, { ruleType, size: 14 })),
-    ),
-  )
-}
-
-function renderShipmentGroups(row: Shipment) {
-  const groups = row.groups ?? []
-  if (!groups.length) return h('span', { class: 'tracking-empty' }, '—')
-  const nodes = groups.flatMap((g, index) => {
-    const parts: ReturnType<typeof h>[] = [renderGroupIconCluster(g)]
-    if (index < groups.length - 1) {
-      parts.push(h('span', { class: 'shipment-group-cell-sep', 'aria-hidden': 'true' }, '·'))
-    }
-    return parts
-  })
-  return h('span', { class: 'shipment-group-cell truncate block max-w-full' }, nodes)
-}
-
 const channelCodeOptions = computed(() =>
   buildChannelSelectOptions(filterOptions.value.channels, filterOptions.value.channelCodes),
 )
@@ -508,6 +457,11 @@ function togglePendingReviewFilter() {
   onFiltersChanged()
 }
 
+function toggleMissingAmazonRefsFilter() {
+  filterMissingAmazonRefs.value = !filterMissingAmazonRefs.value
+  onFiltersChanged()
+}
+
 function toggleStaleDaysFilter(days: 7 | 14) {
   if (filterStaleDays.value === days) {
     filterStaleDays.value = null
@@ -532,14 +486,18 @@ const statusLabel: Record<string, string> = { ...SHIPMENT_STATUS_LABEL_ZH }
 const routeStatusLabelByCode = computed(() => {
   const m: Record<string, string> = {}
   for (const t of filterOptions.value.routeStatuses || []) {
-    m[t.code] = t.nameZh
+    const local = (t.code || '').trim().toUpperCase()
+    if (local) m[local] = t.nameZh
+    const dps = (t.dpsStatus || '').trim()
+    if (dps) m[dps] = t.nameZh
   }
   return m
 })
 
 function routeStatusLabel(code: string | null | undefined) {
   if (!code) return '—'
-  return routeStatusLabelByCode.value[code] || code
+  const label = routeStatusLabelZh(code, routeStatusLabelByCode.value)
+  return label || '—'
 }
 
 const exceptionLabelByCode = computed(() => {
@@ -829,9 +787,14 @@ const exceptionColumns: DataTableColumns<Shipment> = [
 ]
 
 const statusOptions = computed(() => {
-  const allowed = isPreportWorkspace.value ? PRE_PORT_STATUS_CODES : TRANSIT_STATUS_CODES
+  if (isPreportWorkspace.value) {
+    return PRE_PORT_STATUS_FILTER_CODES.map((code) => ({
+      label: statusLabel[code] || code,
+      value: code,
+    }))
+  }
   return filterOptions.value.statusCodes
-    .filter((code) => allowed.has(code))
+    .filter((code) => TRANSIT_STATUS_CODES.has(code))
     .map((code) => ({
       label: statusLabel[code] || code,
       value: code,
@@ -884,6 +847,9 @@ const carrierOptions = computed(() =>
     { includeEmpty: true, emptyValue: CARRIER_FILTER_EMPTY },
   ),
 )
+const supplierOptions = computed(() =>
+  (filterOptions.value.supplierNames || []).map((v) => ({ label: v, value: v })),
+)
 const countryOptions = computed(() =>
   filterOptions.value.countryCodes.map((code) => ({
     label: countryLabel(code) === code ? code : `${countryLabel(code)} (${code})`,
@@ -932,6 +898,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   timeField: timeField.value,
   timeRange: timeRange.value,
   filterCarrier: filterCarrier.value,
+  filterSupplierName: filterSupplierName.value,
   filterCountry: filterCountry.value,
   filterChannelNameZh: filterChannelNameZh.value,
   filterChannelCategory: filterChannelCategory.value,
@@ -949,6 +916,7 @@ const filterQueryInput = computed((): ShipmentFilterQueryInput => ({
   filterStaleDays: filterStaleDays.value,
   filterNoTracking: filterNoInternalTracking.value,
   filterNoZipcode: filterNoZipcode.value,
+  filterMissingAmazonRefs: filterMissingAmazonRefs.value,
   filterHasTrackingNumber: filterHasTrackingNumber.value,
   filterException: filterException.value,
   filterPaymentStatus: filterPaymentStatus.value,
@@ -993,6 +961,7 @@ const advancedOnlyActiveCount = computed(() => {
   if (advBillNos.value.trim()) n++
   if (advCustomerShipmentIds.value.trim()) n++
   if (filterCarrier.value) n++
+  if (filterSupplierName.value) n++
   if (filterCountry.value) n++
   if (filterChannelNameZh.value) n++
   if (filterCustomerNo.value) n++
@@ -1022,6 +991,7 @@ const advancedOnlyActiveCount = computed(() => {
   if (hasAta.value) n++
   if (deliveryRisk.value) n++
   if (filterPendingTrackingTimeReview.value) n++
+  if (filterMissingAmazonRefs.value) n++
   if (filterCarrierAheadOfInternal.value) n++
   const adv = advancedTimes.value
   for (const key of Object.keys(adv) as (keyof typeof adv)[]) {
@@ -1453,6 +1423,7 @@ watch(shipmentWorkspace, (next, prev) => {
   filterNoCarrierTracking.value = false
   filterCarrierAheadOfInternal.value = false
   filterPendingTrackingTimeReview.value = false
+  filterMissingAmazonRefs.value = false
   filterStaleDays.value = null
   page.value = 1
   checkedRowKeys.value = []
@@ -1495,6 +1466,45 @@ function openEdit(row: Shipment) {
   modalMode.value = 'edit'
   editingRow.value = row
   modalShow.value = true
+}
+
+function openAmazonRefEdit(row: Shipment) {
+  amazonRefRow.value = row
+  amazonRefShow.value = true
+}
+
+async function handleAmazonRefSave(payload: {
+  customerShipmentId: string
+  amazonRefId: string
+  amzPushOriginPort: string
+  amzPushDestPort: string
+}) {
+  if (!amazonRefRow.value || amazonRefSaving.value) return
+  amazonRefSaving.value = true
+  try {
+    const saved = await updateShipment(amazonRefRow.value.id, {
+      customerShipmentId: payload.customerShipmentId,
+      amazonRefId: payload.amazonRefId,
+      amzPushOriginPort: payload.amzPushOriginPort,
+      amzPushDestPort: payload.amzPushDestPort,
+      pushAmzUpdate: true,
+    })
+    const push = saved.amzPush
+    if (!push || push.skipped) {
+      message.warning(push?.message ? `已保存。${push.message}` : '已保存，未推送到亚马逊')
+    } else if (push.ok) {
+      message.success(push.message || '已保存并推送到亚马逊')
+    } else {
+      message.warning(push.message ? `已保存。${push.message}` : '已保存，推送失败')
+    }
+    amazonRefShow.value = false
+    await loadList()
+    await loadFreshnessStats()
+  } catch (err) {
+    message.error(apiErrorMessage(err, '保存失败'))
+  } finally {
+    amazonRefSaving.value = false
+  }
 }
 
 async function handleFormSubmit(payload: Partial<ShipmentPayload> & { shipmentNo: string }) {
@@ -1734,6 +1744,7 @@ function resetFilterValues() {
   filterVipOnly.value = false
   filterFclOnly.value = false
   filterCarrier.value = null
+  filterSupplierName.value = null
   filterCountry.value = null
   filterChannelNameZh.value = null
   filterChannelCategory.value = null
@@ -1746,6 +1757,7 @@ function resetFilterValues() {
   filterNoCarrierTracking.value = false
   filterCarrierAheadOfInternal.value = false
   filterPendingTrackingTimeReview.value = false
+  filterMissingAmazonRefs.value = false
   filterStaleDays.value = null
   filterNoZipcode.value = false
   filterHasTrackingNumber.value = false
@@ -1824,6 +1836,9 @@ function removeFilterTag(key: string) {
     case 'filterCarrier':
       filterCarrier.value = null
       break
+    case 'filterSupplierName':
+      filterSupplierName.value = null
+      break
     case 'filterCountry':
       filterCountry.value = null
       break
@@ -1883,6 +1898,9 @@ function removeFilterTag(key: string) {
       break
     case 'filterPendingTrackingTimeReview':
       filterPendingTrackingTimeReview.value = false
+      break
+    case 'filterMissingAmazonRefs':
+      filterMissingAmazonRefs.value = false
       break
     case 'filterGroupId':
       filterGroupId.value = null
@@ -2122,6 +2140,44 @@ async function handleSyncSelectedCarrier() {
   await handleSyncCarrierTracking(nos)
 }
 
+function formatDpsSyncMessage(res: ShipmentDpsSyncByOrderResult): string {
+  let text = `DPS 更新：新增 ${res.created}，更新 ${res.updated}`
+  if (res.unchanged) text += `，无变化 ${res.unchanged}`
+  if (res.failed) text += `，失败 ${res.failed}`
+  if (res.notFound) text += `，DPS 未返回 ${res.notFound}`
+  return text
+}
+
+async function handleSyncPreportFromDps() {
+  syncingDps.value = true
+  try {
+    const res = await syncPreportShipmentsFromDps()
+    if (res.skipped) {
+      message.warning(res.reason || 'DPS 更新已跳过')
+      return
+    }
+    const text = formatDpsSyncMessage(res)
+    if (res.error) {
+      message.error(`${res.error}（已写入部分：${text}）`)
+      await loadList()
+      await loadFilterOptions()
+      return
+    }
+    message.success(text)
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    const raw = apiErrorMessage(e, 'DPS 更新失败')
+    const hint =
+      /failed to fetch|network|fetch/i.test(raw) || (e instanceof TypeError && !raw)
+        ? '（请确认后端 3001 已启动、config.json 合法且含 dps_authorization；开发环境需重启 Vite 以应用代理超时）'
+        : ''
+    message.error(`${raw}${hint}`)
+  } finally {
+    syncingDps.value = false
+  }
+}
+
 async function handleSyncSelectedFromDps() {
   if (!selectedRows.value.length) {
     message.warning('请先勾选运单')
@@ -2143,11 +2199,7 @@ async function handleSyncSelectedFromDps() {
       message.error(res.error)
       return
     }
-    let text = `DPS 更新：新增 ${res.created}，更新 ${res.updated}`
-    if (res.unchanged) text += `，无变化 ${res.unchanged}`
-    if (res.failed) text += `，失败 ${res.failed}`
-    if (res.notFound) text += `，DPS 未返回 ${res.notFound}`
-    message.success(text)
+    message.success(formatDpsSyncMessage(res))
     clearSelection()
     await loadList()
     await loadFilterOptions()
@@ -2175,7 +2227,14 @@ async function runDpsExportDownload(
   exportType: DpsExportJobType,
   successText: string,
   fallbackError: string,
-  options?: { shipmentIds?: string[]; splitSpec?: string },
+  options?: {
+    shipmentIds?: string[]
+    splitSpec?: string
+    renameFields?: string[]
+    renameSeparator?: string
+    renameFolder?: string
+    renameCountryLang?: 'en' | 'zh'
+  },
 ) {
   const ids = options?.shipmentIds?.length
     ? options.shipmentIds
@@ -2189,6 +2248,10 @@ async function runDpsExportDownload(
   try {
     const { blob, filename } = await runDpsExportJob(exportType, ids, {
       splitSpec: options?.splitSpec,
+      renameFields: options?.renameFields,
+      renameSeparator: options?.renameSeparator,
+      renameFolder: options?.renameFolder,
+      renameCountryLang: options?.renameCountryLang,
       onProgress: (st) => {
         dpsExportProgressMessage.value = st.message || '处理中…'
         dpsExportProgressPercent.value = st.progress
@@ -2263,6 +2326,30 @@ function handleDownloadSelectedMarkSplit() {
   })
 }
 
+const markRenameShow = ref(false)
+
+function handleDownloadSelectedMarkRename() {
+  if (!selectedRows.value.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  markRenameShow.value = true
+}
+
+function onMarkRenameConfirm(payload: {
+  fields: string[]
+  separator: string
+  folder: string
+  countryLang: 'en' | 'zh'
+}) {
+  void runDpsExportDownload('markRename', '重命名唛头已下载', '下载重命名唛头失败', {
+    renameFields: payload.fields,
+    renameCountryLang: payload.countryLang,
+    renameSeparator: payload.separator,
+    renameFolder: payload.folder,
+  })
+}
+
 function handleDownloadSelectedPackinglist() {
   void runDpsExportDownload('packinglist', '箱单发票已下载', '下载箱单发票失败')
 }
@@ -2309,6 +2396,7 @@ async function handleDownloadSelectedWarehouseEntry(format: 'xlsx' | 'pdf') {
 const downloadDropdownOptions: DropdownOption[] = [
   { label: '货箱', key: 'cargo' },
   { label: '唛头', key: 'mark' },
+  { label: '唛头（重命名）', key: 'markRename' },
   { label: '唛头（拆分）', key: 'markSplit' },
   { label: '箱单发票', key: 'packinglist' },
   { label: '进仓单', key: 'warehouseEntry' },
@@ -2319,6 +2407,7 @@ const downloadDropdownOptions: DropdownOption[] = [
 function handleDownloadMenuSelect(key: string | number) {
   if (key === 'cargo') handleDownloadSelectedCargoData()
   else if (key === 'mark') handleDownloadSelectedMarkData()
+  else if (key === 'markRename') handleDownloadSelectedMarkRename()
   else if (key === 'markSplit') handleDownloadSelectedMarkSplit()
   else if (key === 'packinglist') handleDownloadSelectedPackinglist()
   else if (key === 'warehouseEntry') void handleDownloadSelectedWarehouseEntry('xlsx')
@@ -2451,6 +2540,41 @@ async function copySelectedShipmentNos() {
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
+}
+
+function isBlankAmazonField(value: string | null | undefined): boolean {
+  const text = (value ?? '').trim()
+  return text === '' || text === '1'
+}
+
+function needsAmazonRefFill(row: Shipment): boolean {
+  if (isPreportWorkspace.value) return false
+  const code = (row.addressCode ?? '').trim()
+  if (code.length !== 4) return false
+  return isBlankAmazonField(row.customerShipmentId) || isBlankAmazonField(row.amazonRefId)
+}
+
+function renderAmazonRefCell(row: Shipment, field: 'customerShipmentId' | 'amazonRefId') {
+  const text = displayField(row[field]).trim()
+  if (!needsAmazonRefFill(row)) {
+    return h('span', { class: 'shipment-amazon-cell', title: text || undefined }, text || '—')
+  }
+  const missing = isBlankAmazonField(text)
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: missing
+        ? 'shipment-amazon-cell shipment-amazon-gap'
+        : 'shipment-amazon-cell shipment-amazon-gap shipment-amazon-gap--filled',
+      title: missing ? '派送仓库为 4 位。空值或只填 1 需要补货件号或亚马逊预约号' : text,
+      onClick: (event: Event) => {
+        event.stopPropagation()
+        openAmazonRefEdit(row)
+      },
+    },
+    missing ? '待补' : text,
+  )
 }
 
 function displayField(value: string | number | null | undefined): string {
@@ -2783,14 +2907,6 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
       return h('span', { class: ['shipment-status-badge', tone] }, label)
     },
   },
-  groups: {
-    title: '分组',
-    key: 'groups',
-    width: 104,
-    align: 'center',
-    ellipsis: { tooltip: false },
-    render: (row) => renderShipmentGroups(row),
-  },
   channelCode: {
     title: '渠道',
     key: 'channelCode',
@@ -2875,15 +2991,15 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     title: '货件号',
     key: 'customerShipmentId',
     width: 120,
-    ellipsis: { tooltip: true },
-    render: (row) => displayField(row.customerShipmentId) || '—',
+    cellProps: () => ({ class: 'shipment-amazon-td' }),
+    render: (row) => renderAmazonRefCell(row, 'customerShipmentId'),
   },
   amazonRefId: {
     title: '亚马逊预约号',
     key: 'amazonRefId',
     width: 120,
-    ellipsis: { tooltip: true },
-    render: (row) => displayField(row.amazonRefId) || '—',
+    cellProps: () => ({ class: 'shipment-amazon-td' }),
+    render: (row) => renderAmazonRefCell(row, 'amazonRefId'),
   },
   customerNo: {
     title: '客户编号',
@@ -3125,6 +3241,15 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </p>
       </div>
       <NSpace align="center">
+        <NButton
+          v-if="isPreportWorkspace"
+          size="small"
+          :loading="syncingDps"
+          title="从 DPS 按运单号更新全部已下单、提货中、已入仓运单（不含已取消）"
+          @click="handleSyncPreportFromDps"
+        >
+          更新全部运单
+        </NButton>
         <template v-if="!isPreportWorkspace">
           <NButton
             size="small"
@@ -3174,12 +3299,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :pending-review-active="filterPendingTrackingTimeReview"
       :stale7-active="filterStaleDays === 7"
       :stale14-active="filterStaleDays === 14"
+      :missing-amazon-active="filterMissingAmazonRefs"
       :filtered-no-internal-count="filterNoInternalTracking && !loading ? total : null"
       :filtered-no-carrier-count="filterNoCarrierTracking && !loading ? total : null"
       :filtered-pending-review-count="filterPendingTrackingTimeReview && !loading ? total : null"
       :filtered-carrier-ahead-count="filterCarrierAheadOfInternal && !loading ? total : null"
       :filtered-stale7-count="filterStaleDays === 7 && !loading ? total : null"
       :filtered-stale14-count="filterStaleDays === 14 && !loading ? total : null"
+      :filtered-missing-amazon-count="filterMissingAmazonRefs && !loading ? total : null"
       :carrier-sync-hint="carrierSyncHint"
       @toggle-no-internal="toggleNoInternalTrackingFilter"
       @toggle-no-carrier="toggleNoCarrierTrackingFilter"
@@ -3187,6 +3314,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       @toggle-pending-review="togglePendingReviewFilter"
       @toggle-stale7="toggleStale7Filter"
       @toggle-stale14="toggleStale14Filter"
+      @toggle-missing-amazon="toggleMissingAmazonRefsFilter"
     />
 
     <div class="panel shipments-filters-bar shrink-0 px-3 py-2">
@@ -3451,7 +3579,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
           <NButton
             size="small"
             :loading="downloadingDpsExport"
-            title="DPS 货箱 / 唛头 / 箱单发票（需 waybillId）"
+            title="DPS 货箱 / 唛头 / 唛头（重命名）/ 箱单发票（需 waybillId）"
             @click="handleDownloadSelectedCargoData"
           >
             下载
@@ -3539,6 +3667,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       @submit="handleFormSubmit"
     />
 
+    <ShipmentAmazonRefModal
+      :show="amazonRefShow"
+      :shipment="amazonRefRow"
+      :saving="amazonRefSaving"
+      @close="amazonRefShow = false"
+      @save="handleAmazonRefSave"
+    />
+
     <ShipmentTrackingDrawer
       v-model:show="trackingDrawerShow"
       :shipment="trackingDrawerShipment"
@@ -3551,6 +3687,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     <ShipmentAdvancedFilterDrawer
       v-model:show="advancedFilterShow"
       v-model:filter-carrier="filterCarrier"
+      v-model:filter-supplier-name="filterSupplierName"
       v-model:filter-country="filterCountry"
       v-model:filter-channel-name-zh="filterChannelNameZh"
       v-model:filter-customer-no="filterCustomerNo"
@@ -3589,6 +3726,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:advanced-times="advancedTimes"
       :filter-options="filterOptions"
       :carrier-options="carrierOptions"
+      :supplier-options="supplierOptions"
       :country-options="countryOptions"
       :channel-name-zh-options="channelNameZhOptions"
       :time-field-options="timeFieldOptions"
@@ -3604,6 +3742,13 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:show="columnSettingsShow"
       v-model:visible-keys="visibleColumnKeys"
       :excluded-keys="isPreportWorkspace ? PREPORT_EXCLUDED_COLUMN_KEYS : undefined"
+    />
+
+    <ShipmentMarkRenameModal
+      v-model:show="markRenameShow"
+      :preview-row="selectedRows[0] ?? null"
+      :count="selectedCount"
+      @confirm="onMarkRenameConfirm"
     />
 
     <ShipmentDpsExportProgressModal
@@ -3815,73 +3960,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   color: var(--color-muted);
 }
 
-.shipments-data-table :deep(.shipment-group-cell) {
-  display: inline-flex;
-  max-width: 100%;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: nowrap;
-  white-space: nowrap;
-  gap: 0.125rem;
-}
-
-.shipments-data-table :deep(.shipment-group-icon-cluster) {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.125rem;
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon-btn) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.125rem;
-  border: none;
-  border-radius: 0.375rem;
-  background: transparent;
-  cursor: pointer;
-  line-height: 0;
-  transition: background-color 0.15s ease;
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon-btn:hover) {
-  background: var(--color-btn-ghost-bg);
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon__svg) {
-  display: block;
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon--delivery) {
-  color: var(--tag-warning-fg, #d97706);
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon--payment) {
-  color: var(--color-accent-text, #6366f1);
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon--arrival) {
-  color: #0ea5e9;
-}
-
-.shipments-data-table :deep(.shipment-group-rule-icon--default),
-.shipments-data-table :deep(.shipment-group-rule-icon--placeholder) {
-  color: var(--color-muted);
-}
-
-.shipments-data-table :deep(.shipment-group-cell-sep) {
-  flex-shrink: 0;
-  margin: 0 0.0625rem;
-  color: var(--color-muted);
-  user-select: none;
-}
-
 .shipments-data-table :deep(.last-mile-badge-btn) {
   display: inline-flex;
   flex-shrink: 0;
@@ -3983,6 +4061,38 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 .shipments-data-table :deep(.shipment-charged-weight--empty) {
   font-weight: 400;
   color: var(--color-muted);
+}
+
+.shipments-data-table :deep(.shipment-amazon-td) {
+  overflow: hidden;
+  max-width: 120px;
+}
+
+.shipments-data-table :deep(.shipment-amazon-cell) {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shipments-data-table :deep(.shipment-amazon-gap) {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--tag-orange-fg);
+  font: inherit;
+  font-weight: 600;
+  line-height: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.shipments-data-table :deep(.shipment-amazon-gap--filled) {
+  font-weight: 500;
+  color: var(--color-fg);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .shipments-data-table :deep(.shipment-status-badge--indigo) {

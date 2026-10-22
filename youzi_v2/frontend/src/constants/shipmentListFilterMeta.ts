@@ -33,7 +33,6 @@ export const SHIPMENT_LIST_COLUMN_GROUPS = [
       'customerShipmentId',
       'amazonRefId',
       'ctns',
-      'groups',
       'customerNo',
       'countryCode',
       'deliveryAddress',
@@ -68,7 +67,6 @@ export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
   customerShipmentId: '货件号',
   amazonRefId: '亚马逊预约号',
   ctns: '件数',
-  groups: '分组',
   customerNo: '客户编号',
   refShipmentNo: '关联单号',
   countryCode: '国家',
@@ -95,7 +93,6 @@ export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
 /** 与 shipment-list-filter-design.md 默认列一致（不含固定列运单号/状态/操作） */
 export const DEFAULT_SHIPMENT_VISIBLE_COLUMNS = [
   'customer',
-  'groups',
   'channelCode',
   'ctns',
   'paymentStatus',

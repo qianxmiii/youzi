@@ -35,3 +35,8 @@ class TrackingFreshnessStats(BaseModel):
         alias="internalStale14d",
         description="转运中且有效内部轨迹 ≥14 天未更新",
     )
+    missing_amazon_refs: int = Field(
+        0,
+        alias="missingAmazonRefs",
+        description="转运中、派送仓库恰好 4 位，且货件号或亚马逊预约号为空或仅为 1",
+    )

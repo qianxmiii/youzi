@@ -21,6 +21,7 @@ const props = defineProps<{
   hasCarrierFields?: boolean
   hasRouteStatusFields?: boolean
   hasExceptionPhaseFields?: boolean
+  hasAmzPortRuleFields?: boolean
   initial: CodeTableRow | null
 }>()
 
@@ -45,6 +46,21 @@ const exceptionPhaseOptions = [
   { label: '港前', value: 'pre_port' },
 ]
 
+const amzModeOptions = [
+  { label: '空运', value: 'AIR' },
+  { label: '海运', value: 'SEA' },
+]
+const amzLegOptions = [
+  { label: '起运', value: 'ORIGIN' },
+  { label: '目的', value: 'DESTINATION' },
+]
+const amzKindOptions = [
+  { label: '默认', value: 'DEFAULT' },
+  { label: '下拉选项', value: 'OPTION' },
+  { label: '收货仓精确匹配', value: 'ORIGIN_EXACT' },
+  { label: '目的港关键字', value: 'DEST_KEYWORD' },
+]
+
 const form = reactive<CodeTablePayload>({
   code: '',
   nameZh: '',
@@ -59,6 +75,13 @@ const form = reactive<CodeTablePayload>({
   carrierId: '',
   dpsStatus: '',
   phaseCategory: 'post_port',
+  transportMode: 'AIR',
+  countryCode: '',
+  leg: 'DESTINATION',
+  portCode: '',
+  ruleKind: 'DEFAULT',
+  matchText: '',
+  isDefault: false,
 })
 
 const title = computed(() => (props.mode === 'create' ? '新增码表项' : '修改码表项'))
@@ -81,6 +104,13 @@ watch(
       form.carrierId = props.initial.carrierId || ''
       form.dpsStatus = props.initial.dpsStatus || ''
       form.phaseCategory = props.initial.phaseCategory || 'post_port'
+      form.transportMode = props.initial.transportMode || 'AIR'
+      form.countryCode = props.initial.countryCode || ''
+      form.leg = props.initial.leg || 'DESTINATION'
+      form.portCode = props.initial.portCode || ''
+      form.ruleKind = props.initial.ruleKind || 'DEFAULT'
+      form.matchText = props.initial.matchText || ''
+      form.isDefault = !!props.initial.isDefault
     } else {
       form.code = ''
       form.nameZh = ''
@@ -95,6 +125,13 @@ watch(
       form.carrierId = ''
       form.dpsStatus = ''
       form.phaseCategory = 'post_port'
+      form.transportMode = 'AIR'
+      form.countryCode = ''
+      form.leg = 'DESTINATION'
+      form.portCode = ''
+      form.ruleKind = 'DEFAULT'
+      form.matchText = ''
+      form.isDefault = false
     }
   },
   { immediate: true },
@@ -161,6 +198,29 @@ function handleSubmit() {
       <NFormItem v-if="hasExceptionPhaseFields" label="异常大类">
         <NSelect v-model:value="form.phaseCategory" :options="exceptionPhaseOptions" />
       </NFormItem>
+      <template v-if="hasAmzPortRuleFields">
+        <NFormItem label="运输方式">
+          <NSelect v-model:value="form.transportMode" :options="amzModeOptions" />
+        </NFormItem>
+        <NFormItem label="国家">
+          <NInput v-model:value="form.countryCode" placeholder="二字码，如 US" />
+        </NFormItem>
+        <NFormItem label="起运/目的">
+          <NSelect v-model:value="form.leg" :options="amzLegOptions" />
+        </NFormItem>
+        <NFormItem label="港口码">
+          <NInput v-model:value="form.portCode" placeholder="空运三字 / 海运五字" />
+        </NFormItem>
+        <NFormItem label="规则">
+          <NSelect v-model:value="form.ruleKind" :options="amzKindOptions" />
+        </NFormItem>
+        <NFormItem label="匹配文本">
+          <NInput v-model:value="form.matchText" placeholder="深圳仓，或关键字如萨瓦纳" />
+        </NFormItem>
+        <NFormItem label="默认项">
+          <NSwitch v-model:value="form.isDefault" />
+        </NFormItem>
+      </template>
       <NFormItem label="排序">
         <NInputNumber v-model:value="form.sortOrder" :min="0" class="w-full" />
       </NFormItem>

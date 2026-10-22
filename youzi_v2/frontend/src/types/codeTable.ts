@@ -6,6 +6,7 @@ export interface CodeTableMeta {
   hasCarrierFields?: boolean
   hasRouteStatusFields?: boolean
   hasExceptionPhaseFields?: boolean
+  hasAmzPortRuleFields?: boolean
 }
 
 export interface CodeTableRow {
@@ -22,6 +23,13 @@ export interface CodeTableRow {
   carrierId?: string
   dpsStatus?: string
   phaseCategory?: string
+  transportMode?: string
+  countryCode?: string
+  leg?: string
+  portCode?: string
+  ruleKind?: string
+  matchText?: string
+  isDefault?: boolean
   createdTime: string
   updatedTime: string
 }
@@ -49,6 +57,13 @@ export interface CodeTablePayload {
   carrierId?: string
   dpsStatus?: string
   phaseCategory?: string
+  transportMode?: string
+  countryCode?: string
+  leg?: string
+  portCode?: string
+  ruleKind?: string
+  matchText?: string
+  isDefault?: boolean
 }
 
 export interface CodeTableImportResult {

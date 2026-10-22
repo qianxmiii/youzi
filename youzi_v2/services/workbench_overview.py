@@ -320,13 +320,16 @@ def _build_todos(
     return {"items": _merge_todos(raw, limit=todo_limit)}
 
 
-def _day_group_for_eta(eta_dt: datetime, *, today: date) -> str:
+def _day_group_for_eta(eta_dt: datetime, *, today: date) -> str | None:
+    """近期到港分桶：往前 3 天（ETA 已过未 ATA）、今天、往后 3 天。"""
     eta_day = eta_dt.date()
+    if today - timedelta(days=3) <= eta_day < today:
+        return "past"
     if eta_day == today:
         return "today"
-    if eta_day == today + timedelta(days=1):
-        return "tomorrow"
-    return "later"
+    if today < eta_day <= today + timedelta(days=3):
+        return "forward"
+    return None
 
 
 def _eta_day_api_range(eta_dt: datetime) -> tuple[str, str]:
@@ -362,8 +365,8 @@ def _build_arrivals(
 ) -> dict[str, Any]:
     now = now or datetime.now()
     today = now.date()
-    window_start = datetime(today.year, today.month, today.day)
-    window_end = window_start + timedelta(days=4)
+    window_start = datetime.combine(today - timedelta(days=3), datetime.min.time())
+    window_end = datetime.combine(today + timedelta(days=4), datetime.min.time())
 
     with database.lock:
         rows = database.conn.execute(
@@ -405,13 +408,16 @@ def _build_arrivals(
             continue
         if not (window_start <= eta_dt < window_end):
             continue
+        day_group = _day_group_for_eta(eta_dt, today=today)
+        if not day_group:
+            continue
         vessel = (row["vessel_voyage"] or "").strip() or "—"
         dest = (row["destination_port_code"] or "").strip()
         eta_key = eta_raw or ""
         key = (vessel, dest, eta_key)
         if key not in buckets:
             buckets[key] = {
-                "dayGroup": _day_group_for_eta(eta_dt, today=today),
+                "dayGroup": day_group,
                 "vesselVoyage": vessel,
                 "destinationPortCode": dest,
                 "eta": eta_raw or None,
@@ -429,7 +435,7 @@ def _build_arrivals(
     items = sorted(
         buckets.values(),
         key=lambda x: (
-            {"today": 0, "tomorrow": 1, "later": 2}.get(x["dayGroup"], 9),
+            {"past": 0, "today": 1, "forward": 2}.get(x["dayGroup"], 9),
             x["_eta_dt"],
             x["vesselVoyage"],
         ),

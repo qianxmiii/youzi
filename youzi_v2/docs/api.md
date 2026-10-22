@@ -63,7 +63,7 @@ curl http://127.0.0.1:3001/api/v1/health
 - `generatedAt`：生成时间
 - `focus`：待处理异常（SLA `pendingOpen`）、待催收（催款 `todoCount`）、轨迹审批（`pendingTrackingTimeReview`）、三天内到港（海运 `arrivingSoon`）
 - `todos.items`：异常 / 催款 / 轨迹审批合并，同票合并展示，统一优先级后截断
-- `arrivals.items`：ETA 今天～今天+3 天且无 ATA；按日分组、按船名航次+目的港+ETA 聚合
+- `arrivals.items`：ETA 在「往前 3 天～往后 3 天」且尚无 ATA；`dayGroup` 为 `past`（往前三天内）/ `today` / `forward`（往后三天内）；按船名航次+目的港+ETA 聚合
 - `overview`：在途（`IN_TRANSIT` 未签收）、查验中（`exception_code=INSPECTION`）、已到港未签收、本周签收（本地周一～周日）
 - `routeStatus`：未签收运单按关键明细状态计数；`missingCount` 为空或信息传递；`todayItems` 为今日动态（7 项：离港 ATD、到港 ATA、内签收 `delivered_time`、异常开始、到中转仓/快递交仓/轨迹签收明细节点时间，均本地自然日）；点击跳转运单列表日期或 `timeField` 筛选
 
@@ -102,21 +102,23 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/` | 列表（筛选、分页；含 `workspace`（`preport` 港前 / `transit` 在途，与 DPS Status 划分一致，未传 `statusCode` 时按工作台限定范围）、`statusCode`、`routeStatus`、`originWarehouseCode`（收货仓精确匹配）、`missingRouteStatus`、`groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应含 `routeStatus`） |
+| GET | `/` | 列表（筛选、分页；含 `workspace`（`preport` 港前 / `transit` 在途，与 DPS Status 划分一致，未传 `statusCode` 时按工作台限定范围）、`statusCode`、`routeStatus`、`supplierName`（供应商精确匹配）、`originWarehouseCode`（收货仓精确匹配）、`missingRouteStatus`、`missingAmazonRefs`（派送仓库恰好 4 位，且货件号或亚马逊预约号为空或仅为 `1`）、`groupId`、`groupNo`、`hasGroup`、`noZipcode` 等；响应含 `routeStatus`） |
 | GET | `/{item_id}` | 单条详情 |
 | POST | `/` | 新建 |
-| PUT | `/{item_id}` | 更新运单字段 |
+| PUT | `/{item_id}` | 更新运单字段。补货件号窗口传 `pushAmzUpdate=true` 时，保存成功后尝试推送亚马逊，响应附带 `amzPush` |
+| GET | `/{item_id}/amz-push-preview` | 预览本次将推送的起运港、目的港（不调用 DPS） |
 | DELETE | `/{item_id}` | 删除 |
 | POST | `/batch-delete` | 批量删除 |
 | PATCH | `/batch-update` | 批量更新字段 |
-| GET | `/filter-options` | 筛选项（含 `originWarehouseCodes`、`groups`、`routeStatuses`：`{ code, nameZh, dpsStatus }`） |
+| GET | `/filter-options` | 筛选项（含 `supplierNames`、`originWarehouseCodes`、`groups`、`routeStatuses`：`{ code, nameZh, dpsStatus }`） |
 | GET | `/export` | Excel 导出 |
 | POST | `/import` | Excel 导入 |
 | POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
 | POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
 | POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200） |
+| POST | `/sync-preport-from-dps` | 港前全部更新：已下单、提货中、已入仓（不含已取消），按运单号走同一 `shipment_queryByOrder` 写入；无 body |
 | POST | `/download-dps-cargo-data` | DPS 货箱（`dps_data_download`）；body: 本地运单 `ids`，最多 50；单票 `{运单号}_data.ext`，多票 `{N}票数据_{YYYYMMDDHHmmss}.zip`（内含同名文件夹与各票 `_data` 文件） |
-| POST | `/dps-export-jobs` | 异步 DPS 导出（body: `exportType`、`ids`、可选 `splitSpec`）；返回 `jobId`，轮询 `GET /dps-export-jobs/{id}`，完成后 `GET …/download` |
+| POST | `/dps-export-jobs` | 异步 DPS 导出（body: `exportType`、`ids`、可选 `splitSpec`；`exportType=markRename` 另需 `renameFields`、`renameSeparator`）。唛头（重命名）逐票下载，文件名按字段顺序拼接，空字段跳过；`addressCode` 为空时回退邮编；可选 `renameFolder`（如 `customerNo`）把相同值放进同一目录；`renameCountryLang`=`en`（默认国家码缩写如 AU）/`zh`（中文名）控制国家字段。单票且未选文件夹时直接下载该文件名，否则 zip `{N}票唛头_{时间}.zip`。例：`shipmentNo`+`addressCode`+`ctns`、分隔符 `-` → `运单号-派送仓库或邮编-件数.pdf`。返回 `jobId`，轮询 `GET /dps-export-jobs/{id}`，完成后 `GET …/download` |
 | GET | `/dps-export-jobs/{job_id}` | 导出进度 `{ progress, message, done, failed }` |
 | GET | `/dps-export-jobs/{job_id}/download` | 导出完成后的文件 |
 | POST | `/download-dps-mark-data` | DPS 唛头（1 票 `dps_mark_download`，多票 `dps_batchmark_download`）；body: 本地运单 `ids`（前端下载菜单已改用 `/dps-export-jobs` 以展示进度） |
@@ -127,7 +129,7 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/download-dps-warehouse-entry` | 进仓单（`warehouse_entry_template.xlsx` 模板填充 + `dps_warehouse` 收货地址）；**`{N}票进仓单_{YYYYMMDD}.xlsx`** |
 | POST | `/download-dps-warehouse-entry-pdf` | 进仓单 PDF（先按模板生成 xlsx 再转 PDF，与 Excel 下载版式一致）；**`{N}票进仓单_{YYYYMMDD}.pdf`**；无 Excel/LibreOffice 转换能力时 503 |
 | POST | `/sync-route-status-from-dps` | 明细状态：按 `waybillId` 调 `config.dps_route_status_query`；`shipmentNos` 可选（最多 200），空则全部 |
-| GET | `/tracking-freshness-stats` | 轨迹新鲜度统计 |
+| GET | `/tracking-freshness-stats` | 轨迹新鲜度统计；含 `missingAmazonRefs`（转运中、派送仓库恰好 4 位，且货件号或亚马逊预约号为空或仅为 `1` 的票数） |
 | GET | `/tracking-sync/daily-stats` | 日同步统计 |
 | POST | `/exceptions/open` | 开启异常 |
 | POST | `/exceptions/close` | 关闭异常 |
@@ -243,7 +245,7 @@ curl -X POST "http://127.0.0.1:3001/api/v1/vessel-schedules/import" -F "file=@�
 
 | 前缀 | 说明 |
 |------|------|
-| `/api/v1/customers` | CRUD + `sync-from-shipments`；`PATCH` 支持 `customerName` + `updateShipments` 批量改运单客户字段 |
+| `/api/v1/customers` | CRUD + `sync-from-shipments`；`PATCH` 支持 `customerName` + `updateShipments` 批量改运单客户字段；`GET /export` 导出 Excel（`search`、`vipOnly`，上限 10000 条） |
 | `/api/v1/channels` | CRUD + `seed-defaults`（清空后全量导入渠道清单）、`/meta`；字段含 `dpsChannelName`（DPS cnName）；`PATCH` 可改 `code`，同步更新运单 `channel_code` |
 
 ## 报价跟进 quote-opportunities

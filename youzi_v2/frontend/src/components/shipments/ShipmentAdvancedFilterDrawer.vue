@@ -16,6 +16,7 @@ import type { ShipmentAdvancedTimeRanges } from '@/constants/shipmentListFilterM
 const show = defineModel<boolean>('show', { default: false })
 
 const filterCarrier = defineModel<string | null>('filterCarrier', { default: null })
+const filterSupplierName = defineModel<string | null>('filterSupplierName', { default: null })
 const filterCountry = defineModel<string | null>('filterCountry', { default: null })
 const filterChannelNameZh = defineModel<string | null>('filterChannelNameZh', { default: null })
 const filterCustomerNo = defineModel<string>('filterCustomerNo', { default: '' })
@@ -58,6 +59,7 @@ const advancedTimes = defineModel<ShipmentAdvancedTimeRanges>('advancedTimes', {
 defineProps<{
   filterOptions: ShipmentFilterOptions
   carrierOptions: { label: string; value: string }[]
+  supplierOptions: { label: string; value: string }[]
   countryOptions: { label: string; value: string }[]
   channelNameZhOptions: { label: string; value: string }[]
   timeFieldOptions: { label: string; value: string }[]
@@ -139,12 +141,20 @@ function apply() {
               clearable
               size="small"
             />
-            <NInput v-model:value="searchKeyword" placeholder="关键词：供应商、品名、地址等" clearable size="small" />
+            <NInput v-model:value="searchKeyword" placeholder="关键词：品名、地址等" clearable size="small" />
             <NSelect v-model:value="filterCountry" :options="countryOptions" placeholder="国家/地区" clearable filterable size="small" />
             <NInput v-model:value="filterDestinationPort" placeholder="目的港" clearable size="small" />
             <NInput v-model:value="filterAddressKeyword" placeholder="仓库 / 地址关键词" clearable size="small" />
             <NSelect v-model:value="filterChannelNameZh" :options="channelNameZhOptions" placeholder="渠道（中文名）" clearable filterable size="small" />
             <NSelect v-model:value="filterCarrier" :options="carrierOptions" placeholder="承运商" clearable filterable size="small" />
+            <NSelect
+              v-model:value="filterSupplierName"
+              :options="supplierOptions"
+              placeholder="供应商"
+              clearable
+              filterable
+              size="small"
+            />
             <NSelect
               v-model:value="filterPaymentStatus"
               :options="[...PAYMENT_STATUS_FILTER_OPTIONS]"

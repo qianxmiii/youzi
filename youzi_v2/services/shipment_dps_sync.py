@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from ..db.code_tables_repository import CodeTablesRepository
+from ..db.shipment_order_status import PREPORT_DPS_REFRESH_STATUSES
 from ..db.shipment_sla import SLA_DELIVERED_ROUTE_STATUS
 from ..db.shipments_repository import ShipmentsRepository
 from .shipment_dps_mapper import dps_row_to_shipment
@@ -277,6 +278,104 @@ def run_shipment_dps_sync_by_order(
             "notFoundNos": not_found_nos[:50],
             "pages": pages,
             **stats,
+        }
+    finally:
+        _lock.release()
+
+
+def run_shipment_dps_sync_preport_active(
+    shipments_repo: ShipmentsRepository,
+    config_path: Path,
+    *,
+    log: LogFn | None = None,
+) -> dict[str, Any]:
+    """港前全部更新：已下单、提货中、已入仓，按运单号走 shipment_queryByOrder。"""
+
+    def out(msg: str) -> None:
+        if log:
+            log(msg)
+
+    nos = shipments_repo.list_shipment_nos_by_status_codes(
+        sorted(PREPORT_DPS_REFRESH_STATUSES)
+    )
+    empty = {
+        "skipped": False,
+        "remoteTotal": 0,
+        "total": 0,
+        "created": 0,
+        "updated": 0,
+        "unchanged": 0,
+        "failed": 0,
+        "notFound": 0,
+        "notFoundNos": [],
+        "pages": 0,
+        "errors": [],
+    }
+    if not nos:
+        return {
+            **empty,
+            "skipped": True,
+            "reason": "没有已下单、提货中或已入仓的运单",
+        }
+
+    if not _lock.acquire(blocking=False):
+        out("[DPS运单同步] 跳过港前全部更新：上一轮仍在进行")
+        return {**empty, "skipped": True, "reason": "DPS 运单同步进行中"}
+
+    created = updated = unchanged = failed = pages = remote_total = 0
+    not_found_nos: list[str] = []
+    errors: list[str] = []
+    try:
+        out(f"[DPS运单同步] 港前全部更新开始，共 {len(nos)} 单（已下单/提货中/已入仓）")
+        for chunk in _chunk_shipment_nos(nos, _BY_ORDER_CHUNK_SIZE):
+            parsed, err = query_shipments_by_order(chunk, config_path)
+            if err:
+                out(f"[DPS运单同步] 港前全部更新失败：{err}")
+                return {
+                    **empty,
+                    "error": err,
+                    "remoteTotal": remote_total,
+                    "total": created + updated + unchanged + failed,
+                    "created": created,
+                    "updated": updated,
+                    "unchanged": unchanged,
+                    "failed": failed,
+                    "notFound": len(not_found_nos),
+                    "notFoundNos": not_found_nos[:50],
+                    "pages": pages,
+                    "errors": errors,
+                }
+            assert parsed is not None
+            chunk_rows = [r for r in (parsed.get("rows") or []) if isinstance(r, dict)]
+            pages += int(parsed.get("pages") or 0)
+            remote_total += int(parsed.get("total") or len(chunk_rows))
+            returned_nos = {shipment_odd(r) for r in chunk_rows if shipment_odd(r)}
+            not_found_nos.extend(n for n in chunk if n not in returned_nos)
+            stats = _upsert_dps_rows(shipments_repo, chunk_rows, log=log)
+            created += int(stats["created"])
+            updated += int(stats["updated"])
+            unchanged += int(stats["unchanged"])
+            failed += int(stats["failed"])
+            for item in stats.get("errors") or []:
+                if len(errors) < 20:
+                    errors.append(str(item))
+        out(
+            f"[DPS运单同步] 港前全部更新完成 本地={len(nos)} remote={remote_total} "
+            f"新增={created} 更新={updated} 无变化={unchanged} "
+            f"失败={failed} 未返回={len(not_found_nos)}"
+        )
+        return {
+            "skipped": False,
+            "remoteTotal": remote_total,
+            "total": len(nos),
+            "created": created,
+            "updated": updated,
+            "unchanged": unchanged,
+            "failed": failed,
+            "notFound": len(not_found_nos),
+            "notFoundNos": not_found_nos[:50],
+            "pages": pages,
+            "errors": errors,
         }
     finally:
         _lock.release()

@@ -202,6 +202,12 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         )
     if "route_track_signed_time" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN route_track_signed_time TEXT")
+    if "amz_push_dest_port" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_dest_port TEXT")
+    if "amz_push_origin_port" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_origin_port TEXT")
+    if "amz_push_at" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_at TEXT")
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "
         f"ON {TABLE_NAME}(exception_code)"

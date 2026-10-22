@@ -12,9 +12,14 @@ _XL_TYPE_PDF = 0
 _EXCEL_CANDIDATES = (
     Path(r"C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"),
     Path(r"C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"),
+    Path(r"C:\Program Files\Microsoft Office\root\Office15\EXCEL.EXE"),
+    Path(r"C:\Program Files\Microsoft Office\Office16\EXCEL.EXE"),
+    Path(r"C:\Program Files\Microsoft Office\Office15\EXCEL.EXE"),
+    Path(r"C:\Program Files\Microsoft Office\Office14\EXCEL.EXE"),
 )
 _LIBREOFFICE_CANDIDATES = (
     Path(r"C:\Program Files\LibreOffice\program\soffice.exe"),
+    Path(r"C:\Program Files (x86)\LibreOffice\program\soffice.exe"),
     Path("/usr/bin/libreoffice"),
     Path("/usr/bin/soffice"),
 )
@@ -35,19 +40,22 @@ def _find_soffice() -> Path | None:
     return None
 
 
-def _excel_com_available() -> bool:
+def _win32com_importable() -> bool:
     if os.name != "nt":
         return False
-    for p in _EXCEL_CANDIDATES:
-        if p.is_file():
-            return True
-    return shutil.which("excel") is not None
+    try:
+        import win32com.client  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
 
 
 def _convert_via_win32com(xlsx_path: Path, pdf_path: Path) -> None:
     import win32com.client  # pywin32
 
-    excel = win32com.client.Dispatch("Excel.Application")
+    # DispatchEx：独立进程，避免占用用户已打开的 Excel
+    excel = win32com.client.DispatchEx("Excel.Application")
     excel.Visible = False
     excel.DisplayAlerts = False
     wb = None
@@ -95,17 +103,19 @@ def convert_warehouse_entry_xlsx_bytes_to_pdf(xlsx_bytes: bytes) -> bytes:
         pdf_path = td_path / "warehouse_entry.pdf"
         xlsx_path.write_bytes(xlsx_bytes)
 
-        if _excel_com_available():
+        # Windows：有 pywin32 即尝试 COM（Click-to-Run 等路径可能不在候选列表里）
+        if _win32com_importable():
             try:
                 _convert_via_win32com(xlsx_path, pdf_path)
-                if pdf_path.is_file():
+                if pdf_path.is_file() and pdf_path.stat().st_size > 0:
                     return pdf_path.read_bytes()
-            except ImportError:
-                errors.append(
-                    "未安装 pywin32（pip install pywin32），无法用本机 Excel 转 PDF"
-                )
+                errors.append("Excel 转 PDF 未生成文件")
             except Exception as exc:
                 errors.append(f"Excel 转 PDF 失败：{exc}")
+        elif os.name == "nt":
+            errors.append(
+                "未安装 pywin32（pip install pywin32），无法用本机 Excel 转 PDF"
+            )
 
         soffice = _find_soffice()
         if soffice is not None:

@@ -74,7 +74,7 @@ def format_shipment_detail_summary_line(row: dict[str, Any]) -> str:
 
 
 def format_shipment_detail_summary_copy_text(rows: list[dict[str, Any]]) -> str:
-    """多行运单明细摘要（不含转单号），运单之间空一行。"""
+    """多行运单明细摘要（不含转单号），运单之间只换行。"""
     if not rows:
         return ""
-    return "\n\n".join(format_shipment_detail_summary_line(row) for row in rows)
+    return "\n".join(format_shipment_detail_summary_line(row) for row in rows)

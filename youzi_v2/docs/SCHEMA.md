@@ -180,7 +180,7 @@
 | `closed_time` | 结束（可空） |
 | `note` | 备注 |
 
-码表：`shipment_exception_codes`（`phase_category`：港前 `pre_port` / 港后 `post_port`；存量类型默认港后；查验中、掉件、暂扣、破损、运输超时、出口/进口海关异常等）。
+码表：`shipment_exception_codes`（`phase_category`：港前 `pre_port` / 港后 `post_port`；存量类型默认港后；查验中、掉件、暂扣、破损、运输超时、出口/进口海关异常、亚马逊异常等）。
 
 API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST .../close`（`closedTime` 可选）、`GET /api/v1/shipments/{id}/exception-events`。
 

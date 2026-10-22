@@ -220,6 +220,19 @@ def append_time_range(
         params.append(end)
 
 
+def missing_amazon_refs_sql(*, alias: str = "s") -> str:
+    """派送仓库恰好 4 位，且货件号或亚马逊预约号为空或仅为 1。"""
+    prefix = f"{alias}." if alias else ""
+
+    def blank(column: str) -> str:
+        return f"TRIM(COALESCE({prefix}{column}, '')) IN ('', '1')"
+
+    return (
+        f"LENGTH(TRIM(COALESCE({prefix}address_code, ''))) = 4 AND ("
+        f"{blank('customer_shipment_id')} OR {blank('amazon_ref_id')})"
+    )
+
+
 def append_missing_field(
     conditions: list[str],
     *,

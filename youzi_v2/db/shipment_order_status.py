@@ -22,6 +22,11 @@ PRE_PORT_STATUSES: frozenset[str] = frozenset(
     {STATUS_ORDERED, STATUS_PICKED_UP, STATUS_WAREHOUSE_IN, STATUS_CANCELLED}
 )
 
+# 港前「更新全部运单」：已下单 / 提货中 / 已入仓，不含已取消
+PREPORT_DPS_REFRESH_STATUSES: frozenset[str] = frozenset(
+    {STATUS_ORDERED, STATUS_PICKED_UP, STATUS_WAREHOUSE_IN}
+)
+
 TRANSIT_WORKSPACE_STATUSES: frozenset[str] = frozenset(
     {
         STATUS_IN_TRANSIT,
@@ -121,7 +126,7 @@ def status_code_filter_sql(
 
 
 def migrate_legacy_shipment_status_codes(conn) -> None:
-    """一次性兼容：粗码 IN_TRANSIT/DELIVERED → DPS 2/3。"""
+    """兼容：粗码 IN_TRANSIT/DELIVERED → DPS 2/3；空/UNKNOWN → 已下单 0（港前可见）。"""
     conn.execute(
         """
         UPDATE shipments
@@ -134,6 +139,15 @@ def migrate_legacy_shipment_status_codes(conn) -> None:
         UPDATE shipments
         SET status_code = '3'
         WHERE UPPER(TRIM(COALESCE(status_code, ''))) = 'DELIVERED'
+        """
+    )
+    conn.execute(
+        """
+        UPDATE shipments
+        SET status_code = '0'
+        WHERE status_code IS NULL
+           OR TRIM(status_code) = ''
+           OR UPPER(TRIM(status_code)) = 'UNKNOWN'
         """
     )
 

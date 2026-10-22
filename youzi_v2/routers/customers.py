@@ -1,9 +1,15 @@
-from fastapi import APIRouter
+from datetime import datetime
+from urllib.parse import quote
+
+from fastapi import APIRouter, HTTPException, Query, Response
 
 from ..context import *
+from ..services.customer_excel import build_customer_export_bytes
 from ..services.payment_reminder_rules import SETTLEMENT_MONTHLY
 
 router = APIRouter()
+
+_CUSTOMER_EXPORT_MAX = 10_000
 
 @router.get("/api/v1/customers")
 def list_customers(
@@ -15,6 +21,39 @@ def list_customers(
     return customers_repo.list_rows(
         search=search, vip_only=vip_only, limit=limit, offset=offset
     )
+
+@router.get("/api/v1/customers/export")
+def export_customers_excel(
+    search: str | None = None,
+    vip_only: bool | None = Query(None, alias="vipOnly"),
+    limit: int = Query(_CUSTOMER_EXPORT_MAX, le=_CUSTOMER_EXPORT_MAX),
+    offset: int = 0,
+):
+    """导出客户列表（Excel；筛选条件与列表一致）。"""
+    result = customers_repo.list_rows(
+        search=search,
+        vip_only=vip_only,
+        limit=limit,
+        offset=offset,
+    )
+    total = int(result.get("total") or 0)
+    if total > _CUSTOMER_EXPORT_MAX:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                f"当前筛选共 {total} 条，超过导出上限 {_CUSTOMER_EXPORT_MAX}，请缩小筛选范围"
+            ),
+        )
+    data = build_customer_export_bytes(result.get("items") or [])
+    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"客户导出_{ts}.xlsx"
+    encoded = quote(filename)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded}"},
+    )
+
 
 @router.post("/api/v1/customers/sync-from-shipments", response_model=CustomerSyncResult)
 def sync_customers_from_shipments():

@@ -45,6 +45,7 @@ export const navGroups: NavGroup[] = [
     label: '运单中心',
     icon: 'group-shipment',
     items: [
+      { name: '订单流转', to: '/order-flow', icon: 'workflow' },
       { name: '港前运单', to: '/shipments/pre-port', icon: 'box' },
       { name: '在途运单', to: '/shipments', icon: 'truck' },
       { name: '异常跟踪', to: '/shipment-exceptions', icon: 'alert' },
@@ -56,7 +57,10 @@ export const navGroups: NavGroup[] = [
   {
     label: '客户中心',
     icon: 'group-customer',
-    items: [{ name: '客户管理', to: '/customers', icon: 'users' }],
+    items: [
+      { name: '客户管理', to: '/customers', icon: 'users' },
+      { name: '客户地址簿', to: '/customers/addresses', icon: 'pin' },
+    ],
   },
   {
     label: '审批管理',

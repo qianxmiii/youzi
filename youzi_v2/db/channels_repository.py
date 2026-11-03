@@ -34,6 +34,8 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         "sortOrder": row["sort_order"],
         "isActive": bool(row["is_active"]),
         "slaEstimatedDays": sla_days,
+        "slaEstimatedDaysMin": int(row["_sla_estimated_days_min"] or sla_days) if sla_days else None,
+        "slaEstimatedDaysMax": sla_days,
         "slaEnabled": sla_enabled,
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
@@ -43,6 +45,7 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
 _SLA_SELECT = """
     c.*,
     sla.estimated_days AS _sla_estimated_days,
+    sla.estimated_days_min AS _sla_estimated_days_min,
     sla.enabled AS _sla_enabled
 """
 

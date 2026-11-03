@@ -6,6 +6,7 @@ export type DpsExportJobType =
   | 'mark'
   | 'markSplit'
   | 'markRename'
+  | 'markSelf'
   | 'packinglist'
   | 'warehouseform'
   | 'warehouseEntry'
@@ -91,6 +92,7 @@ export const DPS_EXPORT_TITLES: Record<DpsExportJobType, string> = {
   mark: '唛头',
   markSplit: '唛头（拆分）',
   markRename: '唛头（重命名）',
+  markSelf: '唛头（自生成）',
   packinglist: '箱单发票',
   warehouseform: '排仓单',
   warehouseEntry: '进仓单',

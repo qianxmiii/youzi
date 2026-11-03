@@ -49,6 +49,7 @@ _EXPORT_COLUMNS: list[tuple[str, str]] = [
     ("latestTrackingTime", "最新轨迹时间"),
     ("latestTrackingDesc", "最新轨迹"),
     ("paymentStatus", "付款状态"),
+    ("receivableCny", "应收"),
     ("settlementMethodLabel", "结算方式"),
     ("baseDate", "关键日期"),
     ("dueDate", "应付款日"),

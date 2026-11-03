@@ -9,6 +9,7 @@ websocket-client
 openpyxl
 pywin32; sys_platform == "win32"
 pypdf
+reportlab
 xlrd==1.2.0
 xlwt
 xlutils

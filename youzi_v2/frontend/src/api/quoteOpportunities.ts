@@ -11,6 +11,55 @@ export type QuoteScope =
   | 'lost'
   | 'cancelled'
 
+export interface QuoteChannelLine {
+  tradeTerm: string
+  channelName: string
+  unitPrice: number | null
+  chargeWeightKg: number | null
+  quotedAmount: number | null
+  quotedCurrency: string
+  priceBasis?: string
+  transitDaysMin: number | null
+  transitDaysMax: number | null
+  note: string
+}
+
+export interface QuoteDestination {
+  addressCode: string
+  ctns: number | null
+  weightKg: number | null
+  volumeCbm: number | null
+  channels: QuoteChannelLine[]
+}
+
+export interface QuotePasteResult {
+  destinations: QuoteDestination[]
+  summaryCtns: number | null
+  summaryWeightKg: number | null
+  summaryVolumeCbm: number | null
+  pickupFee: number | null
+  pickupFeeCurrency: string
+  unrecognized: string[]
+}
+
+export interface QuoteLine {
+  id: string
+  addressCode: string
+  ctns: number | null
+  weightKg: number | null
+  volumeCbm: number | null
+  tradeTerm: string
+  channelName: string
+  unitPrice: number | null
+  chargeWeightKg: number | null
+  quotedAmount: number | null
+  quotedCurrency: string
+  priceBasis?: string
+  transitDaysMin: number | null
+  transitDaysMax: number | null
+  note: string
+}
+
 export interface QuoteOpportunity {
   id: string
   quoteNo: string
@@ -36,9 +85,17 @@ export interface QuoteOpportunity {
   currentQuotedCurrency: string
   currentProfitAmount: number | null
   currentProfitCurrency: string
+  profitTotal?: number | null
+  profitTotalCurrency?: string
+  exchangeRate?: number | null
   currentProfitRate: number | null
+  profitUnit?: string
   lostReason: string
   note: string
+  pickupFee?: number | null
+  pickupFeeCurrency?: string
+  sourceText?: string
+  lines?: QuoteLine[]
   followupCount: number
   lastFollowupTime: string | null
   lastFollowupNote: string
@@ -108,6 +165,18 @@ export type QuoteCreateBody = {
   profitCurrency?: string
   profitRate?: number | null
   note?: string
+  destinations?: QuoteDestination[]
+  summaryCtns?: number | null
+  summaryWeightKg?: number | null
+  summaryVolumeCbm?: number | null
+  pickupFee?: number | null
+  pickupFeeCurrency?: string
+  sourceText?: string
+  profitAmount?: number | null
+  profitCurrency?: string
+  profitUnit?: string
+  exchangeRate?: number | null
+  nextFollowupDate?: string | null
 }
 
 export type QuoteFollowupBody = {
@@ -164,6 +233,33 @@ export async function listQuoteOpportunities(params?: {
 
 export async function getQuoteNotificationSummary(): Promise<QuoteNotificationSummary> {
   return api('/api/v1/quote-opportunities/notifications/summary')
+}
+
+export interface CustomerQuotedProduct {
+  productName: string
+  lastQuoteDate: string
+  quoteCount: number
+}
+
+export async function listCustomerQuotedProducts(params: {
+  customerId?: string
+  customerName?: string
+}): Promise<{ items: CustomerQuotedProduct[] }> {
+  return api('/api/v1/quote-opportunities/customer-products', { query: params })
+}
+
+export async function parseQuotePaste(text: string): Promise<QuotePasteResult> {
+  return api('/api/v1/quote-opportunities/parse', { method: 'POST', body: { text } })
+}
+
+export async function updateQuoteContent(
+  id: string,
+  body: QuoteCreateBody,
+): Promise<QuoteOpportunity> {
+  return api(`/api/v1/quote-opportunities/${encodeURIComponent(id)}/content`, {
+    method: 'PUT',
+    body,
+  })
 }
 
 export async function createQuoteOpportunity(body: QuoteCreateBody): Promise<QuoteOpportunity> {

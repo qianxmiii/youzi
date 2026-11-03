@@ -275,6 +275,8 @@ API：`POST /api/v1/shipments/exceptions/open`（`openedTime` 可选）、`POST 
 | 供应商 | `supplier_name` |
 | 品名 | `product_name` |
 | 收货仓 | `origin_warehouse_code` |
+| 提单号 | `bill_of_lading_no` |
+| 柜号 | `container_no` |
 | ETD | `etd`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
 | ATD | `atd`（**仅导出**，导出为日期 `YYYY-MM-DD`） |
 | ETA | `eta`（**仅导出**，导出为日期 `YYYY-MM-DD`） |

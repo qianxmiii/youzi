@@ -40,6 +40,7 @@ import {
   type QuoteScope,
   type QuoteVersion,
 } from '@/api/quoteOpportunities'
+import QuotePasteModal from '@/components/quotes/QuotePasteModal.vue'
 import {
   QUOTE_CHANGE_REASON_OPTIONS,
   QUOTE_CURRENCY_OPTIONS,
@@ -48,6 +49,8 @@ import {
   QUOTE_SCOPE_OPTIONS,
   formatMoney,
   formatProfitRate,
+  priceUnitLabel,
+  quoteProfitMoney,
   quoteChangeReasonLabel,
   quoteStatusLabel,
 } from '@/constants/quoteFollowup'
@@ -70,6 +73,8 @@ const search = ref('')
 const customerOptions = ref<{ label: string; value: string }[]>([])
 
 const createShow = ref(false)
+const pasteShow = ref(false)
+const editingQuote = ref<QuoteOpportunity | null>(null)
 const createSubmitting = ref(false)
 const createForm = reactive({
   customerSource: 'existing' as 'existing' | 'new',
@@ -206,6 +211,27 @@ async function load() {
   }
 }
 
+function openPaste() {
+  editingQuote.value = null
+  pasteShow.value = true
+}
+
+async function openEdit(row: QuoteOpportunity) {
+  try {
+    editingQuote.value = await getQuoteOpportunity(row.id)
+    pasteShow.value = true
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '加载报价失败')
+  }
+}
+
+async function onPasteSaved() {
+  await load()
+  if (detailShow.value && detailRow.value) {
+    detailRow.value = await getQuoteOpportunity(detailRow.value.id)
+  }
+}
+
 function openCreate() {
   const today = Date.now()
   createForm.customerSource = 'existing'
@@ -339,6 +365,41 @@ async function submitFollowup() {
   } finally {
     followupSubmitting.value = false
   }
+}
+
+function formatQuoteMeasure(value: number | null | undefined) {
+  if (value == null || Number.isNaN(Number(value))) return '—'
+  const n = Number(value)
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 1000) / 1000)
+}
+
+function displayedProfit(row: QuoteOpportunity) {
+  if (row.profitUnit && row.profitTotal != null) {
+    return { amount: row.profitTotal, currency: row.profitTotalCurrency || 'USD' }
+  }
+  if (row.profitUnit && row.lines?.length) {
+    const money = quoteProfitMoney(
+      row.currentProfitAmount,
+      row.profitUnit,
+      row.lines,
+      row.currentQuotedCurrency,
+      row.exchangeRate,
+    )
+    if (money) return money
+  }
+  if (row.profitUnit) return { amount: null, currency: '' }
+  return { amount: row.currentProfitAmount, currency: row.currentProfitCurrency }
+}
+
+function formatQuoteWithUnit(value: number | null | undefined, unit: string) {
+  const text = formatQuoteMeasure(value)
+  if (text === '—' || !unit) return text
+  return `${text} ${unit}`
+}
+
+function showQuoteCargo(lines: QuoteOpportunity['lines'], index: number) {
+  if (!lines || index === 0) return true
+  return lines[index].addressCode !== lines[index - 1].addressCode
 }
 
 async function openDetail(row: QuoteOpportunity) {
@@ -495,7 +556,7 @@ const columns = computed<DataTableColumns<QuoteOpportunity>>(() => [
     render: (row) => reasonOrNoteText(row) || '—',
   },
   { title: '品名', key: 'productName', width: 120, ellipsis: { tooltip: true }, render: (r) => r.productName || '—' },
-  { title: '地址', key: 'addressText', minWidth: 140, ellipsis: { tooltip: true }, render: (r) => r.addressText || '—' },
+  { title: '地址', key: 'addressText', width: 180, ellipsis: { tooltip: true }, render: (r) => r.addressText || '—' },
   {
     title: '当前报价',
     key: 'currentQuotedAmount',
@@ -506,7 +567,10 @@ const columns = computed<DataTableColumns<QuoteOpportunity>>(() => [
     title: '利润',
     key: 'currentProfitAmount',
     width: 110,
-    render: (r) => formatMoney(r.currentProfitAmount, r.currentProfitCurrency),
+    render: (r) => {
+      const money = displayedProfit(r)
+      return formatMoney(money.amount, money.currency)
+    },
   },
   {
     title: '利润率',
@@ -533,6 +597,7 @@ const columns = computed<DataTableColumns<QuoteOpportunity>>(() => [
       const active = ['QUOTED', 'FOLLOWING'].includes((row.status || '').toUpperCase())
       return h(NSpace, { size: 4, wrap: false }, () => [
         h(NButton, { size: 'tiny', type: 'warning', disabled: !active, onClick: () => openFollowup(row) }, () => '已跟进'),
+        h(NButton, { size: 'tiny', quaternary: true, onClick: () => openEdit(row) }, () => '编辑'),
         h(NButton, { size: 'tiny', quaternary: true, onClick: () => openDetail(row) }, () => '详情'),
         h(NButton, { size: 'tiny', quaternary: true, disabled: !active, onClick: () => confirmWon(row) }, () => '成单'),
         h(NButton, { size: 'tiny', quaternary: true, disabled: !active, onClick: () => openLost(row) }, () => '丢单'),
@@ -542,6 +607,24 @@ const columns = computed<DataTableColumns<QuoteOpportunity>>(() => [
     },
   },
 ])
+
+const tableScrollX = computed(() => {
+  let total = 0
+  for (const column of columns.value) {
+    const width = 'width' in column ? column.width : undefined
+    if (typeof width === 'number') total += width
+  }
+  return total + 48
+})
+
+const tableScrollbarProps = {
+  trigger: 'none' as const,
+  size: 10,
+  themeOverrides: {
+    color: 'rgba(161, 161, 170, 0.7)',
+    colorHover: 'rgba(228, 228, 231, 0.9)',
+  },
+}
 
 watch([scope, filterCustomer, filterIsNewCustomer], () => {
   page.value = 1
@@ -566,7 +649,8 @@ onMounted(() => {
         <h1 class="page-h2">报价跟进</h1>
         <p class="mt-1 text-sm text-zinc-500">记录报价机会、跟进沟通与报价版本变化</p>
       </div>
-      <NButton type="primary" size="small" @click="openCreate">新增报价</NButton>
+      <NButton size="small" @click="openCreate">手动填写</NButton>
+      <NButton type="primary" size="small" @click="openPaste">新增报价</NButton>
     </div>
 
     <div class="quote-followup-filters panel shrink-0 px-3 py-2">
@@ -609,13 +693,15 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="panel min-h-0 flex-1 overflow-hidden p-0">
+    <div class="quote-followup-table panel min-h-0 flex-1 overflow-hidden p-0">
       <NDataTable
         :columns="columns"
         :data="items"
         :loading="loading"
         :bordered="false"
         :single-line="false"
+        :scroll-x="tableScrollX"
+        :scrollbar-props="tableScrollbarProps"
         size="small"
         flex-height
         class="h-full"
@@ -633,10 +719,18 @@ onMounted(() => {
       />
     </div>
 
+    <QuotePasteModal
+      v-model:show="pasteShow"
+      :customers="customerSelectOptions"
+      :quote="editingQuote"
+      @saved="onPasteSaved"
+      @manual="openCreate"
+    />
+
     <NModal
       v-model:show="createShow"
       preset="card"
-      title="新增报价"
+      title="手动填写报价"
       class="w-[720px] max-w-[95vw]"
       :mask-closable="false"
     >
@@ -816,18 +910,47 @@ onMounted(() => {
       </template>
     </NModal>
 
-    <NDrawer v-model:show="detailShow" :width="520" placement="right">
+    <NDrawer v-model:show="detailShow" :width="880" placement="right">
       <NDrawerContent :title="detailRow ? `报价详情 · ${detailRow.quoteNo}` : '报价详情'" closable>
         <div v-if="detailRow" class="space-y-4 text-sm">
-          <div class="space-y-1 rounded-lg border border-[var(--color-border)] p-3">
-            <div class="flex items-center gap-2 font-medium">
+          <div class="space-y-2 rounded-lg border border-[var(--color-border)] p-3">
+            <div class="flex flex-wrap items-center justify-between gap-2">
+              <div class="flex flex-wrap items-center gap-2 font-medium">
               {{ detailRow.customerName }}
+              <span
+                v-if="detailRow.productName"
+                class="rounded px-2 py-0.5 font-semibold"
+                style="background: color-mix(in srgb, var(--color-accent) 18%, transparent); color: var(--color-accent-text)"
+              >
+                {{ detailRow.productName }}
+              </span>
               <NTag v-if="detailRow.isNewCustomer" size="tiny" type="warning" :bordered="false">新客户</NTag>
               <NTag size="tiny" :type="statusTagType(detailRow.displayStatus)" :bordered="false">
                 {{ quoteStatusLabel(detailRow.displayStatus) }}
               </NTag>
+              </div>
+              <NButton size="small" @click="openEdit(detailRow)">编辑</NButton>
             </div>
-            <div class="text-[var(--color-muted)]">
+            <div
+              v-if="detailRow.ctns != null || detailRow.weightKg != null || detailRow.volumeCbm != null"
+              class="font-medium"
+            >
+              明细合计 {{ formatQuoteMeasure(detailRow.ctns) }} ctns / {{ formatQuoteMeasure(detailRow.weightKg) }} kg / {{ formatQuoteMeasure(detailRow.volumeCbm) }} cbm
+            </div>
+            <div v-if="detailRow.lines?.length" class="flex flex-wrap gap-2">
+              <NTag v-if="detailRow.pickupFee != null" size="small" type="info" :bordered="false">
+                提货费 {{ detailRow.pickupFee }} {{ detailRow.pickupFeeCurrency || 'USD' }}
+              </NTag>
+              <NTag v-if="detailRow.currentProfitAmount != null" size="small" type="success" :bordered="false">
+                利润 {{ formatMoney(displayedProfit(detailRow).amount, displayedProfit(detailRow).currency) }}
+                <template v-if="detailRow.currentProfitRate != null"> · {{ formatProfitRate(detailRow.currentProfitRate) }}</template>
+                <template v-if="detailRow.profitUnit">（{{ detailRow.currentProfitAmount }} {{ detailRow.profitUnit }}）</template>
+              </NTag>
+            </div>
+            <div v-if="detailRow.lines?.length && detailRow.note" class="text-[var(--color-fg-secondary)]">
+              询价备注 {{ detailRow.note }}
+            </div>
+            <div v-if="!detailRow.lines?.length" class="text-[var(--color-muted)]">
               报价 {{ formatMoney(detailRow.currentQuotedAmount, detailRow.currentQuotedCurrency) }}
               · 利润 {{ formatMoney(detailRow.currentProfitAmount, detailRow.currentProfitCurrency) }}
               · {{ formatProfitRate(detailRow.currentProfitRate) }}
@@ -835,8 +958,45 @@ onMounted(() => {
             <div class="text-[var(--color-muted)]">
               截止 {{ detailRow.deadlineDate || '—' }} · 下次跟进 {{ detailRow.nextFollowupDate || '—' }}
             </div>
-            <div v-if="detailRow.productName || detailRow.addressText" class="text-[var(--color-muted)]">
-              {{ detailRow.productName || '—' }} · {{ detailRow.addressText || '—' }}
+            <div v-if="!detailRow.lines?.length && detailRow.productName" class="text-[var(--color-muted)]">{{ detailRow.productName }}</div>
+            <div v-if="!detailRow.lines?.length && detailRow.addressText" class="text-[var(--color-muted)]">
+              {{ detailRow.addressText }}
+            </div>
+            <div v-if="detailRow.lines?.length" class="scrollbar-visible overflow-x-auto">
+              <table class="w-full border-collapse text-left text-xs">
+                <thead>
+                  <tr class="border-b border-[var(--color-border)] text-[var(--color-muted)]">
+                    <th class="px-2 py-1.5 font-medium">仓码</th>
+                    <th class="px-2 py-1.5 font-medium">渠道</th>
+                    <th class="w-[5.25rem] px-2 py-1.5 font-medium">件数 ctns</th>
+                    <th class="px-2 py-1.5 font-medium">实重</th>
+                    <th class="px-2 py-1.5 font-medium">方数</th>
+                    <th class="w-[7.5rem] px-2 py-1.5 font-medium">单价</th>
+                    <th class="px-2 py-1.5 font-medium">计费重</th>
+                    <th class="px-2 py-1.5 font-medium">总价</th>
+                    <th class="px-2 py-1.5 font-medium">days</th>
+                    <th class="px-2 py-1.5 font-medium">备注</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr
+                    v-for="(line, index) in detailRow.lines"
+                    :key="line.id"
+                    class="border-b border-[var(--color-border)] last:border-b-0"
+                  >
+                    <td class="px-2 py-1.5">{{ showQuoteCargo(detailRow.lines, index) ? line.addressCode || '—' : '' }}</td>
+                    <td class="px-2 py-1.5">{{ [line.tradeTerm, line.channelName].filter(Boolean).join(' ') || '—' }}</td>
+                    <td class="px-2 py-1.5 tabular-nums">{{ showQuoteCargo(detailRow.lines, index) ? formatQuoteWithUnit(line.ctns, 'ctns') : '' }}</td>
+                    <td class="px-2 py-1.5 tabular-nums">{{ showQuoteCargo(detailRow.lines, index) ? formatQuoteWithUnit(line.weightKg, 'kg') : '' }}</td>
+                    <td class="px-2 py-1.5 tabular-nums">{{ showQuoteCargo(detailRow.lines, index) ? formatQuoteWithUnit(line.volumeCbm, 'cbm') : '' }}</td>
+                    <td class="px-2 py-1.5 tabular-nums">{{ formatQuoteWithUnit(line.unitPrice, priceUnitLabel(line.quotedCurrency, line.priceBasis)) }}</td>
+                    <td class="px-2 py-1.5 tabular-nums">{{ formatQuoteWithUnit(line.chargeWeightKg, (line.priceBasis || '').toLowerCase()) }}</td>
+                    <td class="px-2 py-1.5 tabular-nums">{{ formatMoney(line.quotedAmount, line.quotedCurrency) }}</td>
+                    <td class="px-2 py-1.5 tabular-nums">{{ line.transitDaysMin == null ? '—' : `${line.transitDaysMin}-${line.transitDaysMax ?? ''} days` }}</td>
+                    <td class="px-2 py-1.5">{{ line.note || '—' }}</td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
             <div
               v-if="(detailRow.displayStatus || detailRow.status || '').toUpperCase() === 'LOST' && detailRow.lostReason"
@@ -844,7 +1004,7 @@ onMounted(() => {
             >
               丢单原因：{{ detailRow.lostReason }}
             </div>
-            <div v-if="detailRow.note" class="mt-1 text-[var(--color-fg-secondary)]">
+            <div v-if="!detailRow.lines?.length && detailRow.note" class="mt-1 text-[var(--color-fg-secondary)]">
               备注：{{ detailRow.note }}
             </div>
           </div>
@@ -897,6 +1057,16 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.quote-followup-table {
+  display: flex;
+  flex-direction: column;
+}
+
+.quote-followup-table :deep(.n-data-table) {
+  flex: 1;
+  min-height: 0;
+}
+
 .quote-followup-filters {
   min-width: 0;
 }

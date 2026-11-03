@@ -38,5 +38,20 @@ _INDEXES = [
 
 def ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute(_CREATE_SQL)
+    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({TABLE_NAME})")}
+    if "source_text" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN source_text TEXT NOT NULL DEFAULT ''"
+        )
+    if "pickup_fee" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN pickup_fee REAL")
+    if "pickup_fee_currency" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN pickup_fee_currency TEXT NOT NULL DEFAULT ''"
+        )
+    if "profit_unit" not in cols:
+        conn.execute(
+            f"ALTER TABLE {TABLE_NAME} ADD COLUMN profit_unit TEXT NOT NULL DEFAULT ''"
+        )
     for sql in _INDEXES:
         conn.execute(sql)

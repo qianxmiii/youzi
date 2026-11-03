@@ -26,6 +26,7 @@ from .exception_followup_settings import (
     get_exception_followup_settings,
 )
 from .shipment_sla_settings import SLA_SCAN_INTERVAL_HOURS, get_sla_scan_settings
+from .order_flow_settings import INTERVAL_SEC, get_order_flow_poll_settings
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,7 +38,8 @@ def build_scheduled_task_config(database: Database) -> dict:
     dps_sync = get_shipment_dps_sync_settings(database).to_api_dict()
     exception_followup = get_exception_followup_settings(database).to_api_dict()
     sla_scan = get_sla_scan_settings(database).to_api_dict()
-    out = sync | archive | zipcode | dps_sync | exception_followup | sla_scan | {
+    order_flow = get_order_flow_poll_settings(database).to_api_dict()
+    out = sync | archive | zipcode | dps_sync | exception_followup | sla_scan | order_flow | {
         "scriptPath": str(REPO_ROOT / "youzi_v2" / "scripts" / "sync_all_tracking_scheduled.py"),
         "pollIntervalSec": 60,
     }
@@ -50,6 +52,7 @@ def build_scheduled_task_config(database: Database) -> dict:
         or dps_sync.get("dpsShipmentSyncWarehousedEnabled")
         or exception_followup.get("exceptionFollowupEnabled")
         or sla_scan.get("slaScanEnabled")
+        or order_flow.get("orderFlowPollEnabled")
     )
     return out
 
@@ -104,6 +107,12 @@ def builtin_scheduled_tasks(
         if not sla_settings.enabled
         else f"每 {SLA_SCAN_INTERVAL_HOURS:g} 小时（约 1 天）"
     )
+    order_flow_settings = get_order_flow_poll_settings(database)
+    order_flow_schedule = (
+        "已关闭"
+        if not order_flow_settings.enabled
+        else f"每 {INTERVAL_SEC // 60:g} 分钟"
+    )
 
     return [
         {
@@ -156,6 +165,17 @@ def builtin_scheduled_tasks(
             "description": (
                 "扫描标记异常的运单：10 天以内每 3 天、10 天以上每 5 天、"
                 "20 天以上每 7 天生成顶栏待办跟进提醒；默认关闭，可手动立即执行。"
+            ),
+        },
+        {
+            "id": "order-flow-poll",
+            "name": "订单流转",
+            "source": "order-flow",
+            "schedule": order_flow_schedule,
+            "description": (
+                "从 config.json 的 dps_ddlz_getOrders 拉取待流转订单，"
+                "本地单独记状态；销售- 前缀为待处理，其余只提示节点变化。"
+                "离开待处理列表的订单保留并标为已结束。默认关闭，页面也可手动刷新。"
             ),
         },
         {

@@ -128,6 +128,15 @@ export function normalizeShipmentStatusCode(
   return raw
 }
 
+/** 已下单、提货中、已入仓、已取消进港前运单，其余进在途运单。 */
+export function shipmentListPathForStatus(
+  code: string | number | null | undefined,
+): '/shipments/pre-port' | '/shipments' {
+  const key = normalizeShipmentStatusCode(code)
+  if (PRE_PORT_STATUS_CODES.has(key)) return '/shipments/pre-port'
+  return '/shipments'
+}
+
 export function shipmentStatusLabel(code: string | number | null | undefined): string {
   const key = normalizeShipmentStatusCode(code)
   if (!key) return '—'

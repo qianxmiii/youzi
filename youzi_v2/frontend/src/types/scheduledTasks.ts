@@ -277,3 +277,21 @@ export interface ShipmentDpsSyncRunResult {
 
 }
 
+export interface ShipmentDpsSyncAllStepResult {
+  label: string
+  skipped: boolean
+  reason?: string | null
+  error?: string | null
+  remoteTotal?: number
+  total: number
+  created: number
+  updated: number
+  failed: number
+}
+
+export interface ShipmentDpsSyncAllRunResult {
+  skipped: boolean
+  reason?: string | null
+  steps: ShipmentDpsSyncAllStepResult[]
+}
+

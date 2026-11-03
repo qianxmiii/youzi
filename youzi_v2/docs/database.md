@@ -67,6 +67,13 @@ erDiagram
 | delivery_address | TEXT | 派送地址 |
 | ctns | INTEGER | 件数 |
 | charged_weight | REAL | 计费重 kg（DPS 同步 `chargedWeight` 等） |
+| receivable_cny | REAL | 应收，人民币（DPS `receivable`） |
+| collection_start_date | TEXT | 收款起算日。设了之后应付款日 = 起算日 + `payment_term_days` |
+| payment_term_days | INTEGER | 账期天数，由设置时填写 |
+| reminder_advance_days | INTEGER | 到期前几天进入待催，由设置时填写 |
+| payable_cny | REAL | 应付，人民币（DPS `proRecCharge`） |
+| profit_cny | REAL | 利润，人民币（DPS `profit`） |
+| profit_rate | REAL | 利润率（DPS `profitRate`，按接口数值记录） |
 | zipcode | TEXT | 邮编 |
 | product_name | TEXT | 品名 |
 | origin_warehouse_code | TEXT | 收货仓（DPS `receiveWarehouseName`） |
@@ -147,6 +154,10 @@ erDiagram
 **quote_versions** — 报价版本历史（初次报价、降价、涨价等）；不覆盖、不删除。
 
 **quote_followups** — 每次跟进记录，可关联 `quote_version_id`。
+
+**order_flow_orders** — 订单流转快照，主键是流转系统运单号，不关联 `shipments`。状态以 `销售-` 开头记为待处理；接口不再返回的行保留并标为已结束。`order_flow_status_logs` 记录该票每次进入的节点、节点时间和记入时间。定义：`db/order_flow_orders_table.py`。
+
+**quote_items** — 某一报价版本下的仓点渠道行（箱数、实重、方数、渠道、单价、计费重、总价、时效、备注）。`price_basis` 为 `kg` 或 `cbm`，表示单价和计费重的单位。定义：`db/quote_items_table.py`。主表另有 `pickup_fee`、`exchange_rate`（1 USD 兑多少 RMB，缺省按 6.7 折算美元利润）；版本表另有 `source_text` 保留原文。启动时自动补列。
 
 ### channels（渠道）
 
@@ -283,6 +294,7 @@ erDiagram
 | quote_history | 报价历史（含提货费 / 派送费 / 超长费 / 超尺寸费 等） |
 | addresses | 派送地址簿 |
 | addresses_warehouse | 仓库地址簿 |
+| customer_addresses | 客户自己的收货地址。`address_kind` 为 `WAREHOUSE` 海外仓、`COMMERCIAL` 商业、`RESIDENTIAL` 住宅；`is_remote` 是否偏远。简称可空。不设默认地址 |
 
 ## 时间格式约定
 
@@ -293,3 +305,14 @@ erDiagram
 - [shipment-flow.md](./shipment-flow.md) — 运单业务流
 - [modules/shipment/README.md](./modules/shipment/README.md) — 运单模块
 - [db/README.md](../db/README.md) — 数据层代码说明
+
+## DW 窗口（2026-10-23）
+
+- `channel_sla_rules` 新增 `estimated_days_min`（INTEGER），启动时将NULL回填为既有 `estimated_days`；原字段作为区间上限及预警期限。`dw_early_days`、`dw_late_days` 为兼容保留，但不再参与DW计算。
+- 新表 `shipment_delivery_windows`：`shipment_id`（TEXT 主键）、`mode`（auto/range/amazon）、`manual_start`、`manual_end`（可空 ISO 日期）、`updated_time`。只保存每单最新确认设置，不代表客户回复历史。
+- 自动预测在查询时计算，不落入运单 `expected_delivery_time`，单票DW设置不改动 SLA 预警期限；人工日期独立保存，外部运单同步不会覆盖。
+- 升级前按既有流程备份数据库；重启后端建表、加列，不需手动回填。旧单值天数保持不变；修改区间时原时效字段同步保存上限。
+
+### 到港后送仓区间
+
+`channel_sla_rules` 新增 `post_arrival_days_min`（INTEGER NOT NULL DEFAULT 7）和 `post_arrival_days_max`（INTEGER NOT NULL DEFAULT 15）。启动时仅向缺列的数据库添加，旧规则默认7—15天，已配置范围不回填覆盖。此区间用于DW的ATA/ETA分段估算，不参与原异常预警期限计算。

@@ -105,11 +105,13 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
   - 可选块内 `"timeRange": "transit" | "order" | "none"` 覆盖默认（pickup/warehoused 默认 `order`）
   - **`shipment_queryByOrder`**：按运单号查，拼接 `odds`（多单空格 → `%20`）+ `pageNum`
   - **`dps_route_status_query`**（明细状态轻量同步必填）：仅含 `url`（完整接口地址）；**url 只写在本文件**，业务代码/文档不得写真实地址
+  - **`dps_getOrderProduct`**（运单产品）：仅含 `url`；**GET**（可用块内 `method` 改为 POST），查询参数 **`commerceWaybillId`** = 本地 `waybillId`；鉴权用根级 `dps_authorization`。页面只使用中文品名、英文品名、箱数
   - **`dps_update_amz`**（补货件号推送亚马逊）：仅含 `url`；鉴权用根级 `dps_authorization`
   - **`dps_data_download`**（货箱）：exportBox；**POST** + `?ids=` 单个 waybillId；**单票**保存为 `{运单号}_data.ext`；**多票**各文件重命名后装入文件夹 `{N}票数据_{YYYYMMDDHHmmss}/`，压缩包名为 **`{N}票数据_{YYYYMMDDHHmmss}.zip`**
   - **`dps_mark_download`**（单个唛头）：**POST** + `?id=waybillId&type=2`（`type` 可在块内配置，默认 `2`）；**单票**用 DPS 原名（无则回退 `{运单号}_mark.ext`）
   - **`dps_batchmark_download`**（多个唛头）：**POST**，JSON body 为 waybillId **数组**；多票包名 `{YYYYMMDDHHmmss}.ext`
-  - **唛头（重命名）**：下载菜单逐票走 `dps_mark_download`，按所选字段顺序与分隔符命名（如 `运单号-派送仓库-件数.pdf`）；可选文件夹字段（如客户单号），相同值放入同一目录；多票打成 `{N}票唛头_{YYYYMMDDHHmmss}.zip`
+  - **唛头 / 唛头（重命名）**：多票压缩包命名 **`{N}票{M}件唛头_{YYYYMMDDHHmmss}.zip`**（N 票数、M 件数合计）。重命名另按所选字段顺序与分隔符命名单文件（如 `运单号-派送仓库-件数.pdf`）；可选文件夹字段（如客户单号），相同值放入同一目录
+  - **唛头（自生成）**：不请求 DPS；本地生成 102mm×102mm 多页 PDF（一页一件），条码为运单号+4 位箱序；多票包名 **`{N}票{M}件唛头(自生成)_{YYYYMMDDHHmmss}.zip`**；依赖 `reportlab`
   - **`dps_packinglist_download`**（箱单发票）：**POST** + URL **`?ids=`** waybillId（多票英文逗号拼接，如 `2109884564244705282,2109884627163459585`，无 body）；单票保存 **`{运单号}_箱单发票.ext`**，多票文件名沿用 DPS 原名
   - **`dps_warehouseform_download`**（排仓单）：**POST** + URL **`?ids=`** waybillId（多票英文逗号拼接，如 `2099310173320552449,2109884564244705282`，无 body）；**每批最多 50 个 id**，勾选超过 50 票时后端自动分批请求，多批结果打包 zip；单票 **`{运单号}_排仓单.ext`**
   - **进仓单（模板）**：`youzi_v2/config/templates/warehouse_entry_template.xlsx`（可选根配置 **`warehouse_entry_template`** 指向其它 xlsx）；按占位符 `{日期}` `{收货仓}` `{收货地址}` `{运单号}` `{合计件数}` 等填充勾选运单；收货地址来自 **`dps_warehouse`**；文件名 **`{N}票进仓单_{YYYYMMDD}.xlsx`**（不依赖 DPS 下载）
@@ -117,8 +119,8 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
   - **`dps_warehouse`**：收货地址多行文本，键 **`SHENZHEN`** / **`YIWU`**（与进仓单预览、表头一致）
   - **`dps_warehouse_entry_remarks`**（可选）：特殊备注栏 `{特殊备注}`，按仓键字符串，如 `"SHENZHEN": "…"`, `"YIWU": "…"`
   - 响应 `{ code, msg, total, rows }`，按 `total` 与 `pageSize`（默认 10）自动翻页。见 `services/shipment_query_config.py`
-  - **DPS 运单同步批处理**（计划任务页）：`shipment_queryByPerson` / `_pickup` / `_warehoused` 三项可分别开关，共用发运时间范围；**默认均关闭**，约 24 小时各执行一次。见 `services/shipment_dps_sync.py`
-  - **同步哪些字段**：`youzi_v2/config/shipment_dps_sync_fields.json`（`onInsert` / `onUpdate`）；映射逻辑见 `services/shipment_dps_mapper.py`（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`）
+  - **DPS 运单同步批处理**（计划任务页）：`shipment_queryByPerson` / `_pickup` / `_warehoused` 三项可分别开关，也可点「依次同步全部」按提货中、已入仓、在途顺序跑完；共用发运时间范围；**默认均关闭**，约 24 小时各执行一次。见 `services/shipment_dps_sync.py`
+  - **同步哪些字段**：`youzi_v2/config/shipment_dps_sync_fields.json`（`onInsert` / `onUpdate`）；映射逻辑见 `services/shipment_dps_mapper.py`（`customer_no`←`internalOrderNum`，`ref_shipment_no`←`assOrderNumber`，应收 `receivable`、应付 `proRecCharge`、利润 `profit` 为人民币，利润率 `profitRate`）
 
 ```json
 "dps_authorization": "Bearer <token>",
@@ -136,6 +138,10 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 },
 "dps_route_status_query": {
   "url": "<明细状态轨迹接口完整 URL，仅写于此>"
+},
+"dps_getOrderProduct": {
+  "url": "<运单产品接口完整 URL，仅写于此>",
+  "method": "GET"
 },
 "dps_update_amz": {
   "url": "<推送亚马逊接口完整 URL，仅写于此>"

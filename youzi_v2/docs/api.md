@@ -115,13 +115,13 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/import` | Excel 导入 |
 | POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
 | POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
-| POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200） |
+| POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200）。同时写入应收 `receivable`、应付 `proRecCharge`、利润 `profit`（均为人民币）和利润率 `profitRate` |
 | POST | `/sync-preport-from-dps` | 港前全部更新：已下单、提货中、已入仓（不含已取消），按运单号走同一 `shipment_queryByOrder` 写入；无 body |
 | POST | `/download-dps-cargo-data` | DPS 货箱（`dps_data_download`）；body: 本地运单 `ids`，最多 50；单票 `{运单号}_data.ext`，多票 `{N}票数据_{YYYYMMDDHHmmss}.zip`（内含同名文件夹与各票 `_data` 文件） |
-| POST | `/dps-export-jobs` | 异步 DPS 导出（body: `exportType`、`ids`、可选 `splitSpec`；`exportType=markRename` 另需 `renameFields`、`renameSeparator`）。唛头（重命名）逐票下载，文件名按字段顺序拼接，空字段跳过；`addressCode` 为空时回退邮编；可选 `renameFolder`（如 `customerNo`）把相同值放进同一目录；`renameCountryLang`=`en`（默认国家码缩写如 AU）/`zh`（中文名）控制国家字段。单票且未选文件夹时直接下载该文件名，否则 zip `{N}票唛头_{时间}.zip`。例：`shipmentNo`+`addressCode`+`ctns`、分隔符 `-` → `运单号-派送仓库或邮编-件数.pdf`。返回 `jobId`，轮询 `GET /dps-export-jobs/{id}`，完成后 `GET …/download` |
+| POST | `/dps-export-jobs` | 异步 DPS 导出（body: `exportType`、`ids`、可选 `splitSpec`；`exportType=markRename` 另需 `renameFields`、`renameSeparator`）。唛头（重命名）逐票下载，文件名按字段顺序拼接，空字段跳过；`addressCode` 为空时回退邮编；可选 `renameFolder`（如 `customerNo`）把相同值放进同一目录；`renameCountryLang`=`en`（默认国家码缩写如 AU）/`zh`（中文名）控制国家字段。单票且未选文件夹时直接下载该文件名，否则 zip `{N}票{M}件唛头_{时间}.zip`（M 为成功下载票的件数合计）。例：`shipmentNo`+`addressCode`+`ctns`、分隔符 `-` → `运单号-派送仓库或邮编-件数.pdf`。`exportType=markSelf`（唛头自生成）不调 DPS：按件数生成本地 102mm×102mm PDF（渠道英文名 / 运单号 / 客户单号 / Code128=运单号+4位箱序 / `PKG:i/N` / 国家码 / 邮编 / `MADE IN CHINA`）；单票 `{运单号}.pdf`，多票 `{N}票{M}件唛头(自生成)_{时间}.zip`。返回 `jobId`，轮询 `GET /dps-export-jobs/{id}`，完成后 `GET …/download` |
 | GET | `/dps-export-jobs/{job_id}` | 导出进度 `{ progress, message, done, failed }` |
 | GET | `/dps-export-jobs/{job_id}/download` | 导出完成后的文件 |
-| POST | `/download-dps-mark-data` | DPS 唛头（1 票 `dps_mark_download`，多票 `dps_batchmark_download`）；body: 本地运单 `ids`（前端下载菜单已改用 `/dps-export-jobs` 以展示进度） |
+| POST | `/download-dps-mark-data` | DPS 唛头（1 票 `dps_mark_download`，多票 `dps_batchmark_download`）；多票保存名 `{N}票{M}件唛头_{时间}.zip`；body: 本地运单 `ids`（前端下载菜单已改用 `/dps-export-jobs` 以展示进度） |
 | POST | `/download-dps-mark-data-split` | **单票**唛头 PDF 按件数拆分；body: `ids`（长度 1）、`splitSpec`（如 `1 2 2`）或 `segments`；包内 `{运单号}_{起-止}_{n}ctns.pdf`（单页为 `{运单号}_{序号}_{n}ctns.pdf`），zip `{运单号}_{总件数}ctns.zip` |
 | POST | `/download-dps-packinglist` | DPS 箱单发票（`dps_packinglist_download`，转发为 `?ids=` 逗号拼接 waybillId）；单票 `{运单号}_箱单发票.ext`，多票 DPS 原名 |
 | POST | `/download-dps-warehouseform` | DPS 排仓单（`dps_warehouseform_download`，`?ids=` 逗号拼接；勾选超过 50 票自动分批请求，多批打包 zip）；单票 `{运单号}_排仓单.ext` |
@@ -133,7 +133,9 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | GET | `/tracking-sync/daily-stats` | 日同步统计 |
 | POST | `/exceptions/open` | 开启异常 |
 | POST | `/exceptions/close` | 关闭异常 |
-| GET | `/{item_id}/exception-events` | 异常历史 |
+| POST | `/check-order-product-ctns` | 核对勾选运单的产品箱数合计与运单件数。body: `ids`，最多 50。一致票只返回 `matched` 计数；不一致与查询失败放在 `issues`（运单号、运单件数、产品总箱数、差额、说明） |
+| POST | `/api/v1/shipment-tracking-time-candidates/batch-review` | 批量审批签收时间。body: `ids`（最多 200）、`action`（`use_expected_delivery` 采用预计送仓 / `use_signed_track` 签收节点 / `reject` 暂不处理）。手动填写仍用单条审批 |
+| GET | `/{item_id}/order-products` | 运单产品：按 `waybillId` 调 `config.dps_getOrderProduct`（查询参数 `commerceWaybillId`）。只返回 `cnName` 中文品名、`enName` 英文品名、`ctns` 箱数。无运单 ID 时 400 |
 | GET | `/{item_id}/tracking-logs` | 内部轨迹 |
 | GET | `/{item_id}/carrier-tracking-logs` | 承运商轨迹 |
 | POST | `/{item_id}/subscribe` | 订阅轨迹更新 + ETA 到港前每日提醒 |
@@ -145,12 +147,13 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/payment-reminders` | 催款列表（`scope` / `customer` / `settlementMethod` / `reminderType` / `followupStatus` / `search` / `fclOnly`；`fclOnly` 默认 `false` 排除整柜，`true` 仅整柜；`scope=todo` 排除月结） |
-| GET | `/payment-reminders/summary` | 数量统计：`todoCount` / `allUnpaidCount` / `overdueCount`（侧栏角标、页面标题；默认排除整柜；`todoCount`/`overdueCount` 排除月结） |
+| GET | `/payment-reminders` | 催款列表（`scope` / `customer` / `channelCategory` / `settlementMethod` / `reminderType` / `followupStatus` / `search` / `fclOnly` / `minReceivable` / `sortBy=receivable`；`search` 匹配运单号、客户单号、关联单号、货件号；`channelCategory` 为渠道大类；`fclOnly` 默认 `false` 排除整柜，`true` 仅整柜；`scope=todo` 排除月结；不含港前状态：已下单 `0`、提货中 `01`、已入仓 `1`、已取消 `4`；含 `receivableCny` 应收，人民币。`minReceivable` 只保留达到该金额的票，空应收不计入；`receivablePending=true` 只保留未记应收或应收小于等于 0 的票；`sortBy=receivable` 按应收从高到低，空应收仍在最后） |
+| GET | `/payment-reminders/customer-ranking` | 当前筛选下按客户汇总大于 0 的应收，最多 100 名。条内分开已逾期和未逾期。不含 `customer` 筛选，也不含港前状态。`pendingCount` 是未记应收或应收不大于 0 的票数。页面默认收起 |
+| GET | `/payment-reminders/summary` | 数量统计：`todoCount` / `allUnpaidCount` / `overdueCount`（侧栏角标、页面标题；默认排除整柜和港前状态；`todoCount`/`overdueCount` 排除月结） |
 | GET | `/payment-reminders/export` | 导出当前筛选为 Excel（上限 10000；含 `fclOnly`） |
 | GET | `/payment-reminders/{shipment_id}/followups` | 跟进记录 |
 | POST | `/payment-reminders/{shipment_id}/followups` | 新增跟进 |
-| POST | `/payment-reminders/followups/batch` | 批量跟进 |
+| POST | `/payment-reminders/collection-term` | 给选中运单设置收款起算日。body: `shipmentIds`、`collectionStartDate`、`paymentTermDays`、`reminderAdvanceDays`。账期可填天数，也可直接选收款截止日，保存时换算为天数。应付款日 = 起算日 + 账期，到期前 `reminderAdvanceDays` 天进入待催 |
 
 **订阅消息（顶栏 · 消息铃铛）**
 
@@ -245,8 +248,42 @@ curl -X POST "http://127.0.0.1:3001/api/v1/vessel-schedules/import" -F "file=@�
 
 | 前缀 | 说明 |
 |------|------|
-| `/api/v1/customers` | CRUD + `sync-from-shipments`；`PATCH` 支持 `customerName` + `updateShipments` 批量改运单客户字段；`GET /export` 导出 Excel（`search`、`vipOnly`，上限 10000 条） |
+| `/api/v1/customers` | CRUD + `sync-from-shipments`；`PATCH` 支持 `customerName` + `updateShipments` 批量改运单客户字段，同时更新客户地址簿里的同一客户名；`GET /export` 导出 Excel（`search`、`vipOnly`，上限 10000 条） |
+| `/api/v1/customer-addresses` | 客户地址簿。见下一节 |
 | `/api/v1/channels` | CRUD + `seed-defaults`（清空后全量导入渠道清单）、`/meta`；字段含 `dpsChannelName`（DPS cnName）；`PATCH` 可改 `code`，同步更新运单 `channel_code` |
+
+### 客户地址簿
+
+与 `/api/addresses`、`/api/addresses-warehouse` 分开。数据在本地库 `customer_addresses`，不进入 Git。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/customer-addresses` | 列表。`customer` 精确匹配客户名；`addressKind` 为 `WAREHOUSE` / `COMMERCIAL` / `RESIDENTIAL`；`remote` 是否偏远；`search` 模糊匹配简称和联系字段 |
+| POST | `/api/v1/customer-addresses` | 新建。客户名必须已在客户管理中 |
+| PUT | `/api/v1/customer-addresses/{id}` | 修改 |
+| DELETE | `/api/v1/customer-addresses/{id}` | 删除一条 |
+| POST | `/api/v1/customer-addresses/batch-delete` | body: `ids`，最多 500 |
+| GET | `/api/v1/customer-addresses/export` | 按当前筛选导出，上限 10000 |
+| GET | `/api/v1/customer-addresses/template` | 导入模板，示例为虚构数据 |
+| POST | `/api/v1/customer-addresses/import` | 上传 `.xlsx`，只新增。客户不存在或必填缺失的行跳过 |
+
+## 订单流转 order-flow
+
+独立于运单。鉴权用 `config.json` 的 `dps_ddlz_authorization`，列表地址用 `dps_ddlz_getOrders.url`。定时拉取默认关闭，间隔 5 分钟。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/v1/order-flow/summary` | 含 `mineCount`（未结束的销售-）和 `unseenCount`（上次打开铃铛后新进入节点的单数），以及 `listSeenAt`（上次离开订单流转页的时间） |
+| POST | `/api/v1/order-flow/list-seen` | 离开订单流转页时记下已查看。列表 NEW 只标这次进来之前还没看过的状态变化 |
+| GET | `/api/v1/order-flow/nodes` | 按当前节点汇总票数，以及其中未查看的新进入数 |
+| GET | `/api/v1/order-flow/statuses` | 已出现过的当前状态，供筛选 |
+| GET | `/api/v1/order-flow/{waybillNo}/logs` | 该票每次进入节点的状态、节点时间和记入时间。更早的节点只保留当前和上一节点，之后的变化会逐条累加 |
+| POST | `/api/v1/order-flow/reminders/seen` | 把当前新节点记为已查看。菜单和顶栏角标仍显示未结束的待处理单数 |
+| GET | `/api/v1/order-flow` | 本地快照。`scope`：`mine` 待处理、`remind` 待提醒、`active` 流转中、`ended` 已结束、`all` 全部。可按 `status`、`customer`、`warehouse`、`country`、`channel` 筛选。`channel` 可多选，多个值用逗号分隔。仓库、国家和渠道只显示斜杠前的中文 |
+| GET | `/api/v1/order-flow/customers` | 已出现过的客户，供筛选 |
+| GET | `/api/v1/order-flow/warehouses` | 已出现过的仓库（去掉斜杠后的代码），供筛选 |
+| POST | `/api/v1/order-flow/refresh` | 立即向流转系统拉全量并更新快照 |
+| PUT | `/api/v1/order-flow/settings` | `{ enabled }` 开关 5 分钟定时拉取 |
 
 ## 报价跟进 quote-opportunities
 
@@ -255,10 +292,13 @@ curl -X POST "http://127.0.0.1:3001/api/v1/vessel-schedules/import" -F "file=@�
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | `/api/v1/quote-opportunities` | 列表（`scope`、客户、新客户、日期、搜索、分页） |
+| GET | `/api/v1/quote-opportunities` | 列表。`currentQuotedAmount` 为各渠道总价之和。`profitTotal` 为利润单价乘计费重；报价币种为 USD 时再除以 `exchangeRate`（1 USD 兑 RMB，默认 6.7）后以 USD 显示。`currentProfitRate` 为利润合计除以当前报价，单位是百分比 |
 | GET | `/api/v1/quote-opportunities/notifications/summary` | 待办铃铛聚合：今日/逾期/即将过期 |
-| POST | `/api/v1/quote-opportunities` | 新增报价（同时创建 V1） |
-| GET | `/api/v1/quote-opportunities/{id}` | 详情 |
+| POST | `/api/v1/quote-opportunities/parse` | 解析粘贴的日常报价原文，不写入。渠道行支持 `usd/kg`、`usd/cbm`、`rmb/kg`、`rmb/cbm`。返回仓点、渠道行、原文合计、提货费和未识别行 |
+| GET | `/api/v1/quote-opportunities/customer-products` | 某客户以往报过的产品名（`customerId` 或 `customerName`） |
+| POST | `/api/v1/quote-opportunities` | 新增报价（同时创建 V1）。可带 `destinations` 明细、合计、`pickupFee`、`sourceText`、`profitAmount`、`profitUnit`（`RMB/KG` 或 `RMB/CBM`）、`note` 询价备注。粘贴保存的下次跟进日为当天，以便出现在待办 |
+| PUT | `/api/v1/quote-opportunities/{id}/content` | 改正当前报价的客户、产品、费用和仓点渠道，不另开版本 |
+| GET | `/api/v1/quote-opportunities/{id}` | 详情，含当前版本的渠道明细 |
 | PATCH | `/api/v1/quote-opportunities/{id}` | 更新基础信息/状态/有效期（不直接覆盖报价金额） |
 | POST | `/api/v1/quote-opportunities/{id}/followups` | 新增跟进；`adjustQuote=true` 时创建新版本 |
 | GET | `/api/v1/quote-opportunities/{id}/versions` | 报价版本历史 |
@@ -378,6 +418,7 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 | POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync` | DPS 运单全量同步（`shipment_queryByPerson`；body 可选发运时间，默认当月） |
 | POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync-pickup` | DPS **提货中**同步（`shipment_queryByPerson_pickup`；发运时间与主任务共用配置） |
 | POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync-warehoused` | DPS **已入仓**同步（`shipment_queryByPerson_warehoused`；发运时间与主任务共用配置） |
+| POST | `/api/v1/scheduled-tasks/run-dps-shipment-sync-all` | 依次执行提货中、已入仓、在途三项 DPS 运单同步；某一步失败仍继续下一步。body 可选发运时间 |
 | POST | `/api/v1/scheduled-tasks/run-dps-route-status-sync` | 更新全部明细状态（有 `waybillId` 的运单；无 body） |
 | POST | `/api/v1/notifications/wecom/test` | 企业微信通知测试（详见 [wecom-aibot.md](./wecom-aibot.md)；body 可选 `{ "content": "..." }`） |
 
@@ -409,3 +450,20 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 - [modules/shipment/README.md](./modules/shipment/README.md)
 - [shipment-flow.md](./shipment-flow.md)
 - [frontend/src/api/](../frontend/src/api/) — 前端封装
+
+## 运单 DW 窗口
+
+- `GET /api/v1/shipments/{id}/delivery-window`：返回最终窗口、`copyText`、计算依据、警告及保存的设置。
+- `POST /api/v1/shipments/{id}/delivery-window/preview`：只预览，不写入设置。
+- `PUT /api/v1/shipments/{id}/delivery-window`：保存设置并返回窗口。
+- 请求：`mode` 为 `auto` / `range` / `amazon`；`manualStart`、`manualEnd` 为完整 ISO 日期或同时为 null。人工范围必须成对且结束不早于开始；Amazon模式（含auto解析为AMZ）的人工窗口必须是同一周周日至周六，保存不合规窗口返回422，预览返回不可用原因；无效请求返回 422，运单不存在返回 404。
+- 渠道时效读写使用 `estimatedDaysMin`、`estimatedDaysMax`（正整数，最短不大于最长）；必须同时填写。旧请求 `estimatedDays` 兼容为相同上下限；响应的兼容 `estimatedDays` 为上限，供原预警使用。旧 `dwEarlyDays`、`dwLateDays` 仅保留兼容，不再参与DW计算。渠道列表返回 `slaEstimatedDaysMin` / `slaEstimatedDaysMax`。
+- `copyText` 固定为 `MM/DD - MM/DD`，详情日期保留年份。无规则、无起算日期或已取消时不生成。规则优先匹配同承运商，否则使用渠道通用规则；不借用其他承运商规则。
+- 渠道规则增加 `postArrivalDaysMin` / `postArrivalDaysMax`（非负整数，默认7/15，最短不得大于最长）；渠道复制时一并保留。DW优先以ATA、否则ETA计算到港后范围，与离港全程范围分别取较晚起止日期；不改变原SLA预警期限。
+- 详细业务规则及首版限制见 [delivery-window.md](./delivery-window.md)。
+
+### DW历史参考
+
+`GET /api/v1/shipments/{id}/delivery-window/history?mode=auto|range|amazon` 为独立只读查询。不存在返回404，无效模式返回422。不修改DW设置或运单。
+
+响应包含 `scope`（实际匹配范围）、`lookbackDays=90`、`minBatchCount=5`、`completedCount`、`independentBatchCount`、`unknownBatchTickets`、`longExceptionCount`、`inTransitCount`、`truncated`、`warnings`、`reason`；`metrics.full/postArrival` 各含 `actual/normal/recent30`，每项含 `ticketCount`、`batchCount`、`p50Days`、`p90Days`。条件满足时返回 `prediction` 的日期、复制范围、依据和警告，否则为null。历史参考不改变原DW查询与复制响应；具体口径与局限见 [delivery-window.md](./delivery-window.md)。

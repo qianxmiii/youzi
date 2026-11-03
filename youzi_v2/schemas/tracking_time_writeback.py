@@ -16,3 +16,13 @@ class TrackingTimeReviewIn(BaseModel):
         default=None,
         validation_alias=AliasChoices("manualValue", "manual_value"),
     )
+
+
+class TrackingTimeBatchReviewIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    ids: list[str] = Field(..., min_length=1, max_length=200)
+    action: str = Field(
+        ...,
+        description="use_expected_delivery | use_signed_track | reject",
+    )

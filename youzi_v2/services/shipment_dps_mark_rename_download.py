@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import datetime
 from pathlib import Path
 
 from ..db.shipments_repository import ShipmentsRepository
@@ -13,10 +12,12 @@ from .mark_rename import (
     build_mark_rename_folder,
     build_mark_rename_stem,
     load_country_label_map,
+    mark_batch_zip_filename,
     normalize_mark_rename_country_lang,
     normalize_mark_rename_fields,
     normalize_mark_rename_folder,
     normalize_mark_rename_separator,
+    shipment_ctns_count,
     unique_mark_filename,
 )
 from .shipment_dps_cargo_download import MAX_DOWNLOAD_BATCH
@@ -54,6 +55,7 @@ def build_dps_mark_rename_download(
     errors: list[str] = []
     used_names: dict[str, set[str]] = {}
     total = len(ids)
+    ctns_total = 0
 
     for index, sid in enumerate(ids, start=1):
         row = repo.get_by_id(sid)
@@ -93,6 +95,7 @@ def build_dps_mark_rename_download(
         name = unique_mark_filename(stem, downloaded.extension or ".pdf", used)
         arc_name = f"{folder}/{name}" if folder else name
         files.append((arc_name, downloaded.content, downloaded.media_type or "application/pdf"))
+        ctns_total += shipment_ctns_count(row)
 
     if errors:
         detail = "；".join(errors[:5])
@@ -108,8 +111,7 @@ def build_dps_mark_rename_download(
         return content, media_type, name
 
     report(88, "正在打包重命名唛头…")
-    ts = datetime.now().strftime("%Y%m%d%H%M%S")
-    zip_name = f"{len(files)}票唛头_{ts}.zip"
+    zip_name = mark_batch_zip_filename(len(files), ctns_total)
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for name, content, _media in files:

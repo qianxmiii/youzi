@@ -10,6 +10,7 @@ from typing import Any
 from .connection import Database
 from .datetime_util import now_str
 from .quote_followups_table import TABLE_NAME as FOLLOWUPS_TABLE
+from .quote_items_table import TABLE_NAME as ITEMS_TABLE
 from .quote_opportunities_table import TABLE_NAME as OPPORTUNITIES_TABLE
 from .quote_versions_table import TABLE_NAME as VERSIONS_TABLE
 from .shipment_sla import parse_date
@@ -28,9 +29,53 @@ from ..services.quote_followup_rules import (
     compute_next_followup_date,
     display_status,
     matches_scope,
+    quote_profit_money,
+    quote_profit_rate,
+    quote_selling_total,
     quote_sort_key,
+    usd_cny_rate,
     status_label,
 )
+
+
+def _lines_from_destinations(destinations: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    lines: list[dict[str, Any]] = []
+    for dest in destinations or []:
+        for channel in dest.get("channels") or []:
+            lines.append(
+                {
+                    "quotedAmount": channel.get("quoted_amount"),
+                    "quotedCurrency": channel.get("quoted_currency"),
+                    "chargeWeightKg": channel.get("charge_weight_kg"),
+                    "priceBasis": channel.get("price_basis"),
+                }
+            )
+    return lines
+
+
+def _apply_quote_figures(item: dict[str, Any], lines: list[dict[str, Any]] | None = None) -> None:
+    rows = item.get("lines") if lines is None else lines
+    amount, currency = quote_selling_total(rows)
+    if amount is not None:
+        item["currentQuotedAmount"] = amount
+        item["currentQuotedCurrency"] = currency
+    total, total_currency = quote_profit_money(
+        item.get("currentProfitAmount"),
+        item.get("profitUnit"),
+        rows,
+        item.get("currentQuotedCurrency"),
+        item.get("exchangeRate"),
+    )
+    item["profitTotal"] = total
+    item["profitTotalCurrency"] = total_currency
+    rate = quote_profit_rate(
+        total,
+        total_currency,
+        item.get("currentQuotedAmount"),
+        item.get("currentQuotedCurrency"),
+    )
+    if rate is not None:
+        item["currentProfitRate"] = rate
 
 
 def _opt_float(value: Any) -> float | None:
@@ -40,6 +85,30 @@ def _opt_float(value: Any) -> float | None:
         return float(value)
     except (TypeError, ValueError):
         return None
+
+
+def _sum_int(rows: list[dict[str, Any]], key: str) -> int | None:
+    total = 0
+    seen = False
+    for row in rows:
+        value = _opt_int(row.get(key))
+        if value is None:
+            continue
+        total += value
+        seen = True
+    return total if seen else None
+
+
+def _sum_float(rows: list[dict[str, Any]], key: str) -> float | None:
+    total = 0.0
+    seen = False
+    for row in rows:
+        value = _opt_float(row.get(key))
+        if value is None:
+            continue
+        total += value
+        seen = True
+    return total if seen else None
 
 
 def _opt_int(value: Any) -> int | None:
@@ -169,8 +238,15 @@ class QuoteOpportunitiesRepository:
             "currentProfitAmount": row["current_profit_amount"],
             "currentProfitCurrency": row["current_profit_currency"] or "",
             "currentProfitRate": row["current_profit_rate"],
+            "profitUnit": (row["profit_unit"] if "profit_unit" in row.keys() else "") or "",
+            "exchangeRate": row["exchange_rate"] if "exchange_rate" in row.keys() else None,
             "lostReason": row["lost_reason"] or "",
             "note": row["note"] or "",
+            "pickupFee": row["pickup_fee"] if "pickup_fee" in row.keys() else None,
+            "pickupFeeCurrency": (
+                row["pickup_fee_currency"] if "pickup_fee_currency" in row.keys() else ""
+            )
+            or "",
             "convertedShipmentId": row["converted_shipment_id"] or "",
             "convertedShipmentNo": row["converted_shipment_no"] or "",
             "convertedTime": row["converted_time"] or "",
@@ -210,12 +286,69 @@ class QuoteOpportunitiesRepository:
                     (sid,),
                 ).fetchone()
                 last_note = (note_row["note"] if note_row else "") or ""
-        return self._opportunity_to_api(
+            lines = self._lines_for_version(row["current_quote_version_id"] or "")
+            source_text = ""
+            if row["current_quote_version_id"]:
+                source_row = self._conn.execute(
+                    f"SELECT source_text FROM {VERSIONS_TABLE} WHERE id = ?",
+                    (row["current_quote_version_id"],),
+                ).fetchone()
+                if source_row and "source_text" in source_row.keys():
+                    source_text = source_row["source_text"] or ""
+        item = self._opportunity_to_api(
             row,
             followup_count=int(agg["cnt"] or 0) if agg else 0,
             last_followup_time=agg["last_time"] if agg else None,
             last_followup_note=last_note,
         )
+        item["lines"] = self._overlay_price_basis(lines, source_text)
+        item["sourceText"] = source_text
+        _apply_quote_figures(item)
+        return item
+
+    def list_customer_products(
+        self,
+        *,
+        customer_id: str = "",
+        customer_name: str = "",
+    ) -> list[dict[str, Any]]:
+        cid = customer_id.strip()
+        name = customer_name.strip()
+        if not cid and not name:
+            return []
+        clauses: list[str] = ["TRIM(product_name) != ''"]
+        params: list[Any] = []
+        if cid and name:
+            clauses.append("(customer_id = ? OR TRIM(customer_name) = ?)")
+            params.extend([cid, name])
+        elif cid:
+            clauses.append("customer_id = ?")
+            params.append(cid)
+        else:
+            clauses.append("TRIM(customer_name) = ?")
+            params.append(name)
+        with self._database.lock:
+            rows = self._conn.execute(
+                f"""
+                SELECT TRIM(product_name) AS product_name,
+                       MAX(substr(quote_date, 1, 10)) AS last_date,
+                       COUNT(*) AS quote_count
+                FROM {OPPORTUNITIES_TABLE}
+                WHERE {' AND '.join(clauses)}
+                GROUP BY TRIM(product_name)
+                ORDER BY last_date DESC, quote_count DESC
+                LIMIT 20
+                """,
+                params,
+            ).fetchall()
+        return [
+            {
+                "productName": row["product_name"],
+                "lastQuoteDate": row["last_date"] or "",
+                "quoteCount": int(row["quote_count"] or 0),
+            }
+            for row in rows
+        ]
 
     def list_rows(
         self,
@@ -328,12 +461,45 @@ class QuoteOpportunitiesRepository:
             it.pop("_urgency", None)
         total = len(items)
         page = items[offset : offset + limit]
+        self._attach_profit_totals(page)
         return {
             "items": page,
             "total": total,
             "limit": limit,
             "offset": offset,
         }
+
+    def _attach_profit_totals(self, items: list[dict[str, Any]]) -> None:
+        version_ids = [
+            str(item.get("currentQuoteVersionId") or "").strip()
+            for item in items
+            if str(item.get("currentQuoteVersionId") or "").strip()
+        ]
+        grouped: dict[str, list[dict[str, Any]]] = {vid: [] for vid in version_ids}
+        if version_ids:
+            placeholders = ",".join("?" * len(version_ids))
+            with self._database.lock:
+                rows = self._conn.execute(
+                    f"""
+                    SELECT quote_version_id, charge_weight_kg, price_basis,
+                           quoted_amount, quoted_currency
+                    FROM {ITEMS_TABLE}
+                    WHERE quote_version_id IN ({placeholders})
+                    """,
+                    version_ids,
+                ).fetchall()
+            for row in rows:
+                grouped.setdefault(row["quote_version_id"], []).append(
+                    {
+                        "chargeWeightKg": row["charge_weight_kg"],
+                        "priceBasis": row["price_basis"] or "",
+                        "quotedAmount": row["quoted_amount"],
+                        "quotedCurrency": row["quoted_currency"] or "",
+                    }
+                )
+        for item in items:
+            vid = str(item.get("currentQuoteVersionId") or "").strip()
+            _apply_quote_figures(item, grouped.get(vid, []))
 
     def notification_summary(self) -> dict[str, Any]:
         today = date.today()
@@ -404,9 +570,39 @@ class QuoteOpportunitiesRepository:
         volume_cbm = _opt_float(data.get("volume_cbm"))
         quoted_amount = _opt_float(data.get("quoted_amount"))
         quoted_currency = (data.get("quoted_currency") or "").strip().upper()
+        exchange_rate = usd_cny_rate(data.get("exchange_rate"))
         profit_amount = _opt_float(data.get("profit_amount"))
         profit_currency = (data.get("profit_currency") or "").strip().upper()
         profit_rate = _opt_float(data.get("profit_rate"))
+        pickup_fee = _opt_float(data.get("pickup_fee"))
+        pickup_currency = (data.get("pickup_fee_currency") or "").strip().upper()
+        source_text = (data.get("source_text") or "").strip()
+        destinations = data.get("destinations") or []
+        if destinations:
+            if not address_text:
+                address_text = ", ".join(
+                    str(item.get("address_code") or "").strip()
+                    for item in destinations
+                    if str(item.get("address_code") or "").strip()
+                )
+            if ctns is None:
+                ctns = _sum_int(destinations, "ctns")
+            if weight_kg is None:
+                weight_kg = _sum_float(destinations, "weight_kg")
+            if volume_cbm is None:
+                volume_cbm = _sum_float(destinations, "volume_cbm")
+            if data.get("summary_ctns") is not None:
+                ctns = _opt_int(data.get("summary_ctns"))
+            if data.get("summary_weight_kg") is not None:
+                weight_kg = _opt_float(data.get("summary_weight_kg"))
+            if data.get("summary_volume_cbm") is not None:
+                volume_cbm = _opt_float(data.get("summary_volume_cbm"))
+            selling_amount, selling_currency = quote_selling_total(
+                _lines_from_destinations(destinations)
+            )
+            if selling_amount is not None:
+                quoted_amount = selling_amount
+                quoted_currency = selling_currency
 
         with self._database.lock:
             self._conn.execute(
@@ -418,14 +614,15 @@ class QuoteOpportunitiesRepository:
                     product_name, address_text, ctns, weight_kg, volume_cbm,
                     current_quote_version_id, current_quoted_amount,
                     current_quoted_currency, current_profit_amount,
-                    current_profit_currency, current_profit_rate,
-                    lost_reason, note, converted_shipment_id,
+                    current_profit_currency, current_profit_rate, profit_unit,
+                    lost_reason, note, pickup_fee, pickup_fee_currency,
+                    exchange_rate, converted_shipment_id,
                     converted_shipment_no, converted_time,
                     created_time, updated_time
                 ) VALUES (
                     ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
-                    '', ?, '', '', '', ?, ?
+                    ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                    '', ?, ?, ?, ?, '', '', '', ?, ?
                 )
                 """,
                 (
@@ -452,7 +649,11 @@ class QuoteOpportunitiesRepository:
                     profit_amount,
                     profit_currency,
                     profit_rate,
+                    (data.get("profit_unit") or "").strip(),
                     (data.get("note") or "").strip(),
+                    pickup_fee,
+                    pickup_currency,
+                    exchange_rate,
                     now,
                     now,
                 ),
@@ -463,10 +664,11 @@ class QuoteOpportunitiesRepository:
                     id, quote_id, version_no, version_time, change_reason,
                     product_name, address_text, ctns, weight_kg, volume_cbm,
                     quoted_amount, quoted_currency, profit_amount,
-                    profit_currency, profit_rate, note,
+                    profit_currency, profit_rate, profit_unit, note,
+                    source_text, pickup_fee, pickup_fee_currency,
                     created_time, updated_time
                 ) VALUES (
-                    ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
                 """,
                 (
@@ -484,15 +686,265 @@ class QuoteOpportunitiesRepository:
                     profit_amount,
                     profit_currency,
                     profit_rate,
+                    (data.get("profit_unit") or "").strip(),
                     (data.get("note") or "").strip(),
+                    source_text,
+                    pickup_fee,
+                    pickup_currency,
                     now,
                     now,
                 ),
             )
+            self._insert_quote_items(vid, oid, destinations, now)
             self._conn.commit()
         item = self.get_by_id(oid)
         if item is None:
             raise RuntimeError("创建报价后读取失败")
+        return item
+
+    def _insert_quote_items(
+        self,
+        version_id: str,
+        quote_id: str,
+        destinations: list[dict[str, Any]],
+        now: str,
+    ) -> None:
+        sort_no = 0
+        for dest in destinations:
+            address = str(dest.get("address_code") or "").strip()
+            ctns = _opt_int(dest.get("ctns"))
+            weight = _opt_float(dest.get("weight_kg"))
+            volume = _opt_float(dest.get("volume_cbm"))
+            channels = dest.get("channels") or []
+            if not channels:
+                channels = [{}]
+            for channel in channels:
+                sort_no += 1
+                self._conn.execute(
+                    f"""
+                    INSERT INTO {ITEMS_TABLE} (
+                        id, quote_id, quote_version_id, sort_no, address_code,
+                        ctns, weight_kg, volume_cbm, trade_term, channel_name,
+                        unit_price, charge_weight_kg, quoted_amount, quoted_currency,
+                        price_basis, transit_days_min, transit_days_max, note,
+                        created_time, updated_time
+                    ) VALUES (
+                        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                    )
+                    """,
+                    (
+                        str(uuid.uuid4()),
+                        quote_id,
+                        version_id,
+                        sort_no,
+                        address,
+                        ctns,
+                        weight,
+                        volume,
+                        str(channel.get("trade_term") or "").strip(),
+                        str(channel.get("channel_name") or "").strip(),
+                        _opt_float(channel.get("unit_price")),
+                        _opt_float(channel.get("charge_weight_kg")),
+                        _opt_float(channel.get("quoted_amount")),
+                        str(channel.get("quoted_currency") or "").strip().upper(),
+                        str(channel.get("price_basis") or "").strip().lower(),
+                        _opt_int(channel.get("transit_days_min")),
+                        _opt_int(channel.get("transit_days_max")),
+                        str(channel.get("note") or "").strip(),
+                        now,
+                        now,
+                    ),
+                )
+
+    def _overlay_price_basis(
+        self, lines: list[dict[str, Any]], source_text: str
+    ) -> list[dict[str, Any]]:
+        """旧明细没记下按公斤还是按方时，用原文把单位补到返回结果里。"""
+        if not lines or not any(not str(line.get("priceBasis") or "").strip() for line in lines):
+            return lines
+        if not (source_text or "").strip():
+            return lines
+        from ..services.quote_paste import parse_quote_paste
+
+        parsed_channels: list[dict[str, Any]] = []
+        for dest in parse_quote_paste(source_text).get("destinations") or []:
+            parsed_channels.extend(dest.get("channels") or [])
+        if len(parsed_channels) != len(lines):
+            return lines
+        for line, channel in zip(lines, parsed_channels):
+            if not str(line.get("priceBasis") or "").strip():
+                line["priceBasis"] = str(channel.get("priceBasis") or "")
+        return lines
+
+    def _lines_for_version(self, version_id: str) -> list[dict[str, Any]]:
+        if not version_id:
+            return []
+        rows = self._conn.execute(
+            f"""
+            SELECT * FROM {ITEMS_TABLE}
+            WHERE quote_version_id = ?
+            ORDER BY sort_no, rowid
+            """,
+            (version_id,),
+        ).fetchall()
+        return [
+            {
+                "id": row["id"],
+                "addressCode": row["address_code"] or "",
+                "ctns": row["ctns"],
+                "weightKg": row["weight_kg"],
+                "volumeCbm": row["volume_cbm"],
+                "tradeTerm": row["trade_term"] or "",
+                "channelName": row["channel_name"] or "",
+                "unitPrice": row["unit_price"],
+                "chargeWeightKg": row["charge_weight_kg"],
+                "quotedAmount": row["quoted_amount"],
+                "quotedCurrency": row["quoted_currency"] or "",
+                "priceBasis": (row["price_basis"] if "price_basis" in row.keys() else "") or "",
+                "transitDaysMin": row["transit_days_min"],
+                "transitDaysMax": row["transit_days_max"],
+                "note": row["note"] or "",
+            }
+            for row in rows
+        ]
+
+    def replace_content(self, quote_id: str, data: dict[str, Any]) -> dict[str, Any]:
+        """改正当前报价内容，覆盖当前版本的仓点渠道，不另开版本。"""
+        existing = self.get_by_id(quote_id)
+        if existing is None:
+            raise KeyError(quote_id)
+        version_id = (existing.get("currentQuoteVersionId") or "").strip()
+        if not version_id:
+            raise ValueError("报价没有可编辑的版本")
+
+        customer_name = (data.get("customer_name") or "").strip()
+        if not customer_name:
+            raise ValueError("客户名称不能为空")
+        is_new = bool(data.get("is_new_customer"))
+        customer_id = (data.get("customer_id") or "").strip()
+        if not is_new and not customer_id:
+            is_new = True
+
+        product_name = (data.get("product_name") or "").strip()
+        address_text = (data.get("address_text") or "").strip()
+        destinations = data.get("destinations") or []
+        ctns = _opt_int(data.get("summary_ctns"))
+        weight_kg = _opt_float(data.get("summary_weight_kg"))
+        volume_cbm = _opt_float(data.get("summary_volume_cbm"))
+        if destinations and not address_text:
+            address_text = ", ".join(
+                str(item.get("address_code") or "").strip()
+                for item in destinations
+                if str(item.get("address_code") or "").strip()
+            )
+        if ctns is None:
+            ctns = _sum_int(destinations, "ctns") if destinations else _opt_int(data.get("ctns"))
+        if weight_kg is None:
+            weight_kg = (
+                _sum_float(destinations, "weight_kg")
+                if destinations
+                else _opt_float(data.get("weight_kg"))
+            )
+        if volume_cbm is None:
+            volume_cbm = (
+                _sum_float(destinations, "volume_cbm")
+                if destinations
+                else _opt_float(data.get("volume_cbm"))
+            )
+        pickup_fee = _opt_float(data.get("pickup_fee"))
+        pickup_currency = (data.get("pickup_fee_currency") or "").strip().upper()
+        profit_amount = _opt_float(data.get("profit_amount"))
+        profit_currency = (data.get("profit_currency") or "").strip().upper()
+        profit_unit = (data.get("profit_unit") or "").strip()
+        note = (data.get("note") or "").strip()
+        source_text = (data.get("source_text") or existing.get("sourceText") or "").strip()
+        quote_date = parse_date(data.get("quote_date"))
+        selling_amount, selling_currency = quote_selling_total(
+            _lines_from_destinations(destinations)
+        )
+        exchange_rate = usd_cny_rate(
+            data.get("exchange_rate")
+            if data.get("exchange_rate") not in (None, "")
+            else existing.get("exchangeRate")
+        )
+        now = now_str()
+
+        with self._database.lock:
+            self._conn.execute(
+                f"""
+                UPDATE {OPPORTUNITIES_TABLE}
+                SET customer_id = ?, customer_name = ?, is_new_customer = ?,
+                    product_name = ?, address_text = ?, ctns = ?, weight_kg = ?,
+                    volume_cbm = ?, pickup_fee = ?, pickup_fee_currency = ?,
+                    current_quoted_amount = COALESCE(?, current_quoted_amount),
+                    current_quoted_currency = CASE
+                        WHEN ? != '' THEN ? ELSE current_quoted_currency END,
+                    exchange_rate = ?,
+                    current_profit_amount = ?, current_profit_currency = ?,
+                    profit_unit = ?, note = ?,
+                    quote_date = COALESCE(?, quote_date),
+                    updated_time = ?
+                WHERE id = ?
+                """,
+                (
+                    customer_id,
+                    customer_name,
+                    1 if is_new else 0,
+                    product_name,
+                    address_text,
+                    ctns,
+                    weight_kg,
+                    volume_cbm,
+                    pickup_fee,
+                    pickup_currency,
+                    selling_amount,
+                    selling_currency or "",
+                    selling_currency or "",
+                    exchange_rate,
+                    profit_amount,
+                    profit_currency,
+                    profit_unit,
+                    note,
+                    quote_date.isoformat() if quote_date else None,
+                    now,
+                    quote_id.strip(),
+                ),
+            )
+            self._conn.execute(
+                f"""
+                UPDATE {VERSIONS_TABLE}
+                SET product_name = ?, address_text = ?, ctns = ?, weight_kg = ?,
+                    volume_cbm = ?, pickup_fee = ?, pickup_fee_currency = ?,
+                    profit_amount = ?, profit_currency = ?, profit_unit = ?,
+                    note = ?, source_text = ?, updated_time = ?
+                WHERE id = ?
+                """,
+                (
+                    product_name,
+                    address_text,
+                    ctns,
+                    weight_kg,
+                    volume_cbm,
+                    pickup_fee,
+                    pickup_currency,
+                    profit_amount,
+                    profit_currency,
+                    profit_unit,
+                    note,
+                    source_text,
+                    now,
+                    version_id,
+                ),
+            )
+            self._conn.execute(
+                f"DELETE FROM {ITEMS_TABLE} WHERE quote_version_id = ?",
+                (version_id,),
+            )
+            self._insert_quote_items(version_id, quote_id.strip(), destinations, now)
+            self._conn.commit()
+        item = self.get_by_id(quote_id)
+        if item is None:
+            raise KeyError(quote_id)
         return item
 
     def update(self, quote_id: str, data: dict[str, Any]) -> dict[str, Any]:

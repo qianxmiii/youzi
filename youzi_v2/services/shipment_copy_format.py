@@ -4,6 +4,12 @@ from __future__ import annotations
 
 from typing import Any
 
+from ..last_mile_tracking import (
+    express_code_to_carrier_hint,
+    infer_last_mile_carrier_hint,
+    normalize_last_mile_tracking_number,
+)
+
 
 def _cell(value: Any) -> str:
     if value is None:
@@ -23,11 +29,18 @@ def _format_ctns_for_copy(ctns: Any) -> str:
     return f"{ctns}ctns"
 
 
+def _zip_for_copy(value: Any) -> str:
+    zipcode = _cell(value)
+    if zipcode == "0000":
+        return ""
+    return zipcode
+
+
 def _warehouse_or_zip_for_copy(row: dict[str, Any]) -> str:
     warehouse = _cell(row.get("addressCode"))
     if warehouse:
         return warehouse
-    return _cell(row.get("zipcode"))
+    return _zip_for_copy(row.get("zipcode"))
 
 
 def _norm_copy_key(value: str) -> str:
@@ -62,7 +75,7 @@ def shipment_detail_identifier_parts_for_copy(row: dict[str, Any]) -> list[str]:
 
 
 def format_shipment_detail_summary_line(row: dict[str, Any]) -> str:
-    """单行：运单号 = [关联单号] [= 客户编号] [= 货件号] = 仓库（空则邮编）= Nctns。"""
+    """单行：运单号 = [关联单号] [= 客户编号] [= 货件号] = 仓库（空则邮编，0000 省略）= Nctns。"""
     return join_equals_parts(
         [
             row.get("shipmentNo"),
@@ -78,3 +91,40 @@ def format_shipment_detail_summary_copy_text(rows: list[dict[str, Any]]) -> str:
     if not rows:
         return ""
     return "\n".join(format_shipment_detail_summary_line(row) for row in rows)
+
+
+_COPY_CARRIER_LABELS = {
+    "ups": "UPS",
+    "fedex": "FedEx",
+    "usps": "USPS",
+    "dhl": "DHL",
+    "conwest": "Conwest",
+    "dpd": "DPD UK",
+}
+
+
+def format_shipment_tracking_number_suffix_line(row: dict[str, Any]) -> str:
+    """转单号行：`-- FedEx 876457312498`；无转单号时返回空。"""
+    number, parsed_hint = normalize_last_mile_tracking_number(row.get("trackingNumber"))
+    number = (number or "").strip()
+    if not number:
+        return ""
+    hint = (
+        express_code_to_carrier_hint(row.get("expressCode"))
+        or infer_last_mile_carrier_hint(number)
+        or parsed_hint
+    )
+    label = _COPY_CARRIER_LABELS.get(hint or "", "尾程")
+    return f"-- {label} {number}"
+
+
+def format_shipment_tracking_numbers_copy_text(rows: list[dict[str, Any]]) -> str:
+    """复制转单号：明细行 + 可选第二行承运商转单号，运单之间空一行。"""
+    if not rows:
+        return ""
+    blocks: list[str] = []
+    for row in rows:
+        head = format_shipment_detail_summary_line(row)
+        suffix = format_shipment_tracking_number_suffix_line(row)
+        blocks.append(f"{head}\n{suffix}" if suffix else head)
+    return "\n\n".join(blocks)

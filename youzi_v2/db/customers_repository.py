@@ -8,6 +8,7 @@ from typing import Any
 
 from .connection import Database
 from .datetime_util import now_str
+from .customer_addresses_table import TABLE_NAME as CUSTOMER_ADDRESSES_TABLE
 from .customers_table import TABLE_NAME
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 
@@ -267,6 +268,14 @@ class CustomersRepository:
                     (name, now, old_name),
                 )
                 shipments_updated = int(cur.rowcount)
+                self._conn.execute(
+                    f"""
+                    UPDATE {CUSTOMER_ADDRESSES_TABLE}
+                    SET customer_name = ?, updated_time = ?
+                    WHERE TRIM(customer_name) = ?
+                    """,
+                    (name, now, old_name),
+                )
 
             self._conn.execute(
                 f"""

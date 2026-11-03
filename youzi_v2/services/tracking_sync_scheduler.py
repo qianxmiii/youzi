@@ -233,6 +233,12 @@ def _scheduler_tick(
         force=False,
         trigger="scheduled",
     )
+    try:
+        from .order_flow_sync import run_order_flow_sync
+
+        run_order_flow_sync(shipments_repo._database, config_path, force=False)
+    except Exception:
+        pass
     scan_shipment_sla_alerts(
         shipment_sla_alerts_repo,
         channel_sla_rules_repo,

@@ -2,10 +2,58 @@ from fastapi import APIRouter
 
 from ..context import *
 from .shipment_list_query import ShipmentListFilters
+from ..schemas.delivery_window import DeliveryWindowIn
+from ..services.delivery_window import calculate_delivery_window
+from ..db.delivery_windows_table import load_window, save_window
+from ..db.datetime_util import now_str
+from ..services.delivery_window_history import load_delivery_history
+from typing import Literal
 
 router = APIRouter()
 
 _SHIPMENT_EXPORT_MAX = 10_000
+
+
+def _delivery_window(shipment_id: str, preferences: dict | None = None):
+    with shipments_repo._database.lock:
+        shipment = shipments_repo.get_by_id(shipment_id)
+        if shipment is None:
+            raise HTTPException(status_code=404, detail="运单不存在")
+        rules = channel_sla_rules_repo.list_by_channel(shipment.get('channelCode') or '')
+        stored = load_window(shipments_repo._conn, shipment_id)
+        return calculate_delivery_window(shipment, rules, stored if preferences is None else preferences)
+
+
+@router.get('/api/v1/shipments/{shipment_id}/delivery-window')
+def get_delivery_window(shipment_id: str):
+    return _delivery_window(shipment_id)
+
+
+@router.get('/api/v1/shipments/{shipment_id}/delivery-window/history')
+def get_delivery_window_history(shipment_id: str, mode: Literal['auto', 'range', 'amazon'] = 'auto'):
+    with shipments_repo._database.lock:
+        shipment = shipments_repo.get_by_id(shipment_id)
+        if shipment is None:
+            raise HTTPException(status_code=404, detail='运单不存在')
+        return load_delivery_history(shipments_repo._conn, shipment, mode=mode)
+
+
+@router.post('/api/v1/shipments/{shipment_id}/delivery-window/preview')
+def preview_delivery_window(shipment_id: str, body: DeliveryWindowIn):
+    return _delivery_window(shipment_id, body.model_dump(mode='json'))
+
+
+@router.put('/api/v1/shipments/{shipment_id}/delivery-window')
+def update_delivery_window(shipment_id: str, body: DeliveryWindowIn):
+    preferences = body.model_dump(mode='json')
+    preferences['updated_time'] = now_str()
+    with shipments_repo._database.lock:
+        result = _delivery_window(shipment_id, preferences)
+        if preferences['manual_start'] and result['mode'] == 'amazon' and result['source'] == 'unavailable':
+            raise HTTPException(status_code=422, detail=result['reason'])
+        save_window(shipments_repo._conn, shipment_id, preferences)
+        shipments_repo._conn.commit()
+    return result
 
 @router.get("/api/v1/shipments/filter-options")
 def list_shipment_filter_options():
@@ -265,6 +313,34 @@ def list_pending_tracking_time_reviews(
     )
 
 
+@router.post("/api/v1/shipment-tracking-time-candidates/batch-review")
+def review_tracking_time_candidates_batch(body: TrackingTimeBatchReviewIn):
+    """批量审批签收时间。手动填写仍走单条接口。"""
+    from ..services.tracking_time_writeback import approve_signed_time_candidate
+
+    action = body.action.strip().lower()
+    if action not in {"use_expected_delivery", "use_signed_track", "reject"}:
+        raise HTTPException(status_code=400, detail="批量仅支持采用预计送仓、签收节点或暂不处理")
+    ids = [item.strip() for item in body.ids if item and item.strip()]
+    if not ids:
+        raise HTTPException(status_code=400, detail="请选择待审批记录")
+    ok = 0
+    errors: list[str] = []
+    for candidate_id in ids:
+        try:
+            approve_signed_time_candidate(
+                shipments_repo._database,
+                candidate_id,
+                action=action,
+            )
+            ok += 1
+        except KeyError:
+            errors.append("记录不存在或已处理")
+        except ValueError as exc:
+            errors.append(str(exc))
+    return {"ok": ok, "failed": len(ids) - ok, "errors": errors[:8]}
+
+
 @router.post("/api/v1/shipment-tracking-time-candidates/{candidate_id}/review")
 def review_tracking_time_candidate(candidate_id: str, body: TrackingTimeReviewIn):
     from ..services.tracking_time_writeback import approve_signed_time_candidate
@@ -289,6 +365,25 @@ def get_tracking_sync_daily_stats(source: str = Query("carrier")):
         raise HTTPException(status_code=400, detail="source 须为 internal 或 carrier")
     return TrackingSyncDailyStats(**tracking_jobs_repo.today_stats(src))
 
+@router.post("/api/v1/shipments/check-order-product-ctns")
+def check_order_product_ctns(body: ShipmentBatchIdsIn):
+    """核对勾选运单的产品箱数合计与运单件数。单次最多 50 票。"""
+    from ..services.dps_order_product import MAX_PRODUCT_CTNS_CHECK, check_shipment_product_ctns
+
+    if len(body.ids) > MAX_PRODUCT_CTNS_CHECK:
+        raise HTTPException(
+            status_code=400,
+            detail=f"单次最多核对 {MAX_PRODUCT_CTNS_CHECK} 票",
+        )
+    try:
+        return check_shipment_product_ctns(shipments_repo, LOGISTICS_CONFIG_PATH, body.ids)
+    except ValueError as exc:
+        detail = str(exc)
+        if "dps_getOrderProduct" in detail or "dps_authorization" in detail:
+            detail = f"{detail}。请在 config/config.json 配置 dps_getOrderProduct。"
+        raise HTTPException(status_code=400, detail=detail) from exc
+
+
 @router.get("/api/v1/shipments/{item_id}")
 def get_shipment(item_id: str):
     row = shipments_repo.get_by_id(item_id)
@@ -296,6 +391,26 @@ def get_shipment(item_id: str):
         raise HTTPException(status_code=404, detail="运单不存在")
     _apply_vip_flags([row])
     return row
+
+
+@router.get("/api/v1/shipments/{item_id}/order-products")
+def get_shipment_order_products(item_id: str):
+    """按本地 waybillId 调 config.dps_getOrderProduct，只返回中文品名、英文品名、箱数。"""
+    from ..services.dps_order_product import query_order_products
+
+    row = shipments_repo.get_by_id(item_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="运单不存在")
+    waybill_id = str(row.get("waybillId") or "").strip()
+    if not waybill_id:
+        raise HTTPException(status_code=400, detail="无 DPS 运单 ID，请先更新运单")
+    try:
+        return query_order_products(LOGISTICS_CONFIG_PATH, waybill_id)
+    except ValueError as exc:
+        detail = str(exc)
+        if "dps_getOrderProduct" in detail or "dps_authorization" in detail:
+            detail = f"{detail}。请在 config/config.json 配置 dps_getOrderProduct。"
+        raise HTTPException(status_code=400, detail=detail) from exc
 
 @router.post("/api/v1/shipments")
 def create_shipment(payload: ShipmentRecordIn):

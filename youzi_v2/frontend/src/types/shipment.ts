@@ -21,6 +21,14 @@ export interface Shipment {
   ctns: number | null
   /** 计费重 kg（DPS 同步） */
   chargedWeight?: number | null
+  /** 应收，人民币 */
+  receivableCny?: number | null
+  /** 应付，人民币 */
+  payableCny?: number | null
+  /** 利润，人民币 */
+  profitCny?: number | null
+  /** 利润率，按 DPS 原值 */
+  profitRate?: number | null
   zipcode: string | null
   productName: string | null
   originWarehouseCode: string | null

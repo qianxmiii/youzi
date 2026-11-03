@@ -10,6 +10,8 @@
 | [database.md](./database.md) | SQLite 表结构、字段、ER 关系 |
 | [deployment.md](./deployment.md) | 安装部署、环境变量、生产构建 |
 | [wecom-aibot.md](./wecom-aibot.md) | 企业微信智能机器人（长连接、@ 查运单、主动推送） |
+| [delivery-window.md](./delivery-window.md) | 预计送仓、DW窗口、人工覆盖与复制 |
+| [../desktop_quote/README.md](../desktop_quote/README.md) | 可置顶的独立桌面报价小窗及字段设置 |
 | [api.md](./api.md) | REST API 索引与调用示例 |
 | [shipment-flow.md](./shipment-flow.md) | 运单生命周期与轨迹同步 |
 | [warehouse-flow.md](./warehouse-flow.md) | 仓库地址簿业务流程 |
@@ -20,6 +22,7 @@
 | [design/shipment-groups-design.md](./design/shipment-groups-design.md) | 运单分组与组提醒设计 |
 | [design/quote-followup-management-design.md](./design/quote-followup-management-design.md) | 报价跟进管理设计 |
 | [design/payment-reminder-list-design.md](./design/payment-reminder-list-design.md) | 催款列表设计 |
+| [design/customer-address-book-design.md](./design/customer-address-book-design.md) | 客户地址簿（与派送、仓库地址簿分开，数据只在本地库） |
 | [design/logistics-workbench-home-redesign.md](./design/logistics-workbench-home-redesign.md) | 物流工作台首页改版（阶段一～三已落地） |
 | [design/tools/tools-center-design.md](./design/tools/tools-center-design.md) | 工具中心主设计 |
 | [design/tools/image-link-zip-design.md](./design/tools/image-link-zip-design.md) | 标签图片打包工具设计 |

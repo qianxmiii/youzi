@@ -149,6 +149,10 @@ _UPDATABLE = (
     "route_last_mile_handover_time",
     "route_track_signed_time",
     "payment_status",
+    "receivable_cny",
+    "payable_cny",
+    "profit_cny",
+    "profit_rate",
     "latest_tracking_time",
     "latest_tracking_desc",
 )
@@ -168,6 +172,12 @@ def _exception_duration_label(row: sqlite3.Row) -> str | None:
     if secs is None:
         return None
     return format_duration(secs, opened_time=opened or None)
+
+
+def _opt_row_float(row: sqlite3.Row, column: str) -> float | None:
+    if column not in row.keys() or row[column] is None:
+        return None
+    return float(row[column])
 
 
 def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
@@ -205,6 +215,10 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
             if "charged_weight" in row.keys() and row["charged_weight"] is not None
             else None
         ),
+        "receivableCny": _opt_row_float(row, "receivable_cny"),
+        "payableCny": _opt_row_float(row, "payable_cny"),
+        "profitCny": _opt_row_float(row, "profit_cny"),
+        "profitRate": _opt_row_float(row, "profit_rate"),
         "zipcode": row["zipcode"],
         "productName": row["product_name"],
         "originWarehouseCode": row["origin_warehouse_code"],
@@ -336,6 +350,10 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "deliveryAddress": "delivery_address",
         "ctns": "ctns",
         "chargedWeight": "charged_weight",
+        "receivableCny": "receivable_cny",
+        "payableCny": "payable_cny",
+        "profitCny": "profit_cny",
+        "profitRate": "profit_rate",
         "productName": "product_name",
         "originWarehouseCode": "origin_warehouse_code",
         "supplierName": "supplier_name",

@@ -23,7 +23,7 @@ Youzi v2 业务服务层
 | `wecom_aibot_runtime.py` | 长连接守护、心跳、chat_id 日志 |
 | `wecom_aibot_log.py` | 长连接运行日志文件 |
 | `wecom_aibot_shipment_query.py` | @ 消息解析运单号并查库回复 |
-| `shipment_copy_format.py` | 运单明细复制文案（与前端 `shipmentCopyFormat.ts` 对齐，企微「明细」回复复用） |
+| `shipment_copy_format.py` | 运单明细与转单号复制文案（与前端 `shipmentCopyFormat.ts` 对齐，企微「明细」「转单号」回复复用） |
 | `wecom_aibot_shipment_refresh.py` | 查单前刷新明细状态与内外部轨迹 |
 | `wecom_subscription_push.py` | 运单订阅更新（轨迹/ETA 提醒）同步推企微 |
 | `shipment_query_config.py` | DPS 运单查询、`dps_authorization` 解析；`queryByPerson` / `_pickup` / `_warehoused` / `queryByOrder` 自动翻页 |
@@ -37,6 +37,8 @@ Youzi v2 业务服务层
 | `shipment_dps_mark_rename_download.py` | 逐票下载唛头并重命名；可按字段分文件夹后打 zip |
 | `mark_pdf_split.py` | 唛头 PDF 按件数拆分命名 |
 | `shipment_dps_mark_split_download.py` | 单票唛头拆分 zip 下载 |
+| `mark_self_pdf.py` | 自生成唛头 PDF（102mm×102mm，Code128=运单号+箱序） |
+| `shipment_mark_self_download.py` | 勾选运单批量自生成唛头 |
 | `dps_export_job.py` | DPS 导出异步任务与进度 |
 | `dps_packinglist_download.py` | DPS 箱单发票 |
 | `shipment_dps_packinglist_download.py` | 勾选运单下载箱单发票 |
@@ -50,9 +52,10 @@ Youzi v2 业务服务层
 | `shipment_dps_warehouse_entry_download.py` | 勾选运单进仓单 xlsx/PDF（`{N}票进仓单_{日期}`） |
 | `shipment_dps_sync.py` | DPS 运单同步至本地表（计划任务默认关；港前可按已下单/提货中/已入仓全部按运单号更新） |
 | `dps_waybill_route_info.py` | DPS 明细状态轨迹查询（URL 仅读 config `dps_route_status_query`） |
+| `dps_order_product.py` | DPS 运单产品（`config.dps_getOrderProduct`，参数 `commerceWaybillId`；只取中文品名、英文品名、箱数；可批量核对箱数与运单件数） |
 | `shipment_dps_route_status_sync.py` | 轻量回写 `route_status`、阶段 `route_*_time`；301/306 且 ATD/ATA 空时回写开船/到港时间 |
 | `shipment_route_status_exception.py` | 206/402 清关异常自动开/关 |
-| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（含 `charged_weight`←`chargedWeight`/`chargeWeight` 等） |
+| `shipment_dps_mapper.py` | DPS API rows → shipments 字段映射（含计费重，以及应收/应付/利润人民币与利润率） |
 | `shipment_dps_sync_fields.py` | 同步字段白名单（`config/shipment_dps_sync_fields.json`） |
 | `logistics_tracking.py` | 物流轨迹解析 |
 | `shipment_excel.py` | 运单 Excel 导入导出 |
@@ -61,6 +64,7 @@ Youzi v2 业务服务层
 | `customer_excel.py` | 客户管理 Excel 导出 |
 | `vessel_schedule_excel.py` | 船期 Excel |
 | `address_excel.py` | 仓库地址 Excel |
+| `customer_address_excel.py` | 客户地址簿 Excel 模板、导入与导出 |
 | `vessel_schedule_sync.py` | 外部船期同步 |
 | `maritime_alerts.py` | 海运预警聚合 |
 | `workbench_overview.py` | 工作台首页聚合（今日重点 / 待办 / 近期到港 / 明细状态漏斗 / 运输概览） |
@@ -70,6 +74,8 @@ Youzi v2 业务服务层
 | `maritime_schedule/` | 船期数据源（如 COSCO eLines） |
 | `port_code_resolve.py` | 港口码解析 |
 | `scheduled_sync_settings.py` | 计划任务配置 |
+| `order_flow_client.py` / `order_flow_sync.py` | 订单流转拉取与 5 分钟轮询（默认关闭） |
+| `quote_paste.py` | 报价跟进：把粘贴原文解析成仓点、渠道行、提货费和合计 |
 
 ## 业务流程
 
@@ -96,3 +102,9 @@ scheduler 触发 → 筛选 IN_TRANSIT 运单 → internal_sync + carrier_sync
 
 - [docs/shipment-flow.md](../docs/shipment-flow.md)
 - [docs/deployment.md](../docs/deployment.md)
+
+### DW 计算
+
+`delivery_window.py` 按 ATD（缺省时 ETD）及渠道全程范围，同时参考ATA（无ATA时ETA）与到港后送仓区间，起止日期分别取较晚值；人工窗口优先，AMZ 自动使用周窗口，其他地址不推断为亚马逊。配置计算不读取历史统计，也不修改原预计送仓字段或预警期限。详见 [业务说明](../docs/delivery-window.md)。
+
+`delivery_window_history.py` 独立只读加载历史参考，以目的仓签收为终点，按可识别运输批次合并后计算P50/P90；区分实际含异常、正常与近30天样本。仅在各必要段达到5个有效批次时生成参考窗口，不自动改写配置或人工值。沿用统计模块的分位数算法，但不复用其排除长异常后的样本，以保留实际履约表现。

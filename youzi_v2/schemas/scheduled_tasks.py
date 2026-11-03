@@ -156,6 +156,28 @@ class ShipmentDpsSyncRunResult(BaseModel):
     errors: list[str] = Field(default_factory=list)
 
 
+class ShipmentDpsSyncAllStepResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    label: str
+    skipped: bool = False
+    reason: str | None = None
+    error: str | None = None
+    remote_total: int = Field(default=0, alias="remoteTotal")
+    total: int = 0
+    created: int = 0
+    updated: int = 0
+    failed: int = 0
+
+
+class ShipmentDpsSyncAllRunResult(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    skipped: bool = False
+    reason: str | None = None
+    steps: list[ShipmentDpsSyncAllStepResult] = Field(default_factory=list)
+
+
 class ScheduledTaskOverview(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

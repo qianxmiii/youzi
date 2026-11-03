@@ -14,6 +14,7 @@ from .shipment_dps_cargo_download import build_dps_cargo_data_download
 from .shipment_dps_mark_download import build_dps_mark_data_download
 from .shipment_dps_mark_rename_download import build_dps_mark_rename_download
 from .shipment_dps_mark_split_download import build_dps_mark_split_download
+from .shipment_mark_self_download import build_mark_self_download
 from .shipment_dps_packinglist_download import build_dps_packinglist_download
 from .shipment_dps_warehouse_entry_download import (
     build_dps_warehouse_entry_download,
@@ -162,6 +163,12 @@ def build_export_runner(
             )
 
         return run_rename
+
+    if kind == "markSelf":
+        def run_self(cb: ProgressCallback) -> tuple[bytes, str, str]:
+            return build_mark_self_download(repo, ids, progress_cb=cb)
+
+        return run_self
 
     labels_and_fns: dict[str, tuple[str, Callable[..., tuple[bytes, str, str]]]] = {
         "cargo": ("货箱数据", build_dps_cargo_data_download),

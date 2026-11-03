@@ -99,6 +99,7 @@ const filterOptions = ref<ShipmentFilterOptions>({
   customers: [],
   carriers: [],
   carrierCodes: [],
+  supplierNames: [],
   channels: [],
   countryCodes: [],
   channelCodes: [],

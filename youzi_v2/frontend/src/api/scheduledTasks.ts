@@ -10,6 +10,7 @@ import type {
   ZipcodeBackfillRunResult,
   ShipmentDpsSyncRunRequest,
   ShipmentDpsSyncRunResult,
+  ShipmentDpsSyncAllRunResult,
   ExceptionFollowupRunResult,
 } from '@/types/scheduledTasks'
 
@@ -104,6 +105,20 @@ export async function runDpsShipmentSyncWarehoused(
     {
       method: 'POST',
       body: JSON.stringify(body ?? {}),
+    },
+  )
+}
+
+/** 依次同步提货中、已入仓、在途 */
+export async function runDpsShipmentSyncAll(
+  body?: ShipmentDpsSyncRunRequest,
+): Promise<ShipmentDpsSyncAllRunResult> {
+  return api<ShipmentDpsSyncAllRunResult>(
+    '/api/v1/scheduled-tasks/run-dps-shipment-sync-all',
+    {
+      method: 'POST',
+      body: JSON.stringify(body ?? {}),
+      timeout: 600_000,
     },
   )
 }

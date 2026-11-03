@@ -394,7 +394,6 @@ def run_shipment_dps_sync_batch(
 ) -> dict[str, Any]:
     database = shipments_repo._database
     log_tag = _DPS_SYNC_LOG_LABEL[variant]
-    person_key = _DPS_SYNC_PERSON_KEY[variant]
 
     def out(msg: str) -> None:
         if log:
@@ -424,52 +423,135 @@ def run_shipment_dps_sync_batch(
             "failed": 0,
         }
 
+    try:
+        return _run_shipment_dps_sync_locked(
+            shipments_repo,
+            config_path,
+            database,
+            transit_time_start=transit_time_start,
+            transit_time_end=transit_time_end,
+            force=force,
+            trigger=trigger,
+            log=log,
+            variant=variant,
+        )
+    finally:
+        _lock.release()
+
+
+def _run_shipment_dps_sync_locked(
+    shipments_repo: ShipmentsRepository,
+    config_path: Path,
+    database: Any,
+    *,
+    transit_time_start: str | None,
+    transit_time_end: str | None,
+    force: bool,
+    trigger: str,
+    log: LogFn | None,
+    variant: DpsSyncVariant,
+) -> dict[str, Any]:
+    log_tag = _DPS_SYNC_LOG_LABEL[variant]
+    person_key = _DPS_SYNC_PERSON_KEY[variant]
+
+    def out(msg: str) -> None:
+        if log:
+            log(msg)
+
     settings = get_shipment_dps_sync_settings(database)
     start, end = resolve_transit_time_range(
         transit_time_start if transit_time_start is not None else settings.transit_time_start,
         transit_time_end if transit_time_end is not None else settings.transit_time_end,
     )
 
-    try:
-        out(f"[{log_tag}] 开始 {start} ~ {end}（触发：{trigger}）")
-        parsed, err = query_shipments_by_person(
-            config_path,
-            transit_time_start=start,
-            transit_time_end=end,
-            block_key=person_key,
-        )
-        if err:
-            out(f"[{log_tag}] 失败：{err}")
-            return {
-                "skipped": False,
-                "error": err,
-                "transitTimeStart": start,
-                "transitTimeEnd": end,
-                "total": 0,
-                "created": 0,
-                "updated": 0,
-                "failed": 0,
-            }
-        assert parsed is not None
-        rows = list(parsed.get("rows") or [])
-        total = int(parsed.get("total") or len(rows))
-        stats = _upsert_dps_rows(shipments_repo, rows, log=log)
-        out(
-            f"[{log_tag}] 完成 remote={total} 写入={stats['created'] + stats['updated']} "
-            f"新增={stats['created']} 更新={stats['updated']} "
-            f"无变化={stats['unchanged']} 失败={stats['failed']}"
-        )
-        if trigger == "scheduled" or force:
-            record_shipment_dps_sync_finished(database, variant=variant)
+    out(f"[{log_tag}] 开始 {start} ~ {end}（触发：{trigger}）")
+    parsed, err = query_shipments_by_person(
+        config_path,
+        transit_time_start=start,
+        transit_time_end=end,
+        block_key=person_key,
+    )
+    if err:
+        out(f"[{log_tag}] 失败：{err}")
         return {
             "skipped": False,
+            "error": err,
             "transitTimeStart": start,
             "transitTimeEnd": end,
-            "remoteTotal": total,
-            "total": len(rows),
-            "pages": int(parsed.get("pages") or 0),
-            **stats,
+            "total": 0,
+            "created": 0,
+            "updated": 0,
+            "failed": 0,
         }
+    assert parsed is not None
+    rows = list(parsed.get("rows") or [])
+    total = int(parsed.get("total") or len(rows))
+    stats = _upsert_dps_rows(shipments_repo, rows, log=log)
+    out(
+        f"[{log_tag}] 完成 remote={total} 写入={stats['created'] + stats['updated']} "
+        f"新增={stats['created']} 更新={stats['updated']} "
+        f"无变化={stats['unchanged']} 失败={stats['failed']}"
+    )
+    if trigger == "scheduled" or force:
+        record_shipment_dps_sync_finished(database, variant=variant)
+    return {
+        "skipped": False,
+        "transitTimeStart": start,
+        "transitTimeEnd": end,
+        "remoteTotal": total,
+        "total": len(rows),
+        "pages": int(parsed.get("pages") or 0),
+        **stats,
+    }
+
+
+_DPS_SYNC_ALL_ORDER: tuple[tuple[DpsSyncVariant, str], ...] = (
+    ("pickup", "提货中"),
+    ("warehoused", "已入仓"),
+    ("default", "在途"),
+)
+
+
+def run_shipment_dps_sync_all(
+    shipments_repo: ShipmentsRepository,
+    config_path: Path,
+    *,
+    transit_time_start: str | None = None,
+    transit_time_end: str | None = None,
+    log: LogFn | None = None,
+) -> dict[str, Any]:
+    """依次同步提货中、已入仓、在途。整段共用一把锁，某一步失败仍继续下一步。"""
+
+    def out(msg: str) -> None:
+        if log:
+            log(msg)
+
+    if not _lock.acquire(blocking=False):
+        out("[DPS运单同步] 跳过：上一轮 DPS 运单同步仍在进行")
+        return {
+            "skipped": True,
+            "reason": "DPS 运单同步进行中",
+            "steps": [],
+        }
+
+    database = shipments_repo._database
+    try:
+        out("[DPS运单同步] 开始依次同步：提货中 → 已入仓 → 在途")
+        steps: list[dict[str, Any]] = []
+        for variant, label in _DPS_SYNC_ALL_ORDER:
+            result = _run_shipment_dps_sync_locked(
+                shipments_repo,
+                config_path,
+                database,
+                transit_time_start=transit_time_start,
+                transit_time_end=transit_time_end,
+                force=True,
+                trigger="manual",
+                log=log,
+                variant=variant,
+            )
+            steps.append({"label": label, **result})
+        return {"skipped": False, "steps": steps}
     finally:
         _lock.release()
 

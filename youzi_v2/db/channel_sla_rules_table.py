@@ -38,3 +38,17 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(_CREATE_SQL)
         for stmt in _INDEXES:
             conn.execute(stmt)
+
+    # DW bounds are independent from alert thresholds; existing rules keep zero padding.
+    cols = {row[1] for row in conn.execute(f"PRAGMA table_info({TABLE_NAME})")}
+    for column in ("dw_early_days", "dw_late_days"):
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN {column} INTEGER NOT NULL DEFAULT 0")
+
+    if "estimated_days_min" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN estimated_days_min INTEGER")
+    conn.execute(f"UPDATE {TABLE_NAME} SET estimated_days_min = estimated_days WHERE estimated_days_min IS NULL")
+
+    for column, default in (("post_arrival_days_min", 7), ("post_arrival_days_max", 15)):
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN {column} INTEGER NOT NULL DEFAULT {default}")

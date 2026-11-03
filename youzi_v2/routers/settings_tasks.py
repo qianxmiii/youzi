@@ -203,6 +203,23 @@ def run_scheduled_tasks_dps_shipment_sync_warehoused(
 
 
 @router.post(
+    "/api/v1/scheduled-tasks/run-dps-shipment-sync-all",
+    response_model=ShipmentDpsSyncAllRunResult,
+)
+def run_scheduled_tasks_dps_shipment_sync_all(
+    body: ShipmentDpsSyncRunRequest | None = Body(None),
+):
+    """依次执行提货中、已入仓、在途 DPS 运单同步。"""
+    result = run_shipment_dps_sync_all(
+        shipments_repo,
+        LOGISTICS_CONFIG_PATH,
+        transit_time_start=body.transit_time_start if body else None,
+        transit_time_end=body.transit_time_end if body else None,
+    )
+    return ShipmentDpsSyncAllRunResult(**result)
+
+
+@router.post(
     "/api/v1/scheduled-tasks/run-dps-route-status-sync",
     response_model=ShipmentDpsRouteStatusSyncResult,
 )

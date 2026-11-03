@@ -26,6 +26,8 @@ export interface PaymentReminderItem {
   latestTrackingTime: string | null
   latestTrackingDesc: string
   paymentStatus: string
+  /** 应收，人民币 */
+  receivableCny?: number | null
   settlementMethod: string | null
   settlementMethodLabel: string
   baseDateField: string
@@ -46,6 +48,20 @@ export interface PaymentReminderListResponse {
   total: number
   limit: number
   offset: number
+}
+
+export interface PaymentReminderCustomerRank {
+  customer: string
+  total: number
+  overdue: number
+  open: number
+  count: number
+}
+
+export interface PaymentReminderCustomerRanking {
+  items: PaymentReminderCustomerRank[]
+  pendingCount: number
+  totalReceivable: number
 }
 
 export interface PaymentReminderSummary {
@@ -85,6 +101,13 @@ export type PaymentReminderListParams = {
   search?: string
   /** true=仅整柜；false=排除整柜；与运单列表一致，前端默认 false */
   fclOnly?: boolean
+  /** 只保留应收大于等于该金额的票；空应收不计入 */
+  minReceivable?: number
+  /** 只保留未记应收或应收小于等于 0 的票 */
+  receivablePending?: boolean
+  /** receivable：按应收从高到低，空应收仍在最后 */
+  sortBy?: 'receivable'
+  channelCategory?: string
   limit?: number
   offset?: number
 }
@@ -99,6 +122,10 @@ function buildReminderQuery(params?: PaymentReminderListParams): Record<string, 
   if (params?.search?.trim()) q.search = params.search.trim()
   if (params?.fclOnly === true) q.fclOnly = 'true'
   if (params?.fclOnly === false) q.fclOnly = 'false'
+  if (params?.minReceivable != null) q.minReceivable = String(params.minReceivable)
+  if (params?.receivablePending) q.receivablePending = 'true'
+  if (params?.sortBy) q.sortBy = params.sortBy
+  if (params?.channelCategory?.trim()) q.channelCategory = params.channelCategory.trim()
   if (params?.limit != null) q.limit = String(params.limit)
   if (params?.offset != null) q.offset = String(params.offset)
   return q
@@ -108,6 +135,14 @@ export async function listPaymentReminders(
   params?: PaymentReminderListParams,
 ): Promise<PaymentReminderListResponse> {
   return api<PaymentReminderListResponse>('/api/v1/shipments/payment-reminders', {
+    query: buildReminderQuery(params),
+  })
+}
+
+export async function getPaymentReminderCustomerRanking(
+  params?: PaymentReminderListParams,
+): Promise<PaymentReminderCustomerRanking> {
+  return api<PaymentReminderCustomerRanking>('/api/v1/shipments/payment-reminders/customer-ranking', {
     query: buildReminderQuery(params),
   })
 }
@@ -132,6 +167,18 @@ export async function exportPaymentRemindersExcel(
       offset: 0,
     }),
     responseType: 'blob',
+  })
+}
+
+export async function setPaymentCollectionTerm(
+  shipmentIds: string[],
+  collectionStartDate: string,
+  paymentTermDays = 21,
+  reminderAdvanceDays = 7,
+): Promise<{ updated: number; missing: number }> {
+  return api('/api/v1/shipments/payment-reminders/collection-term', {
+    method: 'POST',
+    body: { shipmentIds, collectionStartDate, paymentTermDays, reminderAdvanceDays },
   })
 }
 

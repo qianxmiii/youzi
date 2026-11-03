@@ -215,6 +215,8 @@ _API_TO_SNAKE: dict[str, str] = {
     "productName": "product_name",
     "supplierName": "supplier_name",
     "originWarehouseCode": "origin_warehouse_code",
+    "billOfLadingNo": "bill_of_lading_no",
+    "containerNo": "container_no",
     "latestTrackingTime": "latest_tracking_time",
     "latestTrackingDesc": "latest_tracking_desc",
     "etd": "etd",

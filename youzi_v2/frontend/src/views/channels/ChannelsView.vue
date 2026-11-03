@@ -140,7 +140,10 @@ async function copySlaRules(fromCode: string, toCode: string) {
     res.items.find((r) => !r.carrierCode && r.startField === 'ATD') || res.items[0]
   if (!rule?.estimatedDays) return
   await upsertChannelSlaRule(toCode, {
-    estimatedDays: rule.estimatedDays,
+    estimatedDaysMin: rule.estimatedDaysMin ?? rule.estimatedDays,
+    estimatedDaysMax: rule.estimatedDaysMax ?? rule.estimatedDays,
+    postArrivalDaysMin: rule.postArrivalDaysMin ?? 7,
+    postArrivalDaysMax: rule.postArrivalDaysMax ?? 15,
     warningDays: rule.warningDays,
     severeOverdueDays: rule.severeOverdueDays,
     enabled: rule.enabled,
@@ -229,7 +232,7 @@ const columns: DataTableColumns<Channel> = [
   {
     title: '时效',
     key: 'slaEstimatedDays',
-    width: 88,
+    width: 125,
     align: 'center',
     render: (row) => {
       if (row.slaEstimatedDays == null || row.slaEstimatedDays <= 0) {
@@ -239,7 +242,8 @@ const columns: DataTableColumns<Channel> = [
           () => '—',
         )
       }
-      const label = row.slaEnabled === false ? `${row.slaEstimatedDays} 天(停)` : `${row.slaEstimatedDays} 天`
+      const range = `${row.slaEstimatedDaysMin ?? row.slaEstimatedDays}—${row.slaEstimatedDaysMax ?? row.slaEstimatedDays} 天`
+      const label = row.slaEnabled === false ? `${range}(停)` : range
       return h(
         NButton,
         { size: 'tiny', quaternary: true, onClick: () => openSla(row) },

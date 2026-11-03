@@ -99,6 +99,11 @@ def send_text_message(
     return {"ok": errcode == 0, "errcode": errcode, "errmsg": errmsg}
 
 
+def build_markdown_reply_body(content: str) -> dict[str, Any]:
+    """群聊 @ 人必须用 markdown；流式文字会把 <@userid> 原样显示。"""
+    return {"msgtype": "markdown", "markdown": {"content": content}}
+
+
 def build_stream_reply_body(content: str, *, stream_id: str | None = None) -> dict[str, Any]:
     """被动回复须用 stream（finish=true 一次性回复）。"""
     sid = stream_id or generate_req_id("stream")

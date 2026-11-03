@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+from datetime import datetime
 from typing import Any, Literal
 
 # 顺序即对话框默认展示顺序
@@ -197,6 +198,32 @@ def build_mark_rename_stem(
     if len(stem) > _STEM_MAX:
         stem = stem[:_STEM_MAX].rstrip(" .-_")
     return stem or "唛头"
+
+
+def shipment_ctns_count(row: dict[str, Any]) -> int:
+    """运单件数；无效或空视为 0。"""
+    raw = row.get("ctns")
+    if raw is None or raw == "":
+        return 0
+    try:
+        return max(0, int(raw))
+    except (TypeError, ValueError):
+        try:
+            return max(0, int(float(str(raw).strip())))
+        except (TypeError, ValueError):
+            return 0
+
+
+def mark_batch_zip_filename(
+    ticket_count: int,
+    ctns_total: int,
+    when: datetime | None = None,
+) -> str:
+    """多票唛头压缩包：`{N}票{M}件唛头_{YYYYMMDDHHmmss}.zip`。"""
+    ts = (when or datetime.now()).strftime("%Y%m%d%H%M%S")
+    tickets = max(0, int(ticket_count))
+    pieces = max(0, int(ctns_total))
+    return f"{tickets}票{pieces}件唛头_{ts}.zip"
 
 
 def unique_mark_filename(stem: str, extension: str, used: set[str]) -> str:

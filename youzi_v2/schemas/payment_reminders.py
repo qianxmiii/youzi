@@ -9,6 +9,29 @@ class PaymentReminderFollowupIn(BaseModel):
     note: str = ""
 
 
+class PaymentCollectionTermIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    shipment_ids: list[str] = Field(
+        ...,
+        min_length=1,
+        max_length=200,
+        validation_alias=AliasChoices("shipmentIds", "shipment_ids"),
+    )
+    collection_start_date: str = Field(
+        ...,
+        validation_alias=AliasChoices("collectionStartDate", "collection_start_date"),
+    )
+    payment_term_days: int = Field(
+        21,
+        validation_alias=AliasChoices("paymentTermDays", "payment_term_days"),
+    )
+    reminder_advance_days: int = Field(
+        7,
+        validation_alias=AliasChoices("reminderAdvanceDays", "reminder_advance_days"),
+    )
+
+
 class PaymentReminderFollowupBatchIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

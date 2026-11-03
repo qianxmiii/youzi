@@ -7,6 +7,7 @@ from ..schemas.quote_opportunities import (
     QuoteMarkLostIn,
     QuoteOpportunityCreateIn,
     QuoteOpportunityPatchIn,
+    QuotePasteIn,
 )
 
 router = APIRouter()
@@ -34,6 +35,15 @@ def _create_payload(body: QuoteOpportunityCreateIn) -> dict:
         "profit_currency": body.profit_currency,
         "profit_rate": body.profit_rate,
         "note": body.note,
+        "destinations": [item.model_dump() for item in body.destinations],
+        "summary_ctns": body.summary_ctns,
+        "summary_weight_kg": body.summary_weight_kg,
+        "summary_volume_cbm": body.summary_volume_cbm,
+        "pickup_fee": body.pickup_fee,
+        "pickup_fee_currency": body.pickup_fee_currency,
+        "source_text": body.source_text,
+        "profit_unit": body.profit_unit,
+        "exchange_rate": body.exchange_rate,
     }
 
 
@@ -73,10 +83,43 @@ def list_quote_opportunities(
     )
 
 
+@router.post("/api/v1/quote-opportunities/parse")
+def parse_quote_opportunity_text(body: QuotePasteIn):
+    """解析日常报价原文，不写入数据库。"""
+    from ..services.quote_paste import parse_quote_paste
+
+    return parse_quote_paste(body.text)
+
+
+@router.get("/api/v1/quote-opportunities/customer-products")
+def list_quote_customer_products(
+    customerId: str = "",
+    customerName: str = "",
+):
+    """某客户以往报过的产品名，按最近报价日倒序。"""
+    return {
+        "items": quote_opportunities_repo.list_customer_products(
+            customer_id=customerId,
+            customer_name=customerName,
+        )
+    }
+
+
 @router.post("/api/v1/quote-opportunities")
 def create_quote_opportunity(body: QuoteOpportunityCreateIn):
     try:
         return quote_opportunities_repo.create(_create_payload(body))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.put("/api/v1/quote-opportunities/{quote_id}/content")
+def replace_quote_content(quote_id: str, body: QuoteOpportunityCreateIn):
+    """改正当前报价的客户、产品和仓点渠道，不另开版本。"""
+    try:
+        return quote_opportunities_repo.replace_content(quote_id, _create_payload(body))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="报价不存在") from None
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

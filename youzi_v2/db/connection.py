@@ -33,6 +33,7 @@ class Database:
     def _bootstrap(self) -> None:
         from . import addresses_table
         from . import addresses_warehouse_table
+        from . import customer_addresses_table
         from . import app_settings_table
         from . import code_tables
         from . import dict_table
@@ -40,6 +41,7 @@ class Database:
         from . import shipments_table
         from . import shipment_exception_events_table
         from . import shipment_exception_followup_table
+        from . import delivery_windows_table
         from . import channel_sla_rules_table
         from . import shipment_sla_alert_followups_table
         from . import shipment_sla_alerts_table
@@ -55,7 +57,9 @@ class Database:
         from . import shipment_payment_followups_table
         from . import quote_opportunities_table
         from . import quote_versions_table
+        from . import quote_items_table
         from . import quote_followups_table
+        from . import order_flow_orders_table
         from . import vessel_voyages_table
 
         with self._lock:
@@ -65,16 +69,20 @@ class Database:
             quote_history_table.ensure_schema(self._conn)
             addresses_table.ensure_schema(self._conn)
             addresses_warehouse_table.ensure_schema(self._conn)
+            customer_addresses_table.ensure_schema(self._conn)
             shipments_table.ensure_schema(self._conn)
             shipment_exception_events_table.ensure_schema(self._conn)
             shipment_exception_followup_table.ensure_schema(self._conn)
             channel_sla_rules_table.ensure_schema(self._conn)
+            delivery_windows_table.ensure_schema(self._conn)
             shipment_sla_alerts_table.ensure_schema(self._conn)
             shipment_sla_alert_followups_table.ensure_schema(self._conn)
             shipment_payment_followups_table.ensure_schema(self._conn)
             quote_opportunities_table.ensure_schema(self._conn)
             quote_versions_table.ensure_schema(self._conn)
+            quote_items_table.ensure_schema(self._conn)
             quote_followups_table.ensure_schema(self._conn)
+            order_flow_orders_table.ensure_schema(self._conn)
             internal_tracking_logs_table.ensure_schema(self._conn)
             carrier_tracking_logs_table.ensure_schema(self._conn)
             tracking_sync_jobs_table.ensure_schema(self._conn)

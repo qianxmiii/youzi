@@ -31,9 +31,11 @@ Youzi v2 数据层 — SQLite 仓储
 - `vessel_voyages` / `voyage_port_calls` — 船期
 - `internal_tracking_logs` / `carrier_tracking_logs` — 轨迹
 - `customers`、`channels` — 主数据
-- `quote_opportunities` / `quote_versions` / `quote_followups` — 报价跟进
-- `shipment_payment_followups` — 催款跟进（列表实时计算；见 `shipment_payment_followups_repository.py`）
-- `addresses`、`addresses_warehouse` — 地址簿
+- `quote_opportunities` / `quote_versions` / `quote_items` / `quote_followups` — 报价跟进
+- `order_flow_orders` — 订单流转快照，不关联运单
+- `shipment_payment_followups` — 催款跟进（列表实时计算，不含港前状态；见 `shipment_payment_followups_repository.py`）
+- `addresses`、`addresses_warehouse` — 派送地址簿、仓库地址簿
+- `customer_addresses` — 客户自己的收货地址（见 `customer_addresses_repository.py`）
 
 完整表说明见 [docs/database.md](../docs/database.md)。
 
@@ -58,3 +60,7 @@ rows, total = list_shipments(db.conn, page=1, page_size=20)
 
 - [docs/database.md](../docs/database.md)
 - [docs/modules/shipment/README.md](../docs/modules/shipment/README.md)
+
+### DW 存储
+
+`delivery_windows_table.py` 保存运单最新人工窗口及模式；渠道规则新增时效下限，原预估天数作为上限和预警期限。启动执行增量建表/加列；自动计算结果不写入运单原字段，结构见 [database.md](../docs/database.md)。

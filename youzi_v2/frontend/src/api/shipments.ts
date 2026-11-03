@@ -278,6 +278,42 @@ export async function getShipment(id: string): Promise<Shipment> {
   return api<Shipment>(`/api/v1/shipments/${id}`)
 }
 
+export interface ShipmentOrderProduct {
+  cnName: string
+  enName: string
+  ctns: number | null
+}
+
+/** 按运单 DPS waybillId 拉取产品（中文品名、英文品名、箱数） */
+export async function getShipmentOrderProducts(id: string): Promise<ShipmentOrderProduct[]> {
+  return api<ShipmentOrderProduct[]>(`/api/v1/shipments/${encodeURIComponent(id)}/order-products`)
+}
+
+export interface ProductCtnsCheckIssue {
+  id: string
+  shipmentNo: string
+  shipmentCtns: number | null
+  productCtns: number | null
+  diff: number | null
+  kind: 'mismatch' | 'error'
+  message: string
+}
+
+export interface ProductCtnsCheckResult {
+  matched: number
+  checked: number
+  issues: ProductCtnsCheckIssue[]
+}
+
+/** 核对勾选运单的产品箱数合计与运单件数，最多 50 票 */
+export async function checkShipmentProductCtns(ids: string[]): Promise<ProductCtnsCheckResult> {
+  return api<ProductCtnsCheckResult>('/api/v1/shipments/check-order-product-ctns', {
+    method: 'POST',
+    body: { ids },
+    timeout: 180_000,
+  })
+}
+
 export async function createShipment(payload: ShipmentPayload): Promise<Shipment> {
   return api<Shipment>('/api/v1/shipments', { method: 'POST', body: payload })
 }
@@ -722,6 +758,16 @@ export async function reviewTrackingTimeCandidate(
   },
 ): Promise<{ action: string; deliveredTime?: string }> {
   return api(`/api/v1/shipment-tracking-time-candidates/${encodeURIComponent(candidateId)}/review`, {
+    method: 'POST',
+    body,
+  })
+}
+
+export async function batchReviewTrackingTimeCandidates(body: {
+  ids: string[]
+  action: 'use_expected_delivery' | 'use_signed_track' | 'reject'
+}): Promise<{ ok: number; failed: number; errors: string[] }> {
+  return api('/api/v1/shipment-tracking-time-candidates/batch-review', {
     method: 'POST',
     body,
   })

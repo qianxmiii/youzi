@@ -14,7 +14,7 @@ import type { DataTableColumns } from 'naive-ui'
 import { Copy } from 'lucide-vue-next'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { getShipment, getShipmentFilterOptions, listPendingTrackingTimeReviews, reviewTrackingTimeCandidate } from '@/api/shipments'
+import { getShipment, getShipmentFilterOptions, listPendingTrackingTimeReviews, reviewTrackingTimeCandidate, batchReviewTrackingTimeCandidates } from '@/api/shipments'
 import { buildCarrierSelectOptions } from '@/utils/carrierFilterOptions'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import TableActionIcon from '@/components/common/TableActionIcon.vue'
@@ -30,6 +30,8 @@ const router = useRouter()
 const { refreshPendingTrackingTimeReviewCount } = usePendingTrackingTimeReviewCount()
 const loading = ref(false)
 const reviewingId = ref<string | null>(null)
+const batching = ref<'use_expected_delivery' | 'use_signed_track' | 'reject' | null>(null)
+const checkedRowKeys = ref<string[]>([])
 const manualRowId = ref<string | null>(null)
 const manualAt = ref<number | null>(null)
 const items = ref<TrackingTimeCandidate[]>([])
@@ -61,6 +63,8 @@ async function load() {
     })
     items.value = res.items
     total.value = res.total
+    const visible = new Set(res.items.map((row) => row.id))
+    checkedRowKeys.value = checkedRowKeys.value.filter((id) => visible.has(id))
     await refreshPendingTrackingTimeReviewCount()
   } catch (e) {
     items.value = []
@@ -92,6 +96,34 @@ async function review(row: TrackingTimeCandidate, action: TrackingTimeReviewActi
     message.error(e instanceof Error ? e.message : '审批失败')
   } finally {
     reviewingId.value = null
+  }
+}
+
+async function batchReview(action: 'use_expected_delivery' | 'use_signed_track' | 'reject') {
+  const ids = checkedRowKeys.value.filter(Boolean)
+  if (!ids.length || batching.value) return
+  batching.value = action
+  try {
+    const res = await batchReviewTrackingTimeCandidates({ ids, action })
+    const labels = {
+      use_expected_delivery: '采用预计送仓',
+      use_signed_track: '采用签收节点',
+      reject: '暂不处理',
+    }
+    if (res.failed) {
+      message.warning(`${labels[action]}完成 ${res.ok} 条，失败 ${res.failed} 条`)
+    } else {
+      message.success(`已${labels[action]} ${res.ok} 条`)
+    }
+    checkedRowKeys.value = []
+    if (items.value.length <= ids.length && page.value > 1) {
+      page.value -= 1
+    }
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '批量审批失败')
+  } finally {
+    batching.value = null
   }
 }
 
@@ -226,6 +258,7 @@ function carrierDisplayLabel(row: TrackingTimeCandidate): string {
 }
 
 const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
+  { type: 'selection', fixed: 'left', width: 40 },
   {
     title: '运单号',
     key: 'shipmentNo',
@@ -292,7 +325,7 @@ const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
     fixed: 'right',
     render: (row) => {
       const busy = reviewingId.value === row.id
-      const disabled = reviewingId.value != null && reviewingId.value !== row.id
+      const disabled = batching.value != null || (reviewingId.value != null && reviewingId.value !== row.id)
       return h(NSpace, { size: 6, wrap: true }, () => [
           h(
             NButton,
@@ -388,7 +421,7 @@ onMounted(() => {
           <span class="ml-1 font-semibold tabular-nums text-[var(--color-fg-emphasis)]">{{ total }}</span>
           条
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex flex-wrap items-center gap-2">
           <span class="text-xs text-[var(--color-muted)]">承运商</span>
           <NSelect
             v-model:value="filterCarrier"
@@ -400,6 +433,47 @@ onMounted(() => {
             placeholder="全部"
           />
         </div>
+      </div>
+
+      <div
+        v-if="checkedRowKeys.length"
+        class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2"
+      >
+        <span class="text-sm text-[var(--color-fg-secondary)]">
+          已选
+          <span class="font-semibold tabular-nums text-[var(--color-fg-emphasis)]">{{ checkedRowKeys.length }}</span>
+          条
+        </span>
+        <NSpace size="small">
+          <NButton
+            size="small"
+            type="primary"
+            :loading="batching === 'use_expected_delivery'"
+            :disabled="batching != null && batching !== 'use_expected_delivery'"
+            @click="batchReview('use_expected_delivery')"
+          >
+            采用预计送仓
+          </NButton>
+          <NButton
+            size="small"
+            :loading="batching === 'use_signed_track'"
+            :disabled="batching != null && batching !== 'use_signed_track'"
+            @click="batchReview('use_signed_track')"
+          >
+            签收节点
+          </NButton>
+          <NButton
+            size="small"
+            :loading="batching === 'reject'"
+            :disabled="batching != null && batching !== 'reject'"
+            @click="batchReview('reject')"
+          >
+            暂不处理
+          </NButton>
+          <NButton size="small" quaternary :disabled="batching != null" @click="checkedRowKeys = []">
+            取消选择
+          </NButton>
+        </NSpace>
       </div>
 
       <div
@@ -433,6 +507,7 @@ onMounted(() => {
       </div>
       <div v-else class="tracking-approval-table-wrap min-h-0 flex-1 overflow-hidden">
         <NDataTable
+          v-model:checked-row-keys="checkedRowKeys"
           flex-height
           :loading="loading"
           class="tracking-approval-table h-full"
@@ -440,7 +515,7 @@ onMounted(() => {
           :data="items"
           :row-key="(row: TrackingTimeCandidate) => row.id"
           size="small"
-          :scroll-x="1700"
+          :scroll-x="1740"
           :bordered="false"
         />
       </div>

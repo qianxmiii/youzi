@@ -36,6 +36,7 @@ from .db.shipments_repository import ShipmentsRepository
 from .db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from .db.tracking_logs_repository import TrackingLogsRepository
 from .db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
+from .db.customer_addresses_repository import CustomerAddressesRepository
 from .db.customers_repository import CustomersRepository
 from .db.channels_repository import ChannelsRepository
 from .db.shipment_performance_statistics_repository import ShipmentPerformanceStatisticsRepository
@@ -128,13 +129,14 @@ from .schemas.scheduled_tasks import (
     ZipcodeBackfillRunResult,
     ShipmentDpsSyncRunRequest,
     ShipmentDpsSyncRunResult,
+    ShipmentDpsSyncAllRunResult,
 )
 from .schemas.tracking import (
     TrackingSyncDailyStats,
     TrackingSyncRequest,
     TrackingSyncResult,
 )
-from .schemas.tracking_time_writeback import TrackingTimeReviewIn
+from .schemas.tracking_time_writeback import TrackingTimeBatchReviewIn, TrackingTimeReviewIn
 from .services.shipment_group_archive import run_group_auto_archive_batch
 from .services.shipment_group_alerts import evaluate_group_alerts
 from .services.shipment_group_suggestions import apply_group_suggestions, build_group_suggestions
@@ -154,6 +156,7 @@ from .services.shipment_dps_sync_settings import (
     save_shipment_dps_sync_warehoused_enabled,
 )
 from .services.shipment_dps_sync import (
+    run_shipment_dps_sync_all,
     run_shipment_dps_sync_batch,
     run_shipment_dps_sync_batch_pickup,
     run_shipment_dps_sync_batch_warehoused,
@@ -318,6 +321,7 @@ tracking_jobs_repo = TrackingSyncJobsRepository(_database)
 code_tables_repo = CodeTablesRepository(_database)
 dict_repo = DictRepository(_database)
 customers_repo = CustomersRepository(_database)
+customer_addresses_repo = CustomerAddressesRepository(_database)
 channels_repo = ChannelsRepository(_database)
 shipment_statistics_repo = ShipmentStatisticsRepository(_database)
 performance_statistics_repo = ShipmentPerformanceStatisticsRepository(_database)

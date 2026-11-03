@@ -59,6 +59,22 @@ def extract_dps_charged_weight(
     return None
 
 
+def extract_dps_money(row: dict[str, Any], params: dict[str, Any], *keys: str) -> float | None:
+    """行级或 params 中的金额、利润率。百分号只去掉符号，不换算。"""
+    for key in keys:
+        for source in (row, params):
+            raw = source.get(key)
+            if raw is None:
+                continue
+            text = str(raw).strip().replace(",", "")
+            if text.endswith("%"):
+                text = text[:-1].strip()
+            val = _opt_float(text)
+            if val is not None:
+                return val
+    return None
+
+
 def _infer_platform_warehouse_type(
     customer_no: str | None,
     address_code: str | None,
@@ -181,6 +197,10 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         "zipcode": _opt_str(row.get("deliveryZip")),
         "ctns": _opt_int(row.get("totalCtns")) or _opt_int(params.get("ctnsTotal")),
         "charged_weight": extract_dps_charged_weight(row, params),
+        "receivable_cny": extract_dps_money(row, params, "receivable"),
+        "payable_cny": extract_dps_money(row, params, "proRecCharge"),
+        "profit_cny": extract_dps_money(row, params, "profit"),
+        "profit_rate": extract_dps_money(row, params, "profitRate"),
         "product_name": _opt_str(params.get("productName")),
         "origin_warehouse_code": _opt_str(row.get("receiveWarehouseName")),
         "supplier_name": _opt_str(row.get("shipperCompanyName")),

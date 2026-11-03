@@ -27,6 +27,7 @@ import {
   runDpsShipmentSync,
   runDpsShipmentSyncPickup,
   runDpsShipmentSyncWarehoused,
+  runDpsShipmentSyncAll,
   runDpsRouteStatusSync,
   updateScheduledTasksSettings,
 } from '@/api/scheduledTasks'
@@ -52,6 +53,7 @@ const runningExceptionFollowup = ref(false)
 const runningDpsShipmentSync = ref(false)
 const runningDpsShipmentSyncPickup = ref(false)
 const runningDpsShipmentSyncWarehoused = ref(false)
+const runningDpsShipmentSyncAll = ref(false)
 const runningDpsRouteStatusSync = ref(false)
 const overview = ref<ScheduledTaskOverview | null>(null)
 const jobs = ref<TrackingSyncJobRecord[]>([])
@@ -381,6 +383,36 @@ async function onRunDpsShipmentSyncWarehoused() {
   }
 }
 
+function dpsSyncAllStepText(step: Awaited<ReturnType<typeof runDpsShipmentSyncAll>>['steps'][number]) {
+  if (step.skipped) return `${step.label}：${step.reason || '已跳过'}`
+  if (step.error) return `${step.label}：${step.error}`
+  const remote = step.remoteTotal ?? step.total
+  return `${step.label}：新增 ${step.created}、更新 ${step.updated}（远程 ${remote} 单）`
+}
+
+async function onRunDpsShipmentSyncAll() {
+  runningDpsShipmentSyncAll.value = true
+  try {
+    const res = await runDpsShipmentSyncAll({
+      transitTimeStart: dpsTransitTimeStartForApi(),
+      transitTimeEnd: dpsTransitTimeEndForApi(),
+    })
+    if (res.skipped) {
+      message.warning(res.reason || '已跳过')
+    } else {
+      const text = res.steps.map(dpsSyncAllStepText).join('；')
+      const failed = res.steps.some((step) => step.error || step.skipped)
+      if (failed) message.warning(text || '依次同步未完成')
+      else message.success(text || '依次同步完成')
+    }
+    await load()
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '执行失败')
+  } finally {
+    runningDpsShipmentSyncAll.value = false
+  }
+}
+
 async function onRunDpsRouteStatusSync() {
   runningDpsRouteStatusSync.value = true
   try {
@@ -571,9 +603,33 @@ onMounted(load)
             <NFormItem label="DPS 运单同步">
               <NSpace vertical :size="8" class="w-full max-w-3xl">
                 <NSpace align="center" wrap>
+                  <NButton
+                    size="small"
+                    type="primary"
+                    :loading="runningDpsShipmentSyncAll"
+                    :disabled="
+                      runningDpsShipmentSync ||
+                      runningDpsShipmentSyncPickup ||
+                      runningDpsShipmentSyncWarehoused
+                    "
+                    title="依次执行提货中、已入仓、在途"
+                    @click="onRunDpsShipmentSyncAll"
+                  >
+                    依次同步全部
+                  </NButton>
+                  <span class="text-xs text-[var(--color-muted)]">
+                    提货中 → 已入仓 → 在途
+                  </span>
+                </NSpace>
+                <NSpace align="center" wrap>
                   <NSwitch v-model:value="form.dpsShipmentSyncEnabled" />
-                  <span class="text-xs text-[var(--color-muted)]">在途/全量 queryByPerson</span>
-                  <NButton size="tiny" :loading="runningDpsShipmentSync" @click="onRunDpsShipmentSync">
+                  <span class="text-xs text-[var(--color-muted)]">在途 queryByPerson</span>
+                  <NButton
+                    size="tiny"
+                    :loading="runningDpsShipmentSync"
+                    :disabled="runningDpsShipmentSyncAll"
+                    @click="onRunDpsShipmentSync"
+                  >
                     立即执行
                   </NButton>
                 </NSpace>
@@ -583,6 +639,7 @@ onMounted(load)
                   <NButton
                     size="tiny"
                     :loading="runningDpsShipmentSyncPickup"
+                    :disabled="runningDpsShipmentSyncAll"
                     @click="onRunDpsShipmentSyncPickup"
                   >
                     立即执行
@@ -594,6 +651,7 @@ onMounted(load)
                   <NButton
                     size="tiny"
                     :loading="runningDpsShipmentSyncWarehoused"
+                    :disabled="runningDpsShipmentSyncAll"
                     @click="onRunDpsShipmentSyncWarehoused"
                   >
                     立即执行

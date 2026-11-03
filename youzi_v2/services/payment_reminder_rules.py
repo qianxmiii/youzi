@@ -13,6 +13,9 @@ SETTLEMENT_BEFORE_ARRIVAL = "BEFORE_ARRIVAL"
 SETTLEMENT_AFTER_ARRIVAL = "AFTER_ARRIVAL"
 SETTLEMENT_MONTHLY = "MONTHLY"
 SETTLEMENT_AFTER_DELIVERY = "AFTER_DELIVERY"
+SETTLEMENT_WITHIN_DAYS = "WITHIN_DAYS"
+DEFAULT_PAYMENT_TERM_DAYS = 21
+DEFAULT_REMINDER_ADVANCE_DAYS = 7
 
 SETTLEMENT_METHODS = frozenset(
     {
@@ -30,6 +33,7 @@ SETTLEMENT_LABELS: dict[str, str] = {
     SETTLEMENT_AFTER_ARRIVAL: "到港后结",
     SETTLEMENT_MONTHLY: "月结",
     SETTLEMENT_AFTER_DELIVERY: "签收结",
+    SETTLEMENT_WITHIN_DAYS: "21日内",
 }
 
 REMINDER_UPCOMING_7 = "upcoming_7_days"
@@ -400,6 +404,55 @@ def _compute_payment_reminder_inner(
     )
 
 
+def _within_days_reminder(row: dict[str, Any], today: date) -> dict[str, Any] | None:
+    """运单上设了收款起算日时，应付款日 = 起算日 + 账期（默认 21 天）。"""
+    start = parse_date(row.get("collection_start_date"))
+    if not start:
+        return None
+    try:
+        days = int(row.get("payment_term_days") or DEFAULT_PAYMENT_TERM_DAYS)
+    except (TypeError, ValueError):
+        days = DEFAULT_PAYMENT_TERM_DAYS
+    if days < 1:
+        days = DEFAULT_PAYMENT_TERM_DAYS
+    try:
+        advance = int(
+            DEFAULT_REMINDER_ADVANCE_DAYS
+            if row.get("reminder_advance_days") is None
+            else row.get("reminder_advance_days")
+        )
+    except (TypeError, ValueError):
+        advance = DEFAULT_REMINDER_ADVANCE_DAYS
+    if advance < 0:
+        advance = DEFAULT_REMINDER_ADVANCE_DAYS
+    due = start + timedelta(days=days)
+    reminder_start = due - timedelta(days=advance)
+    if today < reminder_start:
+        reminder_type = ""
+    elif today < due:
+        reminder_type = REMINDER_UPCOMING_7
+    elif today == due:
+        reminder_type = REMINDER_TODAY
+    else:
+        reminder_type = REMINDER_OVERDUE
+    result = _base_result(
+        settlement_method=SETTLEMENT_WITHIN_DAYS,
+        base_date_field="collection_start_date",
+        base_date=start,
+        due_date=due,
+        reminder_date=reminder_start,
+        reminder_type=reminder_type,
+        today=today,
+    )
+    result["settlementMethodLabel"] = f"{days}日内"
+    if reminder_type == REMINDER_UPCOMING_7:
+        result["reminderTypeLabel"] = f"提前{advance}天"
+    result["collectionStartDate"] = start.isoformat()
+    result["paymentTermDays"] = days
+    result["reminderAdvanceDays"] = advance
+    return result
+
+
 def compute_payment_reminder(
     row: dict[str, Any],
     *,
@@ -407,8 +460,11 @@ def compute_payment_reminder(
     settlement_day: int | None,
     today: date | None = None,
 ) -> dict[str, Any]:
-    """根据运单与客户结算配置计算催款上下文。"""
+    """根据运单与客户结算配置计算催款上下文。设了收款起算日的票按账期计算。"""
     check_day = today or date.today()
+    termed = _within_days_reminder(row, check_day)
+    if termed is not None:
+        return termed
     result = _compute_payment_reminder_inner(
         row,
         settlement_method=settlement_method,

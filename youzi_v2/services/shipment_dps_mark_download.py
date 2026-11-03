@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 
 from ..db.shipments_repository import ShipmentsRepository
@@ -12,14 +11,10 @@ from .dps_mark_download import (
     download_dps_single_mark,
     safe_mark_filename,
 )
+from .mark_rename import mark_batch_zip_filename, shipment_ctns_count
 from .shipment_dps_cargo_download import MAX_DOWNLOAD_BATCH
 
 MAX_MARK_BATCH = MAX_DOWNLOAD_BATCH
-
-
-def _mark_download_filename(extension: str) -> str:
-    ext = extension if extension.startswith(".") else f".{extension}" if extension else ".zip"
-    return f"{datetime.now().strftime('%Y%m%d%H%M%S')}{ext}"
 
 
 def build_dps_mark_data_download(
@@ -33,7 +28,7 @@ def build_dps_mark_data_download(
     if len(ids) > MAX_MARK_BATCH:
         raise ValueError(f"单次最多下载 {MAX_MARK_BATCH} 票唛头")
 
-    entries: list[tuple[str, str]] = []
+    entries: list[tuple[str, str, int]] = []
     errors: list[str] = []
 
     for sid in ids:
@@ -47,7 +42,7 @@ def build_dps_mark_data_download(
         if not waybill_id:
             errors.append(f"{label}: 无 DPS 运单 ID，请先「更新选中运单」")
             continue
-        entries.append((shipment_no or label, waybill_id))
+        entries.append((shipment_no or label, waybill_id, shipment_ctns_count(row)))
 
     if not entries:
         detail = "；".join(errors[:5])
@@ -57,16 +52,19 @@ def build_dps_mark_data_download(
 
     try:
         if len(entries) == 1:
-            shipment_no, waybill_id = entries[0]
+            shipment_no, waybill_id, _ctns = entries[0]
             downloaded = download_dps_single_mark(config_path, waybill_id)
             filename = resolve_dps_download_filename(
                 downloaded,
                 fallback=safe_mark_filename(shipment_no, downloaded.extension),
             )
         else:
-            waybill_ids = [w for _, w in entries]
+            waybill_ids = [w for _, w, _c in entries]
             downloaded = download_dps_batch_mark(config_path, waybill_ids)
-            filename = _mark_download_filename(downloaded.extension)
+            filename = mark_batch_zip_filename(
+                len(entries),
+                sum(c for _s, _w, c in entries),
+            )
     except Exception as exc:
         suffix = f"（另有 {len(errors)} 票未纳入）" if errors else ""
         raise ValueError(f"唛头下载失败：{exc}{suffix}") from exc

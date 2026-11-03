@@ -9,11 +9,15 @@ import {
   NSelect,
   NSpace,
   NSwitch,
+  NTooltip,
   useDialog,
   useMessage,
   type DataTableColumns,
 } from 'naive-ui'
+import { MapPin } from 'lucide-vue-next'
 import { h, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ICON_STROKE } from '@/constants/icons'
 import {
   createCustomer,
   deleteCustomer,
@@ -32,13 +36,18 @@ import {
 
 const message = useMessage()
 const dialog = useDialog()
+const route = useRoute()
+const router = useRouter()
 const loading = ref(false)
 const syncing = ref(false)
 const exporting = ref(false)
 const submitting = ref(false)
 const items = ref<Customer[]>([])
 const total = ref(0)
-const search = ref('')
+const initialSearch = String(
+  Array.isArray(route.query.search) ? route.query.search[0] : route.query.search || '',
+).trim()
+const search = ref(initialSearch)
 const filterVipOnly = ref(false)
 const newName = ref('')
 const newCustomerLang = ref<CustomerLang>('zh')
@@ -163,14 +172,14 @@ function onCustomerNameBlur(row: Customer) {
 
   const count = row.shipmentCount
   if (count <= 0) {
-    void handleRename(row, draft, false).finally(() => clearNameDraft(row.id))
+    void handleRename(row, draft, true).finally(() => clearNameDraft(row.id))
     return
   }
 
   dialog.warning({
     title: '同步运单客户名',
-    content: `客户名将由「${row.customerName}」改为「${draft}」。是否同时更新该客户名下全部 ${count} 条运单？`,
-    positiveText: '是，更新全部运单',
+    content: `客户名将由「${row.customerName}」改为「${draft}」。是否同时更新该客户名下全部 ${count} 条运单，以及客户地址簿里的同一客户名？`,
+    positiveText: '是，更新运单和地址',
     negativeText: '否，仅改客户表',
     onPositiveClick: () => handleRename(row, draft, true).finally(() => clearNameDraft(row.id)),
     onNegativeClick: () => handleRename(row, draft, false).finally(() => clearNameDraft(row.id)),
@@ -250,6 +259,37 @@ const columns: DataTableColumns<Customer> = [
           onUpdateValue: (v: string) => onCustomerNameInput(row, v),
           onBlur: () => onCustomerNameBlur(row),
         }),
+        h(
+          NTooltip,
+          { trigger: 'hover' },
+          {
+            trigger: () =>
+              h(
+                NButton,
+                {
+                  size: 'small',
+                  secondary: true,
+                  circle: true,
+                  class: 'customer-address-link',
+                  'aria-label': '客户地址',
+                  onClick: () =>
+                    router.push({
+                      path: '/customers/addresses',
+                      query: { customer: row.customerName },
+                    }),
+                },
+                {
+                  icon: () =>
+                    h(MapPin, {
+                      size: 16,
+                      strokeWidth: ICON_STROKE,
+                      'aria-hidden': 'true',
+                    }),
+                },
+              ),
+            default: () => '客户地址',
+          },
+        ),
         row.isVip ? h(VipStarBadge) : null,
       ]),
   },
@@ -385,6 +425,15 @@ watch(search, () => {
   searchTimer = setTimeout(load, 300)
 })
 
+watch(
+  () => route.query.search,
+  (value) => {
+    const text = String(Array.isArray(value) ? value[0] : value || '').trim()
+    if (text === search.value) return
+    search.value = text
+  },
+)
+
 watch(filterVipOnly, () => {
   page.value = 1
   load()
@@ -480,3 +529,10 @@ onMounted(async () => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.customer-address-link {
+  color: var(--color-accent-text);
+  background: color-mix(in srgb, var(--color-accent) 16%, var(--color-elevated));
+}
+</style>

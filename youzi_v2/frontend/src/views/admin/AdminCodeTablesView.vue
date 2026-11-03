@@ -325,12 +325,6 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
     <div class="shrink-0 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="page-h2">后台管理 · 码表</h2>
-        <p class="text-xs text-zinc-500">
-          「渠道」页与原渠道管理一致（含时效、全量导入）；其他码表可 Excel 导入。承运商「编码」对应运单
-          <code class="text-zinc-400">carrier_code</code>；「承运商ID」为 DPS
-          <code class="text-zinc-400">carrierId</code>
-          ，仅用于反查编码。
-        </p>
       </div>
       <NSpace v-if="!isChannelTable">
         <NButton size="small" quaternary @click="downloadTemplate">下载模板</NButton>

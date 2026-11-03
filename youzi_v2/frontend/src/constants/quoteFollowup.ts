@@ -69,6 +69,101 @@ export function quoteChangeReasonLabel(code: string | null | undefined): string 
   return CHANGE_LABEL[key] || key || '—'
 }
 
+export function moneyUnitLabel(currency: string | null | undefined): string {
+  const code = (currency || '').trim().toUpperCase()
+  if (code === 'USD') return 'usd'
+  if (code === 'CNY' || code === 'RMB') return 'rmb'
+  return code.toLowerCase()
+}
+
+export function priceUnitLabel(
+  currency: string | null | undefined,
+  basis: string | null | undefined,
+): string {
+  const money = moneyUnitLabel(currency)
+  const unit = (basis || '').trim().toLowerCase()
+  if (money && unit) return `${money}/${unit}`
+  return money || unit
+}
+
+export const DEFAULT_USD_CNY_RATE = 6.7
+
+export function quoteSellingTotal(
+  lines: Array<{ quotedAmount?: number | null; quotedCurrency?: string }>,
+): { amount: number; currency: string } | null {
+  const buckets = new Map<string, { amount: number; count: number }>()
+  for (const line of lines) {
+    if (line.quotedAmount == null || Number.isNaN(Number(line.quotedAmount))) continue
+    const currency = (line.quotedCurrency || '').trim().toUpperCase() === 'RMB'
+      ? 'CNY'
+      : (line.quotedCurrency || '').trim().toUpperCase()
+    const bucket = buckets.get(currency) || { amount: 0, count: 0 }
+    bucket.amount += Number(line.quotedAmount)
+    bucket.count += 1
+    buckets.set(currency, bucket)
+  }
+  if (!buckets.size) return null
+  const [currency, bucket] = [...buckets.entries()].sort(
+    (left, right) => right[1].count - left[1].count || Math.abs(right[1].amount) - Math.abs(left[1].amount),
+  )[0]
+  return { amount: bucket.amount, currency }
+}
+
+export function quoteProfitMoney(
+  rate: number | null | undefined,
+  profitUnit: string | null | undefined,
+  lines: Array<{ chargeWeightKg: number | null; priceBasis?: string }>,
+  sellingCurrency: string | null | undefined,
+  exchangeRate: number | null | undefined,
+): { amount: number; currency: string } | null {
+  const total = quoteProfitTotal(rate, profitUnit, lines)
+  if (total == null) return null
+  const currency = (sellingCurrency || '').trim().toUpperCase() === 'RMB'
+    ? 'CNY'
+    : (sellingCurrency || '').trim().toUpperCase()
+  if (currency === 'USD') {
+    const rateValue = exchangeRate != null && exchangeRate > 0 ? exchangeRate : DEFAULT_USD_CNY_RATE
+    return { amount: total / rateValue, currency: 'USD' }
+  }
+  return { amount: total, currency: 'CNY' }
+}
+
+export function quoteProfitRate(
+  profitAmount: number | null | undefined,
+  profitCurrency: string | null | undefined,
+  sellingAmount: number | null | undefined,
+  sellingCurrency: string | null | undefined,
+): number | null {
+  if (profitAmount == null || sellingAmount == null || sellingAmount === 0) return null
+  const profitCode = (profitCurrency || '').trim().toUpperCase() === 'RMB' ? 'CNY' : (profitCurrency || '').trim().toUpperCase()
+  const sellingCode = (sellingCurrency || '').trim().toUpperCase() === 'RMB' ? 'CNY' : (sellingCurrency || '').trim().toUpperCase()
+  if (!profitCode || profitCode !== sellingCode) return null
+  return Math.round((profitAmount / sellingAmount) * 10000) / 100
+}
+
+export function quoteProfitTotal(
+  rate: number | null | undefined,
+  profitUnit: string | null | undefined,
+  lines: Array<{ chargeWeightKg: number | null; priceBasis?: string }>,
+): number | null {
+  if (rate == null || Number.isNaN(Number(rate))) return null
+  const unit = (profitUnit || '').trim().toUpperCase()
+  if (unit !== 'RMB/KG' && unit !== 'RMB/CBM') return null
+  const want = unit.endsWith('CBM') ? 'cbm' : 'kg'
+  const matched: number[] = []
+  const every: number[] = []
+  for (const line of lines) {
+    if (line.chargeWeightKg == null || Number.isNaN(Number(line.chargeWeightKg))) continue
+    const qty = Number(line.chargeWeightKg)
+    every.push(qty)
+    const basis = (line.priceBasis || '').trim().toLowerCase()
+    if (!basis || basis === want) matched.push(qty)
+  }
+  const chosen = matched.length ? matched : every
+  if (!chosen.length) return null
+  return Number(rate) * chosen.reduce((sum, qty) => sum + qty, 0)
+}
+
 export function formatMoney(
   amount: number | null | undefined,
   currency: string | null | undefined,

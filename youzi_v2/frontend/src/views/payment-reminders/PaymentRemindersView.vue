@@ -3,9 +3,11 @@ import {
   NButton,
   NCheckbox,
   NDataTable,
+  NDatePicker,
   NDrawer,
   NDrawerContent,
   NInput,
+  NInputNumber,
   NPagination,
   NRadioButton,
   NRadioGroup,
@@ -18,16 +20,19 @@ import {
   type DataTableColumns,
 } from 'naive-ui'
 import { Copy } from 'lucide-vue-next'
-import { computed, h, onMounted, ref, watch } from 'vue'
+import { computed, defineComponent, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import {
   batchCreatePaymentReminderFollowups,
   createPaymentReminderFollowup,
   exportPaymentRemindersExcel,
+  getPaymentReminderCustomerRanking,
   getPaymentReminderSummary,
   listPaymentReminderFollowups,
   listPaymentReminders,
+  setPaymentCollectionTerm,
+  type PaymentReminderCustomerRank,
   type PaymentReminderFollowup,
   type PaymentReminderItem,
   type PaymentReminderScope,
@@ -43,7 +48,7 @@ import {
 } from '@/constants/paymentReminders'
 import { ICON_STROKE } from '@/constants/icons'
 import { resolveShipmentListStatusDisplay } from '@/constants/shipmentRouteStatus'
-import { SHIPMENT_STATUS_LABEL_ZH } from '@/constants/shipmentWorkspace'
+import { SHIPMENT_STATUS_LABEL_ZH, shipmentListPathForStatus } from '@/constants/shipmentWorkspace'
 import { usePendingPaymentReminderCount } from '@/composables/usePendingPaymentReminderCount'
 import { shipmentPaymentStatusLabel } from '@/utils/formatGroupAlertMessage'
 import { formatAbsoluteDateTime, formatRelativeTime } from '@/utils/formatDateTime'
@@ -87,17 +92,28 @@ const checkedRowKeys = ref<string[]>([])
 const todoCount = ref(0)
 const allUnpaidCount = ref(0)
 const overdueCount = ref(0)
+const customerRanks = ref<PaymentReminderCustomerRank[]>([])
+const receivablePendingCount = ref(0)
+const rankExpanded = ref(false)
+const rankShowAll = ref(false)
+const rankTotal = ref(0)
 
 const scope = ref<PaymentReminderScope>('todo')
 const filterCustomer = ref<string | null>(null)
+const filterChannelCategory = ref<string | null>(null)
 const filterSettlementMethod = ref<string | null>(null)
 const filterReminderType = ref<string | null>(null)
 const filterFollowupStatus = ref<'unfollowed' | 'followed' | null>(null)
 /** 与运单列表一致：未勾选=排除整柜；勾选=仅整柜 */
 const filterFclOnly = ref(false)
+const filterLargeAmount = ref(false)
+const filterReceivablePending = ref(false)
+const sortByReceivable = ref(false)
 const search = ref('')
+const LARGE_RECEIVABLE = 10000
 
 const customerOptions = ref<{ label: string; value: string }[]>([])
+const channelCategoryOptions = ref<{ label: string; value: string }[]>([])
 
 const followupDrawerShow = ref(false)
 const followupLoading = ref(false)
@@ -112,6 +128,15 @@ const selectedRows = computed(() =>
   items.value.filter((row) => checkedRowKeys.value.includes(row.shipmentId)),
 )
 const selectedCount = computed(() => selectedRows.value.length)
+const selectedReceivableTotal = computed(() =>
+  selectedRows.value.reduce((sum, row) => sum + (row.receivableCny ?? 0), 0),
+)
+const selectedMissingReceivable = computed(
+  () => selectedRows.value.filter((row) => row.receivableCny == null).length,
+)
+const selectedWithReceivable = computed(
+  () => selectedCount.value - selectedMissingReceivable.value,
+)
 const selectedShipmentNos = computed(() =>
   selectedRows.value.map((r) => displayShipmentNo(r)).filter(Boolean),
 )
@@ -154,20 +179,69 @@ function clearSelection() {
   checkedRowKeys.value = []
 }
 
+function reminderQuery(extra?: { limit?: number; offset?: number }) {
+  return {
+    scope: scope.value,
+    customer: filterCustomer.value || undefined,
+    channelCategory: filterChannelCategory.value || undefined,
+    settlementMethod: filterSettlementMethod.value || undefined,
+    reminderType: filterReminderType.value || undefined,
+    followupStatus: filterFollowupStatus.value || undefined,
+    search: search.value.trim() || undefined,
+    fclOnly: filterFclOnly.value,
+    minReceivable: filterLargeAmount.value ? LARGE_RECEIVABLE : undefined,
+    receivablePending: filterReceivablePending.value || undefined,
+    sortBy: sortByReceivable.value ? ('receivable' as const) : undefined,
+    ...extra,
+  }
+}
+
+function rankingQuery() {
+  return {
+    ...reminderQuery(),
+    customer: undefined,
+  }
+}
+
+const visibleRanks = computed(() =>
+  rankShowAll.value ? customerRanks.value : customerRanks.value.slice(0, 10),
+)
+const rankMax = computed(() => customerRanks.value.reduce((max, row) => Math.max(max, row.total), 0))
+
+function rankWidth(amount: number) {
+  if (rankMax.value <= 0) return '0%'
+  return `${Math.max(4, (amount / rankMax.value) * 100)}%`
+}
+
+function toggleRankPanel() {
+  rankExpanded.value = !rankExpanded.value
+  if (!rankExpanded.value) rankShowAll.value = false
+}
+
+function toggleRankCustomer(name: string) {
+  filterCustomer.value = filterCustomer.value === name ? null : name
+}
+
+async function loadRanking() {
+  try {
+    const res = await getPaymentReminderCustomerRanking({ ...rankingQuery(), limit: 100 })
+    customerRanks.value = res.items
+    receivablePendingCount.value = res.pendingCount
+    rankTotal.value = res.totalReceivable ?? 0
+  } catch {
+    customerRanks.value = []
+  }
+}
+
 async function load() {
   loading.value = true
   try {
-    const res = await listPaymentReminders({
-      scope: scope.value,
-      customer: filterCustomer.value || undefined,
-      settlementMethod: filterSettlementMethod.value || undefined,
-      reminderType: filterReminderType.value || undefined,
-      followupStatus: filterFollowupStatus.value || undefined,
-      search: search.value.trim() || undefined,
-      fclOnly: filterFclOnly.value,
-      limit: pageSize.value,
-      offset: (page.value - 1) * pageSize.value,
-    })
+    const res = await listPaymentReminders(
+      reminderQuery({
+        limit: pageSize.value,
+        offset: (page.value - 1) * pageSize.value,
+      }),
+    )
     items.value = res.items
     total.value = res.total
     syncSelectionWithItems()
@@ -206,17 +280,12 @@ function downloadBlob(blob: Blob, filename: string) {
 async function handleExport() {
   exporting.value = true
   try {
-    const blob = await exportPaymentRemindersExcel({
-      scope: scope.value,
-      customer: filterCustomer.value || undefined,
-      settlementMethod: filterSettlementMethod.value || undefined,
-      reminderType: filterReminderType.value || undefined,
-      followupStatus: filterFollowupStatus.value || undefined,
-      search: search.value.trim() || undefined,
-      fclOnly: filterFclOnly.value,
-      limit: Math.min(total.value || 10_000, 10_000),
-      offset: 0,
-    })
+    const blob = await exportPaymentRemindersExcel(
+      reminderQuery({
+        limit: Math.min(total.value || 10_000, 10_000),
+        offset: 0,
+      }),
+    )
     const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').slice(0, 14)
     downloadBlob(blob, `催款列表导出_${ts}.xlsx`)
     message.success(`已导出 ${total.value} 条（当前筛选）`)
@@ -231,6 +300,7 @@ async function loadFilterOptions() {
   try {
     const opts = await getShipmentFilterOptions()
     customerOptions.value = (opts.customers || []).map((c) => ({ label: c, value: c }))
+    channelCategoryOptions.value = (opts.channelCategories || []).map((c) => ({ label: c, value: c }))
   } catch {
     customerOptions.value = []
   }
@@ -317,6 +387,149 @@ function handleMarkPaid(row: PaymentReminderItem) {
     positiveText: '确认',
     negativeText: '取消',
     onPositiveClick: () => markPaid([row.shipmentId]),
+  })
+}
+
+function ymdFromTs(ts: number) {
+  const d = new Date(ts)
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
+}
+
+function addDaysYmd(ymd: string, days: number) {
+  const [year, month, day] = ymd.split('-').map(Number)
+  const date = new Date(year, month - 1, day)
+  date.setDate(date.getDate() + days)
+  return ymdFromTs(date.getTime())
+}
+
+function tsFromYmd(ymd: string) {
+  const [year, month, day] = ymd.split('-').map(Number)
+  return new Date(year, month - 1, day).getTime()
+}
+
+function diffDays(fromYmd: string, toYmd: string) {
+  return Math.round((tsFromYmd(toYmd) - tsFromYmd(fromYmd)) / 86400000)
+}
+
+function openCollectionTermDialog() {
+  const rows = selectedRows.value
+  if (!rows.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  const startTs = ref<number | null>(Date.now())
+  const termDays = ref(21)
+  const dueTs = ref<number | null>(tsFromYmd(addDaysYmd(ymdFromTs(Date.now()), 21)))
+  const advanceDays = ref(7)
+
+  function syncDueFromDays() {
+    if (startTs.value == null) return
+    const days = Math.trunc(Number(termDays.value))
+    if (!Number.isFinite(days)) return
+    dueTs.value = tsFromYmd(addDaysYmd(ymdFromTs(startTs.value), days))
+  }
+
+  function syncDaysFromDue() {
+    if (startTs.value == null || dueTs.value == null) return
+    termDays.value = diffDays(ymdFromTs(startTs.value), ymdFromTs(dueTs.value))
+  }
+
+  const Picker = defineComponent({
+    setup() {
+      return () => {
+        const term = Math.trunc(Number(termDays.value))
+        const advance = Math.max(0, Math.trunc(Number(advanceDays.value)) || 0)
+        const start = startTs.value == null ? '' : ymdFromTs(startTs.value)
+        const due = dueTs.value == null ? '' : ymdFromTs(dueTs.value)
+        const remind = due ? addDaysYmd(due, -advance) : ''
+        return h('div', { class: 'flex flex-col gap-3 text-sm' }, [
+          h('p', `选中 ${rows.length} 票。账期天数和收款截止日会互相换算。`),
+          h('label', { class: 'flex flex-col gap-1' }, [
+            '收款起算日',
+            h(NDatePicker, {
+              type: 'date',
+              value: startTs.value,
+              'onUpdate:value': (value: number | null) => {
+                startTs.value = value
+                syncDueFromDays()
+              },
+            }),
+          ]),
+          h('label', { class: 'flex flex-col gap-1' }, [
+            '账期天数',
+            h(NInputNumber, {
+              value: termDays.value,
+              min: 1,
+              max: 3650,
+              'onUpdate:value': (value: number | null) => {
+                termDays.value = value ?? 1
+                syncDueFromDays()
+              },
+            }),
+          ]),
+          h('label', { class: 'flex flex-col gap-1' }, [
+            '收款截止日',
+            h(NDatePicker, {
+              type: 'date',
+              value: dueTs.value,
+              'onUpdate:value': (value: number | null) => {
+                dueTs.value = value
+                syncDaysFromDue()
+              },
+            }),
+          ]),
+          h('label', { class: 'flex flex-col gap-1' }, [
+            '提前几天进入待催',
+            h(NInputNumber, {
+              value: advanceDays.value,
+              min: 0,
+              max: 365,
+              'onUpdate:value': (value: number | null) => {
+                advanceDays.value = value ?? 0
+              },
+            }),
+          ]),
+          h('p', due && start ? `应付款日 ${due}，${remind} 起进入待催` : '请选择收款起算日和截止日'),
+        ])
+      }
+    },
+  })
+  dialog.create({
+    title: '设置收款日',
+    content: () => h(Picker),
+    positiveText: '确认',
+    negativeText: '取消',
+    onPositiveClick: async () => {
+      if (startTs.value == null || dueTs.value == null) {
+        message.warning('请选择收款起算日和截止日')
+        return false
+      }
+      const term = diffDays(ymdFromTs(startTs.value), ymdFromTs(dueTs.value))
+      const advance = Math.trunc(Number(advanceDays.value))
+      if (!Number.isFinite(term) || term < 1 || term > 3650) {
+        message.warning('截止日须晚于起算日，且不超过 3650 天')
+        return false
+      }
+      if (!Number.isFinite(advance) || advance < 0 || advance > 365) {
+        message.warning('提前提醒天数须在 0 到 365 天')
+        return false
+      }
+      try {
+        const res = await setPaymentCollectionTerm(
+          rows.map((row) => row.shipmentId),
+          ymdFromTs(startTs.value),
+          term,
+          advance,
+        )
+        message.success(`已设置 ${res.updated} 票收款日`)
+        clearSelection()
+        await reloadAfterMutation()
+      } catch (e) {
+        message.error(e instanceof Error ? e.message : '设置收款日失败')
+        return false
+      }
+    },
   })
 }
 
@@ -410,8 +623,13 @@ async function copyRowShipmentNo(row: PaymentReminderItem) {
   }
 }
 
-function goShipmentList(shipmentNo: string) {
-  void router.push({ path: '/shipments', query: { shipmentNo } })
+function goShipmentList(row: PaymentReminderItem) {
+  const shipmentNo = (row.shipmentNo || '').trim()
+  if (!shipmentNo) return
+  void router.push({
+    path: shipmentListPathForStatus(row.statusCode),
+    query: { shipmentNo },
+  })
 }
 
 function formatTrackingTime(value: string | null | undefined): string {
@@ -510,6 +728,37 @@ function renderStatusCell(row: PaymentReminderItem) {
     coarseStatusLabel: SHIPMENT_STATUS_LABEL_ZH,
   })
   return h('span', { class: ['shipment-status-badge', toneClass] }, label)
+}
+
+function formatReceivable(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) return '—'
+  return value.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
+function renderReceivable(value: number | null | undefined) {
+  if (value == null || Number.isNaN(value)) {
+    return h('span', { class: 'payment-receivable payment-receivable--empty' }, '—')
+  }
+  return h(
+    'span',
+    {
+      class: [
+        'payment-receivable',
+        value >= LARGE_RECEIVABLE ? 'payment-receivable--large' : '',
+      ],
+    },
+    formatReceivable(value),
+  )
+}
+
+function renderSettlementBadge(row: PaymentReminderItem) {
+  const key = (row.settlementMethod || '').trim().toUpperCase() || 'UNSET'
+  const label = (row.settlementMethodLabel || '').trim() || settlementMethodLabel(row.settlementMethod)
+  return h(
+    'span',
+    { class: ['settlement-badge', `settlement-badge--${key.toLowerCase()}`] },
+    label,
+  )
 }
 
 function renderPaymentStatusCell(row: PaymentReminderItem) {
@@ -618,7 +867,7 @@ function renderShipmentNoCell(row: PaymentReminderItem) {
       {
         type: 'button',
         class: 'text-left text-[var(--color-accent-text)] hover:underline shrink-0',
-        onClick: () => goShipmentList(row.shipmentNo),
+        onClick: () => goShipmentList(row),
       },
       sn,
     ),
@@ -654,6 +903,23 @@ function renderShipmentNoCell(row: PaymentReminderItem) {
   ])
 }
 
+function renderCustomerCell(row: PaymentReminderItem) {
+  const name = (row.customer || '').trim()
+  if (!name) return '—'
+  return h(
+    'button',
+    {
+      type: 'button',
+      class: 'payment-reminders-customer-link',
+      title: '打开客户',
+      onClick: () => {
+        void router.push({ path: '/customers', query: { search: name } })
+      },
+    },
+    name,
+  )
+}
+
 const shipmentNoColWidth = computed(() => {
   let maxLen = 10
   for (const row of items.value) {
@@ -685,7 +951,7 @@ const columns = computed<DataTableColumns<PaymentReminderItem>>(() => [
     ellipsis: { tooltip: true },
     render: (row) => (row.refShipmentNo || '').trim() || '—',
   },
-  { title: '客户', key: 'customer', width: 132, ellipsis: { tooltip: true } },
+  { title: '客户', key: 'customer', width: 132, ellipsis: { tooltip: true }, render: (row) => renderCustomerCell(row) },
   {
     title: '渠道',
     key: 'channelCode',
@@ -714,10 +980,17 @@ const columns = computed<DataTableColumns<PaymentReminderItem>>(() => [
     render: (row) => renderPaymentStatusCell(row),
   },
   {
+    title: '应收',
+    key: 'receivableCny',
+    width: 112,
+    align: 'right',
+    render: (row) => renderReceivable(row.receivableCny),
+  },
+  {
     title: '结算方式',
     key: 'settlementMethod',
-    width: 108,
-    render: (row) => settlementMethodLabel(row.settlementMethod),
+    width: 116,
+    render: (row) => renderSettlementBadge(row),
   },
   {
     title: '关键日期',
@@ -765,12 +1038,13 @@ const columns = computed<DataTableColumns<PaymentReminderItem>>(() => [
 ])
 
 watch(
-  [scope, filterCustomer, filterSettlementMethod, filterReminderType, filterFollowupStatus, filterFclOnly],
+  [scope, filterCustomer, filterChannelCategory, filterSettlementMethod, filterReminderType, filterFollowupStatus, filterFclOnly, filterLargeAmount, filterReceivablePending, sortByReceivable],
   () => {
     page.value = 1
     clearSelection()
     void load()
     void loadSummary()
+    void loadRanking()
   },
 )
 
@@ -800,6 +1074,7 @@ onMounted(() => {
   void loadFilterOptions()
   void load()
   void loadSummary()
+  void loadRanking()
 })
 </script>
 
@@ -828,9 +1103,12 @@ onMounted(() => {
           <span class="payment-summary-bar__total">当前列表 {{ total }} 条</span>
         </div>
       </div>
-      <NButton size="small" :loading="exporting" :disabled="total <= 0" @click="handleExport">
-        导出
-      </NButton>
+      <div class="flex shrink-0 items-center gap-2">
+        <NButton size="small" :loading="loading" @click="reloadAfterMutation">刷新</NButton>
+        <NButton size="small" :loading="exporting" :disabled="total <= 0" @click="handleExport">
+          导出
+        </NButton>
+      </div>
     </div>
 
     <div class="payment-reminders-filters panel shrink-0 px-3 py-2">
@@ -852,6 +1130,15 @@ onMounted(() => {
           clearable
           filterable
           placeholder="客户"
+          class="payment-reminders-filter-select"
+          size="small"
+        />
+        <NSelect
+          v-model:value="filterChannelCategory"
+          :options="channelCategoryOptions"
+          clearable
+          filterable
+          placeholder="渠道大类"
           class="payment-reminders-filter-select"
           size="small"
         />
@@ -882,15 +1169,80 @@ onMounted(() => {
         <NInput
           v-model:value="search"
           clearable
-          placeholder="运单号 / 客户单号 / 货件号"
+          placeholder="运单号 / 客户单号 / 关联单号 / 货件号"
           class="payment-reminders-filter-search"
           size="small"
         />
         <NCheckbox v-model:checked="filterFclOnly" size="small" class="shrink-0">
           整柜
         </NCheckbox>
+        <NCheckbox v-model:checked="filterLargeAmount" size="small" class="shrink-0">
+          1万以上
+        </NCheckbox>
+        <NCheckbox v-model:checked="filterReceivablePending" size="small" class="shrink-0">
+          应收待更新
+        </NCheckbox>
+        <NCheckbox v-model:checked="sortByReceivable" size="small" class="shrink-0">
+          按应收
+        </NCheckbox>
       </div>
     </div>
+
+    <section class="payment-rank panel shrink-0 px-3 py-2">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <h2 class="text-sm font-semibold">客户欠款</h2>
+        <div class="flex items-center gap-2">
+          <span v-if="rankExpanded" class="text-sm">
+            合计欠款
+            <strong class="payment-rank__money">{{ formatReceivable(rankTotal) }}</strong>
+          </span>
+          <NButton
+            v-if="rankExpanded && customerRanks.length > 10"
+            size="tiny"
+            quaternary
+            @click="rankShowAll = !rankShowAll"
+          >
+            {{ rankShowAll ? '只看前十' : '展开全部' }}
+          </NButton>
+          <NButton size="tiny" quaternary @click="toggleRankPanel">
+            {{ rankExpanded ? '收起' : '展开' }}
+          </NButton>
+        </div>
+      </div>
+      <div v-show="rankExpanded">
+        <div class="mt-2 flex items-center gap-3 text-xs text-[var(--color-muted)]">
+          <span class="payment-rank__legend payment-rank__legend--overdue">已逾期</span>
+          <span class="payment-rank__legend payment-rank__legend--open">未逾期</span>
+        </div>
+        <p v-if="receivablePendingCount" class="mt-1 text-xs text-[var(--color-muted)]">
+          {{ receivablePendingCount }} 票未记应收或应收不大于 0，未计入排名
+        </p>
+        <p v-if="!visibleRanks.length" class="mt-2 text-sm text-[var(--color-muted)]">暂无可排名的应收</p>
+        <ol v-else class="payment-rank__list mt-2 space-y-1">
+          <li v-for="row in visibleRanks" :key="row.customer">
+            <button
+              type="button"
+              class="payment-rank__row"
+              :class="{ 'payment-rank__row--active': filterCustomer === row.customer }"
+              @click="toggleRankCustomer(row.customer)"
+            >
+              <span class="payment-rank__name" :title="row.customer">{{ row.customer }}</span>
+              <span class="payment-rank__bar">
+                <span
+                  class="payment-rank__overdue"
+                  :style="{ width: rankWidth(row.overdue) }"
+                />
+                <span
+                  class="payment-rank__open"
+                  :style="{ width: rankWidth(row.open) }"
+                />
+              </span>
+              <span class="payment-rank__money">{{ formatReceivable(row.total) }}</span>
+            </button>
+          </li>
+        </ol>
+      </div>
+    </section>
 
     <div class="min-h-0 flex-1 overflow-hidden rounded-lg border border-[var(--color-border)]">
       <NDataTable
@@ -903,7 +1255,7 @@ onMounted(() => {
         flex-height
         class="payment-reminders-table h-full"
         size="small"
-        :scroll-x="1788"
+        :scroll-x="1900"
       />
     </div>
 
@@ -916,10 +1268,18 @@ onMounted(() => {
           已选
           <strong class="payment-reminders-selection-bar__count">{{ selectedCount }}</strong>
           条（本页）
+          <template v-if="selectedWithReceivable">
+            ，应收合计
+            <strong class="payment-reminders-selection-bar__money">{{ formatReceivable(selectedReceivableTotal) }}</strong>
+          </template>
+          <template v-if="selectedMissingReceivable">
+            ，{{ selectedMissingReceivable }} 票未记应收
+          </template>
         </span>
         <NButton size="small" quaternary @click="clearSelection">取消选择</NButton>
       </div>
       <NSpace size="small">
+        <NButton size="small" @click="openCollectionTermDialog">设置收款日</NButton>
         <NButton size="small" title="复制选中运单号（换行）" @click="copySelectedShipmentNos">
           复制运单号
         </NButton>
@@ -1064,8 +1424,198 @@ onMounted(() => {
   color: var(--color-text);
 }
 
+.payment-reminders-selection-bar__money {
+  color: rgb(180 83 9);
+  font-variant-numeric: tabular-nums;
+}
+
+.payment-reminders-table :deep(.payment-receivable) {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-fg-emphasis);
+}
+
+.payment-reminders-table :deep(.payment-receivable--large) {
+  color: rgb(180 83 9);
+}
+
+.payment-reminders-table :deep(.payment-receivable--empty) {
+  font-weight: 400;
+  color: var(--color-muted);
+}
+
+[data-theme='dark'] .payment-reminders-selection-bar__money,
+[data-theme='dark'] .payment-reminders-table :deep(.payment-receivable--large) {
+  color: rgb(253 230 138);
+}
+
+.payment-reminders-table :deep(.payment-reminders-customer-link) {
+  max-width: 100%;
+  overflow: hidden;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--color-accent-text);
+  font: inherit;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.payment-reminders-table :deep(.payment-reminders-customer-link:hover) {
+  text-decoration: underline;
+}
+
+.payment-reminders-table :deep(.settlement-badge) {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.payment-reminders-table :deep(.settlement-badge--before_shipment) {
+  background: rgb(245 158 11 / 0.18);
+  color: rgb(146 64 14);
+}
+
+.payment-reminders-table :deep(.settlement-badge--before_arrival) {
+  background: rgb(14 165 233 / 0.16);
+  color: rgb(3 105 161);
+}
+
+.payment-reminders-table :deep(.settlement-badge--after_arrival) {
+  background: rgb(139 92 246 / 0.16);
+  color: rgb(91 33 182);
+}
+
+.payment-reminders-table :deep(.settlement-badge--monthly) {
+  background: rgb(113 113 122 / 0.16);
+  color: rgb(63 63 70);
+}
+
+.payment-reminders-table :deep(.settlement-badge--after_delivery) {
+  background: rgb(34 197 94 / 0.16);
+  color: rgb(21 128 61);
+}
+
+.payment-reminders-table :deep(.settlement-badge--within_days) {
+  background: rgb(244 63 94 / 0.16);
+  color: rgb(190 18 60);
+}
+
+.payment-reminders-table :deep(.settlement-badge--unset) {
+  background: transparent;
+  color: var(--color-muted);
+  box-shadow: inset 0 0 0 1px var(--color-border);
+}
+
+[data-theme='dark'] .payment-reminders-table :deep(.settlement-badge--before_shipment) {
+  color: rgb(253 230 138);
+}
+
+[data-theme='dark'] .payment-reminders-table :deep(.settlement-badge--before_arrival) {
+  color: rgb(125 211 252);
+}
+
+[data-theme='dark'] .payment-reminders-table :deep(.settlement-badge--after_arrival) {
+  color: rgb(196 181 253);
+}
+
+[data-theme='dark'] .payment-reminders-table :deep(.settlement-badge--monthly) {
+  color: rgb(212 212 216);
+}
+
+[data-theme='dark'] .payment-reminders-table :deep(.settlement-badge--within_days) {
+  color: rgb(253 164 175);
+}
+
+[data-theme='dark'] .payment-reminders-table :deep(.settlement-badge--after_delivery) {
+  color: rgb(134 239 172);
+}
+
 .payment-reminders-filters {
   min-width: 0;
+}
+
+.payment-rank__row {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 8rem minmax(0, 1fr) 6.5rem;
+  align-items: center;
+  gap: 0.5rem;
+  border: none;
+  border-radius: 0.375rem;
+  background: transparent;
+  padding: 0.15rem 0.25rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.payment-rank__row:hover,
+.payment-rank__row--active {
+  background: rgb(139 92 246 / 0.08);
+}
+
+.payment-rank__name {
+  overflow: hidden;
+  font-size: 0.75rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.payment-rank__list {
+  max-height: 16rem;
+  overflow: auto;
+}
+
+.payment-rank__bar {
+  display: flex;
+  height: 0.55rem;
+  overflow: hidden;
+  border-radius: 999px;
+}
+
+.payment-rank__overdue,
+.payment-rank__open {
+  height: 100%;
+}
+
+.payment-rank__overdue {
+  background: rgb(244 63 94);
+}
+
+.payment-rank__open {
+  background: rgb(14 165 233);
+}
+
+.payment-rank__money {
+  font-size: 0.75rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.payment-rank__legend::before {
+  content: '';
+  display: inline-block;
+  width: 0.55rem;
+  height: 0.55rem;
+  margin-right: 0.25rem;
+  border-radius: 999px;
+  vertical-align: -1px;
+}
+
+.payment-rank__legend--overdue::before {
+  background: rgb(244 63 94);
+}
+
+.payment-rank__legend--open::before {
+  background: rgb(14 165 233);
 }
 
 .payment-reminders-filters__row {

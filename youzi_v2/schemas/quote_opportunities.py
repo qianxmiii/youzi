@@ -5,6 +5,59 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 from ..services.quote_followup_rules import CHANGE_REASONS, FOLLOWUP_TYPES
 
 
+class QuoteChannelIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    trade_term: str = Field(
+        default="", validation_alias=AliasChoices("tradeTerm", "trade_term")
+    )
+    channel_name: str = Field(
+        default="", validation_alias=AliasChoices("channelName", "channel_name")
+    )
+    unit_price: float | None = Field(
+        default=None, validation_alias=AliasChoices("unitPrice", "unit_price")
+    )
+    charge_weight_kg: float | None = Field(
+        default=None, validation_alias=AliasChoices("chargeWeightKg", "charge_weight_kg")
+    )
+    quoted_amount: float | None = Field(
+        default=None, validation_alias=AliasChoices("quotedAmount", "quoted_amount")
+    )
+    quoted_currency: str = Field(
+        default="", validation_alias=AliasChoices("quotedCurrency", "quoted_currency")
+    )
+    price_basis: str = Field(
+        default="", validation_alias=AliasChoices("priceBasis", "price_basis")
+    )
+    transit_days_min: int | None = Field(
+        default=None, validation_alias=AliasChoices("transitDaysMin", "transit_days_min")
+    )
+    transit_days_max: int | None = Field(
+        default=None, validation_alias=AliasChoices("transitDaysMax", "transit_days_max")
+    )
+    note: str = ""
+
+
+class QuoteDestinationIn(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    address_code: str = Field(
+        default="", validation_alias=AliasChoices("addressCode", "address_code")
+    )
+    ctns: int | None = None
+    weight_kg: float | None = Field(
+        default=None, validation_alias=AliasChoices("weightKg", "weight_kg")
+    )
+    volume_cbm: float | None = Field(
+        default=None, validation_alias=AliasChoices("volumeCbm", "volume_cbm")
+    )
+    channels: list[QuoteChannelIn] = Field(default_factory=list)
+
+
+class QuotePasteIn(BaseModel):
+    text: str = ""
+
+
 class QuoteOpportunityCreateIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
@@ -67,6 +120,32 @@ class QuoteOpportunityCreateIn(BaseModel):
         default=None, validation_alias=AliasChoices("profitRate", "profit_rate")
     )
     note: str = ""
+    destinations: list[QuoteDestinationIn] = Field(default_factory=list)
+    summary_ctns: int | None = Field(
+        default=None, validation_alias=AliasChoices("summaryCtns", "summary_ctns")
+    )
+    summary_weight_kg: float | None = Field(
+        default=None, validation_alias=AliasChoices("summaryWeightKg", "summary_weight_kg")
+    )
+    summary_volume_cbm: float | None = Field(
+        default=None, validation_alias=AliasChoices("summaryVolumeCbm", "summary_volume_cbm")
+    )
+    pickup_fee: float | None = Field(
+        default=None, validation_alias=AliasChoices("pickupFee", "pickup_fee")
+    )
+    pickup_fee_currency: str = Field(
+        default="",
+        validation_alias=AliasChoices("pickupFeeCurrency", "pickup_fee_currency"),
+    )
+    source_text: str = Field(
+        default="", validation_alias=AliasChoices("sourceText", "source_text")
+    )
+    profit_unit: str = Field(
+        default="", validation_alias=AliasChoices("profitUnit", "profit_unit")
+    )
+    exchange_rate: float | None = Field(
+        default=None, validation_alias=AliasChoices("exchangeRate", "exchange_rate")
+    )
 
 
 class QuoteOpportunityPatchIn(BaseModel):

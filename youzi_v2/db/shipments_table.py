@@ -208,6 +208,20 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_origin_port TEXT")
     if "amz_push_at" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_at TEXT")
+    if "collection_start_date" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN collection_start_date TEXT")
+    if "payment_term_days" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN payment_term_days INTEGER")
+    if "reminder_advance_days" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN reminder_advance_days INTEGER")
+    if "receivable_cny" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN receivable_cny REAL")
+    if "payable_cny" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN payable_cny REAL")
+    if "profit_cny" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN profit_cny REAL")
+    if "profit_rate" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN profit_rate REAL")
     conn.execute(
         f"CREATE INDEX IF NOT EXISTS idx_{TABLE_NAME}_exception_code "
         f"ON {TABLE_NAME}(exception_code)"

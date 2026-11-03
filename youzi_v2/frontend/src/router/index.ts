@@ -58,6 +58,12 @@ const router = createRouter({
           meta: { title: '地址簿' },
         },
         {
+          path: 'order-flow',
+          name: 'order-flow',
+          component: () => import('@/views/order-flow/OrderFlowView.vue'),
+          meta: { title: '订单流转' },
+        },
+        {
           path: 'shipments/pre-port',
           name: 'shipments-pre-port',
           component: () => import('@/views/shipments/ShipmentsView.vue'),
@@ -110,6 +116,12 @@ const router = createRouter({
           name: 'admin',
           component: () => import('@/views/admin/AdminCodeTablesView.vue'),
           meta: { title: '后台管理' },
+        },
+        {
+          path: 'customers/addresses',
+          name: 'customer-addresses',
+          component: () => import('@/views/customers/CustomerAddressesView.vue'),
+          meta: { title: '客户地址簿' },
         },
         {
           path: 'customers',

@@ -81,7 +81,7 @@ export function formatShipmentDetailTsvRow(row: Shipment): string {
     countryLabel(row.countryCode),
     row.addressCode,
     row.deliveryAddress,
-    row.zipcode,
+    zipForCopy(row.zipcode),
     channelLabel(row),
     row.carrierNameZh?.trim() || row.carrierCode,
     row.trackingNumber,
@@ -111,7 +111,7 @@ function formatChargedWeightKgForCopy(value: number | null | undefined): string 
   if (value === null || value === undefined || Number.isNaN(Number(value))) return ''
   const n = Number(value)
   if (Number.isInteger(n)) return String(n)
-  return String(Number(n.toFixed(3)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''))
+  return String(Number(n.toFixed(3)))
 }
 
 /** 港前复制：英文客户 Chargeweight，中文客户 计费重 */
@@ -132,10 +132,16 @@ export function formatChargedWeightCopyLine(row: Shipment): string {
   return `计费重: ${kg}kg`
 }
 
+function zipForCopy(value: string | null | undefined): string {
+  const zip = cell(value)
+  if (zip === '0000') return ''
+  return zip
+}
+
 function warehouseOrZipForCopy(row: Shipment): string {
   const warehouse = cell(row.addressCode)
   if (warehouse) return warehouse
-  return cell(row.zipcode)
+  return zipForCopy(row.zipcode)
 }
 
 /** 用 ` = ` 连接非空片段；空值不产生多余等号 */
@@ -173,7 +179,7 @@ export function shipmentDetailIdentifierPartsForCopy(row: Shipment): string[] {
   return parts
 }
 
-/** 单行：运单号 = [关联单号] [= 客户编号] [= 货件号] = 仓库（空则邮编）= Nctns */
+/** 单行：运单号 = [关联单号] [= 客户编号] [= 货件号] = 仓库（空则邮编，0000 省略）= Nctns */
 export function formatShipmentDetailSummaryLine(row: Shipment): string {
   return joinEqualsParts([
     row.shipmentNo,
@@ -183,7 +189,7 @@ export function formatShipmentDetailSummaryLine(row: Shipment): string {
   ])
 }
 
-/** 运单明细摘要 + 可选第二行计费重（港前） */
+/** 运单明细摘要 + 可选第二行计费重 */
 export function formatShipmentDetailSummaryBlock(
   row: Shipment,
   options?: { appendChargedWeight?: boolean },
@@ -214,12 +220,22 @@ export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
   return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n')
 }
 
-/** 港前「复制 → 数据」：运单明细摘要 + 换行 + 计费重（无计费重仍保留摘要行） */
+/** 「复制 → 数据」文末确认句；勾选全为英文客户时用英文，否则中文 */
+export function formatPreportShipmentDataConfirmLine(rows: Shipment[]): string {
+  const allEnglish =
+    rows.length > 0 && rows.every((row) => isEnglishShipmentCopyContext(row))
+  return allEnglish
+    ? 'Please check and confirm. Thank you.'
+    : '数据请确认，谢谢！'
+}
+
+/** 「复制 → 数据」：运单明细摘要 + 换行 + 计费重；正文后空一行追加确认句 */
 export function formatPreportShipmentDataCopyText(rows: Shipment[]): string {
   if (!rows.length) return ''
-  return rows
+  const body = rows
     .map((row) => formatShipmentDetailSummaryBlock(row, { appendChargedWeight: true }))
     .join('\n\n')
+  return `${body}\n\n${formatPreportShipmentDataConfirmLine(rows)}`
 }
 
 /**

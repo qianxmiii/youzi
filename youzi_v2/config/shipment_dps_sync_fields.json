@@ -61,6 +61,30 @@
       "onInsert": true,
       "onUpdate": true
     },
+    "receivable_cny": {
+      "label": "应收",
+      "dpsSource": "receivable（人民币）",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "payable_cny": {
+      "label": "应付",
+      "dpsSource": "proRecCharge（人民币）",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "profit_cny": {
+      "label": "利润",
+      "dpsSource": "profit（人民币）",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "profit_rate": {
+      "label": "利润率",
+      "dpsSource": "profitRate",
+      "onInsert": true,
+      "onUpdate": true
+    },
     "product_name": {
       "label": "品名",
       "dpsSource": "params.productName",

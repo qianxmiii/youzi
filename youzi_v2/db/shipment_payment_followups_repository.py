@@ -11,6 +11,7 @@ from .connection import Database
 from .customers_table import TABLE_NAME as CUSTOMERS_TABLE
 from .datetime_util import now_str
 from .shipment_payment_followups_table import TABLE_NAME as FOLLOWUPS_TABLE
+from .shipment_order_status import PRE_PORT_STATUSES
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 from .tracking_freshness import (
     FCL_CARRIER_NAME_ZH,
@@ -25,6 +26,13 @@ from ..services.payment_reminder_rules import (
     matches_scope,
     reminder_sort_key,
 )
+
+
+def _receivable_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    amount = item.get("receivableCny")
+    if amount is None:
+        return (1, 0.0, reminder_sort_key(item))
+    return (0, -float(amount), reminder_sort_key(item))
 
 
 def _followup_row_to_api(row: sqlite3.Row) -> dict[str, Any]:
@@ -148,6 +156,11 @@ class ShipmentPaymentFollowupsRepository:
             )
             or "",
             "paymentStatus": payment_status or "UNPAID",
+            "receivableCny": (
+                float(row["receivable_cny"])
+                if "receivable_cny" in row.keys() and row["receivable_cny"] is not None
+                else None
+            ),
             "followupCount": int(row["followup_count"] or 0)
             if "followup_count" in row.keys()
             else 0,
@@ -171,14 +184,18 @@ class ShipmentPaymentFollowupsRepository:
         followup_status: str | None = None,
         search: str | None = None,
         fcl_only: bool | None = None,
+        channel_category: str | None = None,
         today: date | None = None,
     ) -> list[dict[str, Any]]:
         today = today or date.today()
 
+        preport = sorted(PRE_PORT_STATUSES)
+        preport_placeholders = ", ".join("?" for _ in preport)
         conditions = [
-            "(s.payment_status IS NULL OR TRIM(s.payment_status) = '' OR UPPER(s.payment_status) != 'PAID')"
+            "(s.payment_status IS NULL OR TRIM(s.payment_status) = '' OR UPPER(s.payment_status) != 'PAID')",
+            f"TRIM(COALESCE(s.status_code, '')) NOT IN ({preport_placeholders})",
         ]
-        params: list[Any] = []
+        params: list[Any] = list(preport)
 
         if customer and customer.strip():
             conditions.append("TRIM(s.customer) = ?")
@@ -197,9 +214,13 @@ class ShipmentPaymentFollowupsRepository:
         if search and search.strip():
             q = f"%{search.strip()}%"
             conditions.append(
-                "(s.shipment_no LIKE ? OR s.customer_no LIKE ? OR s.customer_shipment_id LIKE ?)"
+                "(s.shipment_no LIKE ? OR s.customer_no LIKE ? OR s.ref_shipment_no LIKE ? OR s.customer_shipment_id LIKE ?)"
             )
-            params.extend([q, q, q])
+            params.extend([q, q, q, q])
+
+        if channel_category and channel_category.strip():
+            conditions.append("TRIM(cc.category) = ?")
+            params.append(channel_category.strip())
 
         fu_status = (followup_status or "").strip().lower()
         if fu_status in ("unfollowed", "none", "pending"):
@@ -276,6 +297,10 @@ class ShipmentPaymentFollowupsRepository:
         followup_status: str | None = None,
         search: str | None = None,
         fcl_only: bool | None = None,
+        min_receivable: float | None = None,
+        receivable_pending: bool = False,
+        sort_by: str | None = None,
+        channel_category: str | None = None,
         limit: int = 50,
         offset: int = 0,
     ) -> dict[str, Any]:
@@ -289,7 +314,24 @@ class ShipmentPaymentFollowupsRepository:
             followup_status=followup_status,
             search=search,
             fcl_only=fcl_only,
+            channel_category=channel_category,
         )
+        if min_receivable is not None:
+            threshold = float(min_receivable)
+            items = [
+                item
+                for item in items
+                if item.get("receivableCny") is not None
+                and float(item["receivableCny"]) >= threshold
+            ]
+        if receivable_pending:
+            items = [
+                item
+                for item in items
+                if item.get("receivableCny") is None or float(item["receivableCny"]) <= 0
+            ]
+        if (sort_by or "").strip() == "receivable":
+            items.sort(key=_receivable_sort_key)
         total = len(items)
         page = items[offset : offset + limit]
         return {
@@ -297,6 +339,85 @@ class ShipmentPaymentFollowupsRepository:
             "total": total,
             "limit": limit,
             "offset": offset,
+        }
+
+    def customer_ranking(
+        self,
+        *,
+        scope: str = "todo",
+        settlement_method: str | None = None,
+        reminder_type: str | None = None,
+        followup_status: str | None = None,
+        search: str | None = None,
+        fcl_only: bool | None = None,
+        min_receivable: float | None = None,
+        receivable_pending: bool = False,
+        channel_category: str | None = None,
+        limit: int = 10,
+    ) -> dict[str, Any]:
+        """当前筛选下按客户汇总大于 0 的应收。不含客户筛选，方便点排名后列表收窄而图仍在。"""
+        items = self._collect_reminder_items(
+            scope=scope,
+            settlement_method=settlement_method,
+            reminder_type=reminder_type,
+            followup_status=followup_status,
+            search=search,
+            fcl_only=fcl_only,
+            channel_category=channel_category,
+        )
+        pending_count = sum(
+            1
+            for item in items
+            if item.get("receivableCny") is None or float(item["receivableCny"]) <= 0
+        )
+        if min_receivable is not None:
+            threshold = float(min_receivable)
+            items = [
+                item
+                for item in items
+                if item.get("receivableCny") is not None
+                and float(item["receivableCny"]) >= threshold
+            ]
+        if receivable_pending:
+            items = [
+                item
+                for item in items
+                if item.get("receivableCny") is None or float(item["receivableCny"]) <= 0
+            ]
+        buckets: dict[str, dict[str, Any]] = {}
+        for item in items:
+            raw = item.get("receivableCny")
+            if raw is None or float(raw) <= 0:
+                continue
+            amount = float(raw)
+            name = (item.get("customer") or "").strip() or "未填客户"
+            bucket = buckets.get(name)
+            if bucket is None:
+                bucket = {
+                    "customer": name,
+                    "total": 0.0,
+                    "overdue": 0.0,
+                    "open": 0.0,
+                    "count": 0,
+                }
+                buckets[name] = bucket
+            bucket["total"] += amount
+            bucket["count"] += 1
+            if (item.get("reminderType") or "") == "overdue":
+                bucket["overdue"] += amount
+            else:
+                bucket["open"] += amount
+        ranked = sorted(buckets.values(), key=lambda row: (-row["total"], row["customer"]))
+        for row in ranked:
+            row["total"] = round(row["total"], 2)
+            row["overdue"] = round(row["overdue"], 2)
+            row["open"] = round(row["open"], 2)
+        top = ranked[: max(1, min(limit, 100))]
+        total_receivable = round(sum(row["total"] for row in ranked), 2)
+        return {
+            "items": top,
+            "pendingCount": pending_count,
+            "totalReceivable": total_receivable,
         }
 
     def reminder_summary(self, *, fcl_only: bool | None = False) -> dict[str, Any]:
@@ -393,6 +514,55 @@ class ShipmentPaymentFollowupsRepository:
         if row is None:
             raise RuntimeError("跟进记录写入失败")
         return _followup_row_to_api(row)
+
+    def set_collection_terms(
+        self,
+        shipment_ids: list[str],
+        *,
+        start_date: str,
+        term_days: int = 21,
+        advance_days: int = 7,
+    ) -> dict[str, Any]:
+        from ..db.shipment_sla import parse_date
+
+        day = (start_date or "").strip()[:10]
+        if parse_date(day) is None:
+            raise ValueError("收款起算日无效")
+        try:
+            days = int(term_days)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("账期无效") from exc
+        if days < 1 or days > 3650:
+            raise ValueError("账期须在 1 到 3650 天")
+        try:
+            advance = int(advance_days)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("提前提醒天数无效") from exc
+        if advance < 0 or advance > 365:
+            raise ValueError("提前提醒天数须在 0 到 365 天")
+        now = now_str()
+        updated = 0
+        missing = 0
+        with self._database.lock:
+            for sid in shipment_ids:
+                clean = (sid or "").strip()
+                if not clean:
+                    continue
+                cur = self._conn.execute(
+                    f"""
+                    UPDATE {SHIPMENTS_TABLE}
+                    SET collection_start_date = ?, payment_term_days = ?,
+                        reminder_advance_days = ?, updated_time = ?
+                    WHERE id = ?
+                    """,
+                    (day, days, advance, now, clean),
+                )
+                if cur.rowcount:
+                    updated += 1
+                else:
+                    missing += 1
+            self._conn.commit()
+        return {"updated": updated, "missing": missing}
 
     def batch_create_followups(
         self,

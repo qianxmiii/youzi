@@ -197,6 +197,138 @@ def matches_scope(
     return True
 
 
+DEFAULT_USD_CNY_RATE = 6.6
+
+
+def _line_amount(line: dict[str, Any], *keys: str) -> float | None:
+    for key in keys:
+        raw = line.get(key)
+        if raw is None or raw == "":
+            continue
+        try:
+            return float(raw)
+        except (TypeError, ValueError):
+            return None
+    return None
+
+
+def _line_text(line: dict[str, Any], *keys: str) -> str:
+    for key in keys:
+        raw = line.get(key)
+        if raw is None:
+            continue
+        text = str(raw).strip()
+        if text:
+            return text
+    return ""
+
+
+def normalize_money_code(currency: str | None) -> str:
+    code = (currency or "").strip().upper()
+    return "CNY" if code == "RMB" else code
+
+
+def usd_cny_rate(value: Any) -> float:
+    try:
+        rate = float(value)
+    except (TypeError, ValueError):
+        return DEFAULT_USD_CNY_RATE
+    return rate if rate > 0 else DEFAULT_USD_CNY_RATE
+
+
+def quote_selling_total(lines: list[dict[str, Any]] | None) -> tuple[float | None, str]:
+    """当前报价：同一币种的渠道总价相加。"""
+    buckets: dict[str, float] = {}
+    counts: dict[str, int] = {}
+    for line in lines or []:
+        amount = _line_amount(line, "quotedAmount", "quoted_amount")
+        if amount is None:
+            continue
+        currency = normalize_money_code(_line_text(line, "quotedCurrency", "quoted_currency"))
+        buckets[currency] = buckets.get(currency, 0.0) + amount
+        counts[currency] = counts.get(currency, 0) + 1
+    if not buckets:
+        return None, ""
+    currency = max(buckets, key=lambda code: (counts[code], abs(buckets[code])))
+    return buckets[currency], currency
+
+
+def quote_profit_money(
+    rate: Any,
+    profit_unit: str | None,
+    lines: list[dict[str, Any]] | None,
+    selling_currency: str | None,
+    exchange_rate: Any,
+) -> tuple[float | None, str]:
+    """人民币利润单价乘计费重。报价币种是美元时再除以汇率。"""
+    total = quote_profit_total(rate, profit_unit, lines)
+    if total is None:
+        return None, ""
+    currency = normalize_money_code(selling_currency)
+    if currency == "USD":
+        return total / usd_cny_rate(exchange_rate), "USD"
+    return total, "CNY"
+
+
+def quote_profit_rate(
+    profit_amount: Any,
+    profit_currency: str | None,
+    selling_amount: Any,
+    selling_currency: str | None,
+) -> float | None:
+    """利润率 = 利润合计 / 当前报价。两边币种必须相同。"""
+    if profit_amount is None or selling_amount is None:
+        return None
+    try:
+        profit = float(profit_amount)
+        selling = float(selling_amount)
+    except (TypeError, ValueError):
+        return None
+    if selling == 0:
+        return None
+    if normalize_money_code(profit_currency) != normalize_money_code(selling_currency):
+        return None
+    return round(profit / selling * 100, 2)
+
+
+def quote_profit_total(
+    rate: Any,
+    profit_unit: str | None,
+    lines: list[dict[str, Any]] | None,
+) -> float | None:
+    """利润备注是单价。总利润 = 单价 × 计费重。单位对不上时仍用各行计费重。"""
+    if rate is None or rate == "":
+        return None
+    try:
+        rate_value = float(rate)
+    except (TypeError, ValueError):
+        return None
+    unit = (profit_unit or "").strip().upper()
+    if unit not in {"RMB/KG", "RMB/CBM"}:
+        return None
+    want = "cbm" if unit.endswith("CBM") else "kg"
+    matched: list[float] = []
+    every: list[float] = []
+    for line in lines or []:
+        raw = line.get("chargeWeightKg")
+        if raw is None:
+            raw = line.get("charge_weight_kg")
+        if raw is None or raw == "":
+            continue
+        try:
+            qty = float(raw)
+        except (TypeError, ValueError):
+            continue
+        every.append(qty)
+        basis = str(line.get("priceBasis") or line.get("price_basis") or "").strip().lower()
+        if not basis or basis == want:
+            matched.append(qty)
+    chosen = matched or every
+    if not chosen:
+        return None
+    return rate_value * sum(chosen)
+
+
 def quote_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
     urgency = item.get("_urgency") or "other"
     order = URGENCY_SORT.get(str(urgency), 99)

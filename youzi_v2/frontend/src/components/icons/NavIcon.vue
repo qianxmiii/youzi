@@ -22,6 +22,7 @@ import {
   Truck,
   TriangleAlert,
   Users,
+  Workflow,
   Wrench,
 } from 'lucide-vue-next'
 import type { LucideProps } from 'lucide-vue-next'
@@ -59,6 +60,7 @@ const ICONS: Record<string, FunctionalComponent<LucideProps>> = {
   wallet: CircleDollarSign,
   download: Download,
   wrench: Wrench,
+  workflow: Workflow,
 }
 
 const Icon = computed(() => ICONS[props.name] ?? Star)

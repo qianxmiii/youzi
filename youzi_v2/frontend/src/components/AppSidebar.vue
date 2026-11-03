@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { ChevronDown, ChevronLeft } from 'lucide-vue-next'
 import { NTooltip } from 'naive-ui'
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import NavIcon from '@/components/icons/NavIcon.vue'
 import { ICON_STROKE, ICON_STROKE_NAV } from '@/constants/icons'
 import { navGroups, type NavItem } from '@/constants/navigation'
 import { useNavGroupsExpanded } from '@/composables/useNavGroupsExpanded'
+import { useOrderFlowTodoCount } from '@/composables/useOrderFlowTodoCount'
 import { usePendingPaymentReminderCount } from '@/composables/usePendingPaymentReminderCount'
 import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
 import { usePendingTrackingTimeReviewCount } from '@/composables/usePendingTrackingTimeReviewCount'
@@ -21,11 +22,20 @@ const { pendingShipmentSlaAlertCount, refreshPendingShipmentSlaAlertCount } =
   usePendingShipmentSlaAlertCount()
 const { pendingPaymentReminderCount, refreshPendingPaymentReminderCount } =
   usePendingPaymentReminderCount()
+const { orderFlowTodoCount, refreshOrderFlowTodoCount } = useOrderFlowTodoCount()
+
+let orderFlowTimer: ReturnType<typeof setInterval> | null = null
 
 onMounted(() => {
   void refreshPendingTrackingTimeReviewCount()
   void refreshPendingShipmentSlaAlertCount()
   void refreshPendingPaymentReminderCount()
+  void refreshOrderFlowTodoCount()
+  orderFlowTimer = setInterval(() => void refreshOrderFlowTodoCount(), 60000)
+})
+
+onUnmounted(() => {
+  if (orderFlowTimer) clearInterval(orderFlowTimer)
 })
 
 const flatItems = computed(() =>
@@ -79,6 +89,7 @@ function pendingNavCount(path: string) {
   if (path === '/approvals/tracking-time') return pendingTrackingTimeReviewCount.value
   if (path === '/shipment-exceptions') return pendingShipmentSlaAlertCount.value
   if (path === '/shipments/payment-reminders') return pendingPaymentReminderCount.value
+  if (path === '/order-flow') return orderFlowTodoCount.value
   return 0
 }
 
@@ -86,6 +97,7 @@ function pendingNavHint(path: string, count: number) {
   if (path === '/approvals/tracking-time') return `${count} 待审`
   if (path === '/shipment-exceptions') return `${count} 待办`
   if (path === '/shipments/payment-reminders') return `${count} 待催`
+  if (path === '/order-flow') return `${count} 个待处理`
   return `${count}`
 }
 
@@ -176,6 +188,7 @@ function groupPendingCount(groupLabel: string) {
                   :aria-expanded="settingsMenuOpen || submenuHasActive(item)"
                   @click="settingsMenuOpen = !(settingsMenuOpen || submenuHasActive(item))"
                 >
+                  <NavIcon :name="item.icon" />
                   <span class="min-w-0 flex-1 truncate text-left">{{ item.name }}</span>
                   <ChevronDown
                     class="nav-group-chevron shrink-0"
@@ -198,6 +211,7 @@ function groupPendingCount(groupLabel: string) {
                     class="nav-item nav-item--child"
                     :class="{ 'nav-item-active': isActive(child.to) }"
                   >
+                    <NavIcon :name="child.icon" />
                     <span class="flex-1 truncate">{{ child.name }}</span>
                   </RouterLink>
                 </div>
@@ -208,6 +222,7 @@ function groupPendingCount(groupLabel: string) {
                 class="nav-item nav-item--child"
                 :class="{ 'nav-item-active': isActive(item.to) }"
               >
+                <NavIcon :name="item.icon" />
                 <span class="flex-1 truncate">{{ item.name }}</span>
                 <span
                   v-if="pendingNavCount(item.to) > 0"

@@ -9,6 +9,12 @@ export interface ChannelSlaRule {
   carrierCode: string
   startField: string
   estimatedDays: number
+  estimatedDaysMin?: number
+  postArrivalDaysMin?: number
+  postArrivalDaysMax?: number
+  estimatedDaysMax?: number
+  dwEarlyDays?: number
+  dwLateDays?: number
   warningDays: number
   severeOverdueDays: number
   enabled: boolean
@@ -18,7 +24,13 @@ export interface ChannelSlaRule {
 }
 
 export interface ChannelSlaRulePayload {
-  estimatedDays: number
+  estimatedDays?: number
+  estimatedDaysMin?: number
+  postArrivalDaysMin?: number
+  postArrivalDaysMax?: number
+  estimatedDaysMax?: number
+  dwEarlyDays?: number
+  dwLateDays?: number
   carrierCode?: string
   startField?: string
   warningDays?: number

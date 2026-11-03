@@ -299,7 +299,7 @@ class DpsExportJobCreateIn(BaseModel):
     export_type: str = Field(
         ...,
         validation_alias=AliasChoices("exportType", "export_type"),
-        description="cargo|mark|markSplit|markRename|packinglist|warehouseform|warehouseEntry|warehouseEntryPdf",
+        description="cargo|mark|markSplit|markRename|markSelf|packinglist|warehouseform|warehouseEntry|warehouseEntryPdf",
     )
     ids: list[str] = Field(
         ...,

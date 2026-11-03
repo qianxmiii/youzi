@@ -13,17 +13,20 @@ from .mark_pdf_split import (
 )
 
 
-def build_dps_mark_split_download(
+def prepare_dps_mark_split_parts(
     repo: ShipmentsRepository,
     config_path: Path,
     shipment_id: str,
     segments_raw: str | list[int],
     *,
     progress_cb=None,
-) -> tuple[bytes, str, str]:
+) -> tuple[str, list[tuple[str, bytes]], int]:
+    """下载并拆分单票唛头。返回 (运单号, [(文件名, PDF)], 合计件数)。"""
+
     def report(p: int, msg: str) -> None:
         if progress_cb:
             progress_cb(p, msg)
+
     sid = (shipment_id or "").strip()
     if not sid:
         raise ValueError("运单 id 不能为空")
@@ -46,7 +49,28 @@ def build_dps_mark_split_download(
 
     report(38, f"正在按 {len(segments)} 段拆分 PDF…")
     parts = split_mark_pdf_segments(downloaded.content, shipment_no, segments)
-    total = sum(segments)
+    return shipment_no, parts, sum(segments)
+
+
+def build_dps_mark_split_download(
+    repo: ShipmentsRepository,
+    config_path: Path,
+    shipment_id: str,
+    segments_raw: str | list[int],
+    *,
+    progress_cb=None,
+) -> tuple[bytes, str, str]:
+    def report(p: int, msg: str) -> None:
+        if progress_cb:
+            progress_cb(p, msg)
+
+    shipment_no, parts, total = prepare_dps_mark_split_parts(
+        repo,
+        config_path,
+        shipment_id,
+        segments_raw,
+        progress_cb=progress_cb,
+    )
     report(78, "正在打包拆分唛头…")
     content, filename = zip_mark_split_files(shipment_no, parts, total_ctns=total)
     report(95, "即将完成…")

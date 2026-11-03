@@ -13,6 +13,8 @@ export interface Channel {
   isActive: boolean
   /** 渠道默认运输时效（ATD + 预估天数）；未配置时为 null */
   slaEstimatedDays?: number | null
+  slaEstimatedDaysMin?: number | null
+  slaEstimatedDaysMax?: number | null
   slaEnabled?: boolean | null
   createdTime: string
   updatedTime: string

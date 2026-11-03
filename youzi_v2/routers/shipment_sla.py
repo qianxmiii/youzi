@@ -20,6 +20,11 @@ def upsert_channel_sla_rule(code: str, body: ChannelSlaRuleIn):
         row = channel_sla_rules_repo.upsert_rule(
             channel_code=code,
             estimated_days=body.estimated_days,
+            estimated_days_min=body.estimated_days_min,
+            post_arrival_days_min=body.post_arrival_days_min,
+            post_arrival_days_max=body.post_arrival_days_max,
+            dw_early_days=body.dw_early_days,
+            dw_late_days=body.dw_late_days,
             carrier_code=body.carrier_code,
             start_field=body.start_field,
             warning_days=body.warning_days,

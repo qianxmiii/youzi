@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { fetchHealth, fetchLegacyHealth } from '@/api/client'
 import AppMessageBell from '@/components/AppMessageBell.vue'
+import AppOrderFlowBell from '@/components/AppOrderFlowBell.vue'
 import AppTodoBell from '@/components/AppTodoBell.vue'
 import WorldClockBar from '@/components/header/WorldClockBar.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
@@ -62,6 +63,7 @@ onMounted(async () => {
     <WorldClockBar class="min-w-0 w-full max-w-full justify-self-stretch" />
 
     <div class="relative z-20 flex shrink-0 items-center gap-2 justify-self-end">
+      <AppOrderFlowBell />
       <AppTodoBell />
       <AppMessageBell />
       <span class="status-pill">

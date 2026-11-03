@@ -26,6 +26,11 @@ import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentException
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
 import ShipmentAmazonRefModal from '@/components/shipments/ShipmentAmazonRefModal.vue'
+import ShipmentDeliveryWindowModal from '@/components/shipments/ShipmentDeliveryWindowModal.vue'
+import ShipmentOrderProductsModal from '@/components/shipments/ShipmentOrderProductsModal.vue'
+import ShipmentProductCtnsCheckModal from '@/components/shipments/ShipmentProductCtnsCheckModal.vue'
+import { getDeliveryWindow } from '@/api/deliveryWindow'
+import { prepareShipmentDWCopy } from '@/utils/deliveryWindowCopy'
 import ShipmentFilterSummaryBar from '@/components/shipments/ShipmentFilterSummaryBar.vue'
 import ShipmentAdvancedFilterDrawer from '@/components/shipments/ShipmentAdvancedFilterDrawer.vue'
 import ShipmentColumnSettingsDrawer from '@/components/shipments/ShipmentColumnSettingsDrawer.vue'
@@ -92,7 +97,6 @@ import {
 import {
   applyPreportListColumnKeys,
   defaultStatusFilterForWorkspace,
-  PRE_PORT_STATUS_CODES,
   PRE_PORT_STATUS_FILTER_CODES,
   PREPORT_EXCLUDED_COLUMN_KEYS,
   SHIPMENT_STATUS_LABEL_ZH,
@@ -2282,6 +2286,10 @@ function handleDownloadSelectedMarkData() {
   void runDpsExportDownload('mark', '唛头已下载', '下载唛头失败')
 }
 
+function handleDownloadSelectedMarkSelf() {
+  void runDpsExportDownload('markSelf', '自生成唛头已下载', '下载自生成唛头失败')
+}
+
 const markSplitSpecInput = ref('')
 
 function handleDownloadSelectedMarkSplit() {
@@ -2398,6 +2406,7 @@ const downloadDropdownOptions: DropdownOption[] = [
   { label: '唛头', key: 'mark' },
   { label: '唛头（重命名）', key: 'markRename' },
   { label: '唛头（拆分）', key: 'markSplit' },
+  { label: '唛头（自生成）', key: 'markSelf' },
   { label: '箱单发票', key: 'packinglist' },
   { label: '进仓单', key: 'warehouseEntry' },
   { label: '进仓单（PDF）', key: 'warehouseEntryPdf' },
@@ -2409,6 +2418,7 @@ function handleDownloadMenuSelect(key: string | number) {
   else if (key === 'mark') handleDownloadSelectedMarkData()
   else if (key === 'markRename') handleDownloadSelectedMarkRename()
   else if (key === 'markSplit') handleDownloadSelectedMarkSplit()
+  else if (key === 'markSelf') handleDownloadSelectedMarkSelf()
   else if (key === 'packinglist') handleDownloadSelectedPackinglist()
   else if (key === 'warehouseEntry') void handleDownloadSelectedWarehouseEntry('xlsx')
   else if (key === 'warehouseEntryPdf') void handleDownloadSelectedWarehouseEntry('pdf')
@@ -2700,18 +2710,86 @@ async function copySelectedPreportShipmentData() {
   }
 }
 
+const deliveryWindowShow = ref(false)
+const deliveryWindowRow = ref<Shipment | null>(null)
+const orderProductsShow = ref(false)
+const orderProductsRow = ref<Shipment | null>(null)
+const productCtnsCheckShow = ref(false)
+const productCtnsCheckIds = ref<string[]>([])
+const PRODUCT_CTNS_CHECK_LIMIT = 50
+
+function openProductCtnsCheck() {
+  const ids = selectedRows.value.map((row) => row.id)
+  if (!ids.length) {
+    message.warning('请先勾选运单')
+    return
+  }
+  if (ids.length > PRODUCT_CTNS_CHECK_LIMIT) {
+    message.warning(`单次最多核对 ${PRODUCT_CTNS_CHECK_LIMIT} 票`)
+    return
+  }
+  productCtnsCheckIds.value = ids
+  productCtnsCheckShow.value = true
+}
+
+function openOrderProducts(row: Shipment) {
+  if (!row.waybillId?.trim()) {
+    message.warning('无 DPS 运单 ID，请先更新运单')
+    return
+  }
+  orderProductsRow.value = row
+  orderProductsShow.value = true
+}
+const copyingDW = ref(false)
+function openDeliveryWindow() {
+  if (selectedRows.value.length !== 1) { message.warning('请只选择一条运单'); return }
+  deliveryWindowRow.value = selectedRows.value[0] ?? null
+  deliveryWindowShow.value = true
+}
+async function copySelectedDW() {
+  if (copyingDW.value) return
+  const rows = selectedRows.value.map(row => ({ ...row }))
+  if (!rows.length) { message.warning('请先勾选运单'); return }
+  copyingDW.value = true
+  try {
+    const result = await prepareShipmentDWCopy(rows, getDeliveryWindow)
+    if (result.failures.length) {
+      const first = result.failures[0]!
+      dialog.warning({
+        title: `${result.failures.length} 票DW需核对，本次未复制`,
+        content: result.failures.slice(0, 10).map(item => `${item.row.shipmentNo}：${item.reason}`).join('\n')
+          + (result.failures.length > 10 ? `\n另有 ${result.failures.length - 10} 票需核对。` : ''),
+        positiveText: '查看首票设置',
+        negativeText: '关闭',
+        onPositiveClick: () => {
+          deliveryWindowRow.value = first.row
+          deliveryWindowShow.value = true
+        },
+      })
+      return
+    }
+    await navigator.clipboard.writeText(result.text)
+    message.success(`已复制 ${rows.length} 票运单明细及DW`)
+  } catch { message.error('复制DW失败，请检查浏览器权限后重试') }
+  finally { copyingDW.value = false }
+}
+
 const copyDropdownOptions = computed((): DropdownOption[] => {
   const items: DropdownOption[] = [
-    { label: '运单明细', key: 'detailSummary' },
-    ...(isPreportWorkspace.value ? [{ label: '数据', key: 'preportData' }] : []),
+    { label: '复制DW', key: 'deliveryWindowCopy', disabled: selectedRows.value.length === 0 || copyingDW.value },
+    { label: 'DW窗口设置', key: 'deliveryWindowSettings', disabled: selectedRows.value.length !== 1 },
+    { label: '数据', key: 'preportData' },
     { label: '最新轨迹', key: 'latestTracking' },
     { label: '转单号', key: 'trackingNumbers' },
+    { label: '运单明细', key: 'detailSummary' },
   ]
   return items
 })
 
 function handleCopyMenuSelect(key: string | number) {
-  if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
+  if (key === 'deliveryWindowCopy') void copySelectedDW()
+  else if (key === 'deliveryWindowSettings') openDeliveryWindow()
+  else if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
   else if (key === 'preportData') void copySelectedPreportShipmentData()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
@@ -2825,28 +2903,44 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     align: 'center',
     ellipsis: { tooltip: true },
     render: (row) => {
+      const busy = syncingRouteStatusRowId.value === row.id
+      const hasWaybill = Boolean(row.waybillId?.trim())
+      const title = busy
+        ? '正在更新明细状态…'
+        : hasWaybill
+          ? '点击更新明细状态'
+          : '无 DPS 运单 ID，需先更新运单'
+      const onClick = (e: MouseEvent) => {
+        e.stopPropagation()
+        void handleSyncRowRouteStatus(row)
+      }
       if (isPreportWorkspace.value) {
         const label = shipmentStatusLabel(row.statusCode)
         return h(
-          'span',
+          'button',
           {
+            type: 'button',
             class: [
               'shipment-status-badge',
+              'shipment-status-badge--clickable',
               dpsPreportStatusBadgeClass(row.statusCode),
+              { 'shipment-status-badge--loading': busy },
             ],
+            disabled: busy || syncingRouteStatus.value,
+            title,
+            'aria-label': `明细状态 ${label}，点击更新`,
+            onClick,
           },
           label,
         )
       }
-      const busy = syncingRouteStatusRowId.value === row.id
-      const hasWaybill = Boolean(row.waybillId?.trim())
       const { label, toneClass, tipExtra } = resolveShipmentListStatusDisplay({
         statusCode: row.statusCode,
         routeStatus: row.routeStatus,
         routeStatusLabelByCode: routeStatusLabelByCode.value,
         coarseStatusLabel: statusLabel,
       })
-      const title = busy
+      const transitTitle = busy
         ? '正在更新明细状态…'
         : hasWaybill
           ? `${tipExtra}点击更新明细状态`
@@ -2862,12 +2956,9 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
             { 'shipment-status-badge--loading': busy },
           ],
           disabled: busy || syncingRouteStatus.value,
-          title,
+          title: transitTitle,
           'aria-label': `明细状态 ${label}，点击更新`,
-          onClick: (e: MouseEvent) => {
-            e.stopPropagation()
-            void handleSyncRowRouteStatus(row)
-          },
+          onClick,
         },
         label,
       )
@@ -2976,7 +3067,7 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
       const n = Number(v)
       const text = Number.isInteger(n)
         ? String(n)
-        : String(Number(n.toFixed(3)).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, ''))
+        : String(Number(n.toFixed(3)))
       return h('span', { class: 'shipment-charged-weight' }, text)
     },
   },
@@ -3032,9 +3123,26 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
   productName: {
     title: '品名',
     key: 'productName',
-    width: 120,
+    width: 140,
     ellipsis: { tooltip: true },
-    render: (row) => displayField(row.productName) || '—',
+    render: (row) => {
+      const label = displayField(row.productName) || '查看产品'
+      const hasWaybill = Boolean(row.waybillId?.trim())
+      return h(
+        NButton,
+        {
+          text: true,
+          size: 'small',
+          type: 'primary',
+          title: hasWaybill ? '点击查看运单产品' : '无 DPS 运单 ID，需先更新运单',
+          onClick: (event: MouseEvent) => {
+            event.stopPropagation()
+            openOrderProducts(row)
+          },
+        },
+        { default: () => label },
+      )
+    },
   },
   originWarehouseCode: {
     title: '收货仓',
@@ -3330,10 +3438,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
               size="small"
               class="shipments-filter-shipment-no"
             />
-            <span
-              v-if="shipmentNoTokens.length > 0"
-              class="mt-1 shrink-0 rounded bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-200"
-            >
+            <span v-if="shipmentNoTokens.length > 0" class="shipment-no-count">
               {{ shipmentNoTokens.length }} 个单号
             </span>
           </div>
@@ -3508,6 +3613,13 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             复制
           </NButton>
         </NDropdown>
+        <NButton
+          size="small"
+          title="核对选中运单的产品箱数与运单件数，最多 50 票"
+          @click="openProductCtnsCheck"
+        >
+          核对件数
+        </NButton>
         <NDropdown
           trigger="hover"
           :options="subscribeDropdownOptions"
@@ -3579,7 +3691,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
           <NButton
             size="small"
             :loading="downloadingDpsExport"
-            title="DPS 货箱 / 唛头 / 唛头（重命名）/ 箱单发票（需 waybillId）"
+            title="DPS 货箱 / 唛头 / 唛头（重命名）/ 箱单发票（需 waybillId）；唛头（自生成）本地出 PDF"
             @click="handleDownloadSelectedCargoData"
           >
             下载
@@ -3666,6 +3778,10 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       @close="modalShow = false"
       @submit="handleFormSubmit"
     />
+
+    <ShipmentDeliveryWindowModal v-model:show="deliveryWindowShow" :shipment="deliveryWindowRow" />
+    <ShipmentOrderProductsModal v-model:show="orderProductsShow" :shipment="orderProductsRow" />
+    <ShipmentProductCtnsCheckModal v-model:show="productCtnsCheckShow" :ids="productCtnsCheckIds" />
 
     <ShipmentAmazonRefModal
       :show="amazonRefShow"
@@ -3783,6 +3899,19 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   min-width: 0;
   align-items: flex-start;
   gap: 0.5rem;
+}
+
+.shipment-no-count {
+  margin-top: 0.25rem;
+  flex-shrink: 0;
+  border-radius: 0.375rem;
+  border: 1px solid rgb(196 181 253 / 0.7);
+  background: rgb(139 92 246 / 0.28);
+  padding: 0.125rem 0.5rem;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  color: #ede9fe;
 }
 
 .shipments-filters-bar .shipments-filter-shipment-no {
@@ -4152,5 +4281,13 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 /* Naive 滚动条圆角、弱化轨道占位 */
 .shipments-table-panel :deep(.n-scrollbar-rail__scrollbar) {
   border-radius: 9999px !important;
+}
+</style>
+
+<style>
+[data-theme='light'] .shipment-no-count {
+  border-color: rgb(109 40 217 / 0.45);
+  background: rgb(109 40 217 / 0.14);
+  color: #4c1d95;
 }
 </style>

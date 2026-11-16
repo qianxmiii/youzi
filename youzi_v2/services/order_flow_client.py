@@ -15,9 +15,9 @@ ORDERS_KEY = "dps_ddlz_getOrders"
 _MAX_PAGES = 40
 
 
-def load_order_flow_config(config_path: Path) -> dict[str, Any]:
+def load_order_flow_config(config_path: Path, config_key: str = ORDERS_KEY) -> dict[str, Any]:
     config = load_config_json(config_path)
-    block = config.get(ORDERS_KEY)
+    block = config.get(config_key)
     if not isinstance(block, dict):
         block = {}
     raw_auth = config.get(AUTH_KEY) or block.get("Authorization") or block.get("authorization")
@@ -41,10 +41,10 @@ def load_order_flow_config(config_path: Path) -> dict[str, Any]:
     }
 
 
-def require_order_flow_config(config_path: Path) -> dict[str, Any]:
-    cfg = load_order_flow_config(config_path)
+def require_order_flow_config(config_path: Path, config_key: str = ORDERS_KEY) -> dict[str, Any]:
+    cfg = load_order_flow_config(config_path, config_key)
     if not cfg["url"]:
-        raise ValueError(f"config.json 缺少 {ORDERS_KEY}.url")
+        raise ValueError(f"config.json 缺少 {config_key}.url")
     if not cfg["authorization"]:
         raise ValueError(f"config.json 缺少 {AUTH_KEY}")
     return cfg
@@ -68,21 +68,23 @@ def parse_orders_page(body: Any) -> tuple[list[dict[str, Any]], int]:
     if code not in (200, "200", 0, "0"):
         raise ValueError(body.get("msg") or f"订单流转查询失败 code={code}")
     rows = body.get("rows")
-    if rows is None:
-        rows = []
     if not isinstance(rows, list):
         raise ValueError("订单流转 rows 不是数组")
-    clean = [row for row in rows if isinstance(row, dict)]
+    if any(not isinstance(row, dict) or not str(row.get("waybillNo") or "").strip() for row in rows):
+        raise ValueError("订单流转包含无效订单，保留原快照")
+    clean = rows
     total_raw = body.get("total")
     try:
-        total = int(total_raw) if total_raw is not None else len(clean)
+        total = int(total_raw)
     except (TypeError, ValueError):
-        total = len(clean)
-    return clean, max(total, 0)
+        raise ValueError("订单流转缺少有效 total，保留原快照")
+    if total < 0:
+        raise ValueError("订单流转 total 无效")
+    return clean, total
 
 
-def fetch_order_flow_rows(config_path: Path) -> list[dict[str, Any]]:
-    cfg = require_order_flow_config(config_path)
+def fetch_order_flow_rows(config_path: Path, config_key: str = ORDERS_KEY) -> list[dict[str, Any]]:
+    cfg = require_order_flow_config(config_path, config_key)
     headers = {"Authorization": cfg["authorization"], "Accept": "application/json"}
     collected: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -113,6 +115,8 @@ def fetch_order_flow_rows(config_path: Path) -> list[dict[str, Any]]:
             seen.add(key)
             collected.append(row)
             added += 1
-        if not rows or added == 0 or len(collected) >= total:
-            break
-    return collected
+        if len(collected) == total:
+            return collected
+        if not rows or added == 0 or len(collected) > total:
+            raise ValueError("订单流转分页不完整，保留原快照")
+    raise ValueError("订单流转超过分页上限，保留原快照")

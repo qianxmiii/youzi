@@ -121,3 +121,10 @@ export function updateOrderFlowSettings(enabled: boolean) {
     { method: 'PUT', body: { enabled } },
   )
 }
+
+export function listPendingSalesFees() {
+  return api<{ items: OrderFlowItem[]; total: number; orderFlowPollEnabled: boolean }>('/api/v1/pending-sales-fees')
+}
+export function refreshPendingSalesFees() {
+  return api<{ skipped: boolean; reason: string; remote?: number }>('/api/v1/pending-sales-fees/refresh', { method: 'POST', timeout: 120000 })
+}

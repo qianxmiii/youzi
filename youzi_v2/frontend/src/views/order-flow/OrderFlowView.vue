@@ -2,7 +2,10 @@
 import { NButton, NCheckbox, NDrawer, NDrawerContent, NInput, NPopover, NSelect, NSwitch, NTag, useMessage } from 'naive-ui'
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import { useNow } from '@vueuse/core'
 import {
+  listPendingSalesFees,
+  refreshPendingSalesFees,
   getOrderFlowLogs,
   getOrderFlowSummary,
   listOrderFlow,
@@ -20,13 +23,16 @@ import {
 } from '@/api/orderFlow'
 import { useOrderFlowTodoCount } from '@/composables/useOrderFlowTodoCount'
 import { apiErrorMessage } from '@/utils/apiError'
-import { formatRelativeTime } from '@/utils/formatDateTime'
+import { formatRelativeTime, parseDateTimeInput } from '@/utils/formatDateTime'
 
 const route = useRoute()
 const message = useMessage()
 const { refreshOrderFlowTodoCount } = useOrderFlowTodoCount()
 
-const scope = ref<OrderFlowScope>('mine')
+const scope = ref<OrderFlowScope | 'fees'>('mine')
+const feeItems = ref<OrderFlowItem[]>([])
+const feeCount = ref(0)
+let loadVersion = 0
 const search = ref('')
 const items = ref<OrderFlowItem[]>([])
 const loading = ref(false)
@@ -56,7 +62,8 @@ const logLoading = ref<Record<string, boolean>>({})
 const listSeenAt = ref<string | null>(null)
 let visitOpen = false
 
-const scopes: { value: OrderFlowScope; label: string }[] = [
+const scopes: { value: OrderFlowScope | 'fees'; label: string }[] = [
+  { value: 'fees', label: '待销售确认费用' },
   { value: 'remind', label: '提醒' },
   { value: 'mine', label: '待处理' },
   { value: 'active', label: '流转中' },
@@ -72,6 +79,15 @@ const someChecked = computed(
 )
 
 async function loadFilters() {
+  if (scope.value === 'fees') {
+    const values = (key: keyof OrderFlowItem) => [...new Set(feeItems.value.map(x => String(x[key] || '')).filter(Boolean))].sort()
+    customers.value = values('customerName')
+    warehouses.value = values('warehouseName')
+    countries.value = values('countryName')
+    channels.value = values('channelName')
+    statuses.value = values('currentStatus')
+    return
+  }
   try {
     const [statusRes, customerRes, warehouseRes, countryRes, channelRes] = await Promise.all([
       listOrderFlowStatuses(),
@@ -117,8 +133,22 @@ function leaveVisit() {
   void markOrderFlowListSeen()
 }
 
+const operationNow = useNow({ interval: 60_000 })
+
+function operateAgeClass(value: string) {
+  const date = parseDateTimeInput(value)
+  if (!date) return ''
+  const age = operationNow.value.getTime() - date.getTime()
+  if (age < 0) return ''
+  const day = 24 * 60 * 60 * 1000
+  if (age <= day) return 'operate-age--day'
+  if (age <= 3 * day) return 'operate-age--three'
+  if (age <= 7 * day) return 'operate-age--week'
+  return 'operate-age--older'
+}
+
 function operateLabel(value: string) {
-  return formatRelativeTime(value)?.relative || showText(value)
+  return formatRelativeTime(value, operationNow.value)?.relative || showText(value)
 }
 
 function currentLogIndex(row: OrderFlowItem, items: OrderFlowLog[]) {
@@ -162,8 +192,27 @@ async function openLogs(waybillNo: string) {
 }
 
 async function load() {
+  const version = ++loadVersion
   loading.value = true
   try {
+    if (scope.value === 'fees') {
+      const res = await listPendingSalesFees()
+      if (version !== loadVersion) return
+      feeItems.value = res.items
+      feeCount.value = res.total
+      const term = search.value.trim().toLowerCase()
+      if (version !== loadVersion) return
+    items.value = res.items.filter(row =>
+        (!term || row.waybillNo.toLowerCase().includes(term)) &&
+        (!statusFilter.value || row.currentStatus === statusFilter.value) &&
+        (!customerFilter.value || row.customerName === customerFilter.value) &&
+        (!warehouseFilter.value || row.warehouseName === warehouseFilter.value) &&
+        (!countryFilter.value || row.countryName === countryFilter.value) &&
+        (!channelFilter.value.length || channelFilter.value.includes(row.channelName)))
+      pollEnabled.value = res.orderFlowPollEnabled
+      await loadFilters()
+      return
+    }
     const res = await listOrderFlow({
       scope: scope.value,
       search: search.value.trim() || undefined,
@@ -173,6 +222,7 @@ async function load() {
       country: countryFilter.value || undefined,
       channel: channelFilter.value.length ? channelFilter.value : undefined,
     })
+    if (version !== loadVersion) return
     items.value = res.items
     logCache.value = {}
     mineCount.value = res.mineCount
@@ -184,14 +234,26 @@ async function load() {
   } catch (error) {
     message.error(apiErrorMessage(error, '加载失败'))
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
 async function onRefresh() {
   refreshing.value = true
   try {
+    if (scope.value === 'fees') {
+      const result = await refreshPendingSalesFees()
+      if (result.skipped) message.info('正在同步，请稍后刷新列表')
+      else message.success(`已刷新：待确认 ${result.remote ?? 0} 条`)
+      await load()
+      return
+    }
     const res = await refreshOrderFlow()
+    if (res.skipped) {
+      message.info('正在同步，请稍后刷新列表')
+      await load()
+      return
+    }
     message.success(
       `已刷新：新增 ${res.created ?? 0}，状态变化 ${res.changed ?? 0}，结束 ${res.ended ?? 0}`,
     )
@@ -248,13 +310,20 @@ async function copySelected() {
 
 function applyScopeQuery() {
   const value = String(route.query.scope || '')
-  if (value === 'mine' || value === 'active' || value === 'ended' || value === 'all' || value === 'remind') {
+  if (value === 'fees' || value === 'mine' || value === 'active' || value === 'ended' || value === 'all' || value === 'remind') {
     scope.value = value
   }
   statusFilter.value = String(route.query.status || '') || null
 }
 
-function selectScope(value: OrderFlowScope) {
+function selectScope(value: OrderFlowScope | 'fees') {
+  selected.value = []
+  customerFilter.value = null
+  warehouseFilter.value = null
+  countryFilter.value = null
+  channelFilter.value = []
+  search.value = ''
+  void loadFilters()
   statusFilter.value = null
   scope.value = value
 }
@@ -266,6 +335,7 @@ watch(() => [route.query.scope, route.query.status], applyScopeQuery)
 onMounted(() => {
   applyScopeQuery()
   void loadFilters()
+  void listPendingSalesFees().then(res => { feeCount.value = res.total }).catch(() => {})
   void load()
   void enterVisit()
 })
@@ -301,7 +371,8 @@ onUnmounted(leaveVisit)
           @click="selectScope(item.value)"
         >
           {{ item.label }}
-          <span v-if="item.value === 'remind'"> {{ changedCount }}</span>
+          <span v-if="item.value === 'fees'"> {{ feeCount }}</span>
+          <span v-else-if="item.value === 'remind'"> {{ changedCount }}</span>
           <span v-else-if="item.value === 'mine'"> {{ mineCount }}</span>
           <span v-else-if="item.value === 'active'"> {{ activeCount }}</span>
           <span v-else-if="item.value === 'ended'"> {{ endedCount }}</span>
@@ -408,7 +479,7 @@ onUnmounted(leaveVisit)
                 />
               </td>
               <td class="px-3 py-2 font-medium">
-                <button type="button" class="text-left text-[var(--color-accent-text)] hover:underline" @click="openLogs(row.waybillNo)">
+                <button type="button" class="text-left text-[var(--color-accent-text)] hover:underline" @click="scope !== 'fees' && openLogs(row.waybillNo)">
                   {{ row.waybillNo }}
                 </button>
               </td>
@@ -425,13 +496,14 @@ onUnmounted(leaveVisit)
               <td class="px-3 py-2">{{ showText(row.channelName) }}</td>
               <td class="whitespace-nowrap px-3 py-2">
                 <NPopover
+                  :disabled="scope === 'fees'"
                   trigger="hover"
                   placement="left-start"
                   :show-arrow="false"
-                  @update:show="(show) => show && ensureLogs(row.waybillNo)"
+                  @update:show="(show) => show && scope !== 'fees' && ensureLogs(row.waybillNo)"
                 >
                   <template #trigger>
-                    <span class="cursor-default border-b border-dashed border-[var(--color-border)]">
+                    <span class="cursor-default border-b border-dashed border-[var(--color-border)]" :class="operateAgeClass(row.lastOperateTime)" :title="row.lastOperateTime">
                       {{ operateLabel(row.lastOperateTime) }}
                     </span>
                   </template>
@@ -613,4 +685,15 @@ onUnmounted(leaveVisit)
   line-height: 16px;
   color: var(--color-accent-hover);
 }
+</style>
+
+<style scoped>
+.operate-age--day { color: #15803d; }
+.operate-age--three { color: #2563eb; }
+.operate-age--week { color: #b45309; }
+.operate-age--older { color: #dc2626; font-weight: 600; }
+[data-theme='dark'] .operate-age--day { color: #4ade80; }
+[data-theme='dark'] .operate-age--three { color: #60a5fa; }
+[data-theme='dark'] .operate-age--week { color: #fbbf24; }
+[data-theme='dark'] .operate-age--older { color: #f87171; }
 </style>

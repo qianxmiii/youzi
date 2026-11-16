@@ -120,7 +120,7 @@ def list_order_flow(
             if part.strip()
         ),
     )
-    return {"items": items, "total": len(items), **_repo.summary(_seen_at())}
+    return {"items": items, "total": len(items), **_repo.summary(_seen_at()), **get_order_flow_poll_settings(_database).to_api_dict()}
 
 
 @router.post("/api/v1/order-flow/refresh")
@@ -137,3 +137,19 @@ def update_order_flow_settings(body: OrderFlowSettingsUpdate):
     settings = save_order_flow_poll_enabled(_database, enabled=body.enabled)
     return settings.to_api_dict()
 
+
+
+@router.get("/api/v1/pending-sales-fees")
+def pending_sales_fees_list():
+    from ..services.pending_sales_fees import list_orders
+    items = list_orders(_database)
+    return {"items": items, "total": len(items), **get_order_flow_poll_settings(_database).to_api_dict()}
+
+
+@router.post("/api/v1/pending-sales-fees/refresh")
+def pending_sales_fees_refresh():
+    from ..services.pending_sales_fees import sync
+    try:
+        return sync(_database, LOGISTICS_CONFIG_PATH, force=True)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc

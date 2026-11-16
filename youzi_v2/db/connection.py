@@ -83,6 +83,8 @@ class Database:
             quote_items_table.ensure_schema(self._conn)
             quote_followups_table.ensure_schema(self._conn)
             order_flow_orders_table.ensure_schema(self._conn)
+            from ..services.pending_sales_fees import ensure_schema as ensure_pending_fees
+            ensure_pending_fees(self._conn)
             internal_tracking_logs_table.ensure_schema(self._conn)
             carrier_tracking_logs_table.ensure_schema(self._conn)
             tracking_sync_jobs_table.ensure_schema(self._conn)

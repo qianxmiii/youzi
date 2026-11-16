@@ -47,3 +47,13 @@ whether a commit is requested.
 - Never put actual prices, costs, customer data, shipment identifiers, or secrets
   in changelogs or archives. Keep this policy authoritative rather than copying
   divergent versions into editor-specific rules.
+
+
+## Youzi startup shortcut
+
+When the user says “启动 youzi”, start both services from the repository root in separate background terminal sessions:
+
+- Frontend: `npm.cmd --prefix youzi_v2/frontend run dev`
+- Backend: `python -m uvicorn youzi_v2.app:app --host 127.0.0.1 --port 3001 --reload`
+
+Check ports 5173 and 3001 first. Reuse healthy existing Youzi services; report unrelated port conflicts without killing processes. Verify readiness and report the URLs. Follow environment approval requirements if execution is restricted. This shortcut does not authorize Git staging, commits, pushes, or file deletion.

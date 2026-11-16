@@ -1,4 +1,8 @@
 config.json
+# 本地报价核对记录（含单价，勿提交）
+PRICE_CHANGELOG.md
+PRICE_CHANGELOG
+
 # 本地私密配置
 config/config.json
 youzi_v2/order_assistant/extension/allowed-page.local.js
@@ -70,6 +74,7 @@ cache/
 dist/
 build/
 coverage/
+*.tsbuildinfo
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/

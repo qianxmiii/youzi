@@ -8,6 +8,11 @@ if (-not (Test-Path -LiteralPath $runtimePython)) {
     python -m venv (Join-Path $widgetDirectory '.venv')
     if ($LASTEXITCODE -ne 0) { throw 'Python环境创建失败，请先安装Python。' }
 }
+& $runtimePython -c "import sys" 2>$null
+if ($LASTEXITCODE -ne 0) {
+    python -m venv --upgrade --without-pip (Join-Path $widgetDirectory '.venv')
+    if ($LASTEXITCODE -ne 0) { throw 'Python环境修复失败，请检查当前Python安装。' }
+}
 & $runtimePython -m pip install -r (Join-Path $widgetDirectory 'requirements.txt')
 if ($LASTEXITCODE -ne 0) { throw '桌面依赖安装失败，请检查网络后重试。' }
 Push-Location $frontendDirectory

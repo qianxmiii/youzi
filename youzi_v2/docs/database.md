@@ -316,3 +316,6 @@ erDiagram
 ### 到港后送仓区间
 
 `channel_sla_rules` 新增 `post_arrival_days_min`（INTEGER NOT NULL DEFAULT 7）和 `post_arrival_days_max`（INTEGER NOT NULL DEFAULT 15）。启动时仅向缺列的数据库添加，旧规则默认7—15天，已配置范围不回填覆盖。此区间用于DW的ATA/ETA分段估算，不参与原异常预警期限计算。
+
+
+**shipment_marks** — 运单与标识的独立关联表，按运单和标识键唯一。`mark_id` 可空，保存远端名称/颜色，未知标识在码表补齐后解析；按标识 ID、未匹配名称建立筛选索引。首次启动从旧 JSON 一次性回填，旧列冻结保留，不再作为读写来源。迁移与回退要求见[标识管理](./commerce-marks.md#运单标识关联表迁移)。

@@ -117,6 +117,8 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
 | POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200）。同时写入应收 `receivable`、应付 `proRecCharge`、利润 `profit`（均为人民币）和利润率 `profitRate` |
 | POST | `/sync-preport-from-dps` | 港前全部更新：已下单、提货中、已入仓（不含已取消），按运单号走同一 `shipment_queryByOrder` 写入；无 body |
+| POST | `/sync-today-from-dps` | 港前「同步今天」：当天 00:00:00–23:59:59，依次同步提货中、已入仓（均 `orderTimeStart`/`orderTimeEnd`）；一步失败仍继续；无 body |
+| POST | `/sync-today-transit-from-dps` | 在途/港后「同步今天」：当天发运时间（`transitTimeDateRange[0]`/`[1]`），仅 `shipment_queryByPerson` 在途；无 body |
 | POST | `/download-dps-cargo-data` | DPS 货箱（`dps_data_download`）；body: 本地运单 `ids`，最多 50；单票 `{运单号}_data.ext`，多票 `{N}票数据_{YYYYMMDDHHmmss}.zip`（内含同名文件夹与各票 `_data` 文件） |
 | POST | `/dps-export-jobs` | 异步 DPS 导出（body: `exportType`、`ids`、可选 `splitSpec`；`exportType=markRename` 另需 `renameFields`、`renameSeparator`）。唛头（重命名）逐票下载，文件名按字段顺序拼接，空字段跳过；`addressCode` 为空时回退邮编；可选 `renameFolder`（如 `customerNo`）把相同值放进同一目录；`renameCountryLang`=`en`（默认国家码缩写如 AU）/`zh`（中文名）控制国家字段。单票且未选文件夹时直接下载该文件名，否则 zip `{N}票{M}件唛头_{时间}.zip`（M 为成功下载票的件数合计）。例：`shipmentNo`+`addressCode`+`ctns`、分隔符 `-` → `运单号-派送仓库或邮编-件数.pdf`。`exportType=markSelf`（唛头自生成）不调 DPS：按件数生成本地 102mm×102mm PDF（渠道英文名 / 运单号 / 客户单号 / Code128=运单号+4位箱序 / `PKG:i/N` / 国家码 / 邮编 / `MADE IN CHINA`）；单票 `{运单号}.pdf`，多票 `{N}票{M}件唛头(自生成)_{时间}.zip`。返回 `jobId`，轮询 `GET /dps-export-jobs/{id}`，完成后 `GET …/download` |
 | GET | `/dps-export-jobs/{job_id}` | 导出进度 `{ progress, message, done, failed }` |
@@ -467,3 +469,91 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 `GET /api/v1/shipments/{id}/delivery-window/history?mode=auto|range|amazon` 为独立只读查询。不存在返回404，无效模式返回422。不修改DW设置或运单。
 
 响应包含 `scope`（实际匹配范围）、`lookbackDays=90`、`minBatchCount=5`、`completedCount`、`independentBatchCount`、`unknownBatchTickets`、`longExceptionCount`、`inTransitCount`、`truncated`、`warnings`、`reason`；`metrics.full/postArrival` 各含 `actual/normal/recent30`，每项含 `ticketCount`、`batchCount`、`p50Days`、`p90Days`。条件满足时返回 `prediction` 的日期、复制范围、依据和警告，否则为null。历史参考不改变原DW查询与复制响应；具体口径与局限见 [delivery-window.md](./delivery-window.md)。
+
+
+### 待销售确认费用
+
+订单流转新增「待销售确认费用」tab，独立于原订单流转快照。配置键为 `dps_ddlz_getPendingSalesFeeOrders`，包含 `url`、`method`，可选 `pageSize`、`timeout`；鉴权复用 `dps_ddlz_authorization`。响应沿用 `code`、`rows`、`total`，订单以 `waybillNo` 去重，展示字段沿用订单流转字段。不提供远端费用确认操作或节点轨迹。
+
+- `GET /api/v1/pending-sales-fees`：返回完整本地名单、`total` 和轮询开关；页面按运单号、客户、状态、渠道、国家、仓库筛选并支持复制单号。
+- `POST /api/v1/pending-sales-fees/refresh`：刷新独立名单，返回 `skipped`、`reason`，成功时含 `remote`；同步进行中不重复启动。
+
+复用订单流转的五分钟轮询开关，两类同步独立处理。仅完整分页成功后原子替换费用名单，缺失订单退出该名单；失败保留旧数据。分页要求有效 `rows`、`total` 和运单号，空页、重复页或超过上限但尚未收齐时拒绝更新。原订单流转也使用此完整性校验。
+
+启动时自动创建 `pending_sales_fee_orders` 和 `pending_sales_fee_sync` 表，无需手工迁移。新 tab 不计入原铃铛和菜单待处理数。
+
+
+### 签收后的到港提醒
+
+通知读取及 ETA 提醒扫描时，状态为 `DELIVERED`（忽略大小写及首尾空格）或签收时间非空的运单，其已有未读 `eta_reminder` 消息自动置为已读。列表和未读计数采用相同规则；内部轨迹、承运商轨迹、签收消息等其他来源不受影响。
+
+
+### 重命名空格规则
+
+唛头重命名（含前端预览、字段分组文件夹）及 Excel 文件重命名保留字段内部空格，仅清理首尾空白，换行与制表符转换为空格。非法文件名字符沿用原规则过滤或替换，不修改原始运单字段。
+
+
+### 核对件数结果复制
+
+核对件数窗口提供「复制不一致单号」，仅复制结果中 `kind=mismatch` 的运单号，去重并每行一个；不包含查询失败项。加载中或无不一致票时按钮禁用。
+
+
+### 全局任务入口
+
+顶部任务入口在当前浏览器会话统一展示批量货件号推送、DPS 导出、件数核对、内部及承运商轨迹手动同步。批量推送显示已处理票数、分类统计及逐票结果；导出使用服务端进度；核对及轨迹接口仅显示运行状态和完成摘要，不虚构百分比。可打开详情、复制结果、清除已完成记录；异常任务未查看时保留橙色提示。记录现已保存至本地数据库，见下方任务历史；刷新、关闭浏览器仍可能中断前端调度；服务端导出不因此自动取消，此入口不提供跨刷新恢复。
+
+
+全局任务中的件数核对详情保留结构化结果：统计卡片展示已核对、件数一致、件数不一致、查询异常；明细表展示运单号、运单件数、产品箱数、差额和原因。支持按异常类型筛选，以及分别复制不一致单号、查询异常单号和完整结果。没有产品归入查询异常，不当作件数不一致；缺失件数以短横线展示。
+
+
+### 任务历史（持久化）
+
+升级后创建 `task_history`（摘要、统计及逐票结果）和 `task_operation_events`（批量修改计划及推送结果）表，启动自动迁移。仅记录升级后的任务，无历史回填；不记录鉴权、原始请求配置或报价。记录包含单号与业务字段，按业务数据库权限保护，不提交 Git。当前系统未提供可靠的操作人身份，本功能不声称记录操作者。
+
+- `PUT /api/v1/task-history/{id}`：保存前端任务快照，同一编号更新；只接受任务展示字段。
+- `GET /api/v1/task-history?limit=50&offset=0`：按开始时间倒序分页，每页最多 100 条。
+- `GET /api/v1/task-history/{id}/events`：读取该批次服务端登记的修改前后值与推送结果。
+
+当前会话在开始、运行进度及结束时保存快照；保存失败显示提示并支持重试。顶部面板自动读取最近 50 条，可刷新历史、加载更多。「隐藏已完成」将任务编号保存在当前浏览器 localStorage（不保存业务结果），刷新后维持隐藏；「查看历史」包含隐藏记录。历史中未结束的任务显示「结果待确认」，不冒充当前运行任务，也不自动重试；刷新不会恢复前端执行。
+
+批量推送把全局任务编号传给 `batch-row` 的 `taskId`，在本地修改前登记货件号、预约号、港口及强制标志，推送后补结果。没有最终结果表示仅登记过操作计划，不证明修改或推送成功；需核对当前数据。该记录为独立服务端操作明细，不以可修改的前端摘要作为修改事实证明。未改变正常保存及失败不回滚的业务规则。后端任务记录与前端摘要可能因断网而存在时间差。
+
+
+### 链接批量下载
+
+工具中心新增提货照片链接下载及独立持久任务接口，支持粘贴/手工编辑、规则转换、按运单号命名、部分成功汇总包、失败重试和七天文件有效期。接口及运行限制见[链接批量下载](./link-download.md)。此类任务由后端管理，刷新可恢复查看，服务重启中断的票需重试。
+
+
+手动港前更新全部运单、港前/在途同步今天、更新选中运单及明细状态更新现接入全局任务与历史。结果展示新增、更新、失败等统计，分步骤同步保留各步摘要；业务错误、跳过和部分失败标记为需关注。现有接口仅返回最终结果，运行中显示状态，不展示虚构逐票进度；这类请求仍非可跨刷新恢复执行的后端任务。
+
+
+全局任务在发起时记录来源菜单名称与路径，任务名称统一包含来源（如「港前运单 · 更新全部运单」「在途运单 · 同步内部轨迹」），详情显示来源，历史保留 `source`、`sourcePath`。切换菜单不改变已创建任务归属；旧任务缺少来源时不推断补写。
+
+
+运单 Excel 导出（港前、在途共用）和催款 Excel 导出的「状态」列统一使用中文：`0` 已下单、`01` 提货中、`1` 已入仓、`2` 转运中、`3` 已签收、`4` 已取消，兼容旧英文状态码；未知映射保留原值。导入支持上述中文状态，不改变数据库存储码或菜单筛选条件。
+
+
+### 同步请求运行状态核实
+
+手动运单更新、轨迹同步、件数核对通过 `X-Youzi-Task-Id` 关联已创建的任务。后端在请求执行期间维护活动编号，`GET /api/v1/task-history` 返回 `activeRequestIds`；前端按实际活动集合恢复运行中显示并轮询。后端完成后保存统计、异常及最终状态，避免刷新导致丢失结束结果。`managedBy=request` 记录由后端接管，前端不能覆盖。后端重启后无活动记录的旧运行任务仍标为待确认，不假装继续执行。未带编号的既有客户端保持原接口行为；已经在执行的旧版本请求无法补关联。此关联不提供失败自动重试。
+
+
+### 任务隐藏与删除
+
+任务中心使用眼睛图标隐藏已完成，当前浏览器持久保存隐藏编号，跨浏览器不共享。历史图标切换完整历史，仍可分批加载；运行中、结果待确认记录不通过隐藏已完成清理。
+
+`DELETE /api/v1/task-history/{id}` 真正删除已结束任务摘要及关联 `task_operation_events`，保留无业务内容的编号墓碑（`task_history_deleted`），防止延迟快照或源任务重新写入而复现。详情列表的删除操作需明确确认，不能删除数据库中仍为 running 的任务。删除不撤销运单修改或远端推送，不删除下载文件，不影响下载工具自身的任务记录。部署后需重启后端创建墓碑表。已执行的删除无法恢复，前端也会忽略删除前的迟到历史响应。
+
+
+### 港前标识
+
+新增配置目录及批量管理接口，列表返回 `commerceMarkIds`、`commerceMarks`（名称、颜色），源数据优先读取 `params.markVos`，兼容顶层 `markVos`。列表及导出支持 `commerceMarkIds` 多选任意匹配；POST `commerce-marks` 对应增加、移除和替换，成功后本地回写。配置及操作限制见[标识管理](./commerce-marks.md)。
+
+
+标识目录现由后台 `commerce_mark_codes` 码表维护，编码对应 DPS 标识 ID，新增 `color` 字段及 `hasMarkFields` 元信息；支持名称唯一性校验、排序、启停用及 Excel 模板导入。仅启用项可用于操作，名称映射同步包含停用项；旧 JSON 标识目录一次性迁移，接口地址和鉴权继续保留在私密配置中。
+
+
+`POST /api/v1/commerce-marks/sync`：从 `dps_getMarks` 同步到标识码表，返回 `total`、`created`、`updated`、`unchanged`、`failed`；保留已有排序与启用状态，不删除远端未返回项。支持请求任务 ID 关联全局任务。响应结构和配置详见[标识管理](./commerce-marks.md#同步标识目录)。
+
+
+运单标识已迁入 `shipment_marks`，列表、详情和 `commerceMarkIds` 筛选参数保持兼容，返回的 `commerceMarks` 仍含 ID、名称和颜色。缺少 ID 的标识保留名称键，不要求一定存在目录项；主表旧 JSON 不再作为来源，迁移及回退见[关联表迁移](./commerce-marks.md#运单标识关联表迁移)。

@@ -37,6 +37,26 @@ frontend (5173)  ──/api──►  app.py (3001)  ──►  services  ──
 
 详细说明：[docs/architecture.md](./docs/architecture.md)
 
+## 日常启动（Windows）
+
+安装好依赖后，在仓库根目录打开两个终端，各执行一条命令，无需切换目录：
+
+前端：
+
+```powershell
+npm.cmd --prefix youzi_v2/frontend run dev
+```
+
+后端：
+
+```powershell
+python -m uvicorn youzi_v2.app:app --host 127.0.0.1 --port 3001 --reload
+```
+
+`--prefix youzi_v2/frontend` 指定 npm 项目目录，不改变当前终端目录。前端访问 <http://localhost:5173>，后端监听本机 3001 端口。停止服务时在对应终端按 `Ctrl+C`。
+
+在本仓库对助手说「启动 youzi」即执行上述两条命令；启动前检查端口，已有正常服务则复用，端口被其他程序占用时报告，不自动终止进程。
+
 ## 安装部署
 
 本地开发需 **两个终端**，均在 **仓库根目录**执行。
@@ -45,7 +65,7 @@ frontend (5173)  ──/api──►  app.py (3001)  ──►  services  ──
 
 ```bash
 pip install -r youzi_v2/requirements.txt
-uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001 --reload
+python -m uvicorn youzi_v2.app:app --host 127.0.0.1 --port 3001 --reload
 ```
 
 ### 2. 前端（端口 5173）
@@ -53,9 +73,8 @@ uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001 --reload
 **Windows PowerShell**（若 `npm` 报「禁止运行脚本」，改用 `npm.cmd`）：
 
 ```powershell
-cd youzi_v2/frontend
-npm.cmd install
-npm.cmd run dev
+npm.cmd --prefix youzi_v2/frontend install
+npm.cmd --prefix youzi_v2/frontend run dev
 ```
 
 **macOS / Linux / Git Bash**：

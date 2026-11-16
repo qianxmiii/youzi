@@ -4,6 +4,26 @@ Youzi 是面向跨境物流运营的内部 Web 工具，覆盖运单管理、轨
 
 当前主线应用位于 `youzi_v2/`：前端使用 Vue 3 + Vite + TypeScript，后端使用 FastAPI，数据存储为本地 SQLite。仓库根目录下的旧版静态页、脚本和 `server/` 仍保留作历史功能参考，新功能优先在 `youzi_v2/` 内开发。
 
+## 日常启动（Windows）
+
+安装好依赖后，在仓库根目录打开两个终端，各执行一条命令，无需切换目录：
+
+前端：
+
+```powershell
+npm.cmd --prefix youzi_v2/frontend run dev
+```
+
+后端：
+
+```powershell
+python -m uvicorn youzi_v2.app:app --host 127.0.0.1 --port 3001 --reload
+```
+
+`--prefix youzi_v2/frontend` 指定 npm 项目目录，不改变当前终端目录。前端访问 <http://localhost:5173>，后端监听本机 3001 端口。停止服务时在对应终端按 `Ctrl+C`。
+
+在本仓库对助手说「启动 youzi」即执行上述两条命令；启动前检查端口，已有正常服务则复用，端口被其他程序占用时报告，不自动终止进程。
+
 ## 快速开始
 
 本地开发需要两个终端，命令均从仓库根目录执行。
@@ -12,7 +32,7 @@ Youzi 是面向跨境物流运营的内部 Web 工具，覆盖运单管理、轨
 
 ```bash
 pip install -r youzi_v2/requirements.txt
-uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001 --reload
+python -m uvicorn youzi_v2.app:app --host 127.0.0.1 --port 3001 --reload
 ```
 
 后端启动后可访问：
@@ -25,9 +45,8 @@ uvicorn youzi_v2.app:app --host 0.0.0.0 --port 3001 --reload
 Windows PowerShell：
 
 ```powershell
-cd youzi_v2/frontend
-npm.cmd install
-npm.cmd run dev
+npm.cmd --prefix youzi_v2/frontend install
+npm.cmd --prefix youzi_v2/frontend run dev
 ```
 
 macOS / Linux / Git Bash：
@@ -156,3 +175,8 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 - `server/`：旧版 Express 服务
 
 迁移功能时，优先复用旧版业务规则和数据口径，但实现应落在 `youzi_v2/` 的前后端、服务层和测试中。
+
+
+### Excel 箱规粘贴
+
+旧版报价 / 箱规页的「Excel 粘贴（三列 / 五列）」支持每个尺寸分别带 `cm`（不区分大小写），如 `59 cm x 42.5 x 47.5 cm`、`59cm × 42.5cm × 47.5cm`；仍兼容只在末尾带单位或不带单位的格式。识别保留原始小数，后续计费规则不变。

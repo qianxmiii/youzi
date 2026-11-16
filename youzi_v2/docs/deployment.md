@@ -99,8 +99,8 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 - 内部轨迹：`base_url`，由 `services/logistics_tracking.py` 读取
 - 运单查询（DPS 销售助理接口）：
   - **`dps_authorization`**（推荐）：根级 DPS Bearer，供 `shipment_queryByPerson`、`shipment_queryByOrder`、`dps_route_status_query`、`dps_data_download` 等共用（仍兼容各块内 `Authorization`）
-  - **`shipment_queryByPerson`**：查全部/在途运单（url 内已带筛选），代码注入 `pageNum`、`transitTimeStart`、`transitTimeEnd`（默认当月）
-  - **`shipment_queryByPerson_pickup`**：提货中（Status 01 等）；**GET**；代码注入 `orderTimeStart` / `orderTimeEnd`（非 transitTime）
+  - **`shipment_queryByPerson`**：查全部/在途运单（url 内已带筛选），代码注入 `pageNum`、`transitTimeDateRange[0]`、`transitTimeDateRange[1]`（默认当月）
+  - **`shipment_queryByPerson_pickup`**：提货中（Status 01 等）；**GET**；代码注入 `orderTimeStart` / `orderTimeEnd`（非 transitTimeDateRange）
   - **`shipment_queryByPerson_warehoused`**：已入仓（Status 1 等）；**GET**；同上 `orderTimeStart` / `orderTimeEnd`
   - 可选块内 `"timeRange": "transit" | "order" | "none"` 覆盖默认（pickup/warehoused 默认 `order`）
   - **`shipment_queryByOrder`**：按运单号查，拼接 `odds`（多单空格 → `%20`）+ `pageNum`

@@ -50,7 +50,7 @@ Youzi v2 业务服务层
 | `warehouse_entry_xlsx_to_pdf.py` | 进仓单 xlsx → PDF（Excel COM / LibreOffice） |
 | `warehouse_entry_pdf.py` | 进仓单 PDF 编排（模板 xlsx + 转换） |
 | `shipment_dps_warehouse_entry_download.py` | 勾选运单进仓单 xlsx/PDF（`{N}票进仓单_{日期}`） |
-| `shipment_dps_sync.py` | DPS 运单同步至本地表（计划任务默认关；港前可按已下单/提货中/已入仓全部按运单号更新） |
+| `shipment_dps_sync.py` | DPS 运单同步至本地表（计划任务默认关；港前可按已下单/提货中/已入仓全部按运单号更新，也可「同步今天」拉提货中与已入仓；在途「同步今天」用 transitTimeDateRange） |
 | `dps_waybill_route_info.py` | DPS 明细状态轨迹查询（URL 仅读 config `dps_route_status_query`） |
 | `dps_order_product.py` | DPS 运单产品（`config.dps_getOrderProduct`，参数 `commerceWaybillId`；只取中文品名、英文品名、箱数；可批量核对箱数与运单件数） |
 | `shipment_dps_route_status_sync.py` | 轻量回写 `route_status`、阶段 `route_*_time`；301/306 且 ATD/ATA 空时回写开船/到港时间 |

@@ -698,6 +698,64 @@ def sync_preport_shipments_from_dps():
         raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
+@router.post("/api/v1/shipments/sync-today-from-dps")
+def sync_today_shipments_from_dps():
+    """
+    港前「同步今天」：当天时间范围内依次同步提货中、已入仓。
+    两步均用 orderTimeStart / orderTimeEnd；一步失败仍继续下一步。
+    """
+    from ..services.shipment_dps_sync import (
+        run_shipment_dps_sync_today_pickup_and_warehoused,
+    )
+    from ..schemas.scheduled_tasks import ShipmentDpsSyncAllRunResult
+
+    try:
+        result = run_shipment_dps_sync_today_pickup_and_warehoused(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+        )
+        return ShipmentDpsSyncAllRunResult(**result)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                f"{exc}。请在 config/config.json 配置 "
+                "shipment_queryByPerson_pickup / shipment_queryByPerson_warehoused。"
+            ),
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
+@router.post("/api/v1/shipments/sync-today-transit-from-dps")
+def sync_today_transit_shipments_from_dps():
+    """在途/港后「同步今天」：当天 transitTimeDateRange，仅 shipment_queryByPerson 在途。"""
+    from ..services.shipment_dps_sync import run_shipment_dps_sync_today_transit
+    from ..schemas.scheduled_tasks import ShipmentDpsSyncRunResult
+
+    try:
+        result = run_shipment_dps_sync_today_transit(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+        )
+        return ShipmentDpsSyncRunResult(**result)
+    except FileNotFoundError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail=f"{exc}。请在 config/config.json 配置 shipment_queryByPerson。",
+        ) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+
 @router.post("/api/v1/shipments/download-dps-cargo-data")
 def download_shipments_dps_cargo_data(body: ShipmentBatchIdsIn):
     """

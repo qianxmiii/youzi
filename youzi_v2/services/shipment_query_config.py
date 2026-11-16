@@ -21,8 +21,12 @@ QUERY_BY_ORDER_KEY = "shipment_queryByOrder"
 DPS_AUTHORIZATION_KEY = "dps_authorization"
 QUERY_PARAM = "odds"
 PAGE_NUM_PARAM = "pageNum"
-TRANSIT_TIME_START_PARAM = "transitTimeStart"
-TRANSIT_TIME_END_PARAM = "transitTimeEnd"
+# 在途 queryByPerson：DPS 用数组下标参数（非 transitTimeStart/End）
+TRANSIT_TIME_START_PARAM = "transitTimeDateRange[0]"
+TRANSIT_TIME_END_PARAM = "transitTimeDateRange[1]"
+# 旧参数名（注入前一并剔除，避免重复）
+_LEGACY_TRANSIT_TIME_START_PARAM = "transitTimeStart"
+_LEGACY_TRANSIT_TIME_END_PARAM = "transitTimeEnd"
 ORDER_TIME_START_PARAM = "orderTimeStart"
 ORDER_TIME_END_PARAM = "orderTimeEnd"
 
@@ -243,6 +247,16 @@ def default_transit_time_range(
     return start.strftime(DATETIME_FMT), end.strftime(DATETIME_FMT)
 
 
+def today_transit_time_range(
+    now: datetime | None = None,
+) -> tuple[str, str]:
+    """当天 00:00:00 至 23:59:59。"""
+    ref = now or datetime.now()
+    start = ref.replace(hour=0, minute=0, second=0, microsecond=0)
+    end = ref.replace(hour=23, minute=59, second=59, microsecond=0)
+    return start.strftime(DATETIME_FMT), end.strftime(DATETIME_FMT)
+
+
 def resolve_transit_time_range(
     transit_time_start: str | None = None,
     transit_time_end: str | None = None,
@@ -267,7 +281,8 @@ def build_shipment_query_by_person_url(
 ) -> str:
     """
     全部运单列表：GET 查询串注入 pageNum + 时间范围。
-    在途 queryByPerson 用 transitTimeStart/End；港前 pickup/warehoused 默认 orderTimeStart/End。
+    在途 queryByPerson 用 transitTimeDateRange[0]/[1]；
+    港前 pickup/warehoused 默认 orderTimeStart/End。
     """
     base = (base_url or "").strip()
     if not base:
@@ -283,6 +298,8 @@ def build_shipment_query_by_person_url(
         PAGE_NUM_PARAM,
         TRANSIT_TIME_START_PARAM,
         TRANSIT_TIME_END_PARAM,
+        _LEGACY_TRANSIT_TIME_START_PARAM,
+        _LEGACY_TRANSIT_TIME_END_PARAM,
         ORDER_TIME_START_PARAM,
         ORDER_TIME_END_PARAM,
     )
@@ -424,8 +441,9 @@ def query_shipments_by_person_page(
     transit_time_end: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     block_key: str = QUERY_BY_PERSON_KEY,
+    time_range: PersonQueryTimeRange | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """查询全部运单（单页）。"""
+    """查询全部运单（单页）。`time_range` 有值时覆盖配置默认。"""
     cfg = require_shipment_query_by_person_block_config(config_path, block_key)
     url = build_shipment_query_by_person_url(
         cfg["url"],
@@ -433,7 +451,7 @@ def query_shipments_by_person_page(
         transit_time_start=transit_time_start,
         transit_time_end=transit_time_end,
         block_key=block_key,
-        time_range=cfg.get("timeRange"),
+        time_range=time_range if time_range is not None else cfg.get("timeRange"),
     )
     return _fetch_page(
         url,
@@ -503,8 +521,9 @@ def query_shipments_by_person(
     transit_time_end: str | None = None,
     timeout: int = DEFAULT_TIMEOUT,
     block_key: str = QUERY_BY_PERSON_KEY,
+    time_range: PersonQueryTimeRange | None = None,
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """查询全部运单，按 total 自动翻页。"""
+    """查询全部运单，按 total 自动翻页。`time_range` 有值时覆盖配置默认。"""
     cfg = require_shipment_query_by_person_block_config(config_path, block_key)
     page_size = int(cfg.get("pageSize") or DEFAULT_PAGE_SIZE)
     start, end = resolve_transit_time_range(transit_time_start, transit_time_end)
@@ -517,6 +536,7 @@ def query_shipments_by_person(
             transit_time_end=end,
             timeout=timeout,
             block_key=block_key,
+            time_range=time_range,
         )
 
     result, err = _query_all_pages(page_size=page_size, fetch_page=fetch_page)

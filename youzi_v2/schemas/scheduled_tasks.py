@@ -175,6 +175,8 @@ class ShipmentDpsSyncAllRunResult(BaseModel):
 
     skipped: bool = False
     reason: str | None = None
+    transit_time_start: str | None = Field(default=None, alias="transitTimeStart")
+    transit_time_end: str | None = Field(default=None, alias="transitTimeEnd")
     steps: list[ShipmentDpsSyncAllStepResult] = Field(default_factory=list)
 
 

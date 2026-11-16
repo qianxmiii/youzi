@@ -22,11 +22,13 @@ from .shipment_query_config import (
     QUERY_BY_PERSON_KEY,
     QUERY_BY_PERSON_PICKUP_KEY,
     QUERY_BY_PERSON_WAREHOUSED_KEY,
+    PersonQueryTimeRange,
     normalize_shipment_nos,
     query_shipments_by_order,
     query_shipments_by_person,
     resolve_transit_time_range,
     shipment_odd,
+    today_transit_time_range,
 )
 
 _DPS_SYNC_LOG_LABEL: dict[DpsSyncVariant, str] = {
@@ -450,6 +452,7 @@ def _run_shipment_dps_sync_locked(
     trigger: str,
     log: LogFn | None,
     variant: DpsSyncVariant,
+    time_range: PersonQueryTimeRange | None = None,
 ) -> dict[str, Any]:
     log_tag = _DPS_SYNC_LOG_LABEL[variant]
     person_key = _DPS_SYNC_PERSON_KEY[variant]
@@ -464,12 +467,14 @@ def _run_shipment_dps_sync_locked(
         transit_time_end if transit_time_end is not None else settings.transit_time_end,
     )
 
-    out(f"[{log_tag}] 开始 {start} ~ {end}（触发：{trigger}）")
+    range_hint = f"，timeRange={time_range}" if time_range else ""
+    out(f"[{log_tag}] 开始 {start} ~ {end}（触发：{trigger}{range_hint}）")
     parsed, err = query_shipments_by_person(
         config_path,
         transit_time_start=start,
         transit_time_end=end,
         block_key=person_key,
+        time_range=time_range,
     )
     if err:
         out(f"[{log_tag}] 失败：{err}")
@@ -509,6 +514,12 @@ _DPS_SYNC_ALL_ORDER: tuple[tuple[DpsSyncVariant, str], ...] = (
     ("pickup", "提货中"),
     ("warehoused", "已入仓"),
     ("default", "在途"),
+)
+
+# 港前「同步今天」：仅提货中 + 已入仓（均 orderTime）；在途走港后同步今天
+_DPS_SYNC_TODAY_PREPORT_ORDER: tuple[tuple[DpsSyncVariant, str], ...] = (
+    ("pickup", "提货中"),
+    ("warehoused", "已入仓"),
 )
 
 
@@ -554,6 +565,86 @@ def run_shipment_dps_sync_all(
         return {"skipped": False, "steps": steps}
     finally:
         _lock.release()
+
+
+def run_shipment_dps_sync_today_pickup_and_warehoused(
+    shipments_repo: ShipmentsRepository,
+    config_path: Path,
+    *,
+    log: LogFn | None = None,
+) -> dict[str, Any]:
+    """港前「同步今天」：当天范围内依次同步提货中、已入仓（均 orderTime）。"""
+
+    def out(msg: str) -> None:
+        if log:
+            log(msg)
+
+    start, end = today_transit_time_range()
+    if not _lock.acquire(blocking=False):
+        out("[DPS运单同步] 跳过：上一轮 DPS 运单同步仍在进行")
+        return {
+            "skipped": True,
+            "reason": "DPS 运单同步进行中",
+            "transitTimeStart": start,
+            "transitTimeEnd": end,
+            "steps": [],
+        }
+
+    database = shipments_repo._database
+    try:
+        out(
+            f"[DPS运单同步] 港前同步今天开始：提货中 → 已入仓"
+            f"（orderTime {start} ~ {end}）"
+        )
+        steps: list[dict[str, Any]] = []
+        for variant, label in _DPS_SYNC_TODAY_PREPORT_ORDER:
+            result = _run_shipment_dps_sync_locked(
+                shipments_repo,
+                config_path,
+                database,
+                transit_time_start=start,
+                transit_time_end=end,
+                force=True,
+                trigger="manual",
+                log=log,
+                variant=variant,
+                time_range="order",
+            )
+            steps.append({"label": label, **result})
+        return {
+            "skipped": False,
+            "transitTimeStart": start,
+            "transitTimeEnd": end,
+            "steps": steps,
+        }
+    finally:
+        _lock.release()
+
+
+# 兼容旧名
+run_shipment_dps_sync_today_warehoused_and_transit = (
+    run_shipment_dps_sync_today_pickup_and_warehoused
+)
+
+
+def run_shipment_dps_sync_today_transit(
+    shipments_repo: ShipmentsRepository,
+    config_path: Path,
+    *,
+    log: LogFn | None = None,
+) -> dict[str, Any]:
+    """在途/港后「同步今天」：当天 transitTimeDateRange，仅 queryByPerson 在途。"""
+    start, end = today_transit_time_range()
+    return run_shipment_dps_sync_batch(
+        shipments_repo,
+        config_path,
+        transit_time_start=start,
+        transit_time_end=end,
+        force=True,
+        trigger="manual",
+        log=log,
+        variant="default",
+    )
 
 
 def run_shipment_dps_sync_batch_pickup(

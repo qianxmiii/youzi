@@ -658,7 +658,7 @@ onMounted(load)
                   </NButton>
                 </NSpace>
                 <p class="text-[10px] text-[var(--color-muted)]">
-                  三项均为每日批处理（约 24 小时，默认关闭）。在途用发运时间 transitTime；提货中/已入仓用下单时间
+                  三项均为每日批处理（约 24 小时，默认关闭）。在途用发运时间 transitTimeDateRange；提货中/已入仓用下单时间
                   orderTime（日期控件共用）。
                 </p>
                 <NSpace align="center" wrap>

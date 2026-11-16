@@ -292,6 +292,8 @@ export interface ShipmentDpsSyncAllStepResult {
 export interface ShipmentDpsSyncAllRunResult {
   skipped: boolean
   reason?: string | null
+  transitTimeStart?: string | null
+  transitTimeEnd?: string | null
   steps: ShipmentDpsSyncAllStepResult[]
 }
 

@@ -85,6 +85,10 @@ class Database:
             order_flow_orders_table.ensure_schema(self._conn)
             from ..services.pending_sales_fees import ensure_schema as ensure_pending_fees
             ensure_pending_fees(self._conn)
+            from .task_history import ensure_schema as ensure_task_history
+            ensure_task_history(self._conn)
+            from ..services.link_download import ensure_schema as ensure_link_download
+            ensure_link_download(self._conn)
             internal_tracking_logs_table.ensure_schema(self._conn)
             carrier_tracking_logs_table.ensure_schema(self._conn)
             tracking_sync_jobs_table.ensure_schema(self._conn)

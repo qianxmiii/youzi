@@ -1,3 +1,4 @@
+import { trackTask } from '@/composables/useRunningTasks'
 import { api } from '@/api/client'
 import type {
   Shipment,
@@ -24,6 +25,10 @@ import type {
 } from '@/utils/trackingFreshness'
 
 import type { ShipmentGroupFilterOption } from '@/types/shipmentGroup'
+import type {
+  ShipmentDpsSyncAllRunResult,
+  ShipmentDpsSyncRunResult,
+} from '@/types/scheduledTasks'
 
 export interface ShipmentCarrierFilterOption {
   code: string
@@ -306,9 +311,10 @@ export interface ProductCtnsCheckResult {
 }
 
 /** 核对勾选运单的产品箱数合计与运单件数，最多 50 票 */
-export async function checkShipmentProductCtns(ids: string[]): Promise<ProductCtnsCheckResult> {
+async function checkShipmentProductCtnsRequest(ids: string[], taskId?: string): Promise<ProductCtnsCheckResult> {
   return api<ProductCtnsCheckResult>('/api/v1/shipments/check-order-product-ctns', {
     method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
     body: { ids },
     timeout: 180_000,
   })
@@ -435,40 +441,63 @@ export async function importShipmentsExcel(file: File): Promise<ShipmentImportRe
 }
 
 /** 同步内部路由轨迹 */
-export async function syncTracking(shipmentNos?: string[]): Promise<TrackingSyncResult> {
+async function syncTrackingRequest(shipmentNos?: string[], taskId?: string): Promise<TrackingSyncResult> {
   const body = shipmentNos?.length ? { shipmentNos } : undefined
   return api<TrackingSyncResult>('/api/v1/shipments/sync-tracking', {
     method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
     body,
     timeout: 600_000,
   })
 }
 
 /** 同步承运商轨迹（全库仅转运中；指定单号可含已签收） */
-export async function syncCarrierTracking(shipmentNos?: string[]): Promise<TrackingSyncResult> {
+async function syncCarrierTrackingRequest(shipmentNos?: string[], taskId?: string): Promise<TrackingSyncResult> {
   const body = shipmentNos?.length ? { shipmentNos } : undefined
   return api<TrackingSyncResult>('/api/v1/shipments/sync-carrier-tracking', {
     method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
     body,
     timeout: 600_000,
   })
 }
 
 /** 从 DPS shipment_queryByOrder 按运单号更新选中运单 */
-export async function syncShipmentsFromDps(
+async function syncShipmentsFromDpsRequest(
   shipmentNos: string[],
+  taskId?: string,
 ): Promise<ShipmentDpsSyncByOrderResult> {
   return api<ShipmentDpsSyncByOrderResult>('/api/v1/shipments/sync-from-dps', {
     method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
     body: { shipmentNos },
     timeout: 600_000,
   })
 }
 
 /** 港前：按运单号更新全部已下单、提货中、已入仓 */
-export async function syncPreportShipmentsFromDps(): Promise<ShipmentDpsSyncByOrderResult> {
+async function syncPreportShipmentsFromDpsRequest(taskId?: string): Promise<ShipmentDpsSyncByOrderResult> {
   return api<ShipmentDpsSyncByOrderResult>('/api/v1/shipments/sync-preport-from-dps', {
     method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
+    timeout: 600_000,
+  })
+}
+
+/** 港前「同步今天」：当天范围内依次同步提货中、已入仓 */
+async function syncTodayShipmentsFromDpsRequest(taskId?: string): Promise<ShipmentDpsSyncAllRunResult> {
+  return api<ShipmentDpsSyncAllRunResult>('/api/v1/shipments/sync-today-from-dps', {
+    method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
+    timeout: 600_000,
+  })
+}
+
+/** 在途/港后「同步今天」：当天 transitTimeDateRange，仅 queryByPerson 在途 */
+async function syncTodayTransitShipmentsFromDpsRequest(taskId?: string): Promise<ShipmentDpsSyncRunResult> {
+  return api<ShipmentDpsSyncRunResult>('/api/v1/shipments/sync-today-transit-from-dps', {
+    method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
     timeout: 600_000,
   })
 }
@@ -661,13 +690,15 @@ export async function downloadShipmentsDpsWarehouseEntryPdf(
   )
 }
 
-export async function syncShipmentsRouteStatusFromDps(
+async function syncShipmentsRouteStatusFromDpsRequest(
   shipmentNos?: string[],
+  taskId?: string,
 ): Promise<ShipmentDpsRouteStatusSyncResult> {
   return api<ShipmentDpsRouteStatusSyncResult>(
     '/api/v1/shipments/sync-route-status-from-dps',
     {
       method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
       body: shipmentNos?.length ? { shipmentNos } : {},
       timeout: 600_000,
     },
@@ -772,3 +803,19 @@ export async function batchReviewTrackingTimeCandidates(body: {
     body,
   })
 }
+
+export function checkShipmentProductCtns(ids: string[]) { return trackTask('核对件数', (taskId) => checkShipmentProductCtnsRequest(ids, taskId)) }
+
+export function syncTracking(shipmentNos?: string[]) { return trackTask('同步内部轨迹', (taskId) => syncTrackingRequest(shipmentNos, taskId)) }
+
+export function syncCarrierTracking(shipmentNos?: string[]) { return trackTask('同步承运商轨迹', (taskId) => syncCarrierTrackingRequest(shipmentNos, taskId)) }
+
+export function syncPreportShipmentsFromDps() { return trackTask('港前运单 · 更新全部运单', (taskId) => syncPreportShipmentsFromDpsRequest(taskId)) }
+
+export function syncTodayShipmentsFromDps() { return trackTask('港前运单 · 同步今天', (taskId) => syncTodayShipmentsFromDpsRequest(taskId)) }
+
+export function syncTodayTransitShipmentsFromDps() { return trackTask('在途运单 · 同步今天', (taskId) => syncTodayTransitShipmentsFromDpsRequest(taskId)) }
+
+export function syncShipmentsFromDps(shipmentNos: string[]) { return trackTask('运单 · 更新选中运单', (taskId) => syncShipmentsFromDpsRequest(shipmentNos, taskId)) }
+
+export function syncShipmentsRouteStatusFromDps(shipmentNos?: string[]) { return trackTask('运单 · 更新明细状态', (taskId) => syncShipmentsRouteStatusFromDpsRequest(shipmentNos, taskId)) }

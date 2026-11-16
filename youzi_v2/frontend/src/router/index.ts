@@ -152,6 +152,12 @@ const router = createRouter({
           meta: { title: '工具中心' },
         },
         {
+          path: 'tools/link-download',
+          name: 'tools-link-download',
+          component: () => import('@/views/tools/LinkDownloadView.vue'),
+          meta: { title: '链接批量下载' },
+        },
+        {
           path: 'tools/image-link-zip',
           name: 'tools-image-link-zip',
           component: () => import('@/views/tools/ImageLinkZipView.vue'),

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { NDataTable, NModal, type DataTableColumns } from 'naive-ui'
+import { NButton, NDataTable, NModal, useMessage, type DataTableColumns } from 'naive-ui'
 import { computed, ref, watch } from 'vue'
 import {
   checkShipmentProductCtns,
@@ -17,6 +17,21 @@ function errorMessage(error: unknown): string {
   }
   if (error instanceof Error && error.message.trim()) return error.message
   return '核对件数失败'
+}
+
+const message = useMessage()
+const mismatchNos = computed(() => [...new Set((result.value?.issues ?? [])
+  .filter(row => row.kind === 'mismatch')
+  .map(row => row.shipmentNo.trim())
+  .filter(Boolean))])
+async function copyMismatchNos() {
+  if (loading.value || !mismatchNos.value.length) return
+  try {
+    await navigator.clipboard.writeText(mismatchNos.value.join('\n'))
+    message.success(`已复制 ${mismatchNos.value.length} 个件数不一致单号`)
+  } catch {
+    message.error('复制失败，请检查浏览器剪贴板权限')
+  }
 }
 
 const loading = ref(false)
@@ -110,6 +125,9 @@ watch(
         {{ summaryText }}
         <template v-if="result.issues.length">，下面 {{ result.issues.length }} 票需要看一下</template>
       </p>
+      <div class="mb-3 flex justify-end">
+        <NButton size="small" :disabled="loading || !mismatchNos.length" @click="copyMismatchNos">复制不一致单号（{{ mismatchNos.length }}）</NButton>
+      </div>
       <NDataTable
         size="small"
         :loading="loading"

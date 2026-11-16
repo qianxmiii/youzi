@@ -1,3 +1,4 @@
+import { startTask, finishTask } from '@/composables/useRunningTasks'
 import { api } from '@/api/client'
 import { parseDownloadFilename, readBlobApiError } from '@/api/shipments'
 
@@ -41,6 +42,8 @@ export async function runDpsExportJob(
     onProgress: (status: DpsExportJobStatus) => void
   },
 ): Promise<{ blob: Blob; filename: string }> {
+  const task = startTask(`导出 ${DPS_EXPORT_TITLES[exportType]}`)
+  try {
   const { jobId } = await api<{ jobId: string }>('/api/v1/shipments/dps-export-jobs', {
     method: 'POST',
     body: {
@@ -58,6 +61,8 @@ export async function runDpsExportJob(
     const status = await api<DpsExportJobStatus>(
       `/api/v1/shipments/dps-export-jobs/${encodeURIComponent(jobId)}`,
     )
+    task.progress = status.progress
+    task.message = status.message
     options.onProgress(status)
     if (status.failed) {
       throw new Error(status.error?.trim() || status.message || '导出失败')
@@ -78,12 +83,19 @@ export async function runDpsExportJob(
           status.filename ||
           'download.bin'
         options.onProgress({ ...status, progress: 100, message: '下载完成' })
+        task.message = `已下载 ${filename}`
+        finishTask(task)
         return { blob, filename }
       } catch (e) {
         return readBlobApiError(e, '下载导出文件失败')
       }
     }
     await sleep(POLL_MS)
+  }
+  } catch (error) {
+    task.message = error instanceof Error ? error.message : '导出失败'
+    finishTask(task, true)
+    throw error
   }
 }
 

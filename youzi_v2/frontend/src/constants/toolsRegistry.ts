@@ -47,6 +47,7 @@ export const TOOL_CATEGORIES: ToolCategoryMeta[] = [
 ]
 
 export const TOOL_REGISTRY: ToolDefinition[] = [
+  { id:'link-download', name:'链接批量下载', description:'粘贴或填写提货照片链接，后台下载并按运单号命名', category:'file', route:'/tools/link-download', icon:'download', inputSummary:'运单号 + 查看链接', outputSummary:'按运单号命名的 ZIP / 汇总包', status:'active', badge:'new' },
   {
     id: 'image-link-zip',
     name: '标签图片打包',

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import math
+import json
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -262,3 +263,20 @@ def push_amz_update(
         retry_after_sec=COOLDOWN_SEC,
         transport_mode=resolved["transportMode"],
     )
+
+
+def record_amz_push_result(database: Database, shipment: dict, result: dict) -> None:
+    from ..db.shipments_table import TABLE_NAME
+    payload = json.dumps([
+        (shipment.get("customerShipmentId") or "").strip(),
+        (shipment.get("amazonRefId") or "").strip(),
+        result.get("originPort") or "",
+        result.get("destinationPort") or "",
+    ], ensure_ascii=False, separators=(",", ":"))
+    recorded = {**result, "recordedAt": now_str()}
+    with database.lock:
+        database.conn.execute(
+            f"UPDATE {TABLE_NAME} SET amz_push_result = ?, amz_push_success_payload = CASE WHEN ? THEN ? ELSE amz_push_success_payload END WHERE id = ?",
+            (json.dumps(recorded, ensure_ascii=False), bool(result.get("ok") and result.get("attempted")), payload, shipment["id"]),
+        )
+        database.conn.commit()

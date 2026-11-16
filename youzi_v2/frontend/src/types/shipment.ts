@@ -1,6 +1,8 @@
 import type { ShipmentGroupSummary } from '@/types/shipmentGroup'
 
 export interface Shipment {
+  commerceMarkIds?: string[]
+  commerceMarks?: {id:string; name:string; color:string}[]
   id: string
   shipmentNo: string
   customer: string | null
@@ -48,6 +50,8 @@ export interface Shipment {
   /** 补货件号窗口确认过的目的港，空则用规则默认 */
   amzPushDestPort?: string | null
   /** 最近一次亚马逊推送时间，用于 60 秒冷却 */
+  amzPushResult?: string | null
+  amzPushSuccessPayload?: string | null
   amzPushAt?: string | null
   /** 海运提单号（DPS params.ladingBillNum） */
   billOfLadingNo: string | null

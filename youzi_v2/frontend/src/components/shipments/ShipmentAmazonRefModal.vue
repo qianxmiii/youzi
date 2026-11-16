@@ -14,6 +14,7 @@ const emit = defineEmits<{
   close: []
   save: [
     payload: {
+      pushAmzUpdate: boolean
       customerShipmentId: string
       amazonRefId: string
       amzPushOriginPort: string
@@ -26,6 +27,8 @@ const customerShipmentId = ref('')
 const amazonRefId = ref('')
 const originPort = ref('')
 const destPort = ref('')
+const previewLoading = ref(false)
+let previewVersion = 0
 const preview = ref<AmzPushResult | null>(null)
 const nowMs = ref(Date.now())
 let tickTimer: ReturnType<typeof setInterval> | null = null
@@ -39,6 +42,20 @@ const cooldownSec = computed(() => {
   return left > 0 ? left : 0
 })
 
+const currentPayload = computed(() => JSON.stringify([
+  customerShipmentId.value.trim(), amazonRefId.value.trim(),
+  originPort.value.trim().toUpperCase(), destPort.value.trim().toUpperCase(),
+]))
+const lastResult = computed(() => {
+  try { return JSON.parse(props.shipment?.amzPushResult || 'null') as (AmzPushResult & { recordedAt?: string }) | null }
+  catch { return null }
+})
+const synced = computed(() => props.shipment?.amzPushSuccessPayload === currentPayload.value)
+const savedPayload = computed(() => JSON.stringify([
+  props.shipment?.customerShipmentId?.trim() || '', props.shipment?.amazonRefId?.trim() || '',
+  props.shipment?.amzPushOriginPort?.trim().toUpperCase() || '', props.shipment?.amzPushDestPort?.trim().toUpperCase() || '',
+]))
+const retry = computed(() => !!lastResult.value && !lastResult.value.ok && currentPayload.value === savedPayload.value)
 const previewHint = computed(() => {
   const message = preview.value?.message?.trim()
   if (!message) return ''
@@ -51,8 +68,8 @@ watch(
     if (!visible || !props.shipment) return
     customerShipmentId.value = props.shipment.customerShipmentId?.trim() ?? ''
     amazonRefId.value = props.shipment.amazonRefId?.trim() ?? ''
-    originPort.value = ''
-    destPort.value = ''
+    originPort.value = props.shipment.amzPushOriginPort?.trim() || ''
+    destPort.value = props.shipment.amzPushDestPort?.trim() || ''
     preview.value = null
     void loadPreview()
   },
@@ -80,20 +97,25 @@ onBeforeUnmount(() => {
 async function loadPreview() {
   const shipment = props.shipment
   if (!props.show || !shipment) return
+  const version = ++previewVersion
+  previewLoading.value = true
   try {
     const result = await previewShipmentAmzPush(shipment.id)
+    if (version !== previewVersion || !props.show || props.shipment?.id !== shipment.id) return
     preview.value = result
-    originPort.value = shipment.amzPushOriginPort?.trim() || result.originPort || ''
-    destPort.value = shipment.amzPushDestPort?.trim() || result.destinationPort || ''
+    if (!originPort.value) originPort.value = shipment.amzPushOriginPort?.trim() || result.originPort || ''
+    if (!destPort.value) destPort.value = shipment.amzPushDestPort?.trim() || result.destinationPort || ''
   } catch {
-    preview.value = null
-    originPort.value = shipment.amzPushOriginPort?.trim() || ''
-    destPort.value = shipment.amzPushDestPort?.trim() || ''
+    if (version === previewVersion) preview.value = null
+  } finally {
+    if (version === previewVersion) previewLoading.value = false
   }
 }
 
-function submit() {
+function submit(pushAmzUpdate: boolean) {
+  if (props.saving || previewLoading.value || (pushAmzUpdate && cooldownSec.value > 0)) return
   emit('save', {
+    pushAmzUpdate,
     customerShipmentId: customerShipmentId.value.trim(),
     amazonRefId: amazonRefId.value.trim(),
     amzPushOriginPort: originPort.value.trim().toUpperCase(),
@@ -112,9 +134,9 @@ function submit() {
     @update:show="(v: boolean) => { if (!v) emit('close') }"
   >
     <p class="mb-3 text-xs leading-relaxed text-[var(--color-fg-secondary)]">
-      派送仓库为 4 位时需核对货件号和亚马逊预约号。只填 1 视为未填。起运港、目的港已按规则填入默认值，可直接修改；保存货件号后按窗口里的港口推送。
+      派送仓库为 4 位时需核对货件号和亚马逊预约号。只填 1 视为未填。起运港、目的港已按规则填入默认值，可直接修改；可只保存到本地，或保存后按窗口里的港口推送。
     </p>
-    <NForm label-placement="left" label-width="108" size="small">
+    <NForm :disabled="saving || previewLoading" label-placement="left" label-width="108" size="small">
       <NFormItem label="运单号">
         <span class="text-sm text-[var(--color-fg)]">{{ shipment?.shipmentNo || '—' }}</span>
       </NFormItem>
@@ -140,9 +162,18 @@ function submit() {
     <p v-if="cooldownSec > 0" class="mt-1 text-xs text-amber-600">
       这一票推送冷却中，还需 {{ cooldownSec }} 秒
     </p>
+    <p class="mt-2 text-xs" :class="synced ? 'text-green-600' : 'text-amber-600'">
+      {{ synced ? '已同步' : '有修改待推送 / 尚未同步' }}
+    </p>
+    <p v-if="lastResult" class="mt-1 text-xs text-[var(--color-fg-secondary)]">
+      最近结果 {{ lastResult.recordedAt }}：{{ lastResult.message }}
+    </p>
     <div class="mt-2 flex justify-end gap-2">
-      <NButton size="small" :disabled="saving" @click="emit('close')">取消</NButton>
-      <NButton size="small" type="primary" :loading="saving" @click="submit">保存</NButton>
+      <NButton size="small" :disabled="saving" @click="emit('close')">关闭</NButton>
+      <NButton size="small" :disabled="saving || previewLoading" @click="submit(false)">保存</NButton>
+      <NButton size="small" type="primary" :loading="saving" :disabled="saving || previewLoading || cooldownSec > 0" @click="submit(true)">
+        {{ cooldownSec > 0 ? `还需等待 ${cooldownSec} 秒` : retry ? '重试推送' : '保存并推送' }}
+      </NButton>
     </div>
   </NModal>
 </template>

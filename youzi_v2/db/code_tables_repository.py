@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import sqlite3
 from typing import Any
 
@@ -16,6 +17,7 @@ from .shipments_repository import ShipmentsRepository
 _ALLOWED_TABLES = frozenset(list_code_tables())
 
 _TABLE_LABELS: dict[str, str] = {
+    "commerce_mark_codes": "港前运单标识",
     "channel_codes": "渠道",
     "country_codes": "国家",
     "address_codes": "地址代码",
@@ -46,6 +48,7 @@ def list_table_meta() -> list[dict[str, Any]]:
         {
             "table": name,
             "label": _TABLE_LABELS[name],
+            "hasMarkFields": name == "commerce_mark_codes",
             "hasPortType": name == "port_codes",
             "hasChannelFields": name == "channel_codes",
             "hasCarrierFields": name == "carrier_codes",
@@ -67,6 +70,8 @@ def _row_to_api(table: str, row: sqlite3.Row) -> dict[str, Any]:
         "createdTime": row["created_time"],
         "updatedTime": row["updated_time"],
     }
+    if table == "commerce_mark_codes":
+        out["color"] = row["color"]
     if table == "port_codes":
         out["portType"] = row["port_type"]
     if table == "channel_codes":
@@ -339,6 +344,8 @@ class CodeTablesRepository:
                         now,
                     ),
                 )
+            if t == "commerce_mark_codes":
+                self._conn.execute(f"UPDATE {t} SET color=? WHERE code=?",(payload["color"],code))
             self._conn.commit()
         replaced = 0
         if t == "channel_codes":
@@ -379,6 +386,9 @@ class CodeTablesRepository:
             payload["is_active"],
             now_str(),
         ]
+        if t == "commerce_mark_codes":
+            sets.append("color = ?")
+            vals.append(payload["color"])
         if t == "port_codes":
             sets.insert(2, "port_type = ?")
             vals.insert(2, payload["port_type"])
@@ -511,6 +521,13 @@ class CodeTablesRepository:
             "sort_order": sort_order,
             "is_active": is_active,
         }
+        if table == "commerce_mark_codes":
+            if not name_zh: raise ValueError("标识名称不能为空")
+            if not for_update and (code.startswith('name:') or not re.fullmatch(r'[A-Za-z0-9_-]{1,100}',code)):
+                raise ValueError("请填写有效 DPS 标识 ID")
+            color=str(data.get('color') or '#7c3aed').strip()
+            if not re.fullmatch(r'#[0-9A-Fa-f]{6}',color): raise ValueError("颜色需为六位十六进制色值")
+            out['color']=color
         if table == "port_codes":
             port_type = (data.get("port_type") or data.get("portType") or "both").strip().lower()
             if port_type not in _PORT_TYPES:

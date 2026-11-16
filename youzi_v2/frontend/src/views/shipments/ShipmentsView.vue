@@ -17,6 +17,9 @@ import {
   type DropdownOption,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { api } from '@/api/client'
+import ShipmentMarkManagerModal from '@/components/shipments/ShipmentMarkManagerModal.vue'
+import { claimRouteJump } from '@/utils/routeJump'
 import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 import { useRoute, useRouter } from 'vue-router'
 import ShipmentGroupActionModal from '@/components/shipments/ShipmentGroupActionModal.vue'
@@ -25,6 +28,7 @@ import ShipmentExceptionCloseModal from '@/components/shipments/ShipmentExceptio
 import ShipmentExceptionOpenModal from '@/components/shipments/ShipmentExceptionOpenModal.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import ShipmentTrackingFreshnessBar from '@/components/shipments/ShipmentTrackingFreshnessBar.vue'
+import ShipmentBatchAmazonRefsModal from '@/components/shipments/ShipmentBatchAmazonRefsModal.vue'
 import ShipmentAmazonRefModal from '@/components/shipments/ShipmentAmazonRefModal.vue'
 import ShipmentDeliveryWindowModal from '@/components/shipments/ShipmentDeliveryWindowModal.vue'
 import ShipmentOrderProductsModal from '@/components/shipments/ShipmentOrderProductsModal.vue'
@@ -62,6 +66,8 @@ import {
   subscribeShipment,
   syncCarrierTracking,
   syncPreportShipmentsFromDps,
+  syncTodayShipmentsFromDps,
+  syncTodayTransitShipmentsFromDps,
   syncShipmentsFromDps,
   syncShipmentsRouteStatusFromDps,
   syncTracking,
@@ -182,6 +188,7 @@ const exporting = ref(false)
 const syncingTracking = ref(false)
 const syncingCarrier = ref(false)
 const syncingDps = ref(false)
+const syncingTodayDps = ref(false)
 const downloadingDpsExport = ref(false)
 const dpsExportProgressShow = ref(false)
 const dpsExportProgressTitle = ref('正在下载')
@@ -216,6 +223,15 @@ const timeRange = ref<[number, number] | null>(null)
 const filterVipOnly = ref(false)
 const filterFclOnly = ref(false)
 const filterCarrier = ref<string | null>(null)
+const markManagerShow = ref(false)
+const markFilter = ref<string[]>([])
+const markOptions = ref<{id:string;name:string;color:string}[]>([])
+async function loadMarkOptions() {
+  try { const res=await api<{filterItems:typeof markOptions.value}>('/api/v1/commerce-marks/options'); markOptions.value=res.filterItems }
+  catch { message.error('标识筛选配置加载失败') }
+}
+async function marksUpdated() { await loadList(); await loadMarkOptions() }
+watch(markFilter, () => onFiltersChanged())
 const filterSupplierName = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
 const filterChannelNameZh = ref<string | null>(null)
@@ -316,6 +332,19 @@ const trackingDrawerTab = ref<'internal' | 'carrier'>('internal')
 const modalShow = ref(false)
 const modalMode = ref<'create' | 'edit'>('edit')
 const editingRow = ref<Shipment | null>(null)
+const batchAmazonRefsShow = ref(false)
+const batchAmazonProgress = ref({running: false, total: 0, done: 0, success: 0, saved: 0, conflict: 0, skipped: 0, failed: 0})
+const batchAmazonViewed = ref(true)
+const batchAmazonPercent = computed(() => batchAmazonProgress.value.total ? Math.min(100, batchAmazonProgress.value.done / batchAmazonProgress.value.total * 100) : 0)
+const batchAmazonHasIssues = computed(() => batchAmazonProgress.value.saved + batchAmazonProgress.value.conflict + batchAmazonProgress.value.skipped + batchAmazonProgress.value.failed > 0)
+function openBatchAmazonRefs() {
+  batchAmazonRefsShow.value = true
+  batchAmazonViewed.value = true
+}
+function onBatchAmazonProgress(value: typeof batchAmazonProgress.value) {
+  if (batchAmazonProgress.value.running && !value.running) batchAmazonViewed.value = batchAmazonRefsShow.value
+  batchAmazonProgress.value = value
+}
 const amazonRefShow = ref(false)
 const amazonRefRow = ref<Shipment | null>(null)
 const amazonRefSaving = ref(false)
@@ -965,8 +994,10 @@ const advancedOnlyActiveCount = computed(() => {
   if (advBillNos.value.trim()) n++
   if (advCustomerShipmentIds.value.trim()) n++
   if (filterCarrier.value) n++
-  if (filterSupplierName.value) n++
-  if (filterCountry.value) n++
+  // 港前国家/供应商已放外层，不计入高级筛选角标
+  if (isPreportWorkspace.value && markFilter.value.length) n++
+  if (!isPreportWorkspace.value && filterSupplierName.value) n++
+  if (!isPreportWorkspace.value && filterCountry.value) n++
   if (filterChannelNameZh.value) n++
   if (filterCustomerNo.value) n++
   if (filterDestinationPort.value) n++
@@ -1055,6 +1086,7 @@ function buildListParams(): Parameters<typeof listShipments>[0] {
 
   return {
     ...buildShipmentFilterQuery(filterQueryInput.value),
+    ...(isPreportWorkspace.value && markFilter.value.length ? {commerceMarkIds:markFilter.value} : {}),
     limit,
     offset,
     ...(sortBy.value && sortOrder.value
@@ -1181,7 +1213,15 @@ function showGroupJumpHint(count: number, firstNo: string) {
   message.success(`已定位运单 ${firstNo}`)
 }
 
+const shipmentPageRouteName = route.name
+const shipmentPageFullPath = route.fullPath
+let handledJumpRoute = ''
+
 function applyRouteShipmentNoToSearch() {
+  if (route.name !== shipmentPageRouteName || route.fullPath !== shipmentPageFullPath) return
+  const jumpRoute = route.fullPath
+  if (handledJumpRoute === jumpRoute) return
+  handledJumpRoute = jumpRoute
   const sn = readRouteShipmentNo()
   if (!sn) return
   const fromNotify = isRouteFromNotify()
@@ -1191,6 +1231,7 @@ function applyRouteShipmentNoToSearch() {
     searchShipmentNo.value = sn
   }
   filterStatus.value = null
+  if ((fromGroup || fromNotify) && !claimRouteJump(router.currentRoute.value)) return
   if (fromGroup && tokens.length > 0) {
     showGroupJumpHint(tokens.length, tokens[0] || sn)
     void router.replace({ path: '/shipments', query: { shipmentNo: sn } })
@@ -1453,6 +1494,7 @@ onMounted(async () => {
   await Promise.all([
     loadDictTypes('country_code'),
     loadFilterOptions(),
+    ...(isPreportWorkspace.value ? [loadMarkOptions()] : []),
     ...(isPreportWorkspace.value
       ? []
       : [loadCarrierDailyStats(), loadFreshnessStats()]),
@@ -1478,6 +1520,7 @@ function openAmazonRefEdit(row: Shipment) {
 }
 
 async function handleAmazonRefSave(payload: {
+  pushAmzUpdate: boolean
   customerShipmentId: string
   amazonRefId: string
   amzPushOriginPort: string
@@ -1491,17 +1534,19 @@ async function handleAmazonRefSave(payload: {
       amazonRefId: payload.amazonRefId,
       amzPushOriginPort: payload.amzPushOriginPort,
       amzPushDestPort: payload.amzPushDestPort,
-      pushAmzUpdate: true,
+      pushAmzUpdate: payload.pushAmzUpdate,
     })
     const push = saved.amzPush
-    if (!push || push.skipped) {
+    if (!payload.pushAmzUpdate) {
+      message.success('已保存到本地')
+    } else if (!push || push.skipped) {
       message.warning(push?.message ? `已保存。${push.message}` : '已保存，未推送到亚马逊')
     } else if (push.ok) {
       message.success(push.message || '已保存并推送到亚马逊')
     } else {
       message.warning(push.message ? `已保存。${push.message}` : '已保存，推送失败')
     }
-    amazonRefShow.value = false
+    amazonRefRow.value = saved
     await loadList()
     await loadFreshnessStats()
   } catch (err) {
@@ -1748,6 +1793,7 @@ function resetFilterValues() {
   filterVipOnly.value = false
   filterFclOnly.value = false
   filterCarrier.value = null
+  markFilter.value = []
   filterSupplierName.value = null
   filterCountry.value = null
   filterChannelNameZh.value = null
@@ -2182,6 +2228,77 @@ async function handleSyncPreportFromDps() {
   }
 }
 
+function formatTodayDpsStepText(step: {
+  label: string
+  skipped: boolean
+  reason?: string | null
+  error?: string | null
+  remoteTotal?: number
+  total: number
+  created: number
+  updated: number
+}): string {
+  if (step.skipped) return `${step.label}：${step.reason || '已跳过'}`
+  if (step.error) return `${step.label}：${step.error}`
+  const remote = step.remoteTotal ?? step.total
+  return `${step.label}：新增 ${step.created}、更新 ${step.updated}（远程 ${remote} 单）`
+}
+
+async function handleSyncTodayFromDps() {
+  syncingTodayDps.value = true
+  try {
+    const res = await syncTodayShipmentsFromDps()
+    if (res.skipped) {
+      message.warning(res.reason || '同步今天已跳过')
+      return
+    }
+    const text = res.steps.map(formatTodayDpsStepText).join('；')
+    const failed = res.steps.some((step) => step.error || step.skipped)
+    if (failed) message.warning(text || '同步今天未完成')
+    else message.success(text || '同步今天完成')
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    const raw = apiErrorMessage(e, '同步今天失败')
+    const hint =
+      /failed to fetch|network|fetch/i.test(raw) || (e instanceof TypeError && !raw)
+        ? '（请确认后端 3001 已启动、config.json 合法且含 dps_authorization；开发环境需重启 Vite 以应用代理超时）'
+        : ''
+    message.error(`${raw}${hint}`)
+  } finally {
+    syncingTodayDps.value = false
+  }
+}
+
+async function handleSyncTodayTransitFromDps() {
+  syncingTodayDps.value = true
+  try {
+    const res = await syncTodayTransitShipmentsFromDps()
+    if (res.skipped) {
+      message.warning(res.reason || '同步今天已跳过')
+      return
+    }
+    if (res.error) {
+      message.error(res.error)
+      return
+    }
+    message.success(
+      `在途：新增 ${res.created}、更新 ${res.updated}（远程 ${res.remoteTotal ?? res.total} 单）`,
+    )
+    await loadList()
+    await loadFilterOptions()
+  } catch (e) {
+    const raw = apiErrorMessage(e, '同步今天失败')
+    const hint =
+      /failed to fetch|network|fetch/i.test(raw) || (e instanceof TypeError && !raw)
+        ? '（请确认后端 3001 已启动、config.json 合法且含 dps_authorization；开发环境需重启 Vite 以应用代理超时）'
+        : ''
+    message.error(`${raw}${hint}`)
+  } finally {
+    syncingTodayDps.value = false
+  }
+}
+
 async function handleSyncSelectedFromDps() {
   if (!selectedRows.value.length) {
     message.warning('请先勾选运单')
@@ -2557,16 +2674,15 @@ function isBlankAmazonField(value: string | null | undefined): boolean {
   return text === '' || text === '1'
 }
 
-function needsAmazonRefFill(row: Shipment): boolean {
+function canEditAmazonRefs(row: Shipment): boolean {
   if (isPreportWorkspace.value) return false
   const code = (row.addressCode ?? '').trim()
-  if (code.length !== 4) return false
-  return isBlankAmazonField(row.customerShipmentId) || isBlankAmazonField(row.amazonRefId)
+  return code.length === 4
 }
 
 function renderAmazonRefCell(row: Shipment, field: 'customerShipmentId' | 'amazonRefId') {
   const text = displayField(row[field]).trim()
-  if (!needsAmazonRefFill(row)) {
+  if (!canEditAmazonRefs(row)) {
     return h('span', { class: 'shipment-amazon-cell', title: text || undefined }, text || '—')
   }
   const missing = isBlankAmazonField(text)
@@ -2577,7 +2693,7 @@ function renderAmazonRefCell(row: Shipment, field: 'customerShipmentId' | 'amazo
       class: missing
         ? 'shipment-amazon-cell shipment-amazon-gap'
         : 'shipment-amazon-cell shipment-amazon-gap shipment-amazon-gap--filled',
-      title: missing ? '派送仓库为 4 位。空值或只填 1 需要补货件号或亚马逊预约号' : text,
+      title: missing ? '派送仓库为 4 位。空值或只填 1 需要补货件号或亚马逊预约号' : `${text}（点击修改货件号 / 预约号）`,
       onClick: (event: Event) => {
         event.stopPropagation()
         openAmazonRefEdit(row)
@@ -2672,20 +2788,24 @@ async function copySelectedLatestTracking() {
   }
 }
 
-async function copySelectedShipmentDetailSummary() {
+async function copySelectedShipmentDetailSummary(includeRefShipmentNo: boolean) {
   const rows = selectedRows.value
   if (!rows.length) {
     message.warning('请先勾选运单')
     return
   }
-  const text = formatShipmentDetailSummaryCopyText(rows)
+  const text = formatShipmentDetailSummaryCopyText(rows, { includeRefShipmentNo })
   if (!text) {
     message.warning('无可复制内容')
     return
   }
   try {
     await navigator.clipboard.writeText(text)
-    message.success(`已复制 ${rows.length} 条运单明细`)
+    message.success(
+      includeRefShipmentNo
+        ? `已复制 ${rows.length} 条运单明细（带关联单号）`
+        : `已复制 ${rows.length} 条运单明细`,
+    )
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
@@ -2782,6 +2902,7 @@ const copyDropdownOptions = computed((): DropdownOption[] => {
     { label: '最新轨迹', key: 'latestTracking' },
     { label: '转单号', key: 'trackingNumbers' },
     { label: '运单明细', key: 'detailSummary' },
+    { label: '运单明细（带关联单号）', key: 'detailSummaryWithRef' },
   ]
   return items
 })
@@ -2789,7 +2910,8 @@ const copyDropdownOptions = computed((): DropdownOption[] => {
 function handleCopyMenuSelect(key: string | number) {
   if (key === 'deliveryWindowCopy') void copySelectedDW()
   else if (key === 'deliveryWindowSettings') openDeliveryWindow()
-  else if (key === 'detailSummary') void copySelectedShipmentDetailSummary()
+  else if (key === 'detailSummary') void copySelectedShipmentDetailSummary(false)
+  else if (key === 'detailSummaryWithRef') void copySelectedShipmentDetailSummary(true)
   else if (key === 'preportData') void copySelectedPreportShipmentData()
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
@@ -3297,6 +3419,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
       render: (row) => renderShipmentNo(row),
     },
     ...(statusCol ? [{ ...statusCol, fixed: 'left' as const }] : []),
+    ...(isPreportWorkspace.value ? [{title:'标识',key:'commerceMarks',width:180,render:(row:Shipment) => h('div',{class:'flex flex-wrap gap-1'},(row.commerceMarks || []).map(mark => h('span',{class:'rounded px-1.5 py-0.5 text-xs',style:{color:mark.color,backgroundColor:mark.color+'18',border:'1px solid '+mark.color+'40'},title:mark.name},mark.name)))}] : []),
     ...dynamicCols,
     {
       title: '操作',
@@ -3352,13 +3475,48 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         <NButton
           v-if="isPreportWorkspace"
           size="small"
+          :loading="syncingTodayDps"
+          title="按今天下单时间依次同步已入仓、在途"
+          @click="handleSyncTodayFromDps"
+        >
+          同步今天
+        </NButton>
+        <NButton
+          v-if="isPreportWorkspace"
+          size="small"
           :loading="syncingDps"
           title="从 DPS 按运单号更新全部已下单、提货中、已入仓运单（不含已取消）"
           @click="handleSyncPreportFromDps"
         >
           更新全部运单
         </NButton>
+        <NTooltip v-if="!isPreportWorkspace" trigger="hover">
+          <template #trigger>
+            <NButton size="small" class="batch-amazon-progress-button" @click="openBatchAmazonRefs">
+              <span v-if="batchAmazonProgress.running" class="batch-amazon-spinner" aria-hidden="true" />
+              <span v-if="batchAmazonProgress.running">处理中 {{ batchAmazonProgress.done }}/{{ batchAmazonProgress.total }}</span>
+              <span v-else-if="batchAmazonProgress.total && !batchAmazonViewed">已完成 {{ batchAmazonProgress.done }}/{{ batchAmazonProgress.total }}</span>
+              <span v-else>批量补货件/预约号</span>
+              <span v-if="!batchAmazonProgress.running && !batchAmazonViewed && batchAmazonHasIssues" class="batch-amazon-issue-dot" aria-label="有异常结果待查看" />
+              <span v-if="batchAmazonProgress.running" class="batch-amazon-progress-track" role="progressbar" :aria-valuenow="batchAmazonProgress.done" :aria-valuemax="batchAmazonProgress.total" :aria-valuemin="0" aria-label="批量处理进度"><span :style="{ width: `${batchAmazonPercent}%` }" /></span>
+            </NButton>
+          </template>
+          <div v-if="batchAmazonProgress.total">
+            <div>成功 {{ batchAmazonProgress.success }} · 已保存未推送成功 {{ batchAmazonProgress.saved }}</div>
+            <div>冲突 {{ batchAmazonProgress.conflict }} · 跳过 {{ batchAmazonProgress.skipped }} · 失败 {{ batchAmazonProgress.failed }}</div>
+            <div>待处理 {{ Math.max(0, batchAmazonProgress.total - batchAmazonProgress.done) }}，点击查看详情</div>
+          </div>
+          <span v-else>粘贴多行货件号与预约号，批量保存并推送</span>
+        </NTooltip>
         <template v-if="!isPreportWorkspace">
+          <NButton
+            size="small"
+            :loading="syncingTodayDps"
+            title="按今天发运时间同步在途 queryByPerson"
+            @click="handleSyncTodayTransitFromDps"
+          >
+            同步今天
+          </NButton>
           <NButton
             size="small"
             :loading="syncingTracking"
@@ -3386,6 +3544,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </template>
         <NButton type="primary" size="small" @click="openCreate">新增运单</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
+        <NButton v-if="isPreportWorkspace" size="small" :disabled="!checkedRowKeys.length || checkedRowKeys.length>200" @click="markManagerShow = true">标识管理</NButton>
         <NButton size="small" :loading="exporting" @click="handleExport">导出运单</NButton>
       </NSpace>
     </div>
@@ -3462,6 +3621,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             class="shipments-filter-select"
             @update:value="onFiltersChanged"
           />
+          <NSelect v-if="isPreportWorkspace" v-model:value="markFilter" multiple clearable filterable :options="markOptions.map(mark => ({label:mark.name,value:mark.id}))" placeholder="标识（任意匹配）" size="small" class="shipments-filter-select shipments-filter-select--wide" />
           <NSelect
             v-if="isPreportWorkspace"
             v-model:value="filterOriginWarehouseCode"
@@ -3511,6 +3671,28 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             filterable
             size="small"
             class="shipments-filter-select shipments-filter-select--customer"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-if="isPreportWorkspace"
+            v-model:value="filterCountry"
+            :options="countryOptions"
+            placeholder="国家"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select"
+            @update:value="onFiltersChanged"
+          />
+          <NSelect
+            v-if="isPreportWorkspace"
+            v-model:value="filterSupplierName"
+            :options="supplierOptions"
+            placeholder="供应商"
+            clearable
+            filterable
+            size="small"
+            class="shipments-filter-select shipments-filter-select--wide"
             @update:value="onFiltersChanged"
           />
           <NSelect
@@ -3783,6 +3965,8 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     <ShipmentOrderProductsModal v-model:show="orderProductsShow" :shipment="orderProductsRow" />
     <ShipmentProductCtnsCheckModal v-model:show="productCtnsCheckShow" :ids="productCtnsCheckIds" />
 
+    <ShipmentBatchAmazonRefsModal :show="batchAmazonRefsShow" @close="batchAmazonRefsShow = false" @updated="loadList(); loadFreshnessStats()" @progress="onBatchAmazonProgress" />
+    <ShipmentMarkManagerModal :show="markManagerShow" :ids="checkedRowKeys.map(String)" @close="markManagerShow = false" @updated="marksUpdated" />
     <ShipmentAmazonRefModal
       :show="amazonRefShow"
       :shipment="amazonRefRow"
@@ -3851,6 +4035,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :has-group-filter-options="hasGroupFilterOptions"
       :group-filter-options="groupFilterOptions"
       :rule-type-filter-options="ruleTypeFilterOptions"
+      :hide-country-supplier="isPreportWorkspace"
       @apply="onFiltersChanged"
     />
 
@@ -4290,4 +4475,14 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
   background: rgb(109 40 217 / 0.14);
   color: #4c1d95;
 }
+</style>
+
+<style scoped>
+.batch-amazon-progress-button { position: relative; overflow: hidden; }
+.batch-amazon-spinner { width: 12px; height: 12px; margin-right: 6px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: batch-amazon-spin 0.8s linear infinite; }
+.batch-amazon-progress-track { position: absolute; height: 3px; bottom: 0; left: 0; right: 0; background: rgba(139, 92, 246, 0.15); }
+.batch-amazon-progress-track > span { display: block; height: 100%; background: currentColor; transition: width 0.2s ease; }
+.batch-amazon-issue-dot { width: 7px; height: 7px; margin-left: 6px; border-radius: 50%; background: #f59e0b; }
+@keyframes batch-amazon-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .batch-amazon-spinner { animation: none; } .batch-amazon-progress-track > span { transition: none; } }
 </style>

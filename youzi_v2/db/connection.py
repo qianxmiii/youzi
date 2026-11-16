@@ -71,6 +71,8 @@ class Database:
             addresses_warehouse_table.ensure_schema(self._conn)
             customer_addresses_table.ensure_schema(self._conn)
             shipments_table.ensure_schema(self._conn)
+            from .shipment_marks import ensure_schema as ensure_shipment_marks
+            ensure_shipment_marks(self._conn)
             shipment_exception_events_table.ensure_schema(self._conn)
             shipment_exception_followup_table.ensure_schema(self._conn)
             channel_sla_rules_table.ensure_schema(self._conn)

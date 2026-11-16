@@ -55,7 +55,7 @@ def create_code_table_row(table_name: str, payload: CodeTableRecordIn):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except sqlite3.IntegrityError as exc:
-        raise HTTPException(status_code=409, detail="编码已存在") from exc
+        raise HTTPException(status_code=409, detail="标识 ID 或名称已存在" if table_name == "commerce_mark_codes" else "编码已存在") from exc
 
 @router.put("/api/v1/admin/code-tables/{table_name}/{code}")
 def update_code_table_row(table_name: str, code: str, payload: CodeTableUpdateIn):
@@ -65,6 +65,8 @@ def update_code_table_row(table_name: str, code: str, payload: CodeTableUpdateIn
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="记录不存在") from exc
+    except sqlite3.IntegrityError as exc:
+        raise HTTPException(status_code=409, detail="编码或名称已存在") from exc
 
 @router.delete("/api/v1/admin/code-tables/{table_name}/{code}")
 def delete_code_table_row(table_name: str, code: str):

@@ -5,6 +5,7 @@ import {
   NFormItem,
   NInput,
   NInputNumber,
+  NColorPicker,
   NModal,
   NSelect,
   NSpace,
@@ -16,6 +17,7 @@ import type { CodeTablePayload, CodeTableRow } from '@/types/codeTable'
 const props = defineProps<{
   show: boolean
   mode: 'create' | 'edit'
+  hasMarkFields?: boolean
   hasPortType: boolean
   hasChannelFields?: boolean
   hasCarrierFields?: boolean
@@ -65,6 +67,7 @@ const form = reactive<CodeTablePayload>({
   code: '',
   nameZh: '',
   nameEn: '',
+  color: '#7c3aed',
   sortOrder: 0,
   isActive: true,
   portType: 'both',
@@ -91,6 +94,7 @@ watch(
   () => {
     if (!props.show) return
     if (props.mode === 'edit' && props.initial) {
+      form.color = props.initial.color || '#7c3aed'
       form.code = props.initial.code
       form.nameZh = props.initial.nameZh
       form.nameEn = props.initial.nameEn
@@ -112,6 +116,7 @@ watch(
       form.matchText = props.initial.matchText || ''
       form.isDefault = !!props.initial.isDefault
     } else {
+      form.color = '#7c3aed'
       form.code = ''
       form.nameZh = ''
       form.nameEn = ''
@@ -151,15 +156,17 @@ function handleSubmit() {
     @update:show="(v: boolean) => !v && emit('close')"
   >
     <NForm label-placement="left" label-width="88" size="small">
-      <NFormItem label="编码" required>
-        <NInput v-model:value="form.code" :disabled="mode === 'edit'" placeholder="唯一编码" />
+      <NFormItem :label="hasMarkFields ? '标识 ID' : '编码'" required>
+        <NInput v-model:value="form.code" :disabled="mode === 'edit'" :placeholder="hasMarkFields ? 'DPS 真实标识 ID' : '唯一编码'" />
       </NFormItem>
-      <NFormItem label="中文名">
+      <NFormItem :label="hasMarkFields ? '标识名称' : '中文名'">
         <NInput v-model:value="form.nameZh" />
       </NFormItem>
-      <NFormItem label="英文名">
+      <NFormItem v-if="!hasMarkFields" label="英文名">
         <NInput v-model:value="form.nameEn" />
       </NFormItem>
+      <NFormItem v-if="hasMarkFields" label="徽章颜色"><NColorPicker v-model:value="form.color" :show-alpha="false" :modes="['hex']" /></NFormItem>
+      <p v-if="hasMarkFields" class="mb-3 text-xs text-[var(--color-muted)]">名称须与 DPS markVos.name 一致。ID 使用远端真实值，停用后不可用于新操作。</p>
       <NFormItem v-if="hasPortType" label="港口类型">
         <NSelect v-model:value="form.portType" :options="portTypeOptions" />
       </NFormItem>

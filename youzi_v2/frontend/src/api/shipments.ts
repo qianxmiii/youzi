@@ -67,6 +67,7 @@ export interface ShipmentFilterOptions {
 /** 仅发送有值的查询参数，避免 ofetch 序列化异常 */
 export function buildShipmentListQuery(params: ListShipmentsParams): Record<string, string | string[]> {
   const q: Record<string, string | string[]> = {}
+  if (params.commerceMarkIds?.length) q.commerceMarkIds = params.commerceMarkIds
   if (params.search?.trim()) q.search = params.search.trim()
   if (params.trackingSearch?.trim()) q.trackingSearch = params.trackingSearch.trim()
   if (params.shipmentNos?.length) q.shipmentNos = params.shipmentNos
@@ -157,6 +158,7 @@ export function buildShipmentListQuery(params: ListShipmentsParams): Record<stri
 }
 
 export interface ListShipmentsParams {
+  commerceMarkIds?: string[]
   search?: string
   /** 在全部内部/承运商轨迹节点描述中模糊匹配 */
   trackingSearch?: string

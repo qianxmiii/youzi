@@ -68,6 +68,8 @@ defineProps<{
   hasGroupFilterOptions: { label: string; value: string }[]
   groupFilterOptions: { label: string; value: string }[]
   ruleTypeFilterOptions: { label: string; value: string }[]
+  /** 港前国家/供应商已在外层，高级筛选内隐藏避免重复 */
+  hideCountrySupplier?: boolean
 }>()
 
 const emit = defineEmits<{ apply: [] }>()
@@ -142,12 +144,21 @@ function apply() {
               size="small"
             />
             <NInput v-model:value="searchKeyword" placeholder="关键词：品名、地址等" clearable size="small" />
-            <NSelect v-model:value="filterCountry" :options="countryOptions" placeholder="国家/地区" clearable filterable size="small" />
+            <NSelect
+              v-if="!hideCountrySupplier"
+              v-model:value="filterCountry"
+              :options="countryOptions"
+              placeholder="国家/地区"
+              clearable
+              filterable
+              size="small"
+            />
             <NInput v-model:value="filterDestinationPort" placeholder="目的港" clearable size="small" />
             <NInput v-model:value="filterAddressKeyword" placeholder="仓库 / 地址关键词" clearable size="small" />
             <NSelect v-model:value="filterChannelNameZh" :options="channelNameZhOptions" placeholder="渠道（中文名）" clearable filterable size="small" />
             <NSelect v-model:value="filterCarrier" :options="carrierOptions" placeholder="承运商" clearable filterable size="small" />
             <NSelect
+              v-if="!hideCountrySupplier"
               v-model:value="filterSupplierName"
               :options="supplierOptions"
               placeholder="供应商"

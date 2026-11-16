@@ -1,6 +1,7 @@
 export interface CodeTableMeta {
   table: string
   label: string
+  hasMarkFields?: boolean
   hasPortType: boolean
   hasChannelFields?: boolean
   hasCarrierFields?: boolean
@@ -12,6 +13,7 @@ export interface CodeTableMeta {
 export interface CodeTableRow {
   code: string
   nameZh: string
+  color?: string
   nameEn: string
   sortOrder: number
   isActive: boolean
@@ -46,6 +48,7 @@ export interface CodeTableListResponse {
 export interface CodeTablePayload {
   code: string
   nameZh: string
+  color?: string
   nameEn: string
   sortOrder: number
   isActive: boolean

@@ -458,6 +458,8 @@ def update_shipment(item_id: str, payload: ShipmentUpdateIn):
             LOGISTICS_CONFIG_PATH,
             fresh,
         )}
+        from ..services.dps_update_amz import record_amz_push_result
+        record_amz_push_result(shipments_repo._database, fresh, row["amzPush"])
         refreshed = shipments_repo.get_by_id(item_id)
         if refreshed is not None:
             row = {**refreshed, "amzPush": row["amzPush"]}
@@ -1113,3 +1115,24 @@ async def import_shipments_excel(file: UploadFile = File(...)):
     finally:
         if upload_path.exists():
             upload_path.unlink(missing_ok=True)
+
+
+from pydantic import BaseModel, Field
+
+class BatchAmazonRefsIn(BaseModel):
+    taskId: str = Field(default="", max_length=100, pattern=r"^[a-zA-Z0-9-]*$")
+    force: bool = False
+    text: str = Field(min_length=1, max_length=20000)
+    lineIndex: int = Field(ge=0, le=199)
+
+
+@router.post("/api/v1/shipment-amazon-refs/batch-row")
+def update_batch_amazon_refs(body: BatchAmazonRefsIn):
+    from ..services.batch_amazon_refs import parse_lines, process_row
+    rows = parse_lines(body.text)
+    if len(rows) > 200 or body.lineIndex >= len(rows):
+        raise HTTPException(status_code=400, detail="批次最多 200 票，或行号无效")
+    try:
+        return process_row(shipments_repo, LOGISTICS_CONFIG_PATH, rows[body.lineIndex], force=body.force, task_id=body.taskId)
+    except Exception:
+        return {**rows[body.lineIndex], "status": "failed", "message": "处理失败，请核对本地保存及推送记录后重试"}

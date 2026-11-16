@@ -104,6 +104,7 @@ def _upsert_dps_rows(
     rows: list[Any],
     *,
     log: LogFn | None = None,
+    config_path: Path | None = None,
 ) -> dict[str, Any]:
     database = shipments_repo._database
     code_tables = CodeTablesRepository(database)
@@ -115,6 +116,10 @@ def _upsert_dps_rows(
     customs_opened = 0
     customs_closed = 0
     errors: list[str] = []
+    from .commerce_marks import load_catalog, normalize_remote_marks, migrate_legacy_catalog
+    import json
+    migrate_legacy_catalog(database,config_path)
+    catalog = load_catalog(database,include_inactive=True)
 
     for row in rows:
         if not isinstance(row, dict):
@@ -136,6 +141,10 @@ def _upsert_dps_rows(
                 existing=existing,
                 is_new=is_new,
             )
+            marks=normalize_remote_marks(row,catalog)
+            if marks is not None:
+                filtered['commerce_mark_ids']=json.dumps([m['id'] for m in marks])
+                filtered['commerce_marks']=json.dumps(marks,ensure_ascii=False)
             before_id = None if is_new else existing["id"]
             result_row, was_created = shipments_repo.upsert_by_shipment_no(filtered)
             if was_created:
@@ -265,7 +274,7 @@ def run_shipment_dps_sync_by_order(
         returned_nos = {shipment_odd(r) for r in all_rows if shipment_odd(r)}
         not_found_nos = [n for n in nos if n not in returned_nos]
 
-        stats = _upsert_dps_rows(shipments_repo, all_rows, log=log)
+        stats = _upsert_dps_rows(shipments_repo, all_rows, log=log, config_path=config_path)
         out(
             f"[DPS运单同步] 按单号完成 remote={remote_total} 写入="
             f"{stats['created'] + stats['updated']} 新增={stats['created']} "
@@ -353,7 +362,7 @@ def run_shipment_dps_sync_preport_active(
             remote_total += int(parsed.get("total") or len(chunk_rows))
             returned_nos = {shipment_odd(r) for r in chunk_rows if shipment_odd(r)}
             not_found_nos.extend(n for n in chunk if n not in returned_nos)
-            stats = _upsert_dps_rows(shipments_repo, chunk_rows, log=log)
+            stats = _upsert_dps_rows(shipments_repo, chunk_rows, log=log, config_path=config_path)
             created += int(stats["created"])
             updated += int(stats["updated"])
             unchanged += int(stats["unchanged"])
@@ -491,7 +500,7 @@ def _run_shipment_dps_sync_locked(
     assert parsed is not None
     rows = list(parsed.get("rows") or [])
     total = int(parsed.get("total") or len(rows))
-    stats = _upsert_dps_rows(shipments_repo, rows, log=log)
+    stats = _upsert_dps_rows(shipments_repo, rows, log=log, config_path=config_path)
     out(
         f"[{log_tag}] 完成 remote={total} 写入={stats['created'] + stats['updated']} "
         f"新增={stats['created']} 更新={stats['updated']} "

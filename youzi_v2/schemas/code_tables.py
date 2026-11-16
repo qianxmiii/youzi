@@ -10,6 +10,7 @@ class CodeTableRecordIn(BaseModel):
 
     code: str
     name_zh: str = Field(default="", validation_alias=AliasChoices("nameZh", "name_zh"))
+    color: str = Field(default="#7c3aed", max_length=7)
     name_en: str = Field(default="", validation_alias=AliasChoices("nameEn", "name_en"))
     sort_order: int = Field(
         default=0, validation_alias=AliasChoices("sortOrder", "sort_order")
@@ -35,6 +36,7 @@ class CodeTableUpdateIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 
     name_zh: str = Field(default="", validation_alias=AliasChoices("nameZh", "name_zh"))
+    color: str = Field(default="#7c3aed", max_length=7)
     name_en: str = Field(default="", validation_alias=AliasChoices("nameEn", "name_en"))
     sort_order: int = Field(
         default=0, validation_alias=AliasChoices("sortOrder", "sort_order")

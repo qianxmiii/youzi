@@ -1,5 +1,9 @@
 {
-  "sheet_preference": ["码表", "Sheet1", "数据"],
+  "sheet_preference": [
+    "码表",
+    "Sheet1",
+    "数据"
+  ],
   "columns": {
     "编码": "code",
     "港口代码": "code",
@@ -38,7 +42,21 @@
     "DPS status": "dps_status",
     "DPS status码": "dps_status",
     "dps_status": "dps_status",
-    "dpsStatus": "dps_status"
+    "dpsStatus": "dps_status",
+    "标识ID": "code",
+    "标识名称": "name_zh",
+    "颜色": "color",
+    "徽章颜色": "color",
+    "color": "color"
   },
-  "is_active_true": ["1", "true", "yes", "y", "是", "启用", "TRUE", "Yes"]
+  "is_active_true": [
+    "1",
+    "true",
+    "yes",
+    "y",
+    "是",
+    "启用",
+    "TRUE",
+    "Yes"
+  ]
 }

@@ -18,6 +18,7 @@ _CODE_TABLE_DEFS: list[tuple[str, str]] = [
         "channel_codes",
         "country TEXT NOT NULL DEFAULT '',\n    category TEXT NOT NULL DEFAULT '',\n    note TEXT NOT NULL DEFAULT '',\n    dps_channel_name TEXT NOT NULL DEFAULT '',",
     ),
+    ("commerce_mark_codes", "color TEXT NOT NULL DEFAULT '#7c3aed',"),
     ("country_codes", ""),
     ("address_codes", ""),
     ("carrier_codes", "carrier_id TEXT NOT NULL DEFAULT '',"),
@@ -112,6 +113,7 @@ def _migrate_carrier_codes(conn: sqlite3.Connection) -> None:
 def ensure_schema(conn: sqlite3.Connection) -> None:
     for table, extra in _CODE_TABLE_DEFS:
         conn.execute(_create_code_table_sql(table, extra))
+    conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_commerce_mark_name ON commerce_mark_codes(name_zh)")
     _migrate_channel_codes(conn)
     _migrate_carrier_codes(conn)
     _migrate_route_status_codes(conn)

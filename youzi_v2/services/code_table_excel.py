@@ -106,6 +106,8 @@ def parse_excel_rows(
             "sort_order": _cell_int(pick("sort_order"), 0),
             "is_active": _parse_is_active(pick("is_active"), true_tokens),
         }
+        if table == "commerce_mark_codes":
+            payload["color"]=_cell_str(pick("color")) or "#7c3aed"
         if table == "port_codes":
             pt = _cell_str(pick("port_type")) or "both"
             payload["port_type"] = pt.lower()
@@ -162,7 +164,10 @@ def build_template_bytes(table: str) -> bytes:
     validate_table(table)
     headers = ["编码", "中文名", "英文名", "排序", "启用"]
     sample = ["SAMPLE01", "示例中文", "Sample EN", 10, "是"]
-    if table == "channel_codes":
+    if table == "commerce_mark_codes":
+        headers=["标识ID","标识名称","颜色","排序","启用"]
+        sample=["MARK_EXAMPLE","示例标识","#2A3CC8",10,"是"]
+    elif table == "channel_codes":
         headers = [
             "编码",
             "中文名",

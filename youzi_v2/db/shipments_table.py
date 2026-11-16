@@ -206,6 +206,13 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_dest_port TEXT")
     if "amz_push_origin_port" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_origin_port TEXT")
+    for column in ("amz_push_result", "amz_push_success_payload"):
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN {column} TEXT")
+    if "commerce_marks" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN commerce_marks TEXT NOT NULL DEFAULT '[]'")
+    if "commerce_mark_ids" not in cols:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN commerce_mark_ids TEXT NOT NULL DEFAULT '[]'")
     if "amz_push_at" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN amz_push_at TEXT")
     if "collection_start_date" not in cols:

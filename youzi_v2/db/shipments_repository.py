@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 import sqlite3
 import uuid
 from typing import Any
 
 from .connection import Database
+from .shipment_marks import load_many_locked, replace_locked, filter_sql
 from ..internal_tracking import INTERNAL_WAREHOUSE_PLACEHOLDER, mask_internal_summary
 from .datetime_util import now_str
 from .carrier_tracking_logs_table import TABLE_NAME as CARRIER_TRACKING_TABLE
@@ -104,6 +106,8 @@ _LIST_SELECT = (
 
 # 可写字段（不含 id / shipment_no / created_time）
 _UPDATABLE = (
+    "commerce_mark_ids",
+    "commerce_marks",
     "customer",
     "customer_no",
     "ref_shipment_no",
@@ -187,6 +191,8 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
     return {
         "id": row["id"],
         "shipmentNo": row["shipment_no"],
+        "commerceMarks": [],
+        "commerceMarkIds": [],
         "customer": row["customer"],
         "customerNo": row["customer_no"],
         "refShipmentNo": (
@@ -256,6 +262,8 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
             else ""
         )
         or None,
+        "amzPushResult": row["amz_push_result"] if "amz_push_result" in row.keys() else None,
+        "amzPushSuccessPayload": row["amz_push_success_payload"] if "amz_push_success_payload" in row.keys() else None,
         "amzPushAt": (
             row["amz_push_at"] if "amz_push_at" in row.keys() else None
         ),
@@ -414,11 +422,31 @@ class ShipmentsRepository:
     def _subscribed_shipment_ids(self) -> set[str]:
         return ShipmentSubscriptionsRepository(self._database).subscribed_shipment_ids()
 
+    def _enrich_marks(self,items):
+        with self._database.lock:
+            marks=load_many_locked(self._conn,[item['id'] for item in items])
+        for item in items:
+            item['commerceMarks']=marks.get(item['id'],[])
+            item['commerceMarkIds']=[mark['id'] for mark in item['commerceMarks']]
+
+    def _pop_marks_payload(self,payload):
+        raw=payload.pop('commerce_marks',None)
+        ids=payload.pop('commerce_mark_ids',None)
+        if raw is not None:return json.loads(raw) if isinstance(raw,str) else raw
+        if ids is not None:
+            ids=json.loads(ids) if isinstance(ids,str) else ids
+            with self._database.lock:
+                catalog={r[0]:{'name':r[1],'color':r[2]} for r in self._conn.execute('SELECT code,name_zh,color FROM commerce_mark_codes')}
+            return [{'id':key,'name':catalog.get(key,{}).get('name') or key.removeprefix('name:'),'color':catalog.get(key,{}).get('color') or '#7c3aed'} for key in ids]
+        return None
+
     def _enrich_subscribed(self, item: dict[str, Any]) -> dict[str, Any]:
+        self._enrich_marks([item])
         item["subscribed"] = item["id"] in self._subscribed_shipment_ids()
         return item
 
     def _enrich_subscribed_list(self, items: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        self._enrich_marks(items)
         sub_ids = self._subscribed_shipment_ids()
         for item in items:
             item["subscribed"] = item["id"] in sub_ids
@@ -466,6 +494,7 @@ class ShipmentsRepository:
         bill_nos: list[str] | None = None,
         customer_shipment_ids: list[str] | None = None,
         customer_nos: list[str] | None = None,
+        commerce_mark_ids: list[str] | None = None,
         status_code: str | None = None,
         route_status: str | None = None,
         payment_status: str | None = None,
@@ -545,6 +574,9 @@ class ShipmentsRepository:
             workspace = validate_workspace(workspace)
         conditions: list[str] = []
         params: list[Any] = []
+        if commerce_mark_ids:
+            mark_sql,mark_params=filter_sql(commerce_mark_ids)
+            conditions.append(mark_sql);params.extend(mark_params)
         cleaned_nos = list(
             dict.fromkeys(s.strip() for s in (shipment_nos or []) if s and s.strip())
         )
@@ -1629,6 +1661,7 @@ class ShipmentsRepository:
 
     def insert_row(self, data: dict[str, Any]) -> dict[str, Any]:
         payload = _normalize_payload(data)
+        marks=self._pop_marks_payload(payload)
         shipment_no = (payload.get("shipment_no") or "").strip()
         if not shipment_no:
             raise ValueError("运单号不能为空")
@@ -1643,11 +1676,12 @@ class ShipmentsRepository:
         placeholders = ", ".join("?" for _ in cols)
         col_sql = ", ".join(cols)
         with self._database.lock:
-            self._conn.execute(
-                f"INSERT INTO {TABLE_NAME} ({col_sql}) VALUES ({placeholders})",
-                vals,
-            )
-            self._conn.commit()
+            try:
+                self._conn.execute(f"INSERT INTO {TABLE_NAME} ({col_sql}) VALUES ({placeholders})",vals)
+                if marks is not None:replace_locked(self._conn,rid,marks)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback();raise
         if payload.get("tracking_number"):
             self._persist_conwest_tracking_numbers(
                 shipment_no,
@@ -1668,20 +1702,21 @@ class ShipmentsRepository:
         if existing is None:
             raise KeyError(item_id)
         payload = _normalize_payload(data)
+        marks=self._pop_marks_payload(payload)
         payload.pop("shipment_no", None)
-        if not payload:
+        if not payload and marks is None:
             return existing
         sets = [f"{col} = ?" for col in payload]
         sets.append("updated_time = ?")
         vals = list(payload.values()) + [now_str(), item_id]
         with self._database.lock:
-            cur = self._conn.execute(
-                f"UPDATE {TABLE_NAME} SET {', '.join(sets)} WHERE id = ?",
-                vals,
-            )
-            self._conn.commit()
-            if cur.rowcount == 0:
-                raise KeyError(item_id)
+            try:
+                cur=self._conn.execute(f"UPDATE {TABLE_NAME} SET {', '.join(sets)} WHERE id = ?",vals)
+                if cur.rowcount == 0:raise KeyError(item_id)
+                if marks is not None:replace_locked(self._conn,item_id,marks)
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback();raise
         row = self.get_by_id(item_id)
         if row is None:
             raise KeyError(item_id)
@@ -1808,6 +1843,7 @@ class ShipmentsRepository:
 
     def delete_row(self, item_id: str) -> bool:
         with self._database.lock:
+            self._conn.execute("DELETE FROM shipment_marks WHERE shipment_id=?",(item_id,))
             cur = self._conn.execute(
                 f"DELETE FROM {TABLE_NAME} WHERE id = ?",
                 (item_id,),

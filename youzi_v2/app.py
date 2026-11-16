@@ -32,6 +32,9 @@ from .routers import (
     legacy,
     maritime_alerts,
     order_flow,
+    commerce_marks,
+    task_history,
+    link_download,
     pages,
     settings_tasks,
     shipment_groups,
@@ -46,6 +49,8 @@ from .routers import (
 )
 
 app = FastAPI(title="youzi_v2 Admin")
+from .services.request_task_tracking import RequestTaskTrackingMiddleware
+app.add_middleware(RequestTaskTrackingMiddleware, database=shipments_repo._database)
 app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 app.add_middleware(
@@ -107,6 +112,9 @@ for route_module in (
     shipment_sla,
     maritime_alerts,
     order_flow,
+    commerce_marks,
+    task_history,
+    link_download,
     vessel_schedules,
     workbench,
     tools,

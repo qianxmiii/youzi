@@ -13,6 +13,8 @@ import {
   type DataTableColumns,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { api } from '@/api/client'
+import { trackTask } from '@/composables/useRunningTasks'
 import { useRoute, useRouter } from 'vue-router'
 import {
   codeTableTemplateUrl,
@@ -34,9 +36,25 @@ const message = useMessage()
 const route = useRoute()
 const router = useRouter()
 const tables = ref<CodeTableMeta[]>([])
+const tableOrder = ['country_codes','port_codes','address_codes','carrier_codes','channel_codes','shipment_status_codes','shipment_route_status_codes','shipment_exception_codes','commerce_mark_codes','amz_update_port_rules']
+const orderedTables = computed(() => [...tables.value].sort((a,b) => {
+  const rank = (name: string) => { const index=tableOrder.indexOf(name); return index<0 ? tableOrder.length : index }
+  return rank(a.table)-rank(b.table)
+}))
 const activeTable = ref('')
 const loading = ref(false)
 const importing = ref(false)
+const syncingMarks = ref(false)
+async function syncMarks() {
+  if (syncingMarks.value) return
+  syncingMarks.value=true
+  try {
+    const result=await trackTask('同步标识',taskId => api<{created:number;updated:number;unchanged:number}>('/api/v1/commerce-marks/sync',{method:'POST',headers:{'X-Youzi-Task-Id':taskId},timeout:60000,retry:0}))
+    message.success(`标识同步完成：新增 ${result.created}，更新 ${result.updated}，未变化 ${result.unchanged}`)
+    if (activeTable.value === 'commerce_mark_codes') { page.value=1; await loadRows() }
+  } catch(error) { message.error((error as {data?:{detail?:string}})?.data?.detail || '同步标识失败，请检查配置和网络') }
+  finally { syncingMarks.value=false }
+}
 const items = ref<CodeTableRow[]>([])
 const total = ref(0)
 const search = ref('')
@@ -50,6 +68,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const activeMeta = computed(() => tables.value.find((t) => t.table === activeTable.value))
 const isChannelTable = computed(() => activeTable.value === CHANNEL_CODES_TABLE)
+const hasMarkFields = computed(() => activeMeta.value?.hasMarkFields ?? false)
 const hasPortType = computed(() => activeMeta.value?.hasPortType ?? false)
 const hasChannelFields = computed(() => activeMeta.value?.hasChannelFields ?? false)
 const hasCarrierFields = computed(() => activeMeta.value?.hasCarrierFields ?? false)
@@ -66,7 +85,7 @@ async function loadTables() {
   if (typeof q === 'string' && res.tables.some((t) => t.table === q)) {
     activeTable.value = q
   } else if (!activeTable.value && res.tables.length) {
-    activeTable.value = res.tables[0].table
+    activeTable.value = orderedTables.value[0]?.table || res.tables[0].table
   }
 }
 
@@ -192,15 +211,15 @@ function downloadTemplate() {
 const columns = computed<DataTableColumns<CodeTableRow>>(() => {
   const cols: DataTableColumns<CodeTableRow> = [
     {
-      title: '编码',
+      title: hasMarkFields.value ? '标识 ID' : '编码',
       key: 'code',
       width: 140,
       fixed: 'left',
       render: (row) =>
         h('span', { class: 'code-table-code font-mono font-semibold tabular-nums' }, row.code),
     },
-    { title: '中文名', key: 'nameZh', width: 160, ellipsis: { tooltip: true } },
-    { title: '英文名', key: 'nameEn', width: 160, ellipsis: { tooltip: true } },
+    { title: hasMarkFields.value ? '标识名称' : '中文名', key: 'nameZh', width: 160, ellipsis: { tooltip: true } },
+    ...(!hasMarkFields.value ? [{ title: '英文名', key: 'nameEn', width: 160, ellipsis: { tooltip: true } }] : []),
   ]
   if (hasPortType.value) {
     cols.push({
@@ -209,6 +228,9 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       width: 100,
       render: (row) => row.portType || '—',
     })
+  }
+  if (hasMarkFields.value) {
+    cols.push({title:'徽章',key:'color',width:150,render:row => h('span',{style:{color:row.color,backgroundColor:(row.color || '#7c3aed')+'18',border:'1px solid '+row.color+'40',borderRadius:'4px',padding:'2px 8px'}},row.nameZh)})
   }
   if (hasCarrierFields.value) {
     cols.push({
@@ -325,6 +347,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
     <div class="shrink-0 flex flex-wrap items-center justify-between gap-3">
       <div>
         <h2 class="page-h2">后台管理 · 码表</h2>
+        <p class="mt-1 text-xs text-[var(--color-muted)]">基础资料、运单配置与专项规则</p>
       </div>
       <NSpace v-if="!isChannelTable">
         <NButton size="small" quaternary @click="downloadTemplate">下载模板</NButton>
@@ -343,28 +366,28 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
       @change="onFileSelected"
     />
 
-    <NTabs v-model:value="activeTable" type="line" animated class="shrink-0">
+    <div class="code-table-navigation shrink-0">
+    <NTabs v-model:value="activeTable" type="segment" class="code-table-tabs" :pane-style="{padding:0}" :animated="false">
       <NTabPane
-        v-for="t in tables"
+        v-for="t in orderedTables"
         :key="t.table"
         :name="t.table"
         :tab="t.label"
       />
     </NTabs>
+    </div>
 
     <div v-if="isChannelTable" class="min-h-0 flex-1 overflow-hidden">
       <ChannelsView embedded />
     </div>
 
     <template v-else>
-      <div class="shrink-0 flex flex-wrap items-center gap-2">
-        <NInput
-          v-model:value="search"
-          placeholder="搜索编码、中英文名…"
-          clearable
-          size="small"
-          class="w-64"
-        />
+      <div class="code-table-toolbar shrink-0">
+        <div class="code-table-toolbar__context"><strong>{{ activeMeta?.label }}</strong><span>{{ loading ? '加载中…' : `共 ${total} 项` }}</span></div>
+        <div class="code-table-toolbar__actions">
+          <NInput v-model:value="search" :placeholder="hasMarkFields ? '搜索标识 ID、名称…' : '搜索编码、名称…'" clearable size="small" class="code-table-search" />
+          <NButton v-if="hasMarkFields" size="small" secondary type="primary" :loading="syncingMarks" :disabled="syncingMarks || importing" title="从 DPS 同步名称和颜色，保留本地启用状态及排序" @click="syncMarks">同步标识</NButton>
+        </div>
       </div>
 
       <div class="panel min-h-0 flex-1 overflow-hidden p-0">
@@ -396,6 +419,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
         :mode="modalMode"
         :has-port-type="hasPortType"
         :has-channel-fields="hasChannelFields"
+        :has-mark-fields="hasMarkFields"
         :has-carrier-fields="hasCarrierFields"
         :has-route-status-fields="hasRouteStatusFields"
         :has-exception-phase-fields="hasExceptionPhaseFields"
@@ -409,6 +433,21 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
 </template>
 
 <style scoped>
+.code-table-navigation { overflow-x:auto; padding:3px; border:1px solid var(--color-border); border-radius:10px; background:var(--color-btn-ghost-bg); }
+.code-table-tabs { min-width:1080px; }
+.code-table-tabs :deep(.n-tabs-rail) { background:transparent; padding:0; }
+.code-table-tabs :deep(.n-tabs-tab) { padding:9px 12px; font-size:13px; color:var(--color-fg-secondary); }
+.code-table-tabs :deep(.n-tabs-tab--active) { color:var(--color-accent); font-weight:600; }
+.code-table-tabs :deep(.n-tabs-capsule) { border-radius:7px; background:var(--color-surface); box-shadow:0 1px 3px rgb(0 0 0 / .06),inset 0 0 0 1px color-mix(in srgb,var(--color-accent) 18%,transparent); }
+.code-table-tabs :deep(.n-tabs-pane-wrapper) { display:none; }
+.code-table-toolbar { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:3px 1px; }
+.code-table-toolbar__context { display:flex; align-items:center; gap:10px; }
+.code-table-toolbar__context strong { font-size:14px; font-weight:600; color:var(--color-fg-emphasis); }
+.code-table-toolbar__context > span { font-size:12px; color:var(--color-muted); }
+.code-table-toolbar__actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; }
+.code-table-search { width:280px; max-width:100%; }
+@media(max-width:640px) { .code-table-toolbar__actions { width:100%; } .code-table-search { flex:1; min-width:160px; width:auto; } }
+
 .code-tables-data-table :deep(.code-table-code) {
   color: var(--color-fg-emphasis);
 }

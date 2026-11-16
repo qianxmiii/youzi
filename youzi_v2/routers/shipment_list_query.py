@@ -8,6 +8,7 @@ from fastapi import Depends, Query
 
 
 def get_shipment_list_filters(
+    commerce_mark_ids: list[str] | None = Query(None, alias="commerceMarkIds"),
     search: str | None = None,
     tracking_search: str | None = Query(None, alias="trackingSearch"),
     shipment_nos: list[str] | None = Query(None, alias="shipmentNos"),
@@ -85,6 +86,7 @@ def get_shipment_list_filters(
     workspace: str | None = Query(None, alias="workspace"),
 ) -> dict:
     return {
+        "commerce_mark_ids": commerce_mark_ids,
         "search": search,
         "tracking_search": tracking_search,
         "shipment_nos": shipment_nos,

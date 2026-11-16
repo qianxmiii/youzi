@@ -47,9 +47,13 @@ def _norm_copy_key(value: str) -> str:
     return value.strip().upper()
 
 
-def shipment_detail_identifier_parts_for_copy(row: dict[str, Any]) -> list[str]:
+def shipment_detail_identifier_parts_for_copy(
+    row: dict[str, Any],
+    *,
+    include_ref_shipment_no: bool = True,
+) -> list[str]:
     """关联单号、客户编号、货件号；关联单号与货件号相同（忽略大小写）只保留一处。"""
-    ref = _cell(row.get("refShipmentNo"))
+    ref = _cell(row.get("refShipmentNo")) if include_ref_shipment_no else ""
     customer_no = _cell(row.get("customerNo"))
     shipment_id = _cell(row.get("customerShipmentId"))
     ref_same_as_shipment = (
@@ -74,23 +78,40 @@ def shipment_detail_identifier_parts_for_copy(row: dict[str, Any]) -> list[str]:
     return parts
 
 
-def format_shipment_detail_summary_line(row: dict[str, Any]) -> str:
-    """单行：运单号 = [关联单号] [= 客户编号] [= 货件号] = 仓库（空则邮编，0000 省略）= Nctns。"""
+def format_shipment_detail_summary_line(
+    row: dict[str, Any],
+    *,
+    include_ref_shipment_no: bool = True,
+) -> str:
+    """单行：运单号 = [关联单号?] [= 客户编号] [= 货件号] = 仓库（空则邮编，0000 省略）= Nctns。"""
     return join_equals_parts(
         [
             row.get("shipmentNo"),
-            *shipment_detail_identifier_parts_for_copy(row),
+            *shipment_detail_identifier_parts_for_copy(
+                row,
+                include_ref_shipment_no=include_ref_shipment_no,
+            ),
             _warehouse_or_zip_for_copy(row),
             _format_ctns_for_copy(row.get("ctns")),
         ]
     )
 
 
-def format_shipment_detail_summary_copy_text(rows: list[dict[str, Any]]) -> str:
+def format_shipment_detail_summary_copy_text(
+    rows: list[dict[str, Any]],
+    *,
+    include_ref_shipment_no: bool = True,
+) -> str:
     """多行运单明细摘要（不含转单号），运单之间只换行。"""
     if not rows:
         return ""
-    return "\n".join(format_shipment_detail_summary_line(row) for row in rows)
+    return "\n".join(
+        format_shipment_detail_summary_line(
+            row,
+            include_ref_shipment_no=include_ref_shipment_no,
+        )
+        for row in rows
+    )
 
 
 _COPY_CARRIER_LABELS = {

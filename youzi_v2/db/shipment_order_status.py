@@ -169,3 +169,12 @@ def workspace_status_filter_sql(
 def is_delivered_status_code(code: str | None) -> bool:
     key = (code or "").strip().upper()
     return key in DELIVERED_STATUSES or key == LEGACY_DELIVERED
+
+
+SHIPMENT_STATUS_LABELS_ZH = {
+    STATUS_ORDERED: "已下单", STATUS_PICKED_UP: "提货中",
+    STATUS_WAREHOUSE_IN: "已入仓", STATUS_IN_TRANSIT: "转运中",
+    STATUS_DELIVERED: "已签收", STATUS_CANCELLED: "已取消",
+    LEGACY_IN_TRANSIT: "转运中", LEGACY_DELIVERED: "已签收",
+    LEGACY_INSPECTION: "查验", LEGACY_UNKNOWN: "未知",
+}

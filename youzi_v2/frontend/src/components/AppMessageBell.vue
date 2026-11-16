@@ -19,6 +19,9 @@ const items = ref<ShipmentTrackingNotification[]>([])
 const unreadCount = ref(0)
 const popoverShow = ref(false)
 
+let loadVersion = 0
+const opening = new Set<string>()
+
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
 const hasUnread = computed(() => unreadCount.value > 0)
@@ -36,20 +39,24 @@ function formatTime(raw: string | null | undefined) {
 }
 
 async function load() {
+  const version = ++loadVersion
   loading.value = true
   try {
     const res = await getShipmentTrackingNotifications(20)
+    if (version !== loadVersion) return
     items.value = res.items
     unreadCount.value = res.unreadCount
   } catch {
     /* 顶栏静默失败 */
   } finally {
-    loading.value = false
+    if (version === loadVersion) loading.value = false
   }
 }
 
 async function dismiss(n: ShipmentTrackingNotification) {
   try {
+    ++loadVersion
+    loading.value = false
     await markShipmentTrackingNotificationRead(n.id)
     items.value = items.value.filter((x) => x.id !== n.id)
     unreadCount.value = Math.max(0, unreadCount.value - 1)
@@ -61,6 +68,8 @@ async function dismiss(n: ShipmentTrackingNotification) {
 async function dismissAll() {
   if (!hasUnread.value) return
   try {
+    ++loadVersion
+    loading.value = false
     const res = await markAllShipmentTrackingNotificationsRead()
     items.value = []
     unreadCount.value = 0
@@ -72,11 +81,24 @@ async function dismissAll() {
   }
 }
 
-function goShipment(shipmentNo: string) {
-  const sn = shipmentNo.trim()
-  if (!sn) return
-  popoverShow.value = false
-  router.push({ path: '/shipments', query: { shipmentNo: sn, fromNotify: '1' } })
+async function goShipment(n: ShipmentTrackingNotification) {
+  const sn = n.shipmentNo.trim()
+  if (!sn || opening.has(n.id)) return
+  opening.add(n.id)
+  try {
+    ++loadVersion
+    loading.value = false
+    await markShipmentTrackingNotificationRead(n.id)
+    items.value = items.value.filter(x => x.id !== n.id)
+    unreadCount.value = Math.max(0, unreadCount.value - 1)
+    popoverShow.value = false
+    await router.push({ path: '/shipments', query: { shipmentNo: sn, fromNotify: '1' } })
+  } catch (e) {
+    message.error(e instanceof Error ? e.message : '打开通知失败')
+  } finally {
+    opening.delete(n.id)
+    loading.value = false
+  }
 }
 
 function onPopoverShowChange(show: boolean) {
@@ -145,7 +167,7 @@ onUnmounted(() => {
               hasDeliveredKeyword(n.latestDesc) ? 'header-notify-popover__item--delivered' : ''
             "
           >
-            <button type="button" class="header-notify-popover__body" @click="goShipment(n.shipmentNo)">
+            <button type="button" class="header-notify-popover__body" @click="goShipment(n)">
               <p class="header-notify-popover__shipment">
                 <span class="header-notify-popover__shipment-no">{{ n.shipmentNo }}</span>
                 <span v-if="n.customer" class="text-[var(--color-muted)]">{{ n.customer }}</span>

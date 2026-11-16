@@ -103,7 +103,7 @@ def extract_shipment_nos(text: str) -> list[str]:
 
 
 def message_wants_detail_summary(text: str) -> bool:
-    """消息含「明细」时返回与列表「复制 → 运单明细」相同格式。"""
+    """消息含「明细」时返回与列表「复制 → 运单明细」相同格式（不含关联单号）。"""
     cleaned = re.sub(r"@\S+", " ", (text or "").strip())
     return _DETAIL_SUMMARY_HINT in cleaned
 
@@ -433,23 +433,26 @@ def build_shipment_query_reply(text: str, repo: ShipmentsRepository | None = Non
         if tracking_mode:
             hint += " 含「转单号」时返回与系统「复制 → 转单号」相同内容。"
         elif detail_mode:
-            hint += " 含「明细」时返回与系统「复制 → 运单明细」相同内容。"
+            hint += " 含「明细」时返回与系统「复制 → 运单明细」相同内容（不含关联单号）。"
         return f"未识别到可查询单号。\n{hint}"
     if repo is None:
         repo = ShipmentsRepository(get_database(_DB_PATH))
     refresh = read_shipment_query_refresh_enabled(_CONFIG_PATH)
     if tracking_mode or detail_mode:
-        formatter = (
-            format_shipment_tracking_numbers_copy_text
-            if tracking_mode
-            else format_shipment_detail_summary_copy_text
-        )
         blocks: list[str] = []
         for no in nos:
             # 与列表复制一致，只读本地字段，不拉 DPS / 轨迹
             row = _load_row_after_refresh(repo, no, refresh=False)
             if row:
-                blocks.append(formatter([row]))
+                if tracking_mode:
+                    blocks.append(format_shipment_tracking_numbers_copy_text([row]))
+                else:
+                    blocks.append(
+                        format_shipment_detail_summary_copy_text(
+                            [row],
+                            include_ref_shipment_no=False,
+                        )
+                    )
             else:
                 blocks.append(f"【{no}】\n未找到运单（已依次尝试运单号→货件号→客户编号）。")
         if len(nos) >= _MAX_SHIPMENTS:

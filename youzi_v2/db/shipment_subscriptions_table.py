@@ -354,6 +354,7 @@ class ShipmentSubscriptionsRepository:
         skipped = 0
         push_payloads: list[dict[str, Any]] = []
         with self._database.lock:
+            self._mark_delivered_eta_reminders_read_locked()
             rows = self._conn.execute(
                 f"""
                 SELECT sub.id AS subscription_id,
@@ -465,8 +466,29 @@ class ShipmentSubscriptionsRepository:
             "latestDesc": latest_desc,
         }
 
+    def _mark_delivered_eta_reminders_read_locked(self) -> int:
+        """调用方持锁；只处理已签收运单的 ETA 提醒，保留其他来源消息。"""
+        cur = self._conn.execute(
+            f"""
+            UPDATE {NOTIFICATIONS_TABLE}
+            SET read_at = ?
+            WHERE tracking_source = ?
+              AND TRIM(COALESCE(read_at, '')) = ''
+              AND EXISTS (
+                  SELECT 1 FROM {SHIPMENTS_TABLE} s
+                  WHERE s.id = {NOTIFICATIONS_TABLE}.shipment_id
+                    AND (UPPER(TRIM(COALESCE(s.status_code, ''))) = 'DELIVERED'
+                         OR TRIM(COALESCE(s.delivered_time, '')) != '')
+              )
+            """,
+            (now_str(), ETA_REMINDER_SOURCE),
+        )
+        return cur.rowcount
+
     def count_unread_notifications(self) -> int:
         with self._database.lock:
+            if self._mark_delivered_eta_reminders_read_locked():
+                self._conn.commit()
             row = self._conn.execute(
                 f"""
                 SELECT COUNT(*) AS c FROM {NOTIFICATIONS_TABLE}
@@ -478,6 +500,8 @@ class ShipmentSubscriptionsRepository:
     def list_unread_notifications(self, *, limit: int = 20) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 100))
         with self._database.lock:
+            if self._mark_delivered_eta_reminders_read_locked():
+                self._conn.commit()
             rows = self._conn.execute(
                 f"""
                 SELECT n.*, s.customer AS shipment_customer

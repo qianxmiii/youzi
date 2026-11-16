@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from ..db.shipment_order_status import SHIPMENT_STATUS_LABELS_ZH
+
 from typing import TYPE_CHECKING, Any
 
 from io import BytesIO
@@ -96,6 +98,9 @@ def _normalize_status(raw: str | None, aliases: dict[str, str]) -> str | None:
     text = raw.strip()
     if text in aliases:
         return aliases[text]
+    for code, label in SHIPMENT_STATUS_LABELS_ZH.items():
+        if text == label:
+            return code
     upper = text.upper()
     return upper if upper else None
 
@@ -226,12 +231,7 @@ _API_TO_SNAKE: dict[str, str] = {
     "deliveredTime": "delivered_time",
 }
 
-_STATUS_EXPORT_LABELS: dict[str, str] = {
-    "IN_TRANSIT": "转运中",
-    "DELIVERED": "已签收",
-    "INSPECTION": "查验",
-    "UNKNOWN": "未知",
-}
+
 
 
 def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any]) -> Any:
@@ -250,11 +250,13 @@ def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any])
         return None
     if field == "status_code":
         code = str(val).strip().upper()
+        if code in SHIPMENT_STATUS_LABELS_ZH:
+            return SHIPMENT_STATUS_LABELS_ZH[code]
         aliases = mapping.get("status_aliases", {})
         for zh, en in aliases.items():
             if en == code:
                 return zh
-        return _STATUS_EXPORT_LABELS.get(code, val)
+        return val
     if field == "country_code":
         code = str(val).strip()
         for zh, en in mapping.get("country_aliases", {}).items():

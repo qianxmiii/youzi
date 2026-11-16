@@ -92,7 +92,7 @@ function fieldText(
 }
 
 function sanitizePart(value: string): string {
-  return value.replace(/[\\/:*?"<>|\r\n\t]+/g, '').replace(/\s+/g, '')
+  return value.replace(/[\r\n\t]+/g, ' ').replace(/[\\/:*?"<>|]+/g, '').trim()
 }
 
 /** 与后端 mark_rename.build_mark_rename_stem 一致，供下载前预览。 */

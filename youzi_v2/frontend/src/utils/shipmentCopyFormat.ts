@@ -155,9 +155,18 @@ function normCopyKey(value: string): string {
   return value.trim().toUpperCase()
 }
 
+export type ShipmentDetailCopyOptions = {
+  /** 是否包含关联单号；默认 true（转单号/DW/数据等沿用） */
+  includeRefShipmentNo?: boolean
+}
+
 /** 关联单号、客户编号、货件号；关联单号与货件号相同（忽略大小写）只保留一处 */
-export function shipmentDetailIdentifierPartsForCopy(row: Shipment): string[] {
-  const ref = cell(row.refShipmentNo)
+export function shipmentDetailIdentifierPartsForCopy(
+  row: Shipment,
+  options?: ShipmentDetailCopyOptions,
+): string[] {
+  const includeRef = options?.includeRefShipmentNo !== false
+  const ref = includeRef ? cell(row.refShipmentNo) : ''
   const customerNo = cell(row.customerNo)
   const shipmentId = cell(row.customerShipmentId)
   const refSameAsShipment =
@@ -179,11 +188,14 @@ export function shipmentDetailIdentifierPartsForCopy(row: Shipment): string[] {
   return parts
 }
 
-/** 单行：运单号 = [关联单号] [= 客户编号] [= 货件号] = 仓库（空则邮编，0000 省略）= Nctns */
-export function formatShipmentDetailSummaryLine(row: Shipment): string {
+/** 单行：运单号 = [关联单号?] [= 客户编号] [= 货件号] = 仓库（空则邮编，0000 省略）= Nctns */
+export function formatShipmentDetailSummaryLine(
+  row: Shipment,
+  options?: ShipmentDetailCopyOptions,
+): string {
   return joinEqualsParts([
     row.shipmentNo,
-    ...shipmentDetailIdentifierPartsForCopy(row),
+    ...shipmentDetailIdentifierPartsForCopy(row, options),
     warehouseOrZipForCopy(row),
     formatCtnsForCopy(row.ctns),
   ])
@@ -192,9 +204,9 @@ export function formatShipmentDetailSummaryLine(row: Shipment): string {
 /** 运单明细摘要 + 可选第二行计费重 */
 export function formatShipmentDetailSummaryBlock(
   row: Shipment,
-  options?: { appendChargedWeight?: boolean },
+  options?: ShipmentDetailCopyOptions & { appendChargedWeight?: boolean },
 ): string {
-  const head = formatShipmentDetailSummaryLine(row)
+  const head = formatShipmentDetailSummaryLine(row, options)
   if (!options?.appendChargedWeight) return head
   const cw = formatChargedWeightCopyLine(row)
   return cw ? `${head}\n${cw}` : head
@@ -215,9 +227,12 @@ export function formatShipmentDetailSummaryWithTrackingBlock(row: Shipment): str
 }
 
 /** 多行运单明细摘要（不含转单号），运单之间只换行 */
-export function formatShipmentDetailSummaryCopyText(rows: Shipment[]): string {
+export function formatShipmentDetailSummaryCopyText(
+  rows: Shipment[],
+  options?: ShipmentDetailCopyOptions,
+): string {
   if (!rows.length) return ''
-  return rows.map((row) => formatShipmentDetailSummaryLine(row)).join('\n')
+  return rows.map((row) => formatShipmentDetailSummaryLine(row, options)).join('\n')
 }
 
 /** 「复制 → 数据」文末确认句；勾选全为英文客户时用英文，否则中文 */

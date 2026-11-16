@@ -52,20 +52,32 @@ def _win32com_importable() -> bool:
 
 
 def _convert_via_win32com(xlsx_path: Path, pdf_path: Path) -> None:
+    import pythoncom
     import win32com.client  # pywin32
 
-    # DispatchEx：独立进程，避免占用用户已打开的 Excel
-    excel = win32com.client.DispatchEx("Excel.Application")
-    excel.Visible = False
-    excel.DisplayAlerts = False
+    # 导出任务在后台线程跑，须先 CoInitialize，否则报「尚未调用 CoInitialize」
+    pythoncom.CoInitialize()
+    excel = None
     wb = None
     try:
+        # DispatchEx：独立进程，避免占用用户已打开的 Excel
+        excel = win32com.client.DispatchEx("Excel.Application")
+        excel.Visible = False
+        excel.DisplayAlerts = False
         wb = excel.Workbooks.Open(str(xlsx_path.resolve()))
         wb.ExportAsFixedFormat(_XL_TYPE_PDF, str(pdf_path.resolve()))
     finally:
         if wb is not None:
-            wb.Close(False)
-        excel.Quit()
+            try:
+                wb.Close(False)
+            except Exception:
+                pass
+        if excel is not None:
+            try:
+                excel.Quit()
+            except Exception:
+                pass
+        pythoncom.CoUninitialize()
 
 
 def _convert_via_libreoffice(xlsx_path: Path, pdf_path: Path, soffice: Path) -> None:

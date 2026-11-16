@@ -29,7 +29,7 @@ DEFAULT_MARK_RENAME_COUNTRY_LANG: Literal["en", "zh"] = "en"
 _SEPARATOR_MAX = 8
 _STEM_MAX = 180
 _INVALID_FS = re.compile(r'[\\/:*?"<>|\r\n\t]+')
-_WHITESPACE = re.compile(r"\s+")
+_LINE_WHITESPACE = re.compile(r"[\r\n\t]+")
 
 CountryLang = Literal["en", "zh"]
 CountryLabelMap = dict[str, dict[str, str]]
@@ -166,8 +166,8 @@ def build_mark_rename_folder(
 
 
 def sanitize_mark_rename_part(value: str) -> str:
-    text = _INVALID_FS.sub("", str(value or "").strip())
-    return _WHITESPACE.sub("", text)
+    text = _LINE_WHITESPACE.sub(" ", str(value or ""))
+    return _INVALID_FS.sub("", text).strip()
 
 
 def build_mark_rename_stem(

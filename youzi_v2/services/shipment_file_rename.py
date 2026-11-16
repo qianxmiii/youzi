@@ -60,10 +60,9 @@ def _map_headers(row: tuple[Any, ...]) -> dict[str, int]:
 
 
 def sanitize_filename_part(value: Any) -> str:
-    text = str(value if value is not None else "").strip()
+    text = re.sub(r"[\r\n\t]+", " ", str(value if value is not None else ""))
     text = _INVALID_FS.sub("-", text)
-    text = re.sub(r"\s+", "", text)
-    return text
+    return text.strip()
 
 
 def build_rename_target(

@@ -25,7 +25,6 @@ const shippingChannels = {
       "Sea truck",           // 普船卡派
       "Fast sea truck",      // 快船卡派
       "Fast Maston truck",   // 美森卡派
-      "Super Sea truck",  // 快船卡派
       "Normal Maston truck", // 加班美森卡派
       "Normal sea truck",    // 加班卡派
       "Air truck",           // 空卡
@@ -37,7 +36,6 @@ const shippingChannels = {
       "Air express",         // 空派
       "Fast sea express",    // 快船快递派
       "Fast Maston express", // 美森快递派
-      "Super sea express",   // 超级快递派
       "Normal Maston express", // 加班美森快递派
       "Normal sea express",  // 加班快递派
       "ZIM sea express",     // 合德以星快递派
@@ -339,10 +337,10 @@ window.data = {
     ],
     // 派送方式按国家分类
     deliveryMethodsByCountry: {
-        "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Normal sea express", "Air truck","Fast sea truck","Normal sea truck","Fast Maston express", "Super sea express","Super sea truck",
+        "美国": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Normal sea express", "Air truck","Fast sea truck","Normal sea truck","Fast Maston express",
              "Fast Maston truck",  "Normal Maston express", "Normal Maston truck","ZIM sea express","Express"
         ],
-        "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express", "Super sea express","Super sea truck",
+        "加拿大": ["Sea truck", "Sea express", "Air express", "Fast sea express", "Fast Maston express",
             "Fast sea truck", "Fast Maston truck", "Normal sea express", "Normal Maston express", "Normal Maston truck","Normal sea truck", "ZIM sea express", "Express"
         ],
         "欧洲": ["Sea truck", "Sea express", "Air truck", "Air express", "Train express", "Train truck", "Road express","Road truck","Express"],
@@ -370,8 +368,6 @@ window.data = {
         'Train truck': '铁路卡派',
         'Road express': '卡航快递派',
         'Road truck': '卡航卡派',
-        'Super sea express': '快船快递派',
-        'Super sea truck': '快船卡派',
         'Express': '快递',
         // 默认值
         '_default': '普船卡派'
@@ -393,7 +389,7 @@ const transitTimeData = {
         "Air express": {
             "default": "10-15"
         },
-        // Fast sea express、Fast Maston express、Super sea express 使用相同的时效配置
+        // Fast sea express、Fast Maston express使用相同的时效配置
         "Fast sea express": {
             "0-3": "20-25",
             "4-7": "18-22",
@@ -411,7 +407,7 @@ const transitTimeData = {
             "4-7": "20-25",
             "8-9": "18-24"
         },
-        // Fast sea truck、Super sea truck、Fast Maston truck 使用相同的时效配置
+        // Fast sea truck、Fast Maston truck 使用相同的时效配置
         "Fast sea truck": {
             "0-3": "25-30",
             "4-7": "21-26",
@@ -434,16 +430,10 @@ const transitTimeData = {
         "Fast sea truck": {
             "default": "22-28"
         },
-        "Super sea truck": {
-            "default": "22-28"
-        },
         "Fast Maston express": {
             "default": "22-28"
         },
         "Fast sea express": {
-            "default": "22-28"
-        },
-        "Super sea express": {
             "default": "22-28"
         },
         "Air express": {
@@ -517,8 +507,6 @@ const transitTimeData = {
 
 // 合并重复的时效配置
 transitTimeData["美国"]["Fast Maston express"] = transitTimeData["美国"]["Fast sea express"];
-transitTimeData["美国"]["Super sea express"] = transitTimeData["美国"]["Fast sea express"];
-transitTimeData["美国"]["Super sea truck"] = transitTimeData["美国"]["Fast sea truck"];
 transitTimeData["美国"]["Fast Maston truck"] = transitTimeData["美国"]["Fast sea truck"];
 transitTimeData["美国"]["Normal Maston express"] = transitTimeData["美国"]["Normal sea express"];
 

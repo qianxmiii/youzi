@@ -3,8 +3,8 @@
  */
 
 // 新增常量 exchange_rate
-const exchange_rate = 6.65; //美元汇率
-const cost_exchange_rate = 6.8; //美元汇率
+const exchange_rate = 6.6; //美元汇率
+const cost_exchange_rate = 6.7; //美元汇率
 let valid_date = ''; //报价有效日期
 const LINE_BREAK = '\n';
 let addFee = new Decimal(0); //其他费用
@@ -264,7 +264,7 @@ function calculate() {
 
      // 更新汇总信息
      document.getElementById('summary-size').innerText = sizeinfo;
-     document.getElementById('summary-chargeweight').innerText = totalDimensionWeight;
+     document.getElementById('summary-chargeweight').innerText = billingWeight;
      
      // 计算单箱实重，判断是否使用托（pallets）单位
      let singleWeight = 0;
@@ -818,12 +818,12 @@ function renderAllBoxSpecsIntoTable(allBoxSpecs) {
     calculate();
 }
 
-/** 解析外箱尺寸字符串：49 x 43.2 x 55、49*43.2*55（cm，原始数值） */
+/** 解析外箱尺寸字符串；各尺寸可独立带 cm（原始数值，不取整）。 */
 function parseLooseDimensionTriple(str) {
     if (!str || typeof str !== "string") return null;
     const s = str.trim().replace(/\u00a0/g, " ").replace(/\s+/g, " ");
     const m = s.match(
-        /(\d+(?:[.,]\d+)?)\s*[*xX×хХ]\s*(\d+(?:[.,]\d+)?)\s*[*xX×хХ]\s*(\d+(?:[.,]\d+)?)/
+        /(\d+(?:[.,]\d+)?)\s*(?:cm\s*)?[*xX×хХ]\s*(\d+(?:[.,]\d+)?)\s*(?:cm\s*)?[*xX×хХ]\s*(\d+(?:[.,]\d+)?)/i
     );
     if (!m) return null;
     const a = parseFloat(m[1].replace(",", "."));
@@ -1485,8 +1485,7 @@ function showCost(origin,country,channel,postcode,weight,withBattery){
 
     let cost = 0;
     if(origin && country && channel.includes('express')){
-        if (channel == 'Fast sea express' || channel == 'Fast Maston express' 
-             || channel == 'Super sea express'){
+        if (channel == 'Fast sea express' || channel == 'Fast Maston express'){
                 channel = "美森正班";
         } else if (channel == 'Normal sea express' || channel == 'Normal Maston express') {
             channel = "美森加班";

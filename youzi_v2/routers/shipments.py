@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, Header
 
 from ..context import *
 from .shipment_list_query import ShipmentListFilters
@@ -494,6 +494,26 @@ def update_shipment(item_id: str, payload: ShipmentUpdateIn):
         if refreshed is not None:
             row = {**refreshed, "amzPush": row["amzPush"]}
     return row
+
+
+@router.post("/api/v1/shipment-remarks")
+def update_shipment_remarks_api(
+    body: ShipmentRemarkUpdateIn,
+    task_id: str = Header(default="", alias="X-Youzi-Task-Id"),
+):
+    """单票编辑或多票使用同一内容覆盖 DPS 内部备注。"""
+    del task_id  # 任务生命周期由中间件记录；不持久化备注正文。
+    from ..services.shipment_remarks import update_shipment_remarks
+
+    try:
+        return update_shipment_remarks(
+            shipments_repo,
+            LOGISTICS_CONFIG_PATH,
+            body.ids,
+            body.remark,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 @router.delete("/api/v1/shipments/{item_id}")
 def delete_shipment(item_id: str):

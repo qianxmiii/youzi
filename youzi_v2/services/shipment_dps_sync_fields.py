@@ -35,6 +35,7 @@ KNOWN_SYNC_FIELDS = frozenset(
         "carrier_code",
         "carrier_id",
         "waybill_id",
+        "remark",
         "tracking_number",
         "customer_shipment_id",
         "amazon_ref_id",

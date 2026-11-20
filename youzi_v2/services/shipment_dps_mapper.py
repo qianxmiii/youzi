@@ -195,6 +195,7 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
     payload: dict[str, Any] = {
         "shipment_no": shipment_no,
         "waybill_id": _opt_str(row.get("id")),
+        "remark": str(row.get("remark") or "").strip() if "remark" in row else None,
         "customer": _opt_str(row.get("clientUserNickName")),
         "customer_no": customer_no,
         "ref_shipment_no": ref_shipment_no,

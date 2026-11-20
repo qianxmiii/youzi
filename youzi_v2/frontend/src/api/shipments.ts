@@ -382,6 +382,20 @@ export async function batchUpdateShipments(
   })
 }
 
+export async function updateShipmentRemarks(
+  ids: string[],
+  remark: string,
+  taskId?: string,
+): Promise<{ total: number; updated: number; failed: number }> {
+  return api('/api/v1/shipment-remarks', {
+    method: 'POST',
+    headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
+    body: { ids, remark },
+    timeout: 60_000,
+    retry: 0,
+  })
+}
+
 export async function openShipmentExceptions(
   shipmentNos: string[],
   exceptionCode: string,

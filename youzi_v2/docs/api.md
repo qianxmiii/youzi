@@ -577,6 +577,14 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 
 运单标识已迁入 `shipment_marks`，列表、详情和 `commerceMarkIds` 筛选参数保持兼容，返回的 `commerceMarks` 仍含 ID、名称和颜色。缺少 ID 的标识保留名称键，不要求一定存在目录项；主表旧 JSON 不再作为来源，迁移及回退见[关联表迁移](./commerce-marks.md#运单标识关联表迁移)。
 
+### 港前运单内部备注
+
+批量修改内部备注时，勾选港前运单，再从表格下方选择「运单维护 → 内部备注」。
+
+编辑弹窗在运单号旁显示件数（`ctns`）与仓库地址代码（`addressCode`），无仓库地址代码时显示邮编（`zipcode`）；批量编辑逐票展示相同信息，缺失值显示 `—`。这些信息仅供核对，不随备注提交修改。
+
+`POST /api/v1/shipment-remarks`：用同一条内容覆盖 1～200 票港前运单的 DPS 内部备注。请求体为 `ids`（本地运单 ID）与 `remark`（最多 5000 字符，可为空以清空备注）；服务端转换为 DPS 的 `remark` 与 `commerceWaybillIds` 报文。接口不执行追加；DPS 直接返回 HTTP 200 时才回写本地 `remark`，不解析响应体、不跟随重定向。响应返回 `total`、`updated`、`failed`。缺少 DPS 运单 ID、包含非港前运单或鉴权缺失时整批拒绝。
+
 ### 港前／在途运单实重与体积
 
 运单列表、详情及新增／更新返回 `actualWeight`（实重 kg）、`volumeCbm`（体积 m³），未同步时为 null。写入模型支持同名驼峰或 `actual_weight`、`volume_cbm`，须为有限非负数值。DPS 同步分别取 `params.roughWeightTotal`、`params.volumeTotal`，缺失或无效时不覆盖已保存值；零值正常同步。港前和在途的列设置均可勾选「实重（kg）」「体积（m³）」，默认不增加可见列。升级需重启后端自动补列并重新同步运单，页面显示不改变已保存的数值精度。

@@ -327,6 +327,13 @@ class ShipmentRoutePresetsIn(BaseModel):
     presets: list[ShipmentRoutePresetIn] = Field(max_length=100)
 
 
+class ShipmentRemarkUpdateIn(BaseModel):
+    """单票或多票使用同一内容覆盖 DPS 内部备注。"""
+
+    ids: list[str] = Field(min_length=1, max_length=200)
+    remark: str = Field(max_length=5000)
+
+
 class DpsExportJobCreateIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

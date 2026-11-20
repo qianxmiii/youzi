@@ -4,7 +4,7 @@ import threading
 import time
 from ..db.task_history import save_task
 
-PATHS = {'/api/v1/commerce-marks/sync','/api/v1/commerce-marks','/api/v1/shipments/sync-tracking','/api/v1/shipments/sync-carrier-tracking','/api/v1/shipments/sync-from-dps','/api/v1/shipments/sync-preport-from-dps','/api/v1/shipments/sync-today-from-dps','/api/v1/shipments/sync-today-transit-from-dps','/api/v1/shipments/sync-route-status-from-dps','/api/v1/shipments/check-order-product-ctns'}
+PATHS = {'/api/v1/commerce-marks/sync','/api/v1/commerce-marks','/api/v1/shipment-remarks','/api/v1/shipments/sync-tracking','/api/v1/shipments/sync-carrier-tracking','/api/v1/shipments/sync-from-dps','/api/v1/shipments/sync-preport-from-dps','/api/v1/shipments/sync-today-from-dps','/api/v1/shipments/sync-today-transit-from-dps','/api/v1/shipments/sync-route-status-from-dps','/api/v1/shipments/check-order-product-ctns'}
 _active = set()
 _lock = threading.Lock()
 

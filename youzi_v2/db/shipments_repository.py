@@ -127,6 +127,7 @@ _UPDATABLE = (
     "carrier_code",
     "carrier_id",
     "waybill_id",
+    "remark",
     "tracking_number",
     "express_code",
     "customer_shipment_id",
@@ -242,6 +243,7 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
         or None,
         "carrierId": row["carrier_id"],
         "waybillId": row["waybill_id"] if "waybill_id" in row.keys() else None,
+        "remark": row["remark"] if "remark" in row.keys() else None,
         "trackingNumber": row["tracking_number"],
         "expressCode": row["express_code"] if "express_code" in row.keys() else None,
         "customerLang": (
@@ -374,6 +376,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "carrierCode": "carrier_code",
         "carrierId": "carrier_id",
         "waybillId": "waybill_id",
+        "remark": "remark",
         "trackingNumber": "tracking_number",
         "expressCode": "express_code",
         "customerShipmentId": "customer_shipment_id",

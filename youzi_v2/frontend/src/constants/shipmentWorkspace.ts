@@ -45,10 +45,12 @@ export const PREPORT_EXCLUDED_COLUMN_KEYS = [
 
 export const PREPORT_ORIGIN_WAREHOUSE_COLUMN_KEY = 'originWarehouseCode'
 export const PREPORT_CHARGED_WEIGHT_COLUMN_KEY = 'chargedWeight'
+export const PREPORT_REMARK_COLUMN_KEY = 'remark'
 
 const PREPORT_INJECTED_COLUMN_KEYS = new Set<string>([
   PREPORT_ORIGIN_WAREHOUSE_COLUMN_KEY,
   PREPORT_CHARGED_WEIGHT_COLUMN_KEY,
+  PREPORT_REMARK_COLUMN_KEY,
 ])
 
 function insertColumnBefore(keys: readonly string[], columnKey: string, anchorKey: string): string[] {
@@ -91,6 +93,11 @@ export function applyPreportListColumnKeys(keys: readonly string[]): string[] {
   }
   if (!list.includes(PREPORT_CHARGED_WEIGHT_COLUMN_KEY)) {
     list = [PREPORT_CHARGED_WEIGHT_COLUMN_KEY, ...list]
+  }
+
+  list = insertColumnAfter(list, PREPORT_REMARK_COLUMN_KEY, 'productName')
+  if (!list.includes(PREPORT_REMARK_COLUMN_KEY)) {
+    list = insertColumnAfter(list, PREPORT_REMARK_COLUMN_KEY, 'customerNo')
   }
 
   return list

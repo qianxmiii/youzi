@@ -17,10 +17,11 @@ import {
   type DropdownOption,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
-import { ChevronDown, Signpost, Tag } from 'lucide-vue-next'
+import { ChevronDown, Copy, MessageSquareText, Signpost, Tag } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { api } from '@/api/client'
 import ShipmentMarkManagerModal from '@/components/shipments/ShipmentMarkManagerModal.vue'
+import ShipmentRemarkModal from '@/components/shipments/ShipmentRemarkModal.vue'
 import ShipmentRouteAddModal from '@/components/shipments/ShipmentRouteAddModal.vue'
 import { claimRouteJump } from '@/utils/routeJump'
 import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
@@ -227,6 +228,8 @@ const filterVipOnly = ref(false)
 const filterFclOnly = ref(false)
 const filterCarrier = ref<string | null>(null)
 const markManagerShow = ref(false)
+const remarkModalShow = ref(false)
+const remarkModalRows = ref<Shipment[]>([])
 const routeAddShow = ref(false)
 const routeAddRows = ref<Shipment[]>([])
 function openRouteAdd(rows: Shipment[]) {
@@ -240,6 +243,13 @@ async function loadMarkOptions() {
   catch { message.error('标识筛选配置加载失败') }
 }
 async function marksUpdated() { await loadList(); await loadMarkOptions() }
+function openRemarkModal(rows: Shipment[]) {
+  remarkModalRows.value = [...rows]
+  remarkModalShow.value = true
+}
+async function remarksUpdated() {
+  await loadList()
+}
 watch(markFilter, () => onFiltersChanged())
 const filterSupplierName = ref<string | null>(null)
 const filterCountry = ref<string | null>(null)
@@ -728,7 +738,7 @@ function renderExceptionBadge(row: Shipment) {
 }
 
 function renderActionWithTooltip(
-  kind: 'view' | 'edit' | 'delete' | 'subscribe' | 'route-add',
+  kind: 'view' | 'edit' | 'delete' | 'subscribe' | 'remark' | 'route-add',
   tooltip: string,
   options?: {
     onClick?: () => void
@@ -771,6 +781,17 @@ async function copyRowShipmentNo(row: Shipment) {
   try {
     await navigator.clipboard.writeText(sn)
     message.success('已复制运单号')
+  } catch {
+    message.error('复制失败')
+  }
+}
+
+async function copyShipmentRemark(row: Shipment) {
+  const text = row.remark || ''
+  if (!text) return
+  try {
+    await navigator.clipboard.writeText(text)
+    message.success('已复制内部备注')
   } catch {
     message.error('复制失败')
   }
@@ -2954,6 +2975,12 @@ const shipmentMaintenanceOptions = computed<DropdownOption[]>(() => [
       icon: () => h(Tag, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
       disabled: checkedRowKeys.value.length > 200,
     },
+    {
+      label: '内部备注',
+      key: 'remark',
+      icon: () => h(MessageSquareText, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
+      disabled: !selectedRows.value.length || selectedRows.value.length > 200,
+    },
   ] : []),
   {
     label: '新增路由',
@@ -2965,6 +2992,7 @@ const shipmentMaintenanceOptions = computed<DropdownOption[]>(() => [
 
 function handleShipmentMaintenanceSelect(key: string | number) {
   if (key === 'marks') markManagerShow.value = true
+  else if (key === 'remark') openRemarkModal(selectedRows.value)
   else if (key === 'route') openRouteAdd(selectedRows.value)
 }
 
@@ -3326,6 +3354,39 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
       )
     },
   },
+  remark: {
+    title: '内部备注',
+    key: 'remark',
+    width: 240,
+    render: (row) => {
+      const text = displayField(row.remark)
+      if (!text) return '—'
+      return h('div', { class: 'flex min-w-0 items-center gap-1' }, [
+        h(
+          NTooltip,
+          { trigger: 'hover' },
+          {
+            trigger: () => h('span', { class: 'min-w-0 flex-1 truncate' }, text),
+            default: () => h('div', { class: 'max-w-96 whitespace-pre-wrap break-words' }, text),
+          },
+        ),
+        h(
+          'button',
+          {
+            type: 'button',
+            class: 'inline-flex h-6 w-6 shrink-0 items-center justify-center rounded text-violet-600 hover:bg-violet-50 dark:text-violet-400 dark:hover:bg-violet-950/40',
+            title: '复制完整备注',
+            'aria-label': '复制完整备注',
+            onClick: (event: MouseEvent) => {
+              event.stopPropagation()
+              void copyShipmentRemark(row)
+            },
+          },
+          [h(Copy, { size: 14, 'aria-hidden': true })],
+        ),
+      ])
+    },
+  },
   originWarehouseCode: {
     title: '收货仓',
     key: 'originWarehouseCode',
@@ -3483,7 +3544,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
     {
       title: '操作',
       key: 'actions',
-      width: 198,
+      width: isPreportWorkspace.value ? 232 : 198,
       align: 'center',
       fixed: 'right',
       render: (row) =>
@@ -3502,6 +3563,9 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
             ),
             renderActionWithTooltip('edit', '编辑', { onClick: () => openEdit(row) }),
             renderActionWithTooltip('route-add', '新增路由', { onClick: () => openRouteAdd([row]) }),
+            ...(isPreportWorkspace.value
+              ? [renderActionWithTooltip('remark', '内部备注', { onClick: () => openRemarkModal([row]) })]
+              : []),
             h(
               NPopconfirm,
               { onPositiveClick: () => handleDelete(row) },
@@ -4036,6 +4100,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
     <ShipmentBatchAmazonRefsModal :show="batchAmazonRefsShow" @close="batchAmazonRefsShow = false" @updated="loadList(); loadFreshnessStats()" @progress="onBatchAmazonProgress" />
     <ShipmentMarkManagerModal :show="markManagerShow" :ids="checkedRowKeys.map(String)" @close="markManagerShow = false" @updated="marksUpdated" />
+    <ShipmentRemarkModal :show="remarkModalShow" :shipments="remarkModalRows" @close="remarkModalShow = false" @updated="remarksUpdated" />
     <ShipmentRouteAddModal :show="routeAddShow" :shipments="routeAddRows" @close="routeAddShow = false" @updated="loadList" />
     <ShipmentAmazonRefModal
       :show="amazonRefShow"

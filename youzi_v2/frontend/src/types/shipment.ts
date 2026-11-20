@@ -44,6 +44,8 @@ export interface Shipment {
   carrierId: string | null
   /** DPS 运单主键 id（更新选中运单从 shipment_queryByOrder 回写） */
   waybillId: string | null
+  /** DPS 内部备注；更新接口为覆盖而非追加 */
+  remark?: string | null
   trackingNumber: string | null
   /** 尾程快递：UPS/FEDEX/DPD/CWE 等，优先于单号自动识别跳转 */
   expressCode?: string | null

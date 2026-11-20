@@ -127,6 +127,12 @@
       "onInsert": true,
       "onUpdate": true
     },
+    "remark": {
+      "label": "内部备注",
+      "dpsSource": "remark",
+      "onInsert": true,
+      "onUpdate": true
+    },
     "customer_shipment_id": {
       "label": "货件号",
       "dpsSource": "params.amazonID",

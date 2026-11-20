@@ -37,6 +37,7 @@ from .routers import (
     link_download,
     pages,
     settings_tasks,
+    daily_sync,
     shipment_groups,
     payment_reminders,
     quote_opportunities,
@@ -123,3 +124,5 @@ for route_module in (
     legacy,
 ):
     app.include_router(route_module.router)
+
+app.include_router(daily_sync.router)

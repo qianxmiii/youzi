@@ -1,6 +1,9 @@
 """按 waybillId 拉取 DPS 明细状态轨迹，回写 route_status（轻量，非整单）。"""
 
 from __future__ import annotations
+from .sync_coordination import (
+    serialized_sync, pending_rows, checkpointed_rows, retry_item, DpsAuthorizationExpired,
+)
 
 from pathlib import Path
 from typing import Any, Callable
@@ -108,6 +111,7 @@ def extract_route_milestone_times(nodes: list[dict[str, Any]]) -> dict[str, str]
     }
 
 
+@serialized_sync
 def sync_route_status_by_waybill_ids(
     shipments_repo: ShipmentsRepository,
     config_path: Path,
@@ -130,6 +134,7 @@ def sync_route_status_by_waybill_ids(
         nos = list(dict.fromkeys(n.strip() for n in shipment_nos if n and n.strip()))
     else:
         nos = shipments_repo.list_shipment_nos_with_waybill_id()
+    nos = pending_rows(lambda ids: ids if ids is not None else nos, lambda sn: sn)
     total = len(nos)
     updated = 0
     unchanged = 0
@@ -144,9 +149,10 @@ def sync_route_status_by_waybill_ids(
 
     out(f"[DPS明细状态] 开始，共 {total} 单")
 
-    for sn in nos:
+    for sn in checkpointed_rows(nos, lambda sn: sn):
         ship = shipments_repo.get_by_shipment_no(sn)
         if ship is None:
+            retry_item()
             not_local += 1
             failed += 1
             if len(errors) < 20:
@@ -161,7 +167,10 @@ def sync_route_status_by_waybill_ids(
 
         try:
             nodes = query_waybill_route_info(config_path, waybill_id)
+        except DpsAuthorizationExpired:
+            raise
         except Exception as exc:  # noqa: BLE001
+            retry_item()
             failed += 1
             if len(errors) < 20:
                 errors.append(f"{sn}: {exc}")

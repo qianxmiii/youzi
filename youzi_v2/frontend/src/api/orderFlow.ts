@@ -115,6 +115,16 @@ export function refreshOrderFlow() {
   )
 }
 
+export function getOrderFlowAuthorization() {
+  return api<{configured: boolean}>('/api/v1/order-flow/authorization')
+}
+
+export function saveAndRefreshOrderFlow(authorization: string) {
+  return api<{skipped: boolean; reason: string; remote?: number; created?: number; changed?: number; ended?: number; authorizationSaved?: boolean}>(
+    '/api/v1/order-flow/save-and-refresh', {method:'POST',body:{authorization},retry:0,timeout:600_000},
+  )
+}
+
 export function updateOrderFlowSettings(enabled: boolean) {
   return api<Pick<OrderFlowSummary, 'orderFlowPollEnabled' | 'orderFlowPollLastFinished' | 'orderFlowPollIntervalSec'>>(
     '/api/v1/order-flow/settings',

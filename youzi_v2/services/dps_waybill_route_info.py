@@ -1,6 +1,7 @@
 """DPS 运单明细状态轨迹查询（URL / Token 仅来自 config.json）。"""
 
 from __future__ import annotations
+from .sync_coordination import check_dps_response
 
 import json
 from pathlib import Path
@@ -88,8 +89,10 @@ def query_waybill_route_info(
         headers=headers,
         timeout=timeout if timeout is not None else cfg["timeout"],
     )
+    check_dps_response(resp)
     resp.raise_for_status()
     body = resp.json()
+    check_dps_response(resp, body)
     if not isinstance(body, dict):
         raise ValueError("DPS 明细状态轨迹响应格式无效")
     code = body.get("code")

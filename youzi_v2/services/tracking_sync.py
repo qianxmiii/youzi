@@ -5,6 +5,7 @@
 """
 
 from __future__ import annotations
+from .sync_coordination import serialized_sync, pending_rows, checkpointed_rows, retry_item
 
 from pathlib import Path
 from typing import Any, Callable
@@ -55,6 +56,7 @@ def _tracking_api_status_for_row(
     return api_status
 
 
+@serialized_sync
 def sync_all_tracking(
     shipments_repo: ShipmentsRepository,
     tracking_repo: TrackingLogsRepository,
@@ -125,9 +127,11 @@ def _sync_all_tracking_body(
     requested_nos = (
         len([s for s in shipment_nos if s and s.strip()]) if manual_scope else 0
     )
-    tracking_list = shipments_repo.list_for_tracking_sync(
-        shipment_nos,
-        include_delivered=manual_scope,
+    tracking_list = pending_rows(
+        lambda ids: shipments_repo.list_for_tracking_sync(
+            ids if ids is not None else shipment_nos,
+            include_delivered=manual_scope or ids is not None,
+        ), lambda row: row['tracking_number'],
     )
     total = len(tracking_list)
     excluded_not_in_transit = max(0, requested_nos - total) if manual_scope else 0
@@ -182,10 +186,11 @@ def _sync_all_tracking_body(
     not_found = 0
     updated_shipment_nos: list[str] = []
 
-    for idx, row in enumerate(tracking_list, start=1):
+    for idx, row in enumerate(checkpointed_rows(tracking_list, lambda row: row['tracking_number']), start=1):
         sn = row["tracking_number"]
         item = by_odd.get(sn)
         if item is None:
+            retry_item()
             not_found += 1
             continue
 

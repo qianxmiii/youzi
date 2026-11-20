@@ -28,6 +28,10 @@ def make_sync_logger(extra: LogFn | None = None) -> tuple[list[str], LogFn]:
     lines: list[str] = []
 
     def out_log(msg: str) -> None:
+        from .sync_coordination import runtime
+        daily = runtime.get()
+        if daily is not None:
+            msg = daily.clean(msg)
         line = format_sync_log_line(msg)
         lines.append(line)
         print(line, flush=True)

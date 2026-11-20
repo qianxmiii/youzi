@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import threading
+from .sync_coordination import serialized_sync
 from pathlib import Path
 from typing import Any, Callable
 
@@ -203,6 +204,7 @@ def _chunk_shipment_nos(shipment_nos: list[str], size: int) -> list[list[str]]:
     return [shipment_nos[i : i + size] for i in range(0, len(shipment_nos), size)]
 
 
+@serialized_sync
 def run_shipment_dps_sync_by_order(
     shipments_repo: ShipmentsRepository,
     config_path: Path,
@@ -294,6 +296,7 @@ def run_shipment_dps_sync_by_order(
         _lock.release()
 
 
+@serialized_sync
 def run_shipment_dps_sync_preport_active(
     shipments_repo: ShipmentsRepository,
     config_path: Path,
@@ -392,6 +395,7 @@ def run_shipment_dps_sync_preport_active(
         _lock.release()
 
 
+@serialized_sync
 def run_shipment_dps_sync_batch(
     shipments_repo: ShipmentsRepository,
     config_path: Path,
@@ -532,6 +536,7 @@ _DPS_SYNC_TODAY_PREPORT_ORDER: tuple[tuple[DpsSyncVariant, str], ...] = (
 )
 
 
+@serialized_sync
 def run_shipment_dps_sync_all(
     shipments_repo: ShipmentsRepository,
     config_path: Path,
@@ -576,6 +581,7 @@ def run_shipment_dps_sync_all(
         _lock.release()
 
 
+@serialized_sync
 def run_shipment_dps_sync_today_pickup_and_warehoused(
     shipments_repo: ShipmentsRepository,
     config_path: Path,

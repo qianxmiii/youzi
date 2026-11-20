@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 from ..context import LOGISTICS_CONFIG_PATH, _database
 from ..db.order_flow_repository import OrderFlowRepository
@@ -24,6 +24,28 @@ _repo = OrderFlowRepository(_database)
 class OrderFlowSettingsUpdate(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
     enabled: bool = Field(alias="enabled")
+
+
+class OrderFlowAuthorizationUpdate(BaseModel):
+    authorization: SecretStr = SecretStr('')
+
+
+@router.get('/api/v1/order-flow/authorization')
+def order_flow_authorization_status():
+    from ..services.order_flow_client import load_order_flow_config
+    try:
+        return {'configured': bool(load_order_flow_config(LOGISTICS_CONFIG_PATH)['authorization'])}
+    except (OSError, ValueError):
+        return {'configured': False}
+
+
+@router.post('/api/v1/order-flow/save-and-refresh')
+def save_and_refresh_order_flow(body: OrderFlowAuthorizationUpdate):
+    try:
+        return run_order_flow_sync(_database, LOGISTICS_CONFIG_PATH, force=True,
+                                   authorization=body.authorization.get_secret_value())
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from None
 
 
 def _seen_at() -> str:

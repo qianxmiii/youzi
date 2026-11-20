@@ -43,6 +43,8 @@ def delete_task(database, task_id):
     with database.lock:
         row = database.conn.execute('SELECT payload FROM task_history WHERE id=?',(task_id,)).fetchone()
         if row is None: raise KeyError(task_id)
+        if json.loads(row[0]).get('resumable'):
+            raise ValueError('每日同步尚未完成，请先继续未完成任务')
         if json.loads(row[0]).get('state') == 'running':
             raise ValueError('运行中或结果待确认的记录不能删除，可先核对结果')
         try:

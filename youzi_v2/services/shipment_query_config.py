@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import math
+import os
+import tempfile
+from threading import RLock
 from calendar import monthrange
 from datetime import datetime
 from pathlib import Path
@@ -11,6 +14,7 @@ from typing import Any, Callable, Literal
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
 import requests
+from .sync_coordination import check_dps_response, DpsAuthorizationExpired
 
 from ..db.datetime_util import DATETIME_FMT
 
@@ -58,6 +62,29 @@ def load_config_json(config_path: Path) -> dict[str, Any]:
     with config_path.open("r", encoding="utf-8") as f:
         data = json.load(f)
     return data if isinstance(data, dict) else {}
+
+
+_config_lock = RLock()
+
+
+def update_logistics_config(path: Path, update: Callable[[dict[str, Any]], None]) -> None:
+    """Apply a local config edit under the shared write lock."""
+    with _config_lock:
+        config = load_config_json(path)
+        update(config)
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(mode='w', encoding='utf-8', dir=path.parent,
+                                             prefix='.logistics-config-', suffix='.tmp', delete=False) as f:
+                temporary = Path(f.name)
+                json.dump(config, f, ensure_ascii=False, indent=2)
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(temporary, path.stat().st_mode & 0o777)
+            os.replace(temporary, path)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
 
 
 def _normalize_dps_authorization(value: str) -> str:
@@ -404,11 +431,16 @@ def _request_shipment_query_url(
         headers["Authorization"] = authorization
     try:
         resp = requests.get(url, headers=headers, timeout=timeout)
+        check_dps_response(resp)
         resp.raise_for_status()
         try:
-            return resp.json(), None
+            data = resp.json()
+            check_dps_response(resp, data)
+            return data, None
         except ValueError:
             return resp.text, None
+    except DpsAuthorizationExpired:
+        raise
     except Exception as exc:
         return None, str(exc)
 

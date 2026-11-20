@@ -6,6 +6,8 @@ import {
   NForm,
   NFormItem,
   NInputNumber,
+  NInput,
+  NPopconfirm,
   NPagination,
   NSelect,
   NSpace,
@@ -15,7 +17,10 @@ import {
   useMessage,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
-import { computed, h, onMounted, reactive, ref } from 'vue'
+import { computed, h, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { getDailySync, startDailySync, closeDailySync, type DailySyncRun } from '@/api/dailySync'
+import { loadTaskHistory } from '@/composables/useRunningTasks'
+import OrderFlowSyncControl from '@/components/OrderFlowSyncControl.vue'
 import {
   getScheduledTasksOverview,
   listScheduledTaskJobs,
@@ -62,6 +67,68 @@ const page = ref(1)
 const pageSize = ref(20)
 const jobSourceFilter = ref<string | null>(null)
 const error = ref('')
+const dailyAuthorization = ref('')
+const dailyConfigured = ref(false)
+const dailyRun = ref<DailySyncRun | null>(null)
+const dailyStarting = ref(false)
+const dailyStatusError = ref('')
+const dailyLoaded = ref(false)
+const dailyActive = computed(() => ['queued', 'running'].includes(dailyRun.value?.status || ''))
+const dailyResume = computed(() => !!dailyRun.value && !dailyActive.value && !['done', 'closed'].includes(dailyRun.value.status))
+const dailyLabels: Record<string, string> = {
+  queued: '等待开始', pending: '待执行', running: '正在执行', done: '已完成',
+  partial: '未完成', waiting_authorization: '等待更新授权', interrupted: '已中断',
+}
+let dailyTimer: ReturnType<typeof setTimeout> | undefined
+let dailyUnmounted = false
+async function loadDailySync() {
+  try {
+    const data = await getDailySync()
+    dailyRun.value = data.run
+    dailyConfigured.value = data.configured
+    dailyLoaded.value = true
+    dailyStatusError.value = ''
+  } catch {
+    dailyStatusError.value = '每日同步状态读取失败，请重试'
+  } finally {
+    if (!dailyUnmounted) dailyTimer = setTimeout(loadDailySync, dailyActive.value || dailyStatusError.value ? 3000 : 10000)
+  }
+}
+async function onStartDailySync() {
+  const resuming = dailyResume.value
+  dailyStarting.value = true
+  try {
+    dailyRun.value = await startDailySync({
+      authorization: dailyAuthorization.value,
+      resumeId: dailyResume.value ? dailyRun.value!.id : undefined,
+      start: dpsTransitTimeStartForApi(), end: dpsTransitTimeEndForApi(),
+    })
+    dailyAuthorization.value = ''
+    dailyConfigured.value = true
+    message.success(resuming ? '已继续未完成同步' : '已验证授权，后台任务已启动')
+    void loadTaskHistory()
+  } catch (e) {
+    const detail = (e as {data?: {detail?: string}}).data?.detail
+    message.error(typeof detail === 'string' ? detail : '启动结果未确认，请刷新任务状态后核对；不要重复提交')
+  } finally {
+    dailyStarting.value = false
+  }
+}
+onMounted(() => { void loadDailySync() })
+onUnmounted(() => { dailyUnmounted = true; dailyAuthorization.value = ''; if (dailyTimer) clearTimeout(dailyTimer) })
+async function onCloseDailySync() {
+  if (!dailyRun.value) return
+  dailyStarting.value = true
+  try {
+    dailyRun.value = await closeDailySync(dailyRun.value.id)
+    message.info('本轮已结束，未完成结果保留在任务历史中')
+    void loadTaskHistory()
+  } catch {
+    message.error('结束本轮失败，请刷新状态后核对')
+  } finally {
+    dailyStarting.value = false
+  }
+}
 
 const form = reactive<ScheduledSyncSettingsUpdate>({
   internalEnabled: true,
@@ -602,6 +669,47 @@ onMounted(load)
             </NFormItem>
             <NFormItem label="DPS 运单同步">
               <NSpace vertical :size="8" class="w-full max-w-3xl">
+                <section class="rounded-lg border border-[var(--color-border)] p-3 space-y-3" aria-label="每日同步">
+                  <div class="flex items-center justify-between gap-2">
+                    <strong class="text-sm">每日同步</strong>
+                    <NTag size="small" :bordered="false" :type="dailyActive ? 'info' : 'default'">
+                      {{ dailyConfigured ? '授权已配置' : '尚未配置授权' }}
+                    </NTag>
+                  </div>
+                  <NInput v-model:value="dailyAuthorization" type="password" show-password-on="click"
+                    :disabled="dailyActive || dailyStarting" :maxlength="16384" autocomplete="off"
+                    :placeholder="dailyConfigured ? '粘贴新 Authorization；留空沿用已保存授权' : '粘贴 DPS Authorization'"
+                    aria-label="DPS Authorization" />
+                  <NSpace align="center" wrap>
+                    <NButton type="primary" :loading="dailyStarting" :disabled="!dailyLoaded || !!dailyStatusError || dailyActive || (!dailyConfigured && !dailyAuthorization.trim())"
+                      @click="onStartDailySync">
+                      {{ dailyActive ? '每日同步进行中' : dailyResume ? '保存并继续未完成同步' : '保存并开始每日同步' }}
+                    </NButton>
+                    <span class="text-xs text-[var(--color-muted)]">后台执行，离开页面不影响任务</span>
+                    <NPopconfirm v-if="dailyResume" @positive-click="onCloseDailySync">
+                      <template #trigger><NButton size="small" :disabled="dailyStarting || !!dailyStatusError">结束本轮并保留结果</NButton></template>
+                      结束后仍保留未完成及失败结果，不会标记为全部成功。确认后可以开始新一轮同步。
+                    </NPopconfirm>
+                  </NSpace>
+                  <p v-if="dailyStatusError" role="alert" class="text-xs text-red-500">{{ dailyStatusError }}</p>
+                  <p class="text-xs text-[var(--color-muted)]">提货中 → 已入仓 → 在途 → 内部轨迹 → 承运商轨迹 → 明细状态</p>
+                  <template v-if="dailyRun">
+                    <p role="status" aria-live="polite" class="text-xs">{{ dailyRun.message }}</p>
+                    <p class="text-xs text-[var(--color-muted)]">本轮日期范围：{{ dailyRun.start }} 至 {{ dailyRun.end }}（续跑沿用本轮范围）</p>
+                    <ol class="space-y-2">
+                      <li v-for="(step, index) in dailyRun.steps" :key="step.key" class="rounded border border-[var(--color-border)] px-3 py-2">
+                        <div class="flex flex-wrap items-center justify-between gap-2 text-xs">
+                          <span>{{ index + 1 }}. {{ step.label }}</span>
+                          <NTag size="small" :bordered="false" :type="step.status === 'done' ? 'success' : step.status === 'partial' ? 'warning' : step.status === 'running' ? 'info' : 'default'">{{ dailyLabels[step.status] }}</NTag>
+                        </div>
+                        <p v-if="step.message" class="mt-1 text-xs break-all text-[var(--color-muted)]">{{ step.message }}</p>
+                        <p v-if="step.candidateCount != null" class="mt-1 text-xs text-[var(--color-muted)]">本阶段候选 {{ step.candidateCount }}，已处理 {{ step.completedCount }}，待处理 {{ step.pendingCount }}</p>
+                        <p v-for="(issue, i) in step.errors" :key="i" class="mt-1 text-xs break-all text-red-500">{{ issue }}</p>
+                      </li>
+                    </ol>
+                  </template>
+                  <p class="text-xs text-[var(--color-muted)]">下方日期范围用于新一轮同步：在途按发运时间，提货中/已入仓按下单时间。失败的列表步骤继续时会重新核对；后端重启后需手动继续。</p>
+                </section>
                 <NSpace align="center" wrap>
                   <NButton
                     size="small"
@@ -685,6 +793,9 @@ onMounted(load)
                   </span>
                 </NSpace>
               </NSpace>
+            </NFormItem>
+            <NFormItem label="订单流转">
+              <OrderFlowSyncControl />
             </NFormItem>
             <NFormItem label="启动延迟">
               <NSpace align="center">

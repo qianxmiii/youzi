@@ -83,8 +83,14 @@ def parse_orders_page(body: Any) -> tuple[list[dict[str, Any]], int]:
     return clean, total
 
 
-def fetch_order_flow_rows(config_path: Path, config_key: str = ORDERS_KEY) -> list[dict[str, Any]]:
-    cfg = require_order_flow_config(config_path, config_key)
+def fetch_order_flow_rows(config_path: Path, config_key: str = ORDERS_KEY, *, authorization: str | None = None) -> list[dict[str, Any]]:
+    if authorization is None:
+        cfg = require_order_flow_config(config_path, config_key)
+    else:
+        cfg = load_order_flow_config(config_path, config_key)
+        cfg['authorization'] = _normalize_dps_authorization(authorization)
+        if not cfg['url'] or not cfg['authorization']:
+            raise ValueError('请先配置订单流转查询地址，并提供有效授权')
     headers = {"Authorization": cfg["authorization"], "Accept": "application/json"}
     collected: list[dict[str, Any]] = []
     seen: set[str] = set()
@@ -97,6 +103,7 @@ def fetch_order_flow_rows(config_path: Path, config_key: str = ORDERS_KEY) -> li
                 url,
                 headers=headers,
                 timeout=cfg["timeout"],
+                **({'allow_redirects': False} if authorization is not None else {}),
             )
         except requests.RequestException as exc:
             raise ValueError(f"订单流转请求失败：{exc}") from exc

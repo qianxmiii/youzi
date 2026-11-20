@@ -1,6 +1,7 @@
 """承运商轨迹同步：仅转运中(IN_TRANSIT)、按 vendor 串行、每批 10 单。"""
 
 from __future__ import annotations
+from .sync_coordination import serialized_sync, pending_rows, checkpointed_rows, retry_item
 
 from pathlib import Path
 from typing import Any, Callable
@@ -44,6 +45,7 @@ from .carrier_vendors import (
 LogFn = Callable[[str], None]
 
 
+@serialized_sync
 def sync_carrier_tracking(
     shipments_repo: ShipmentsRepository,
     carrier_repo: CarrierTrackingLogsRepository,
@@ -88,9 +90,11 @@ def sync_carrier_tracking(
         len([s for s in shipment_nos if s and s.strip()]) if shipment_nos else 0
     )
     manual_scope = bool(shipment_nos)
-    rows = shipments_repo.list_for_carrier_sync(
-        shipment_nos,
-        include_delivered=manual_scope,
+    rows = pending_rows(
+        lambda ids: shipments_repo.list_for_carrier_sync(
+            ids if ids is not None else shipment_nos,
+            include_delivered=manual_scope or ids is not None,
+        ), lambda row: row['shipment_no'],
     )
     total = len(rows)
     excluded_not_in_transit = max(0, requested_nos - total) if manual_scope else 0
@@ -175,7 +179,7 @@ def sync_carrier_tracking(
             else:
                 tracking_map = {sn: fetch_tracking_one(sn, vendor) for sn in batch_nos}
 
-            for row in batch:
+            for row in checkpointed_rows(batch, lambda row: row['shipment_no']):
                 sn = row["shipment_no"]
                 logs, err, carrier_id, outer_tn, all_tns = unpack_carrier_fetch(
                     tracking_map.get(sn, ([], "未返回", None, None, None))
@@ -257,6 +261,7 @@ def sync_carrier_tracking(
                         out_log(f"[承运商轨迹] {sn} 追踪号表 {n} 条（主单 {main_tn}）")
                 bill_hint = (row.get("carrier_id") or "").strip()
                 if err:
+                    retry_item()
                     err_line = f"{vendor_name}/{sn}: {err}"
                     errors.append(err_line)
                     out_log(f"[承运商轨迹] 失败 {err_line}")

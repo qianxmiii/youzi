@@ -14,7 +14,10 @@
 | [../desktop_quote/README.md](../desktop_quote/README.md) | 可置顶的独立桌面报价小窗及字段设置 |
 | [api.md](./api.md) | REST API 索引与调用示例 |
 | [shipment-flow.md](./shipment-flow.md) | 运单生命周期与轨迹同步 |
+| [transport-attention.md](./transport-attention.md) | 运输关注分级、节点阈值、人工异常七天跟进 |
+| [daily-sync.md](./daily-sync.md) | 保存授权后六步每日同步、后台进度与失败续跑 |
 | [warehouse-flow.md](./warehouse-flow.md) | 仓库地址簿业务流程 |
+| [shipment-route-add.md](./shipment-route-add.md) | 单票及批量新增DPS路由、节点时间、明细状态与常用描述 |
 | [SCHEMA.md](./SCHEMA.md) | 码表与字段详细说明（历史文档，与 database.md 互补） |
 | [cost-calculation.md](./cost-calculation.md) | 成本计算（DDU/DDP） |
 | [design/shipment-route-status-design.md](./design/shipment-route-status-design.md) | DPS 轨迹明细状态（route_status） |

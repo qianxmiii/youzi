@@ -93,6 +93,8 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
 
 ## 私密配置
 
+每日六步同步为单进程后台任务：升级重启自动创建 `daily_sync_runs`，升级前备份数据库；不支持多 worker/多实例互斥。刷新浏览器后继续运行，后端重启/reload 则标记中断，需手动继续。授权从计划任务页面验证后原子保存到既有私密配置，不回传完整凭据，详见[每日同步](daily-sync.md)。
+
 **禁止**将 Token、appKey、authorization 等写入 `youzi_v2/` 业务代码或提交 Git。
 
 - 路径：仓库根 `config/config.json`（gitignore）

@@ -67,6 +67,8 @@ erDiagram
 | delivery_address | TEXT | 派送地址 |
 | ctns | INTEGER | 件数 |
 | charged_weight | REAL | 计费重 kg（DPS 同步 `chargedWeight` 等） |
+| actual_weight | REAL | 实重 kg，取 DPS `params.roughWeightTotal` |
+| volume_cbm | REAL | 体积 m³，取 DPS `params.volumeTotal` |
 | receivable_cny | REAL | 应收，人民币（DPS `receivable`） |
 | collection_start_date | TEXT | 收款起算日。设了之后应付款日 = 起算日 + `payment_term_days` |
 | payment_term_days | INTEGER | 账期天数，由设置时填写 |
@@ -319,3 +321,7 @@ erDiagram
 
 
 **shipment_marks** — 运单与标识的独立关联表，按运单和标识键唯一。`mark_id` 可空，保存远端名称/颜色，未知标识在码表补齐后解析；按标识 ID、未匹配名称建立筛选索引。首次启动从旧 JSON 一次性回填，旧列冻结保留，不再作为读写来源。迁移与回退要求见[标识管理](./commerce-marks.md#运单标识关联表迁移)。
+
+### 运单实重与体积
+
+启动时为已有运单表自动补充 `actual_weight`、`volume_cbm` 两个可空 REAL 字段，不回算历史值。港前及在途运单下一次 DPS 同步后补齐；新增和更新均受运单同步字段配置控制。仅从 params 读取有限非负数值，接受零；缺失、空值、负数及非数值不覆盖已有数据。实重和体积独立保存，不替代计费重。

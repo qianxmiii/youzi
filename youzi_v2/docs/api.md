@@ -81,6 +81,9 @@ curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6
 | GET | `/api/v1/tools/image-link-zip/jobs/{jobId}` | 查询进度（`done`/`total`/`status`） |
 | GET | `/api/v1/tools/image-link-zip/jobs/{jobId}/download` | 完成后下载 zip |
 | POST | `/api/v1/tools/shipment-file-rename/parse` | 解析运单 Excel，返回重命名映射（运单号/国家/仓库代码或邮编/件数 → `targetStem`；无仓库代码时用邮编）；浏览器递归扫描子文件夹后本地改名 |
+| GET | `/api/v1/shipment-routes/options` | 新增路由可选的明细状态（含 100 信息传递）及常用节点配置，见[新增路由](./shipment-route-add.md) |
+| PUT | `/api/v1/shipment-routes/presets` | 保存本地常用节点配置，最多100项 |
+| POST | `/api/v1/shipment-routes` | 单票或批量新增DPS节点，最多50票，返回逐票结果；写请求不自动重试 |
 | POST | `/api/v1/tools/product-import` | 上传箱单发票，转换为产品导入模版；form 字段 `invoice` |
 | GET | `/api/v1/tools/product-import/download/{taskId}` | 下载生成的产品导入 .xls |
 
@@ -158,6 +161,8 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/payment-reminders/collection-term` | 给选中运单设置收款起算日。body: `shipmentIds`、`collectionStartDate`、`paymentTermDays`、`reminderAdvanceDays`。账期可填天数，也可直接选收款截止日，保存时换算为天数。应付款日 = 起算日 + 账期，到期前 `reminderAdvanceDays` 天进入待催 |
 
 **订阅消息（顶栏 · 消息铃铛）**
+
+同一运单的订阅提醒跨来源合并，仅保留最新生成的一条（按生成时间排序，同秒按写入顺序）；读取列表或计数时，将旧提醒自动置为已读，历史记录保留。最新提醒已读后，旧提醒不会重新出现；列表在合并后分页，未读计数采用相同口径。
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -424,6 +429,17 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 | POST | `/api/v1/scheduled-tasks/run-dps-route-status-sync` | 更新全部明细状态（有 `waybillId` 的运单；无 body） |
 | POST | `/api/v1/notifications/wecom/test` | 企业微信通知测试（详见 [wecom-aibot.md](./wecom-aibot.md)；body 可选 `{ "content": "..." }`） |
 
+## 每日同步 daily-sync
+
+订单流转独立入口：`GET /api/v1/order-flow/authorization` 仅返回 `configured`；`POST /api/v1/order-flow/save-and-refresh` 接收只写 `authorization`（空值沿用），完整拉取现有订单流转列表后保存 `dps_ddlz_authorization` 并应用原刷新快照，响应含原 `skipped/reason/remote/created/changed/ended` 及 `authorizationSaved`。拉取或保存失败返回 400；已有执行则返回 `skipped=true` 且不保存授权。只刷新订单流转列表，不执行其他名单同步。详见[操作说明](daily-sync.md#订单流转专用授权)。
+
+- `GET /api/v1/daily-sync`：返回 `configured`（不含凭据）和最近一轮 `run`，无任务为 null。
+- `POST /api/v1/daily-sync`：请求包含只写 `authorization`，可选 `resumeId`、`start`、`end`；授权空值沿用已保存配置，不清空旧授权。新任务日期未给时沿用计划任务配置；继续任务忽略新日期并保持原范围。成功返回 HTTP 202 和任务快照（含 `id`、`authorizationSaved`），不等待完整执行。
+- 运行状态：`queued`、`running`、`waiting_authorization`、`partial`、`interrupted`、`done`。`steps` 含 `key`、`label`、`status`、`attempt`、`message`、最近一次执行的数字 `stats`、脱敏 `errors`，轨迹阶段另含累计 `candidateCount`、`completedCount`、`pendingCount`；不返回候选单号或凭据。
+- 参数/验证/保存失败返回 400；同步租约冲突返回 409。网络超时导致客户端未收到启动响应时，先 GET 核对任务，不盲目重复提交。已有未完成任务必须指定其 `resumeId`，不能另起一轮。
+- `POST /api/v1/daily-sync/{id}/close`：仅允许明确结束部分完成、等待授权或已中断任务；状态改为 `closed`，保留错误及未完成明细，任务历史仍显示需关注。之后可另起一轮。运行中返回冲突，不支持将失败记录改成成功。
+- 此接口是独立后台任务，不接入请求结束即完成的同步请求中间件；顶部任务中心复用 `task_history` 的 server 记录。实际执行范围、继续语义与单进程限制见 [每日同步说明](daily-sync.md)。
+
 ## 地址簿
 
 | 前缀 | 说明 |
@@ -449,6 +465,9 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 
 ## 相关文档
 
+明细状态同步 `POST /api/v1/shipments/sync-route-status-from-dps`：DPS 授权失效返回 401 与明确的 `detail`，同步占用返回 409；单票、选中及全部更新均显示服务端具体原因。授权优先读取根级 `dps_authorization`；根级未配置时才回退到接口块中的 `Authorization`。
+
+- [transport-attention.md](./transport-attention.md) — 运输关注阈值读写、人工异常列表和七天跟进接口；待办列表、统计和角标统一排除未关闭人工异常、已签收及已取消运单。
 - [modules/shipment/README.md](./modules/shipment/README.md)
 - [shipment-flow.md](./shipment-flow.md)
 - [frontend/src/api/](../frontend/src/api/) — 前端封装
@@ -557,3 +576,11 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 
 
 运单标识已迁入 `shipment_marks`，列表、详情和 `commerceMarkIds` 筛选参数保持兼容，返回的 `commerceMarks` 仍含 ID、名称和颜色。缺少 ID 的标识保留名称键，不要求一定存在目录项；主表旧 JSON 不再作为来源，迁移及回退见[关联表迁移](./commerce-marks.md#运单标识关联表迁移)。
+
+### 港前／在途运单实重与体积
+
+运单列表、详情及新增／更新返回 `actualWeight`（实重 kg）、`volumeCbm`（体积 m³），未同步时为 null。写入模型支持同名驼峰或 `actual_weight`、`volume_cbm`，须为有限非负数值。DPS 同步分别取 `params.roughWeightTotal`、`params.volumeTotal`，缺失或无效时不覆盖已保存值；零值正常同步。港前和在途的列设置均可勾选「实重（kg）」「体积（m³）」，默认不增加可见列。升级需重启后端自动补列并重新同步运单，页面显示不改变已保存的数值精度。
+
+运单「复制 → 数据（按方）」沿用原数据摘要格式，第二行使用已保存的 `volumeCbm`，仅复制输出向上取整保留两位小数，单位 cbm，不改变数据库原值；缺失或无效体积显示 `—`，零值输出 0.00cbm。英文客户用 Chargevolume 标签（如 `Chargevolume: 3.25cbm`），末尾沿用中英文确认句；原「数据」仍复制计费重。
+
+运单导出（`GET /api/v1/shipments/export`）的「渠道」列优先显示关联码表的中文名 `channelNameZh`，中文名缺失或为空时回退 `channelCode`。港前和在途共用此规则，筛选及存储仍使用渠道编码。

@@ -1,6 +1,7 @@
 """受支持站点的文件下载规则、持久任务及打包。"""
 from __future__ import annotations
 import json
+import logging
 import re
 import shutil
 import threading
@@ -12,6 +13,8 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qs
 import requests
 from ..db.task_history import save_task
+
+logger = logging.getLogger(__name__)
 
 RETENTION_SEC = 7 * 86400
 MAX_FILE = 50 * 1024 * 1024
@@ -89,6 +92,7 @@ def list_jobs(db):
 
 def _fetch(item, folder, budget, budget_lock):
     target = folder / (item['shipmentNo']+'.zip')
+    partial = target.with_suffix('.zip.part')
     for attempt in range(2):
         try:
             with requests.Session() as session:
@@ -100,7 +104,7 @@ def _fetch(item, folder, budget, budget_lock):
                         raise ValueError('链接返回网页而非压缩包')
                     size = 0
                     started = time.monotonic()
-                    with target.open('wb') as output:
+                    with partial.open('wb') as output:
                         for chunk in response.iter_content(65536):
                             size += len(chunk)
                             with budget_lock:
@@ -109,8 +113,9 @@ def _fetch(item, folder, budget, budget_lock):
                             if size > MAX_FILE or total > MAX_TOTAL or time.monotonic()-started > 180:
                                 raise ValueError('文件过大或下载超时，单票上限 50MB、批次上限 500MB')
                             output.write(chunk)
-            if not zipfile.is_zipfile(target):
+            if not zipfile.is_zipfile(partial):
                 raise ValueError('返回内容不是有效 ZIP 压缩包')
+            partial.replace(target)
             return {'status':'success','message':'下载成功','filename':target.name}
         except requests.RequestException:
             if attempt == 0:
@@ -118,6 +123,12 @@ def _fetch(item, folder, budget, budget_lock):
             return {'status':'failed','message':'连接失败或超时，请稍后重试'}
         except (ValueError,OSError) as exc:
             return {'status':'failed','message':str(exc) if isinstance(exc,ValueError) else '本地文件写入失败'}
+        finally:
+            # 成功时临时文件已原子改名；失败或重试前清理未完成内容。
+            try:
+                partial.unlink(missing_ok=True)
+            except OSError:
+                logger.warning('无法清理下载临时文件 %s，等待批次过期清理', partial, exc_info=True)
     return {'status':'failed','message':'下载失败'}
 
 def _run(db, root, job):

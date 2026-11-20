@@ -44,7 +44,9 @@ def settings(path, database=None):
     config=load_config_json(path)
     block=config.get(CONFIG_KEY) or {}
     if not isinstance(block,dict): raise ValueError('标识接口配置应为对象')
-    return {'url':str(block.get('url') or DEFAULT_URL),'authorization':resolve_dps_authorization(config,block),'marks':load_catalog(database)}
+    method=str(block.get('method') or 'PUT').strip().upper()
+    if method not in ('PUT','POST'): raise ValueError('dps_commerce_waybill_mark.method 仅支持 PUT 或 POST')
+    return {'url':str(block.get('url') or DEFAULT_URL),'method':method,'authorization':resolve_dps_authorization(config,block),'marks':load_catalog(database)}
 
 def next_marks(current, selected, action):
     if action==0: return list(dict.fromkeys([*current,*selected]))
@@ -74,7 +76,7 @@ def apply_marks(repo,path,ids,selected,action,task_id=''):
             for row in rows:
                 events.append(record_event(repo._database,task_id,row['shipmentNo'],{'marks':row.get('commerceMarks',[])},{'type':action,'markIds':selected}))
         try:
-            response=requests.post(cfg['url'],json={'type':action,'markIds':selected,'commerceWaybillIds':list(dict.fromkeys(r['waybillId'] for r in rows))},headers={'Authorization':cfg['authorization']},timeout=30)
+            response=requests.request(cfg.get('method','PUT'),cfg['url'],json={'type':action,'markIds':selected,'commerceWaybillIds':list(dict.fromkeys(r['waybillId'] for r in rows))},headers={'Authorization':cfg['authorization']},timeout=30)
             if response.status_code>=400: raise ValueError(f'DPS 标识操作失败 HTTP {response.status_code}')
             result=response.json()
             if not isinstance(result,dict) or result.get('code') not in (0,'0',200,'200'): raise ValueError('DPS 未确认标识操作成功，请核对远端结果')

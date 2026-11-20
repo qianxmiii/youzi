@@ -9,6 +9,8 @@ from typing import Any, Callable
 from ..db.channel_sla_rules_repository import ChannelSlaRulesRepository
 from ..db.shipment_sla import (
     ACTIVE_STATUSES,
+    ALERT_TRACKING_STALE,
+    compute_internal_tracking_stale_context,
     ALERT_ARRIVAL_NO_DELIVERY,
     ALERT_DELIVERY_TIME,
     ALERT_DEST_WAREHOUSE_NO_DISPATCH,
@@ -75,7 +77,7 @@ def _try_upsert_alert(
         anchor_date=str(ctx.get("startTime") or ctx["dueDate"]),
     )
     existing = alerts_repo.get_by_event_key(event_key)
-    if existing and existing["status"] not in ACTIVE_STATUSES:
+    if existing and existing["status"] not in ACTIVE_STATUSES and not existing.get("autoResolved"):
         return False, True
 
     risk_level = str(ctx.get("riskLevel") or ctx.get("risk_level") or "")
@@ -109,6 +111,7 @@ def _scan_warehouse_no_departure(
     channel_code: str,
     carrier_code: str,
     today: date,
+    thresholds=None,
 ) -> tuple[int, int, int]:
     created = updated = resolved = 0
     if has_departure_schedule(row):
@@ -117,7 +120,7 @@ def _scan_warehouse_no_departure(
         )
         return created, updated, resolved
 
-    ctx = compute_warehouse_no_departure_context(row, today=today)
+    ctx = compute_warehouse_no_departure_context(row, today=today, thresholds=thresholds)
     if not ctx:
         resolved += alerts_repo.resolve_open_for_shipment(
             shipment_id, alert_type=ALERT_WAREHOUSE_NO_DEPARTURE
@@ -149,9 +152,10 @@ def _scan_arrival_no_delivery(
     channel_code: str,
     carrier_code: str,
     today: date,
+    thresholds=None,
 ) -> tuple[int, int, int]:
     created = updated = resolved = 0
-    ctx = compute_arrival_no_delivery_context(row, today=today)
+    ctx = compute_arrival_no_delivery_context(row, today=today, thresholds=thresholds)
     if not ctx:
         resolved += alerts_repo.resolve_open_for_shipment(
             shipment_id, alert_type=ALERT_ARRIVAL_NO_DELIVERY
@@ -183,9 +187,10 @@ def _scan_dest_warehouse_no_dispatch(
     channel_code: str,
     carrier_code: str,
     today: date,
+    thresholds=None,
 ) -> tuple[int, int, int]:
     created = updated = resolved = 0
-    ctx = compute_dest_warehouse_no_dispatch_context(row, today=today)
+    ctx = compute_dest_warehouse_no_dispatch_context(row, today=today, thresholds=thresholds)
     if not ctx:
         resolved += alerts_repo.resolve_open_for_shipment(
             shipment_id, alert_type=ALERT_DEST_WAREHOUSE_NO_DISPATCH
@@ -301,6 +306,8 @@ def scan_shipment_sla_alerts(
 
     try:
         today = date.today()
+        from .transport_attention_settings import load_thresholds
+        thresholds = load_thresholds(database)
         rules_by_channel = rules_repo.list_enabled_grouped()
 
         stale_resolved = alerts_repo.resolve_delivered_stale_alerts()
@@ -349,6 +356,13 @@ def scan_shipment_sla_alerts(
                 resolved += n
                 continue
 
+            # 人工异常期间暂停运输扫描，保留原预警状态供关闭后恢复。
+            if (row.get("exception_code") or "").strip():
+                continue
+            if str(row.get("status_code") or "").strip().upper() in {"4", "CANCELLED", "CANCELED"}:
+                resolved += alerts_repo.resolve_open_for_shipment(shipment_id)
+                continue
+
             channel_code = (row.get("channel_code") or "").strip()
             carrier_code = (row.get("carrier_code") or "").strip()
 
@@ -367,6 +381,7 @@ def scan_shipment_sla_alerts(
                 channel_code=channel_code,
                 carrier_code=carrier_code,
                 today=today,
+                thresholds=thresholds,
             )
             ar_c, ar_u, ar_r = _scan_arrival_no_delivery(
                 alerts_repo,
@@ -376,6 +391,7 @@ def scan_shipment_sla_alerts(
                 channel_code=channel_code,
                 carrier_code=carrier_code,
                 today=today,
+                thresholds=thresholds,
             )
             dw_c, dw_u, dw_r = _scan_dest_warehouse_no_dispatch(
                 alerts_repo,
@@ -385,6 +401,7 @@ def scan_shipment_sla_alerts(
                 channel_code=channel_code,
                 carrier_code=carrier_code,
                 today=today,
+                thresholds=thresholds,
             )
             dt_c, dt_u, dt_r = _scan_delivery_time(
                 alerts_repo,
@@ -396,6 +413,16 @@ def scan_shipment_sla_alerts(
                 carrier_code=carrier_code,
                 today=today,
             )
+            tracking_ctx = compute_internal_tracking_stale_context(row, today=today, thresholds=thresholds)
+            # 新轨迹或规则变化时，旧起算点的预警自动退出。
+            if tracking_ctx:
+                is_new, _ = _try_upsert_alert(alerts_repo, row=row, shipment_id=shipment_id,
+                    shipment_no=shipment_no, ctx=tracking_ctx, channel_code=channel_code,
+                    carrier_code=carrier_code)
+                created += int(is_new)
+                updated += int(not is_new)
+            else:
+                resolved += alerts_repo.resolve_open_for_shipment(shipment_id, alert_type=ALERT_TRACKING_STALE)
             created += wh_c + ar_c + dw_c + dt_c
             updated += wh_u + ar_u + dw_u + dt_u
             resolved += wh_r + ar_r + dw_r + dt_r

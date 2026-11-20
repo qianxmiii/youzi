@@ -38,6 +38,7 @@ const PIPELINE_SHORT: Record<string, string> = {
   EXPORT_CUSTOMS_RELEASE: '出口放行',
   DEPARTED_POL: '离起运港',
   ARRIVED_POD: '到目的港',
+  IMPORT_CUSTOMS_RELEASE: '进口放行',
   DEST_TRANSIT_WAREHOUSE: '目的中转仓',
   TRUCK_DISPATCH_APPOINTED: '卡派约仓',
   LAST_MILE_HANDOVER: '快递交仓',

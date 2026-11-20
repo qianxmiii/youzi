@@ -485,9 +485,33 @@ class ShipmentSubscriptionsRepository:
         )
         return cur.rowcount
 
+    def _mark_superseded_notifications_read_locked(self) -> int:
+        """同一运单仅保留最新生成的通知；已读最新消息也不能让旧消息复现。"""
+        cur = self._conn.execute(
+            f"""
+            UPDATE {NOTIFICATIONS_TABLE}
+            SET read_at = ?
+            WHERE TRIM(COALESCE(read_at, '')) = ''
+              AND rowid IN (
+                  SELECT notification_rowid FROM (
+                      SELECT rowid AS notification_rowid,
+                             ROW_NUMBER() OVER (
+                                 PARTITION BY shipment_id
+                                 ORDER BY datetime(created_at) DESC, rowid DESC
+                             ) AS position
+                      FROM {NOTIFICATIONS_TABLE}
+                  ) WHERE position > 1
+              )
+            """,
+            (now_str(),),
+        )
+        return cur.rowcount
+
     def count_unread_notifications(self) -> int:
         with self._database.lock:
-            if self._mark_delivered_eta_reminders_read_locked():
+            superseded = self._mark_superseded_notifications_read_locked()
+            delivered = self._mark_delivered_eta_reminders_read_locked()
+            if superseded or delivered:
                 self._conn.commit()
             row = self._conn.execute(
                 f"""
@@ -500,7 +524,9 @@ class ShipmentSubscriptionsRepository:
     def list_unread_notifications(self, *, limit: int = 20) -> list[dict[str, Any]]:
         limit = max(1, min(limit, 100))
         with self._database.lock:
-            if self._mark_delivered_eta_reminders_read_locked():
+            superseded = self._mark_superseded_notifications_read_locked()
+            delivered = self._mark_delivered_eta_reminders_read_locked()
+            if superseded or delivered:
                 self._conn.commit()
             rows = self._conn.execute(
                 f"""
@@ -508,7 +534,7 @@ class ShipmentSubscriptionsRepository:
                 FROM {NOTIFICATIONS_TABLE} n
                 LEFT JOIN {SHIPMENTS_TABLE} s ON s.id = n.shipment_id
                 WHERE TRIM(COALESCE(n.read_at, '')) = ''
-                ORDER BY datetime(n.created_at) DESC
+                ORDER BY datetime(n.created_at) DESC, n.rowid DESC
                 LIMIT ?
                 """,
                 (limit,),

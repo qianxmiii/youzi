@@ -3,7 +3,7 @@
   const $ = (id) => document.getElementById(id);
   const api = window.YouziMobile.api;
   let active = false, visible = false, mode = 'all', summary = null, request;
-  const tones = new Set(['EXPORT_CUSTOMS_EXCEPTION', 'IMPORT_CUSTOMS_EXCEPTION', 'WAREHOUSE_IN', 'EXPORT_CUSTOMS_RELEASE', 'DEPARTED_POL', 'ARRIVED_POD', 'DEST_TRANSIT_WAREHOUSE', 'TRUCK_DISPATCH_APPOINTED', 'LAST_MILE_HANDOVER', 'TRACK_SIGNED', 'missing', 'exception']);
+  const tones = new Set(['EXPORT_CUSTOMS_EXCEPTION', 'IMPORT_CUSTOMS_EXCEPTION', 'WAREHOUSE_IN', 'EXPORT_CUSTOMS_RELEASE', 'DEPARTED_POL', 'ARRIVED_POD', 'IMPORT_CUSTOMS_RELEASE', 'DEST_TRANSIT_WAREHOUSE', 'TRUCK_DISPATCH_APPOINTED', 'LAST_MILE_HANDOVER', 'TRACK_SIGNED', 'missing', 'exception']);
   function node(tag, text, className) {
     const element = document.createElement(tag);
     if (text != null) element.textContent = String(text);

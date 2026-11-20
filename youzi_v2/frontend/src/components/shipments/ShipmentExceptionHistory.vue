@@ -32,6 +32,7 @@ const openException = computed(() => {
     label: codeLabel(code),
     note: openEvent?.note || null,
     openedTime: props.shipment?.exceptionOpenedTime || openEvent?.openedTime || null,
+    durationLabel: openEvent?.durationLabel || props.shipment?.exceptionDurationLabel || null,
   }
 })
 
@@ -71,8 +72,15 @@ watch(() => props.shipmentId, load)
           </div>
           <div class="min-w-0 flex-1">
             <div class="abnormal-title">
-              Issue: {{ openException.label }}
+              <span>Issue: {{ openException.label }}</span>
+              <span
+                v-if="openException.durationLabel && openException.durationLabel !== '—'"
+                class="abnormal-duration"
+              >已持续 {{ openException.durationLabel }}</span>
             </div>
+            <p v-if="openException.openedTime" class="abnormal-started">
+              开始时间：{{ openException.openedTime }}
+            </p>
             <p v-if="openException.note" class="abnormal-desc">
               {{ openException.note }}
             </p>
@@ -169,10 +177,29 @@ watch(() => props.shipmentId, load)
 }
 
 .abnormal-title {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 0.875rem;
   font-weight: 600;
   line-height: 1.35;
   color: var(--color-fg-emphasis);
+}
+
+.abnormal-duration {
+  border-radius: 0.25rem;
+  padding: 0.125rem 0.375rem;
+  background: var(--badge-exception-soft-bg);
+  color: var(--badge-exception-soft-fg);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.abnormal-started {
+  margin-top: 0.375rem;
+  color: var(--color-muted);
+  font-size: 0.75rem;
 }
 
 .abnormal-desc {

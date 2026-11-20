@@ -65,7 +65,7 @@ class ShipmentExceptionFollowupRepository:
             rows = self._conn.execute(
                 f"""
                 SELECT s.id, s.shipment_no, s.exception_code, s.exception_opened_time,
-                       s.customer,
+                       s.customer, s.atd, s.latest_tracking_time,
                        COALESCE(ec.name_zh, s.exception_code) AS exception_name_zh
                 FROM {SHIPMENTS_TABLE} s
                 LEFT JOIN {EXCEPTION_CODES_TABLE} ec ON ec.code = s.exception_code
@@ -95,6 +95,37 @@ class ShipmentExceptionFollowupRepository:
         if resolved:
             return resolved
         return (row["triggered_at"] or "").strip() or None
+
+    def record_manual_followup(self, shipment_id: str) -> bool:
+        """原子记录跟进并处理已有待办；不关闭运单异常。"""
+        now = now_str()
+        with self._database.lock:
+            row = self._conn.execute(
+                f"SELECT shipment_no, exception_code FROM {SHIPMENTS_TABLE} WHERE id = ?",
+                (shipment_id,),
+            ).fetchone()
+            if not row or not (row["exception_code"] or "").strip():
+                return False
+            try:
+                self._conn.execute(
+                    f"UPDATE {TABLE_NAME} SET resolved_at = ?, read_at = ?, updated_time = ? "
+                    "WHERE shipment_no = ? AND TRIM(COALESCE(resolved_at, '')) = ''",
+                    (now, now, now, row["shipment_no"]),
+                )
+                self._conn.execute(
+                    f"""INSERT INTO {TABLE_NAME} (
+                        id, shipment_id, shipment_no, exception_code, severity, title, message,
+                        days_open, followup_interval_days, event_key, triggered_at, read_at,
+                        resolved_at, created_time, updated_time
+                    ) VALUES (?, ?, ?, ?, 'info', '人工异常已跟进', '', 0, 7, ?, ?, ?, ?, ?, ?)""",
+                    (str(uuid.uuid4()), shipment_id, row["shipment_no"], row["exception_code"],
+                     f"manual-followup:{uuid.uuid4()}", now, now, now, now, now),
+                )
+                self._conn.commit()
+            except Exception:
+                self._conn.rollback()
+                raise
+        return True
 
     def has_pending_followup(self, shipment_no: str) -> bool:
         sn = shipment_no.strip()

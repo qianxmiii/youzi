@@ -11,6 +11,7 @@ RISK_WARNING_SOON = "warning_soon"
 RISK_OVERDUE = "overdue"
 RISK_SEVERE_OVERDUE = "severe_overdue"
 
+ALERT_TRACKING_STALE = "INTERNAL_TRACKING_STALE"
 ALERT_DELIVERY_TIME = "DELIVERY_TIME"
 ALERT_WAREHOUSE_NO_DEPARTURE = "WAREHOUSE_NO_DEPARTURE"
 ALERT_ARRIVAL_NO_DELIVERY = "ARRIVAL_NO_DELIVERY"
@@ -20,7 +21,7 @@ LABEL_DEST_WAREHOUSE_NO_DISPATCH = "到仓未派送"
 LABEL_TRUCK_APPOINTMENT_NO_DISPATCH = "约仓未派送"
 
 WAREHOUSE_NO_DEPARTURE_DAYS = 7
-ARRIVAL_NO_DELIVERY_DAYS = 5
+ARRIVAL_NO_DELIVERY_DAYS = 7
 DEST_WAREHOUSE_NO_DISPATCH_DAYS = 5
 
 STATUS_OPEN = "open"
@@ -70,6 +71,7 @@ def alert_type_display_label(
             return LABEL_TRUCK_APPOINTMENT_NO_DISPATCH
         return LABEL_DEST_WAREHOUSE_NO_DISPATCH
     static = {
+        ALERT_TRACKING_STALE: "内部轨迹未更新",
         ALERT_DELIVERY_TIME: "运输时效",
         ALERT_WAREHOUSE_NO_DEPARTURE: "入库未开船",
         ALERT_ARRIVAL_NO_DELIVERY: "到港未送仓",
@@ -217,6 +219,7 @@ def compute_warehouse_no_departure_context(
     row: dict[str, Any],
     *,
     today: date | None = None,
+    thresholds: dict[str, tuple[int, int]] | None = None,
 ) -> dict[str, Any] | None:
     """明细状态 202 入库后超过 7 天仍无 ETD/ATD → 入库未开船（第 8 天起）。"""
     entry_raw = _row_time(
@@ -228,7 +231,8 @@ def compute_warehouse_no_departure_context(
     if not entry_day or has_departure_schedule(row):
         return None
     check_day = today or date.today()
-    due_day = entry_day + timedelta(days=WAREHOUSE_NO_DEPARTURE_DAYS)
+    minor, major = (thresholds or {}).get("WAREHOUSE_NO_DEPARTURE", (7, 10))
+    due_day = entry_day + timedelta(days=minor)
     if check_day <= due_day:
         return None
     due_iso = due_day.isoformat()
@@ -240,7 +244,7 @@ def compute_warehouse_no_departure_context(
         "startTime": entry_raw[:10] if len(entry_raw) >= 10 else entry_raw,
         "ruleScope": "system",
         "ruleId": "",
-        "riskLevel": RISK_OVERDUE,
+        "riskLevel": RISK_SEVERE_OVERDUE if (check_day - entry_day).days > major else RISK_OVERDUE,
     }
 
 
@@ -248,8 +252,9 @@ def compute_arrival_no_delivery_context(
     row: dict[str, Any],
     *,
     today: date | None = None,
+    thresholds: dict[str, tuple[int, int]] | None = None,
 ) -> dict[str, Any] | None:
-    """明细状态 306 到港后超过 5 天仍未到中转仓/交仓 → 到港未送仓（第 6 天起）。"""
+    """明细状态 306 到港后超过配置天数仍未到中转仓/交仓 → 到港未送仓。"""
     if is_arrival_fulfilled(row):
         return None
     pod_raw = _row_time(
@@ -261,7 +266,8 @@ def compute_arrival_no_delivery_context(
     if not pod_day:
         return None
     check_day = today or date.today()
-    due_day = pod_day + timedelta(days=ARRIVAL_NO_DELIVERY_DAYS)
+    minor, major = (thresholds or {}).get("ARRIVAL_NO_DELIVERY", (7, 12))
+    due_day = pod_day + timedelta(days=minor)
     if check_day <= due_day:
         return None
     due_iso = due_day.isoformat()
@@ -273,7 +279,7 @@ def compute_arrival_no_delivery_context(
         "startTime": pod_raw[:10] if len(pod_raw) >= 10 else pod_raw,
         "ruleScope": "system",
         "ruleId": "",
-        "riskLevel": RISK_OVERDUE,
+        "riskLevel": RISK_SEVERE_OVERDUE if (check_day - pod_day).days > major else RISK_OVERDUE,
     }
 
 
@@ -281,8 +287,9 @@ def compute_dest_warehouse_no_dispatch_context(
     row: dict[str, Any],
     *,
     today: date | None = None,
+    thresholds: dict[str, tuple[int, int]] | None = None,
 ) -> dict[str, Any] | None:
-    """明细状态 502 到中转仓后超过 5 天仍未交仓/签收 → 到仓未派送（第 6 天起）。"""
+    """明细状态 502 到中转仓后超过 5 天仍未交仓/签收 → 到仓未派送。"""
     if is_dest_dispatch_fulfilled(row):
         return None
     transit_raw = _row_time(
@@ -294,7 +301,8 @@ def compute_dest_warehouse_no_dispatch_context(
     if not transit_day:
         return None
     check_day = today or date.today()
-    due_day = transit_day + timedelta(days=DEST_WAREHOUSE_NO_DISPATCH_DAYS)
+    minor, major = (thresholds or {}).get("DEST_WAREHOUSE_NO_DISPATCH", (5, 7))
+    due_day = transit_day + timedelta(days=minor)
     if check_day <= due_day:
         return None
     due_iso = due_day.isoformat()
@@ -306,7 +314,7 @@ def compute_dest_warehouse_no_dispatch_context(
         "startTime": transit_raw[:10] if len(transit_raw) >= 10 else transit_raw,
         "ruleScope": "system",
         "ruleId": "",
-        "riskLevel": RISK_OVERDUE,
+        "riskLevel": RISK_SEVERE_OVERDUE if (check_day - transit_day).days > major else RISK_OVERDUE,
     }
 
 
@@ -424,3 +432,21 @@ def build_event_key(
         return f"{key_id}|{at}|{(rule_id or '').strip()}|{due_date.strip()}"
     anchor = (anchor_date or due_date).strip()
     return f"{key_id}|{at}|{anchor}"
+
+
+def compute_internal_tracking_stale_context(row, *, today=None, thresholds=None):
+    """内部轨迹按记录时间计算；不使用承运商或同步时间。"""
+    raw = _row_time(row, "latest_tracking_time", "latestTrackingTime")
+    start = parse_date(raw)
+    if start is None:
+        return None
+    check_day = today or date.today()
+    minor, major = (thresholds or {}).get(ALERT_TRACKING_STALE, (7, 10))
+    days = (check_day - start).days
+    if days <= minor:
+        return None
+    due = (start + timedelta(days=minor)).isoformat()
+    return {"alertType": ALERT_TRACKING_STALE, "dueDate": due, "warningDate": due,
+            "startField": "latest_tracking_time", "startTime": raw,
+            "ruleScope": "system", "ruleId": "",
+            "riskLevel": RISK_SEVERE_OVERDUE if days > major else RISK_OVERDUE}

@@ -95,7 +95,7 @@ function pendingNavCount(path: string) {
 
 function pendingNavHint(path: string, count: number) {
   if (path === '/approvals/tracking-time') return `${count} 待审`
-  if (path === '/shipment-exceptions') return `${count} 待办`
+  if (path === '/shipment-exceptions') return `${count} 主要关注`
   if (path === '/shipments/payment-reminders') return `${count} 待催`
   if (path === '/order-flow') return `${count} 个待处理`
   return `${count}`

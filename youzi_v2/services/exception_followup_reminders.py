@@ -1,4 +1,4 @@
-"""扫描标记异常运单，按分档间隔生成跟进待办。"""
+"""扫描标记异常运单，按七天间隔生成跟进待办。"""
 
 from __future__ import annotations
 
@@ -67,7 +67,7 @@ def scan_exception_followup_reminders(
             if repo.has_pending_followup(sn):
                 continue
 
-            anchor = repo.last_followup_anchor(sn)
+            anchor = max(opened, repo.last_followup_anchor(sn) or opened)
             due, days_open, interval = is_followup_due(opened, anchor, now=now)
             if not due:
                 continue

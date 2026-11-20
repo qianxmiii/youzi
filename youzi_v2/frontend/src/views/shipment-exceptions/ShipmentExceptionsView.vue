@@ -6,8 +6,9 @@ import {
   NDropdown,
   NInput,
   NPagination,
-  NRadioButton,
-  NRadioGroup,
+  NPopover,
+  NTab,
+  NTabs,
   NSelect,
   NSpace,
   NTag,
@@ -20,6 +21,7 @@ import {
 import { ChevronDown, Copy, CircleHelp, ScanBarcode } from 'lucide-vue-next'
 import { computed, h, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import ManualExceptionsPanel from '@/components/shipments/ManualExceptionsPanel.vue'
 import ExceptionStatusBadge from '@/components/common/ExceptionStatusBadge.vue'
 import ShipmentTrackingDrawer from '@/components/shipments/ShipmentTrackingDrawer.vue'
 import { getShipment, getShipmentFilterOptions, syncTracking, type ShipmentFilterOptions } from '@/api/shipments'
@@ -51,15 +53,9 @@ import {
   routeStatusLabelZh,
 } from '@/constants/shipmentRouteStatus'
 import {
-  shipmentExceptionPhaseFilterOptions,
-  shipmentExceptionPhaseLabel,
-  type ShipmentExceptionPhase,
-} from '@/constants/shipmentExceptionPhase'
-import {
   renderSlaTimelinessBadge,
   renderTimelinessStatusSelectLabel,
   toneForAlertType,
-  toneForRiskLevel,
 } from '@/utils/slaTimelinessBadge'
 
 const route = useRoute()
@@ -68,6 +64,7 @@ const message = useMessage()
 const dialog = useDialog()
 const { refreshPendingShipmentSlaAlertCount } = usePendingShipmentSlaAlertCount()
 
+const attentionTab = ref('transport')
 const loading = ref(false)
 const scanning = ref(false)
 const batchSubmitting = ref(false)
@@ -77,17 +74,35 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(50)
 const checkedRowKeys = ref<string[]>([])
-const pendingOpenCount = ref(0)
+const manualExceptionCount = ref(0)
 const severeOverdueCount = ref(0)
 const overdueCount = ref(0)
 const warningSoonCount = ref(0)
 
+const filterRiskLevel = ref<SlaRiskLevel>('severe_overdue')
 const filterTimelinessStatus = ref<string | null>(null)
+const attentionTabs = computed(() => [
+  { value: 'severe_overdue', label: '主要关注', count: severeOverdueCount.value },
+  { value: 'overdue', label: '次要关注', count: overdueCount.value },
+  { value: 'warning_soon', label: '观察中', count: warningSoonCount.value },
+  { value: 'manual', label: '人工异常', count: manualExceptionCount.value },
+])
+const selectedAttentionTab = computed({
+  get: () => attentionTab.value === 'manual' ? 'manual' : filterRiskLevel.value,
+  set: (value: string) => {
+    if (value === 'manual') switchAttentionView('manual')
+    else if (SUMMARY_RISK_KEYS.has(value)) {
+      filterRiskLevel.value = value as SlaRiskLevel
+      switchAttentionView('transport')
+    }
+  },
+})
+const riskDescription = computed(() => ({
+  severe_overdue: '严重超时或长时间滞留，优先处理。',
+  overdue: '已超过时效或节点阈值，安排跟进。',
+  warning_soon: '已进入提前预警期，尚未超时，留意后续进度。',
+})[filterRiskLevel.value])
 const filterStatus = ref<string | null>(null)
-/** 未勾选：仅无当前异常码的货件；勾选：仅存在异常码的货件 */
-const filterOnlyExceptionShipments = ref(false)
-const filterExceptionCode = ref<string | null>(null)
-const filterExceptionPhase = ref<ShipmentExceptionPhase | ''>('')
 const filterChannelCode = ref<string | null>(null)
 const filterShowHistory = ref(false)
 const search = ref('')
@@ -114,15 +129,16 @@ const filterOptions = ref<ShipmentFilterOptions>({
 })
 
 const timelinessStatusOptions = [
-  { label: '即将超时', value: 'warning_soon' },
-  { label: '已超时', value: 'overdue' },
-  { label: '严重超时', value: 'severe_overdue' },
+  { label: '全程运输时效', value: 'DELIVERY_TIME' },
+  { label: '内部轨迹未更新', value: 'INTERNAL_TRACKING_STALE' },
   { label: '入库未开船', value: 'WAREHOUSE_NO_DEPARTURE' },
   { label: '到港未送仓', value: 'ARRIVAL_NO_DELIVERY' },
   { label: '到仓未派送', value: 'DEST_WAREHOUSE_NO_DISPATCH' },
 ]
 
 const STAGE_ALERT_TYPES = new Set([
+  'DELIVERY_TIME',
+  'INTERNAL_TRACKING_STALE',
   'WAREHOUSE_NO_DEPARTURE',
   'ARRIVAL_NO_DELIVERY',
   'DEST_WAREHOUSE_NO_DISPATCH',
@@ -141,18 +157,6 @@ const statusOptions = [
   { label: '已解决', value: 'resolved' },
   { label: '已忽略', value: 'ignored' },
 ]
-
-const exceptionFilterOptions = computed(() => {
-  const phase = filterExceptionPhase.value
-  const types = filterOptions.value.exceptionTypes.filter((t) => {
-    if (!phase) return true
-    return (t.phaseCategory || 'post_port') === phase
-  })
-  return types.map((t) => ({
-    label: phase ? t.nameZh : `${shipmentExceptionPhaseLabel(t.phaseCategory)} · ${t.nameZh}`,
-    value: t.code,
-  }))
-})
 
 const channelCodeOptions = computed(() =>
   buildChannelSelectOptions(filterOptions.value.channels, filterOptions.value.channelCodes),
@@ -294,12 +298,6 @@ function handleBatchIgnore() {
   void runBatchAction('忽略', actionableSelectedRows.value, (row) => ignoreShipmentSlaAlert(row.id))
 }
 
-function riskLabel(level: SlaRiskLevel): string {
-  if (level === 'severe_overdue') return '严重超时'
-  if (level === 'overdue') return '已超时'
-  return '即将超时'
-}
-
 function alertTypeLabel(row: ShipmentSlaAlert): string {
   const labels = (row.alertTypeLabels || []).filter(Boolean)
   if (labels.length) return labels[0]!
@@ -312,6 +310,7 @@ function alertTypeLabel(row: ShipmentSlaAlert): string {
     return '到仓未派送'
   }
   if (t === 'DELIVERY_TIME') return '运输时效'
+  if (t === 'INTERNAL_TRACKING_STALE') return '内部轨迹未更新'
   return t || '运输时效'
 }
 
@@ -336,7 +335,7 @@ function overdueDaysClass(days: number): string {
 
 function renderOverdueDaysHeader() {
   return h('span', { class: 'inline-flex items-center gap-1' }, [
-    '超时天数',
+    '超时天数 ↓',
     h(
       NTooltip,
       { trigger: 'hover' },
@@ -348,7 +347,7 @@ function renderOverdueDaysHeader() {
             'aria-label': '超时天数说明',
           }),
         default: () =>
-          '正数=已超过截止日的天数；负数=距截止日还剩天数。颜色：绿=未超时，橙=已超时，红=超时较多（≥21 天）。',
+          '列表按超时天数从大到小排列。正数=已超过截止日的天数；负数=距截止日还剩天数。颜色：绿=未超时，橙=已超时，红=超时较多（≥21 天）。',
       },
     ),
   ])
@@ -375,10 +374,7 @@ function renderRiskDueCell(row: ShipmentSlaAlert) {
     { disabled: !title },
     {
       trigger: () =>
-        h('span', { class: 'inline-flex flex-wrap items-center gap-1' }, [
-          renderSlaTimelinessBadge(typeLabel, toneForAlertType(row.alertType)),
-          renderSlaTimelinessBadge(riskLabel(row.riskLevel), toneForRiskLevel(row.riskLevel)),
-        ]),
+        renderSlaTimelinessBadge(typeLabel, toneForAlertType(row.alertType)),
       default: () => title || '—',
     },
   )
@@ -458,27 +454,12 @@ function renderStatusCell(row: ShipmentSlaAlert) {
   return tag
 }
 
-function onFollowTabChange(value: string | null) {
-  filterStatus.value = value || null
-}
-
-type SummaryBadgeKey = 'pending' | 'warning_soon' | 'overdue' | 'severe_overdue'
-
 const SUMMARY_RISK_KEYS = new Set<string>(['warning_soon', 'overdue', 'severe_overdue'])
 
-const activeSummaryBadge = computed<SummaryBadgeKey | null>(() => {
-  const ts = filterTimelinessStatus.value
-  if (ts && SUMMARY_RISK_KEYS.has(ts)) return ts as SummaryBadgeKey
-  if (!ts) return 'pending'
-  return null
-})
-
-function onSummaryBadgeClick(key: SummaryBadgeKey) {
-  if (key === 'pending') {
-    if (filterTimelinessStatus.value) filterTimelinessStatus.value = null
-    return
-  }
-  filterTimelinessStatus.value = filterTimelinessStatus.value === key ? null : key
+function switchAttentionView(view: 'transport' | 'manual') {
+  attentionTab.value = view
+  checkedRowKeys.value = []
+  void loadSummary()
 }
 
 function applyRouteQuery() {
@@ -488,18 +469,20 @@ function applyRouteQuery() {
       ? q.timelinessStatus
       : typeof q.riskLevel === 'string'
         ? q.riskLevel
-        : null
-  filterTimelinessStatus.value = ts
+        : 'severe_overdue'
+  const risk = typeof q.riskLevel === 'string' ? q.riskLevel : ts
+  filterRiskLevel.value = SUMMARY_RISK_KEYS.has(risk) ? risk as SlaRiskLevel : 'severe_overdue'
+  filterTimelinessStatus.value = STAGE_ALERT_TYPES.has(ts) ? ts : null
   filterStatus.value = typeof q.status === 'string' ? q.status : null
-  filterOnlyExceptionShipments.value = q.hasException === 'true'
-  filterExceptionCode.value = typeof q.exceptionCode === 'string' ? q.exceptionCode : null
+  filterShowHistory.value = q.history === 'true'
+  attentionTab.value = q.hasException === 'true' || q.view === 'manual' ? 'manual' : 'transport'
   filterChannelCode.value = typeof q.channelCode === 'string' ? q.channelCode : null
 }
 
 async function loadSummary() {
   try {
     const summary = await getShipmentSlaSummary()
-    pendingOpenCount.value = summary.pendingOpen ?? 0
+    manualExceptionCount.value = summary.currentExceptions ?? 0
     severeOverdueCount.value = summary.severeOverdue ?? 0
     overdueCount.value = summary.overdue ?? 0
     warningSoonCount.value = summary.warningSoon ?? 0
@@ -509,28 +492,30 @@ async function loadSummary() {
   }
 }
 
+let listRevision = 0
 async function load() {
+  const current = ++listRevision
   loading.value = true
   try {
     const res = await listShipmentSlaAlerts({
       scope: filterShowHistory.value ? 'all' : 'todo',
       ...timelinessListParams(filterTimelinessStatus.value),
+      riskLevel: filterRiskLevel.value,
       status: filterStatus.value || undefined,
-      hasException: filterOnlyExceptionShipments.value,
-      exceptionCode: filterExceptionCode.value || undefined,
-      exceptionPhase: filterExceptionPhase.value || undefined,
+      hasException: false,
       channelCode: filterChannelCode.value || undefined,
       search: search.value.trim() || undefined,
       limit: pageSize.value,
       offset: (page.value - 1) * pageSize.value,
     })
+    if (current !== listRevision) return
     items.value = res.items
     total.value = res.total
     syncSelectionWithItems()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '加载失败')
+    if (current === listRevision) message.error(e instanceof Error ? e.message : '加载失败')
   } finally {
-    loading.value = false
+    if (current === listRevision) loading.value = false
   }
 }
 
@@ -577,6 +562,14 @@ function shipmentStub(row: ShipmentSlaAlert): Shipment {
     createdTime: row.createdTime || '',
     updatedTime: row.updatedTime || '',
   } as Shipment
+}
+
+async function openManualShipment(id: string) {
+  try {
+    trackingDrawerShipment.value = await getShipment(id)
+    trackingDrawerTab.value = 'internal'
+    trackingDrawerShow.value = true
+  } catch (e) { message.error(e instanceof Error ? e.message : '加载运单失败') }
 }
 
 async function openTrackingDrawer(row: ShipmentSlaAlert, tab: 'internal' | 'carrier' = 'internal') {
@@ -1078,13 +1071,6 @@ const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
     render: (row) => renderDaysInTransitCell(row),
   },
   {
-    title: '预估时效',
-    key: 'estimatedDays',
-    width: 88,
-    align: 'center',
-    render: (row) => (row.estimatedDays != null ? `${row.estimatedDays} 天` : '—'),
-  },
-  {
     title: () => renderOverdueDaysHeader(),
     key: 'overdueDays',
     width: 100,
@@ -1125,25 +1111,23 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
 watch(
   [
+    filterRiskLevel,
+    attentionTab,
     filterTimelinessStatus,
     filterStatus,
-    filterOnlyExceptionShipments,
-    filterExceptionCode,
-    filterExceptionPhase,
     filterChannelCode,
     filterShowHistory,
   ],
   () => {
+  if (route.name !== 'shipment-exceptions') return
   page.value = 1
   void router.replace({
     query: {
+      riskLevel: filterRiskLevel.value,
+      ...(attentionTab.value === 'manual' ? { view: 'manual' } : {}),
       ...(filterTimelinessStatus.value ? { timelinessStatus: filterTimelinessStatus.value } : {}),
       ...(filterStatus.value ? { status: filterStatus.value } : {}),
-      ...(filterOnlyExceptionShipments.value ? { hasException: 'true' } : {}),
-      ...(filterExceptionCode.value ? { exceptionCode: filterExceptionCode.value } : {}),
-      ...(filterExceptionPhase.value
-        ? { exceptionPhase: filterExceptionPhase.value }
-        : {}),
+      ...(filterShowHistory.value ? { history: 'true' } : {}),
       ...(filterChannelCode.value ? { channelCode: filterChannelCode.value } : {}),
     },
   })
@@ -1151,15 +1135,11 @@ watch(
   },
 )
 
-watch([page, pageSize], load)
-
-watch(filterExceptionPhase, () => {
-  const code = filterExceptionCode.value
-  if (!code) return
-  if (!exceptionFilterOptions.value.some((o) => o.value === code)) {
-    filterExceptionCode.value = null
-  }
+watch(() => route.query, () => {
+  if (route.name === 'shipment-exceptions') applyRouteQuery()
 })
+
+watch([page, pageSize], load)
 
 let searchTimer: ReturnType<typeof setTimeout> | null = null
 watch(search, () => {
@@ -1188,87 +1168,45 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-full min-h-0 w-full flex-col gap-4">
-    <div class="flex shrink-0 flex-wrap items-end justify-between gap-3">
-      <div class="min-w-0">
-        <h1 class="page-h2">异常跟踪</h1>
-        <div class="sla-summary-bar mt-1.5" role="toolbar" aria-label="异常摘要筛选">
-          <button
-            type="button"
-            class="sla-summary-bar__badge sla-summary-bar__badge--exception"
-            :class="{ 'is-active': activeSummaryBadge === 'pending' }"
-            :aria-pressed="activeSummaryBadge === 'pending'"
-            @click="onSummaryBadgeClick('pending')"
-          >
-            <span class="sla-summary-bar__dot sla-summary-bar__dot--exception" aria-hidden="true" />
-            <span class="sla-summary-bar__label">异常</span>
-            <span class="sla-summary-bar__count">{{ pendingOpenCount }}</span>
-          </button>
-          <button
-            type="button"
-            class="sla-summary-bar__badge sla-summary-bar__badge--warning"
-            :class="{ 'is-active': activeSummaryBadge === 'warning_soon' }"
-            :aria-pressed="activeSummaryBadge === 'warning_soon'"
-            @click="onSummaryBadgeClick('warning_soon')"
-          >
-            <span class="sla-summary-bar__dot sla-summary-bar__dot--warning" aria-hidden="true" />
-            <span class="sla-summary-bar__label">即将超时</span>
-            <span class="sla-summary-bar__count">{{ warningSoonCount }}</span>
-          </button>
-          <button
-            type="button"
-            class="sla-summary-bar__badge sla-summary-bar__badge--overdue"
-            :class="{ 'is-active': activeSummaryBadge === 'overdue' }"
-            :aria-pressed="activeSummaryBadge === 'overdue'"
-            @click="onSummaryBadgeClick('overdue')"
-          >
-            <span class="sla-summary-bar__dot sla-summary-bar__dot--overdue" aria-hidden="true" />
-            <span class="sla-summary-bar__label">已超时</span>
-            <span class="sla-summary-bar__count">{{ overdueCount }}</span>
-          </button>
-          <button
-            type="button"
-            class="sla-summary-bar__badge sla-summary-bar__badge--severe"
-            :class="{ 'is-active': activeSummaryBadge === 'severe_overdue' }"
-            :aria-pressed="activeSummaryBadge === 'severe_overdue'"
-            @click="onSummaryBadgeClick('severe_overdue')"
-          >
-            <span class="sla-summary-bar__dot sla-summary-bar__dot--severe" aria-hidden="true" />
-            <span class="sla-summary-bar__label">严重超时</span>
-            <span class="sla-summary-bar__count">{{ severeOverdueCount }}</span>
-          </button>
-          <span class="sla-summary-bar__divider" aria-hidden="true" />
-          <span class="sla-summary-bar__total">当前列表 {{ total }} 条</span>
-        </div>
-      </div>
-      <NSpace>
+  <div class="flex h-full min-h-0 w-full flex-col gap-2">
+    <header class="sla-exceptions-header flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
+      <h1 class="page-h2 shrink-0 whitespace-nowrap">异常跟踪</h1>
+      <NTabs
+        v-model:value="selectedAttentionTab"
+        type="segment"
+        size="small"
+        class="risk-tabs"
+        aria-label="异常跟踪分类"
+        :theme-overrides="{ colorSegment: 'var(--color-border-subtle)', tabColorSegment: 'var(--color-panel)', tabTextColorSegment: 'var(--color-muted)', tabTextColorActiveSegment: 'var(--color-fg-emphasis)', tabTextColorHoverSegment: 'var(--color-fg)', tabBorderRadius: '6px', tabFontWeightActive: '600' }"
+      >
+        <NTab v-for="tab in attentionTabs" :key="tab.value" :name="tab.value">
+          <span class="risk-tab-label" :class="`risk-tab-label--${tab.value}`">
+            <span class="risk-tab-dot" aria-hidden="true" />
+            <span>{{ tab.label }}</span>
+            <span class="risk-tab-count" :title="tab.value === 'manual' ? '当前未关闭异常运单数' : '当前待办总数，不随下面的筛选变化'">{{ tab.count }}</span>
+          </span>
+        </NTab>
+      </NTabs>
+      <div v-if="attentionTab === 'transport'" class="ml-auto flex flex-wrap items-center gap-2">
+        <NButton size="small" @click="router.push('/admin/attention-rules')">时效规则</NButton>
         <NButton type="primary" size="small" :loading="scanning" @click="runScan">
           <template #icon>
             <ScanBarcode class="h-4 w-4" :stroke-width="ICON_STROKE" aria-hidden="true" />
           </template>
           立即扫描
         </NButton>
-      </NSpace>
-    </div>
-
-    <div class="sla-exceptions-filters panel shrink-0 px-3 py-2">
-      <div class="sla-exceptions-filters__row scrollbar-subtle">
-        <NRadioGroup
-          :value="filterStatus ?? ''"
-          size="small"
-          class="sla-follow-tabs shrink-0"
-          @update:value="onFollowTabChange"
-        >
-          <NRadioButton value="">全部待办</NRadioButton>
-          <NRadioButton value="open">待处理</NRadioButton>
-          <NRadioButton value="acknowledged">已跟进</NRadioButton>
-        </NRadioGroup>
+      </div>
+    </header>
+    <ManualExceptionsPanel v-if="attentionTab === 'manual'" class="min-h-0 flex-1 overflow-auto" @open="openManualShipment" />
+    <template v-else>
+    <div class="sla-exceptions-filters shrink-0">
+      <div class="sla-exceptions-filters__row">
         <NSelect
           v-model:value="filterTimelinessStatus"
           :options="timelinessStatusOptions"
           :render-label="renderTimelinessStatusSelectLabel"
           clearable
-          placeholder="时效状态"
+          placeholder="关注原因"
           class="sla-exceptions-filter-select sla-exceptions-filter-select--wide"
           size="small"
         />
@@ -1280,29 +1218,7 @@ onMounted(() => {
           class="sla-exceptions-filter-select"
           size="small"
         />
-        <NCheckbox
-          v-model:checked="filterOnlyExceptionShipments"
-          size="small"
-          class="shrink-0 whitespace-nowrap"
-        >
-          仅异常货件
-        </NCheckbox>
-        <NSelect
-          v-model:value="filterExceptionPhase"
-          :options="[...shipmentExceptionPhaseFilterOptions]"
-          placeholder="异常大类"
-          class="sla-exceptions-filter-select"
-          size="small"
-        />
-        <NSelect
-          v-model:value="filterExceptionCode"
-          :options="exceptionFilterOptions"
-          clearable
-          filterable
-          placeholder="异常类型"
-          class="sla-exceptions-filter-select sla-exceptions-filter-select--wide"
-          size="small"
-        />
+
         <NSelect
           v-model:value="filterChannelCode"
           :options="channelCodeOptions"
@@ -1322,6 +1238,19 @@ onMounted(() => {
         <NCheckbox v-model:checked="filterShowHistory" size="small" class="shrink-0 whitespace-nowrap">
           含已签收/历史
         </NCheckbox>
+        <div class="ml-auto flex items-center gap-1 whitespace-nowrap text-sm text-[var(--color-muted)]">
+          <span>当前列表 {{ total }} 条</span>
+          <NPopover trigger="click" placement="bottom-end">
+            <template #trigger>
+              <NButton quaternary circle size="small" aria-label="查看关注分类说明">
+                <template #icon>
+                  <CircleHelp class="h-4 w-4" :stroke-width="ICON_STROKE" aria-hidden="true" />
+                </template>
+              </NButton>
+            </template>
+            <p class="max-w-64 whitespace-normal text-sm">{{ riskDescription }}已跟进只记录处理进度，仍保留在对应风险分类中。</p>
+          </NPopover>
+        </div>
       </div>
     </div>
 
@@ -1392,14 +1321,7 @@ onMounted(() => {
       </NSpace>
     </div>
 
-    <ShipmentTrackingDrawer
-      v-model:show="trackingDrawerShow"
-      :shipment="trackingDrawerShipment"
-      :initial-tab="trackingDrawerTab"
-      :exception-label-by-code="exceptionLabelByCode"
-      :route-status-label-by-code="routeStatusLabelByCode"
-      @shipment-updated="handleTrackingDrawerShipmentUpdated"
-    />
+
 
     <div class="flex shrink-0 justify-end">
       <NPagination
@@ -1411,122 +1333,85 @@ onMounted(() => {
         size="small"
       />
     </div>
+    </template>
+    <ShipmentTrackingDrawer
+      v-model:show="trackingDrawerShow"
+      :shipment="trackingDrawerShipment"
+      :initial-tab="trackingDrawerTab"
+      :exception-label-by-code="exceptionLabelByCode"
+      :route-status-label-by-code="routeStatusLabelByCode"
+      @shipment-updated="handleTrackingDrawerShipmentUpdated"
+    />
   </div>
 </template>
 
 <style scoped>
-.sla-summary-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.5rem;
-  font-size: 0.8125rem;
-  line-height: 1.25rem;
-  color: var(--color-fg);
+.risk-tabs {
+  width: min(100%, 34rem);
+  min-width: 0;
 }
 
-.sla-summary-bar__badge {
+.risk-tabs :deep(.n-tabs-rail) {
+  padding: 2px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+}
+
+.risk-tabs :deep(.n-tabs-tab) {
+  min-height: 30px;
+}
+
+.risk-tabs :deep(.n-tabs-tab:focus-visible) {
+  outline: 2px solid var(--color-accent-text);
+  outline-offset: -2px;
+  border-radius: 7px;
+}
+
+.risk-tab-label {
   display: inline-flex;
   align-items: center;
-  gap: 0.375rem;
-  margin: 0;
-  padding: 0.25rem 0.625rem;
-  border: 1px solid var(--color-border, #e4e4e7);
-  border-radius: 9999px;
-  background: var(--color-bg-elevated, #fff);
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-  transition:
-    background-color 0.15s ease,
-    border-color 0.15s ease,
-    box-shadow 0.15s ease;
+  justify-content: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
-.sla-summary-bar__badge:hover {
-  border-color: #d4d4d8;
-  background: #fafafa;
-}
+.risk-tab-label--severe_overdue { --risk-tone: var(--tag-rose-fg); --risk-bg: var(--tag-rose-bg); }
+.risk-tab-label--overdue { --risk-tone: var(--tag-orange-fg); --risk-bg: var(--tag-orange-bg); }
+.risk-tab-label--warning_soon { --risk-tone: var(--tag-indigo-fg); --risk-bg: var(--tag-indigo-bg); }
+.risk-tab-label--manual { --risk-tone: var(--tag-violet-fg); --risk-bg: var(--tag-violet-bg); }
 
-.sla-summary-bar__badge:focus-visible {
-  outline: 2px solid var(--color-accent, #8b5cf6);
-  outline-offset: 2px;
-}
-
-.sla-summary-bar__badge.is-active {
-  box-shadow: inset 0 0 0 1px transparent;
-}
-
-.sla-summary-bar__badge--exception.is-active {
-  border-color: #e02020;
-  background: #fef2f2;
-}
-
-.sla-summary-bar__badge--warning.is-active {
-  border-color: #f7b500;
-  background: #fffbeb;
-}
-
-.sla-summary-bar__badge--overdue.is-active {
-  border-color: #fa6400;
-  background: #fff7ed;
-}
-
-.sla-summary-bar__badge--severe.is-active {
-  border-color: #d0021b;
-  background: #fef2f2;
-}
-
-.sla-summary-bar__dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 9999px;
+.risk-tab-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--risk-tone);
   flex-shrink: 0;
 }
 
-.sla-summary-bar__dot--exception {
-  background: #e02020;
-}
-
-.sla-summary-bar__dot--warning {
-  background: #f7b500;
-}
-
-.sla-summary-bar__dot--overdue {
-  background: #fa6400;
-}
-
-.sla-summary-bar__dot--severe {
-  background: #d0021b;
-}
-
-.sla-summary-bar__label {
-  color: var(--color-fg-secondary, #52525b);
-}
-
-.sla-summary-bar__count {
-  font-weight: 700;
+.risk-tab-count {
+  min-width: 26px;
+  padding: 0 6px;
+  border-radius: 999px;
+  color: var(--risk-tone);
+  background: var(--risk-bg);
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
-  color: var(--color-fg-emphasis, #18181b);
 }
 
-.sla-summary-bar__badge.is-active .sla-summary-bar__label,
-.sla-summary-bar__badge.is-active .sla-summary-bar__count {
-  color: inherit;
+.sla-exceptions-header {
+  container-type: inline-size;
 }
 
-.sla-summary-bar__divider {
-  width: 1px;
-  height: 0.875rem;
-  margin: 0 0.25rem;
-  background: var(--color-border, #e4e4e7);
-  flex-shrink: 0;
+@container (max-width: 53rem) {
+  .risk-tabs { order: 1; width: 100%; }
 }
 
-.sla-summary-bar__total {
-  color: #999999;
-  font-variant-numeric: tabular-nums;
-  padding-left: 0.25rem;
+@container (max-width: 23rem) {
+  .risk-tab-label { flex-direction: column; gap: 2px; font-size: 12px; }
+  .risk-tab-dot { display: none; }
+  .risk-tab-count { min-width: 22px; padding-inline: 5px; font-size: 11px; }
 }
 
 .sla-exceptions-table :deep(.sla-timeliness-badge),
@@ -1805,11 +1690,9 @@ onMounted(() => {
 .sla-exceptions-filters__row {
   display: flex;
   min-width: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   align-items: center;
   gap: 0.5rem;
-  overflow-x: auto;
-  overflow-y: hidden;
 }
 
 .sla-exceptions-filters__row > * {

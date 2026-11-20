@@ -42,6 +42,12 @@ from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 EXCEPTION_CODES_TABLE = "shipment_exception_codes"
 CARRIER_CODES_TABLE = "carrier_codes"
 
+_TRANSPORT_ELIGIBLE_SQL = (
+    "TRIM(COALESCE(s.exception_code, '')) = '' AND "
+    "UPPER(TRIM(COALESCE(s.status_code, ''))) NOT IN ('4', 'CANCELLED', 'CANCELED') AND "
+    + sql_sla_not_delivered("s.route_status")
+)
+
 _RISK_RANK = {
     "severe_overdue": 0,
     "overdue": 1,
@@ -52,7 +58,9 @@ _RISK_RANK = {
 _ALERT_TYPE_RANK = {
     "WAREHOUSE_NO_DEPARTURE": 0,
     "ARRIVAL_NO_DELIVERY": 1,
-    "DELIVERY_TIME": 2,
+    "DEST_WAREHOUSE_NO_DISPATCH": 2,
+    "INTERNAL_TRACKING_STALE": 3,
+    "DELIVERY_TIME": 4,
 }
 
 
@@ -75,6 +83,15 @@ def _alert_list_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
     else:
         followed = 2
     return (followed, *_alert_severity_sort_key(item))
+
+
+def _overdue_days_desc_sort_key(item: dict[str, Any]) -> tuple[Any, ...]:
+    """按前端显示的有符号超时天数倒序；观察期负数离截止日越近越靠前。"""
+    delta = item.get("daysUntilDue")
+    if delta is None:
+        return (1, 0, *_alert_list_sort_key(item), str(item.get("id") or ""))
+    days = (item.get("overdueDays") or abs(delta)) if delta < 0 else -delta
+    return (0, -days, *_alert_list_sort_key(item), str(item.get("id") or ""))
 
 
 def _merge_alerts_by_shipment(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -296,6 +313,7 @@ def _alert_to_api(
         "routeStatus": route_status or None,
         "relatedAlertIds": [row["id"]] if row["id"] else [],
         "riskLevel": row["risk_level"],
+        "autoResolved": bool(row["auto_resolved"]) if "auto_resolved" in row.keys() else False,
         "status": row["status"],
         "severity": row["severity"],
         "ruleId": row["rule_id"] or "",
@@ -498,13 +516,15 @@ class ShipmentSlaAlertsRepository:
         sno = shipment_no.strip()
         with self._database.lock:
             row = self._conn.execute(
-                f"SELECT id, status, shipment_id FROM {TABLE_NAME} WHERE event_key = ?",
+                f"SELECT id, status, shipment_id, auto_resolved FROM {TABLE_NAME} WHERE event_key = ?",
                 (key,),
             ).fetchone()
             if row:
                 status = (row["status"] or "").strip()
                 keep_id = str(row["id"])
-                if status in ACTIVE_STATUSES:
+                if status in ACTIVE_STATUSES or (status == STATUS_RESOLVED and row["auto_resolved"]):
+                    if status == STATUS_RESOLVED:
+                        self._conn.execute(f"UPDATE {TABLE_NAME} SET status = 'open', auto_resolved = 0, resolved_time = '' WHERE id = ?", (keep_id,))
                     self._conn.execute(
                         f"""
                         UPDATE {TABLE_NAME}
@@ -714,7 +734,7 @@ class ShipmentSlaAlertsRepository:
             cur = self._conn.execute(
                 f"""
                 UPDATE {TABLE_NAME}
-                SET status = ?, resolved_time = ?, updated_time = ?
+                SET status = ?, resolved_time = ?, updated_time = ?, auto_resolved = 1
                 WHERE shipment_id = ?
                   AND status IN ({placeholders}){type_clause}
                 """,
@@ -734,7 +754,7 @@ class ShipmentSlaAlertsRepository:
             cur = self._conn.execute(
                 f"""
                 UPDATE {TABLE_NAME}
-                SET status = ?, resolved_time = ?, updated_time = ?
+                SET status = ?, resolved_time = ?, updated_time = ?, auto_resolved = 1
                 WHERE shipment_id IN ({id_placeholders})
                   AND status IN ({status_placeholders})
                 """,
@@ -751,7 +771,7 @@ class ShipmentSlaAlertsRepository:
             cur = self._conn.execute(
                 f"""
                 UPDATE {TABLE_NAME}
-                SET status = ?, resolved_time = ?, updated_time = ?
+                SET status = ?, resolved_time = ?, updated_time = ?, auto_resolved = 1
                 WHERE status IN ({status_placeholders})
                   AND shipment_id IN (
                     SELECT id FROM {SHIPMENTS_TABLE}
@@ -772,7 +792,7 @@ class ShipmentSlaAlertsRepository:
             cur = self._conn.execute(
                 f"""
                 UPDATE {TABLE_NAME}
-                SET status = ?, resolved_time = ?, updated_time = ?
+                SET status = ?, resolved_time = ?, updated_time = ?, auto_resolved = 1
                 WHERE status IN ({status_placeholders})
                   AND shipment_id IN (
                     SELECT id FROM {SHIPMENTS_TABLE}
@@ -810,11 +830,11 @@ class ShipmentSlaAlertsRepository:
         if (scope or "todo").strip().lower() != "all":
             conditions.append("a.status IN (?, ?)")
             params.extend([STATUS_OPEN, STATUS_ACKNOWLEDGED])
-            conditions.append(sql_sla_not_delivered("s.route_status"))
-        if risk_level:
+            conditions.append(_TRANSPORT_ELIGIBLE_SQL)
+        if risk_level and scope == "all":
             conditions.append("a.risk_level = ?")
             params.append(risk_level.strip())
-        if alert_type:
+        if alert_type and scope == "all":
             conditions.append("a.alert_type = ?")
             params.append(alert_type.strip())
         if status:
@@ -902,6 +922,12 @@ class ShipmentSlaAlertsRepository:
         # 待办列表：同运单只保留最严重一条（历史 scope=all 仍逐条展示）
         if (scope or "todo").strip().lower() != "all":
             items = _merge_alerts_by_shipment(items)
+            if risk_level:
+                items = [item for item in items if item["riskLevel"] == risk_level]
+            if alert_type:
+                items = [item for item in items if alert_type in item.get("alertTypes", [])]
+        # 全量筛选/合并完成后排序，再分页；不改变顶栏通知的原有优先级。
+        items.sort(key=_overdue_days_desc_sort_key)
         total = len(items)
         page = items[offset : offset + limit]
         return {
@@ -912,62 +938,24 @@ class ShipmentSlaAlertsRepository:
         }
 
     def summary_counts(self) -> dict[str, int]:
-        excl = sla_excluded_channels_params()
         with self._database.lock:
-            rows = self._conn.execute(
-                f"""
-                SELECT a.risk_level, a.status, COUNT(*) AS c
-                FROM {TABLE_NAME} a
-                INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
-                WHERE {sla_excluded_channels_sql("s.channel_code")}
-                GROUP BY a.risk_level, a.status
-                """,
-                excl,
-            ).fetchall()
-            pending_row = self._conn.execute(
-                f"""
-                SELECT COUNT(DISTINCT a.shipment_no) AS c
-                FROM {TABLE_NAME} a
-                INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
-                WHERE a.status IN (?, ?)
-                  AND {sql_sla_not_delivered("s.route_status")}
-                  AND {sla_excluded_channels_sql("s.channel_code")}
-                """,
-                (STATUS_OPEN, STATUS_ACKNOWLEDGED, *excl),
-            ).fetchone()
-            exc_row = self._conn.execute(
-                f"""
-                SELECT COUNT(*) AS c FROM {SHIPMENTS_TABLE}
-                WHERE exception_code IS NOT NULL AND TRIM(exception_code) != ''
-                """
-            ).fetchone()
-        pending_open = int(pending_row["c"] or 0)
-        severe = 0
-        overdue = 0
-        warning_soon = 0
-        for row in rows:
-            rl = row["risk_level"]
-            st = row["status"]
-            count = int(row["c"] or 0)
-            if st in ACTIVE_STATUSES:
-                if rl == RISK_SEVERE_OVERDUE:
-                    severe += count
-                elif rl == RISK_OVERDUE:
-                    overdue += count
-                elif rl == "warning_soon":
-                    warning_soon += count
-        return {
-            "pendingOpen": pending_open,
-            "severeOverdue": severe,
-            "overdue": overdue,
-            "warningSoon": warning_soon,
-            "currentExceptions": int(exc_row["c"] or 0),
-        }
+            rows = self._conn.execute(f"""
+                SELECT a.shipment_no, MAX(CASE a.risk_level
+                    WHEN 'severe_overdue' THEN 3 WHEN 'overdue' THEN 2 ELSE 1 END) AS rank
+                FROM {TABLE_NAME} a JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
+                WHERE a.status IN ('open', 'acknowledged')
+                  AND {_TRANSPORT_ELIGIBLE_SQL}
+                  AND {sla_excluded_channels_sql('s.channel_code')}
+                GROUP BY a.shipment_no
+            """, sla_excluded_channels_params()).fetchall()
+            exceptions = self._conn.execute(f"SELECT COUNT(*) FROM {SHIPMENTS_TABLE} WHERE TRIM(COALESCE(exception_code, '')) != ''").fetchone()[0]
+        return {"pendingOpen": len(rows), "severeOverdue": sum(r['rank'] == 3 for r in rows),
+                "overdue": sum(r['rank'] == 2 for r in rows),
+                "warningSoon": sum(r['rank'] == 1 for r in rows), "currentExceptions": exceptions}
 
     def list_todo_notifications(self, *, limit: int = 20) -> list[dict[str, Any]]:
         """顶栏待办：已超时/严重超时且待处理；按运单号合并（每票一张）。"""
         lim = max(1, min(limit, 50))
-        fetch_cap = max(lim * 4, 80)
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
@@ -981,20 +969,19 @@ class ShipmentSlaAlertsRepository:
                 LEFT JOIN {RULES_TABLE} csr ON csr.id = a.rule_id
                 WHERE a.status = ?
                   AND a.risk_level IN (?, ?)
+                  AND {_TRANSPORT_ELIGIBLE_SQL}
                   AND {sla_excluded_channels_sql("s.channel_code")}
                 ORDER BY
                   CASE a.risk_level WHEN ? THEN 0 ELSE 1 END,
                   a.due_date ASC,
                   datetime(a.updated_time) DESC
-                LIMIT ?
                 """,
                 (
                     STATUS_OPEN,
                     RISK_OVERDUE,
                     RISK_SEVERE_OVERDUE,
-                    RISK_SEVERE_OVERDUE,
                     *sla_excluded_channels_params(),
-                    fetch_cap,
+                    RISK_SEVERE_OVERDUE,
                 ),
             ).fetchall()
         rules_by_channel = self._load_channel_rules_grouped()
@@ -1010,6 +997,7 @@ class ShipmentSlaAlertsRepository:
                 FROM {TABLE_NAME} a
                 INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
                 WHERE a.status = ? AND a.risk_level IN (?, ?)
+                  AND {_TRANSPORT_ELIGIBLE_SQL}
                   AND {sla_excluded_channels_sql("s.channel_code")}
                 """,
                 (STATUS_OPEN, RISK_OVERDUE, RISK_SEVERE_OVERDUE, *sla_excluded_channels_params()),

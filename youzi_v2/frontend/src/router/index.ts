@@ -112,6 +112,12 @@ const router = createRouter({
           meta: { title: '统计管理' },
         },
         {
+          path: 'admin/attention-rules',
+          name: 'transport-attention-rules',
+          component: () => import('@/views/admin/TransportAttentionRulesView.vue'),
+          meta: { title: '时效规则' },
+        },
+        {
           path: 'admin',
           name: 'admin',
           component: () => import('@/views/admin/AdminCodeTablesView.vue'),

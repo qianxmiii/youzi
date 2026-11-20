@@ -55,3 +55,6 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
         conn.execute(_CREATE_SQL)
         for stmt in _INDEXES:
             conn.execute(stmt)
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({TABLE_NAME})")}
+    if "auto_resolved" not in columns:
+        conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN auto_resolved INTEGER NOT NULL DEFAULT 0")

@@ -1,4 +1,4 @@
-"""标记异常运单的跟进提醒间隔（按异常持续天数分档）。"""
+"""标记异常运单的跟进提醒间隔（默认每七个自然日）。"""
 
 from __future__ import annotations
 
@@ -6,9 +6,9 @@ from datetime import datetime
 
 from .exception_duration import _parse_dt
 
-# 异常持续 <10 天：每 3 天；≥10 天：每 5 天；≥20 天：每 7 天
-FOLLOWUP_TIER_UNDER_10_DAYS = 3
-FOLLOWUP_TIER_FROM_10_DAYS = 5
+# 兼容旧导入名称，所有阶段统一为七天
+FOLLOWUP_TIER_UNDER_10_DAYS = 7
+FOLLOWUP_TIER_FROM_10_DAYS = 7
 FOLLOWUP_TIER_FROM_20_DAYS = 7
 
 
@@ -22,11 +22,7 @@ def exception_days_open(opened_time: str, *, now: datetime | None = None) -> int
 
 
 def followup_interval_days(days_open: int) -> int:
-    if days_open >= 20:
-        return FOLLOWUP_TIER_FROM_20_DAYS
-    if days_open >= 10:
-        return FOLLOWUP_TIER_FROM_10_DAYS
-    return FOLLOWUP_TIER_UNDER_10_DAYS
+    return 7
 
 
 def followup_severity(days_open: int) -> str:

@@ -93,6 +93,6 @@ export const navGroups: NavGroup[] = [
   {
     label: '后台管理',
     icon: 'settings',
-    items: [{ name: '码表', to: '/admin', icon: 'settings' }],
+    items: [{ name: '码表', to: '/admin', icon: 'settings' }, { name: '时效规则', to: '/admin/attention-rules', icon: 'settings' }],
   },
 ]

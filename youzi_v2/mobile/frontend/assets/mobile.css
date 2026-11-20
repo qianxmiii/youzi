@@ -66,7 +66,7 @@ button:disabled { opacity: .45; cursor: default; }
 .tone-EXPORT_CUSTOMS_EXCEPTION, .tone-exception { --status-color: #c23845; background: #fff3f3; border-color: #f2d8db; }
 .tone-IMPORT_CUSTOMS_EXCEPTION { --status-color: #c02d60; background: #fff2f6; border-color: #f1d8e2; }
 .tone-WAREHOUSE_IN { --status-color: #167ca7; }
-.tone-EXPORT_CUSTOMS_RELEASE { --status-color: #248579; }
+.tone-EXPORT_CUSTOMS_RELEASE, .tone-IMPORT_CUSTOMS_RELEASE { --status-color: #248579; }
 .tone-DEPARTED_POL { --status-color: #6254c9; }
 .tone-ARRIVED_POD { --status-color: #8853c5; }
 .tone-DEST_TRANSIT_WAREHOUSE { --status-color: #27839b; }
@@ -125,7 +125,7 @@ summary { cursor: pointer; min-height: 48px; padding: 14px 0; border-top: 1px so
   .tone-EXPORT_CUSTOMS_EXCEPTION, .tone-exception { --status-color: #ff929f; background: #34222e; border-color: #55303d; }
   .tone-IMPORT_CUSTOMS_EXCEPTION { --status-color: #f695b8; background: #322333; border-color: #503146; }
   .tone-WAREHOUSE_IN { --status-color: #74bddb; }
-  .tone-EXPORT_CUSTOMS_RELEASE { --status-color: #7ac6b7; }
+  .tone-EXPORT_CUSTOMS_RELEASE, .tone-IMPORT_CUSTOMS_RELEASE { --status-color: #7ac6b7; }
   .tone-DEPARTED_POL { --status-color: #b2a8ff; }
   .tone-ARRIVED_POD { --status-color: #c4a0f2; }
   .tone-DEST_TRANSIT_WAREHOUSE { --status-color: #7ac3d7; }

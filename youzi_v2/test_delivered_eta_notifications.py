@@ -13,11 +13,11 @@ class DeliveredEtaTests(unittest.TestCase):
         conn.executemany(f"INSERT INTO {SHIPMENTS_TABLE} VALUES (?, ?, ?)", [("status", " delivered ", ""), ("time", "TRANSIT", "2026-01-01"), ("active", "TRANSIT", " ")])
         conn.executemany(f"INSERT INTO {NOTIFICATIONS_TABLE} VALUES (?, ?, ?, ?)", [("a", "status", "eta_reminder", ""), ("b", "time", "eta_reminder", ""), ("c", "active", "eta_reminder", ""), ("d", "status", "internal", ""), ("e", "status", "carrier", ""), ("f", "status", "eta_reminder", "original")])
         repo = ShipmentSubscriptionsRepository(SimpleNamespace(conn=conn, lock=threading.RLock()))
-        self.assertEqual(repo.count_unread_notifications(), 3)
+        self.assertEqual(repo._mark_delivered_eta_reminders_read_locked(), 2)
         rows = {r["id"]: r["read_at"] for r in conn.execute(f"SELECT * FROM {NOTIFICATIONS_TABLE}")}
         self.assertTrue(rows["a"])
         self.assertTrue(rows["b"])
         self.assertEqual([rows[k] for k in ("c", "d", "e")], ["", "", ""])
         self.assertEqual(rows["f"], "original")
-        self.assertEqual(repo.count_unread_notifications(), 3)
+        self.assertEqual(repo._mark_delivered_eta_reminders_read_locked(), 0)
         conn.close()

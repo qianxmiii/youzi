@@ -5,6 +5,58 @@ from ..context import *
 router = APIRouter()
 
 
+@router.get("/api/v1/shipment-sla-alerts/manual-exceptions")
+def list_manual_exceptions():
+    from datetime import datetime, timedelta
+    from ..db.exception_duration import _parse_dt
+    from ..db.exception_followup import exception_days_open
+    from ..db.shipment_sla import days_since_start
+    rows = shipment_exception_followup_repo.list_active_exception_shipments()
+    result = []
+    for row in rows:
+        opened = row.get("exception_opened_time") or ""
+        anchor = shipment_exception_followup_repo.last_followup_anchor(row["shipment_no"])
+        # 上一轮异常的跟进时间不影响本轮异常。
+        anchor = max(opened, anchor or opened)
+        start = _parse_dt(anchor)
+        pending = shipment_exception_followup_repo.has_pending_followup(row["shipment_no"])
+        due = (start if pending else start + timedelta(days=7)) if start else None
+        result.append({**row, "daysOpen": exception_days_open(opened),
+                       "transportDays": days_since_start(row.get("atd")),
+                       "trackingDays": days_since_start(row.get("latest_tracking_time")),
+                       "nextFollowup": due.strftime("%Y-%m-%d") if due else None,
+                       "followupDue": pending or bool(due and datetime.now().date() >= due.date())})
+    result.sort(key=lambda item: (not item["followupDue"], item["nextFollowup"] or "9999"))
+    return {"items": result}
+
+
+@router.post("/api/v1/shipment-sla-alerts/manual-exceptions/{shipment_id}/follow-up")
+def follow_up_manual_exception(shipment_id: str):
+    if not shipment_exception_followup_repo.record_manual_followup(shipment_id):
+        raise HTTPException(status_code=404, detail="运单不存在或异常已关闭")
+    return {"ok": True}
+
+
+@router.get("/api/v1/shipment-sla-alerts/attention-rules")
+def get_attention_rules():
+    from ..services.transport_attention_settings import load_thresholds
+    return load_thresholds(_database)
+
+
+@router.put("/api/v1/shipment-sla-alerts/attention-rules")
+def put_attention_rules(body: dict):
+    from ..services.transport_attention_settings import save_thresholds
+    try:
+        rules = save_thresholds(_database, body)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    result = scan_shipment_sla_alerts(
+        shipment_sla_alerts_repo, channel_sla_rules_repo,
+        shipment_exception_followup_repo, force=True, trigger="manual",
+    )
+    return {"rules": rules, "scan": result}
+
+
 @router.get("/api/v1/channels/{code}/sla-rules")
 def list_channel_sla_rules(code: str):
     if channels_repo.get_row(code) is None:

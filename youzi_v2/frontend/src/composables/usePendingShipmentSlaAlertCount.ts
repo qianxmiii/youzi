@@ -10,7 +10,8 @@ export function usePendingShipmentSlaAlertCount() {
     inflight = (async () => {
       try {
         const summary = await getShipmentSlaSummary()
-        pendingShipmentSlaAlertCount.value = summary.pendingOpen ?? 0
+        // 菜单角标与“主要关注”Tab 使用同一份按运单合并后的计数。
+        pendingShipmentSlaAlertCount.value = summary.severeOverdue ?? 0
       } catch {
         /* 保留上次计数 */
       } finally {

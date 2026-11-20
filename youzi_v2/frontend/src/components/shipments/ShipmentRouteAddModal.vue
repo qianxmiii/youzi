@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import { NButton, NDatePicker, NInput, NModal, NPopconfirm, NSelect, useMessage, type InputInst } from 'naive-ui'
-import { ChevronDown } from 'lucide-vue-next'
+import { Check, ChevronDown } from 'lucide-vue-next'
 import { api } from '@/api/client'
 import type { Shipment } from '@/types/shipment'
 import { syncShipmentsRouteStatusFromDps } from '@/api/shipments'
 import { ICON_STROKE } from '@/constants/icons'
+import { normalizeRouteStatusLocalCode, ROUTE_STATUS_BADGE_TONE } from '@/constants/shipmentRouteStatus'
 
 const props = defineProps<{ show: boolean; shipments: Shipment[] }>()
 const emit = defineEmits<{ close: []; updated: [] }>()
@@ -15,7 +16,7 @@ const optionsLoading = ref(false)
 const attempted = ref(false)
 const nodeTime = ref<number | null>(Date.now())
 const deliveryTime = ref<number | null>(Date.now())
-const timeSettingsOpen = ref(false)
+const timeSettingsOpen = ref(true)
 const description = ref('')
 const appointmentDate = ref<string | null>(null)
 const deliveredDate = ref<string | null>(null)
@@ -109,6 +110,15 @@ function presetStatusOptions(value: string | null) {
   return statuses.value
 }
 
+function presetColors(code: string) {
+  const tone = ROUTE_STATUS_BADGE_TONE[normalizeRouteStatusLocalCode(code)] || 'default'
+  return { '--preset-fg': `var(--tag-${tone}-fg)`, '--preset-bg': `var(--tag-${tone}-bg)` }
+}
+
+function isPresetSelected(preset: RoutePreset) {
+  return status.value === preset.status && description.value === preset.text
+}
+
 function applyPreset(preset: RoutePreset) {
   suggestDescription.value = false
   appointmentDate.value = null
@@ -168,7 +178,7 @@ watch(() => props.show, async show => {
   const now = new Date(), delivery = new Date(now)
   delivery.setDate(delivery.getDate() + 15)
   nodeTime.value = now.getTime(); deliveryTime.value = delivery.getTime()
-  timeSettingsOpen.value = false
+  timeSettingsOpen.value = true
   appointmentDate.value = null
   deliveredDate.value = null
   suggestDescription.value = false
@@ -248,7 +258,19 @@ async function submit() {
     <p v-if="shipments.some(s => !s.waybillId)" class="mb-3 text-sm text-red-600">部分运单缺少 DPS ID，请先更新运单。</p>
     <fieldset :disabled="busy || attempted" class="space-y-3">
       <div class="flex flex-wrap gap-2">
-        <NButton v-for="preset in availablePresets" :key="`${preset.status}:${preset.text}`" size="small" :disabled="busy || attempted" @click="applyPreset(preset)">{{ preset.label }}</NButton>
+        <button
+          v-for="preset in availablePresets"
+          :key="`${preset.status}:${preset.text}`"
+          type="button"
+          class="route-preset"
+          :style="presetColors(preset.status)"
+          :aria-pressed="isPresetSelected(preset)"
+          :disabled="busy || attempted"
+          @click="applyPreset(preset)"
+        >
+          <Check v-if="isPresetSelected(preset)" class="size-3.5 shrink-0" :stroke-width="ICON_STROKE" aria-hidden="true" />
+          {{ preset.label }}
+        </button>
       </div>
       <div><label class="mb-1 block text-sm">明细状态</label><NSelect v-model:value="status" :options="statuses" :loading="optionsLoading" :disabled="busy || attempted" filterable placeholder="请选择对应的节点状态" /></div>
       <div>
@@ -259,7 +281,7 @@ async function submit() {
           <ul class="max-h-36 overflow-auto px-1 pb-1">
             <li v-for="preset in descriptionSuggestions" :key="`${preset.status}:${preset.text}`">
               <button type="button" class="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-border-subtle)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent-text)]" @click="selectDescriptionSuggestion(preset)">
-                <span class="block font-medium">{{ preset.label }} <span class="text-xs text-[var(--color-muted)]">· {{ preset.status }}</span></span>
+                <span class="block font-medium">{{ preset.label }} <span class="route-preset-code" :style="presetColors(preset.status)">{{ preset.status }}</span></span>
                 <span class="block break-words text-xs text-[var(--color-muted)]">{{ preset.text }}</span>
               </button>
             </li>
@@ -329,3 +351,46 @@ async function submit() {
     </template>
   </NModal>
 </template>
+
+<style scoped>
+.route-preset,
+.route-preset-code {
+  color: var(--preset-fg);
+  background: var(--preset-bg);
+}
+
+.route-preset {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border: 1px solid color-mix(in srgb, var(--preset-fg) 28%, var(--color-border));
+  border-radius: 0.375rem;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
+  cursor: pointer;
+}
+
+.route-preset:hover:not(:disabled),
+.route-preset[aria-pressed='true'] {
+  border-color: var(--preset-fg);
+}
+
+.route-preset:focus-visible {
+  outline: 2px solid var(--preset-fg);
+  outline-offset: 2px;
+}
+
+.route-preset:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.route-preset-code {
+  display: inline-block;
+  border-radius: 0.25rem;
+  padding: 0 0.25rem;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+}
+</style>

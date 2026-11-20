@@ -1,5 +1,6 @@
 config.json
 # 本地报价核对记录（含单价，勿提交）
+/data/data_price.js
 PRICE_CHANGELOG.md
 PRICE_CHANGELOG
 

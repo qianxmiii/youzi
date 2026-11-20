@@ -17,8 +17,11 @@ import {
   type DropdownOption,
 } from 'naive-ui'
 import { computed, h, onMounted, ref, watch } from 'vue'
+import { ChevronDown, Signpost, Tag } from 'lucide-vue-next'
+import { ICON_STROKE } from '@/constants/icons'
 import { api } from '@/api/client'
 import ShipmentMarkManagerModal from '@/components/shipments/ShipmentMarkManagerModal.vue'
+import ShipmentRouteAddModal from '@/components/shipments/ShipmentRouteAddModal.vue'
 import { claimRouteJump } from '@/utils/routeJump'
 import { formatGroupNoDisplay } from '@/utils/shipmentGroup'
 import { useRoute, useRouter } from 'vue-router'
@@ -224,6 +227,12 @@ const filterVipOnly = ref(false)
 const filterFclOnly = ref(false)
 const filterCarrier = ref<string | null>(null)
 const markManagerShow = ref(false)
+const routeAddShow = ref(false)
+const routeAddRows = ref<Shipment[]>([])
+function openRouteAdd(rows: Shipment[]) {
+  routeAddRows.value = rows.map(row => ({ ...row }))
+  routeAddShow.value = true
+}
 const markFilter = ref<string[]>([])
 const markOptions = ref<{id:string;name:string;color:string}[]>([])
 async function loadMarkOptions() {
@@ -269,11 +278,13 @@ const selectedSystemView = ref<ShipmentSystemViewId | null>(null)
 
 function loadVisibleColumnKeys(): string[] {
   try {
-    const raw = localStorage.getItem(SHIPMENT_COLUMN_STORAGE_KEY)
+    const current = localStorage.getItem(SHIPMENT_COLUMN_STORAGE_KEY)
+    const raw = current ?? localStorage.getItem('youzi-shipment-list-columns-v5')
     if (raw) {
       const parsed = JSON.parse(raw) as unknown
       if (Array.isArray(parsed) && parsed.every((x) => typeof x === 'string')) {
-        return parsed.filter((key) => key !== 'statusCode' && key !== 'groups')
+        const keys = parsed.filter((key) => key !== 'statusCode' && key !== 'groups')
+        return current === null ? ['commerceMarks', ...keys.filter((key) => key !== 'commerceMarks')] : keys
       }
     }
   } catch {
@@ -287,7 +298,7 @@ const visibleColumnKeys = ref<string[]>(loadVisibleColumnKeys())
 const preportExcludedColumnKeySet = new Set<string>(PREPORT_EXCLUDED_COLUMN_KEYS)
 
 const tableVisibleColumnKeys = computed(() => {
-  if (!isPreportWorkspace.value) return visibleColumnKeys.value
+  if (!isPreportWorkspace.value) return visibleColumnKeys.value.filter((key) => key !== 'commerceMarks')
   const filtered = visibleColumnKeys.value.filter(
     (key) => !preportExcludedColumnKeySet.has(key),
   )
@@ -717,7 +728,7 @@ function renderExceptionBadge(row: Shipment) {
 }
 
 function renderActionWithTooltip(
-  kind: 'view' | 'edit' | 'delete' | 'subscribe',
+  kind: 'view' | 'edit' | 'delete' | 'subscribe' | 'route-add',
   tooltip: string,
   options?: {
     onClick?: () => void
@@ -2580,7 +2591,7 @@ async function handleSyncRowRouteStatus(row: Shipment) {
       message.success('明细状态无变化')
     }
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '明细状态更新失败')
+    message.error((e as { data?: { detail?: string } })?.data?.detail || (e instanceof Error ? e.message : '明细状态更新失败'))
   } finally {
     syncingRouteStatusRowId.value = null
   }
@@ -2618,7 +2629,7 @@ async function handleSyncSelectedRouteStatus() {
     await loadList()
     await loadFilterOptions()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '明细状态更新失败')
+    message.error((e as { data?: { detail?: string } })?.data?.detail || (e instanceof Error ? e.message : '明细状态更新失败'))
   } finally {
     syncingRouteStatus.value = false
   }
@@ -2642,7 +2653,7 @@ async function handleSyncAllRouteStatus() {
     await loadList()
     await loadFilterOptions()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '明细状态更新失败')
+    message.error((e as { data?: { detail?: string } })?.data?.detail || (e instanceof Error ? e.message : '明细状态更新失败'))
   } finally {
     syncingRouteStatus.value = false
   }
@@ -2811,20 +2822,20 @@ async function copySelectedShipmentDetailSummary(includeRefShipmentNo: boolean) 
   }
 }
 
-async function copySelectedPreportShipmentData() {
+async function copySelectedPreportShipmentData(basis: 'kg' | 'cbm' = 'kg') {
   const rows = selectedRows.value
   if (!rows.length) {
     message.warning('请先勾选运单')
     return
   }
-  const text = formatPreportShipmentDataCopyText(rows)
+  const text = formatPreportShipmentDataCopyText(rows, basis)
   if (!text) {
     message.warning('无可复制内容')
     return
   }
   try {
     await navigator.clipboard.writeText(text)
-    message.success(`已复制 ${rows.length} 条运单数据`)
+    message.success(`已复制 ${rows.length} 条运单数据${basis === 'cbm' ? '（按方）' : ''}`)
   } catch {
     message.error('复制失败，请检查浏览器权限')
   }
@@ -2899,6 +2910,7 @@ const copyDropdownOptions = computed((): DropdownOption[] => {
     { label: '复制DW', key: 'deliveryWindowCopy', disabled: selectedRows.value.length === 0 || copyingDW.value },
     { label: 'DW窗口设置', key: 'deliveryWindowSettings', disabled: selectedRows.value.length !== 1 },
     { label: '数据', key: 'preportData' },
+    { label: '数据（按方）', key: 'preportDataCbm' },
     { label: '最新轨迹', key: 'latestTracking' },
     { label: '转单号', key: 'trackingNumbers' },
     { label: '运单明细', key: 'detailSummary' },
@@ -2913,6 +2925,7 @@ function handleCopyMenuSelect(key: string | number) {
   else if (key === 'detailSummary') void copySelectedShipmentDetailSummary(false)
   else if (key === 'detailSummaryWithRef') void copySelectedShipmentDetailSummary(true)
   else if (key === 'preportData') void copySelectedPreportShipmentData()
+  else if (key === 'preportDataCbm') void copySelectedPreportShipmentData('cbm')
   else if (key === 'latestTracking') void copySelectedLatestTracking()
   else if (key === 'trackingNumbers') void copySelectedTrackingNumbers()
 }
@@ -2931,6 +2944,28 @@ const batchEditDropdownOptions: DropdownOption[] = [
 
 function handleBatchEditMenuSelect(key: string | number) {
   if (key === 'delete') promptBatchDelete()
+}
+
+const shipmentMaintenanceOptions = computed<DropdownOption[]>(() => [
+  ...(isPreportWorkspace.value ? [
+    {
+      label: '标识管理',
+      key: 'marks',
+      icon: () => h(Tag, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
+      disabled: checkedRowKeys.value.length > 200,
+    },
+  ] : []),
+  {
+    label: '新增路由',
+    key: 'route',
+    icon: () => h(Signpost, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
+    disabled: !selectedRows.value.length || selectedRows.value.length > 50,
+  },
+])
+
+function handleShipmentMaintenanceSelect(key: string | number) {
+  if (key === 'marks') markManagerShow.value = true
+  else if (key === 'route') openRouteAdd(selectedRows.value)
 }
 
 function promptBatchDelete() {
@@ -3018,6 +3053,17 @@ async function onFileSelected(ev: Event) {
 }
 
 const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment>[number]> => ({
+  commerceMarks: {
+    title: '标识',
+    key: 'commerceMarks',
+    width: 180,
+    render: (row) => h('div', { class: 'flex flex-wrap gap-1' },
+      (row.commerceMarks || []).map((mark) => h('span', {
+        class: 'rounded px-1.5 py-0.5 text-xs',
+        style: { color: mark.color, backgroundColor: mark.color + '18', border: '1px solid ' + mark.color + '40' },
+        title: mark.name,
+      }, mark.name))),
+  },
   statusCode: {
     title: '状态',
     key: 'statusCode',
@@ -3175,6 +3221,20 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     width: 96,
     ellipsis: { tooltip: true },
     render: (row) => displayField(row.zipcode) || '—',
+  },
+  actualWeight: {
+    title: '实重（kg）',
+    key: 'actualWeight',
+    width: 100,
+    align: 'center',
+    render: (row) => row.actualWeight == null ? '—' : String(row.actualWeight),
+  },
+  volumeCbm: {
+    title: '体积（m³）',
+    key: 'volumeCbm',
+    width: 100,
+    align: 'center',
+    render: (row) => row.volumeCbm == null ? '—' : String(row.volumeCbm),
   },
   chargedWeight: {
     title: '计费重',
@@ -3419,12 +3479,11 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
       render: (row) => renderShipmentNo(row),
     },
     ...(statusCol ? [{ ...statusCol, fixed: 'left' as const }] : []),
-    ...(isPreportWorkspace.value ? [{title:'标识',key:'commerceMarks',width:180,render:(row:Shipment) => h('div',{class:'flex flex-wrap gap-1'},(row.commerceMarks || []).map(mark => h('span',{class:'rounded px-1.5 py-0.5 text-xs',style:{color:mark.color,backgroundColor:mark.color+'18',border:'1px solid '+mark.color+'40'},title:mark.name},mark.name)))}] : []),
     ...dynamicCols,
     {
       title: '操作',
       key: 'actions',
-      width: 132,
+      width: 198,
       align: 'center',
       fixed: 'right',
       render: (row) =>
@@ -3442,6 +3501,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
               },
             ),
             renderActionWithTooltip('edit', '编辑', { onClick: () => openEdit(row) }),
+            renderActionWithTooltip('route-add', '新增路由', { onClick: () => openRouteAdd([row]) }),
             h(
               NPopconfirm,
               { onPositiveClick: () => handleDelete(row) },
@@ -3544,7 +3604,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </template>
         <NButton type="primary" size="small" @click="openCreate">新增运单</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
-        <NButton v-if="isPreportWorkspace" size="small" :disabled="!checkedRowKeys.length || checkedRowKeys.length>200" @click="markManagerShow = true">标识管理</NButton>
         <NButton size="small" :loading="exporting" @click="handleExport">导出运单</NButton>
       </NSpace>
     </div>
@@ -3830,6 +3889,16 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             批量修改
           </NButton>
         </NDropdown>
+        <NDropdown
+          trigger="click"
+          :options="shipmentMaintenanceOptions"
+          @select="handleShipmentMaintenanceSelect"
+        >
+          <NButton size="small" icon-placement="right" aria-haspopup="menu">
+            <template #icon><ChevronDown :size="16" :stroke-width="ICON_STROKE" aria-hidden="true" /></template>
+            运单维护
+          </NButton>
+        </NDropdown>
         <template v-if="!isPreportWorkspace">
           <NButton
             size="small"
@@ -3967,6 +4036,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
     <ShipmentBatchAmazonRefsModal :show="batchAmazonRefsShow" @close="batchAmazonRefsShow = false" @updated="loadList(); loadFreshnessStats()" @progress="onBatchAmazonProgress" />
     <ShipmentMarkManagerModal :show="markManagerShow" :ids="checkedRowKeys.map(String)" @close="markManagerShow = false" @updated="marksUpdated" />
+    <ShipmentRouteAddModal :show="routeAddShow" :shipments="routeAddRows" @close="routeAddShow = false" @updated="loadList" />
     <ShipmentAmazonRefModal
       :show="amazonRefShow"
       :shipment="amazonRefRow"
@@ -4042,7 +4112,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     <ShipmentColumnSettingsDrawer
       v-model:show="columnSettingsShow"
       v-model:visible-keys="visibleColumnKeys"
-      :excluded-keys="isPreportWorkspace ? PREPORT_EXCLUDED_COLUMN_KEYS : undefined"
+      :excluded-keys="isPreportWorkspace ? PREPORT_EXCLUDED_COLUMN_KEYS : ['commerceMarks']"
     />
 
     <ShipmentMarkRenameModal

@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from ..context import *
 from .shipment_list_query import ShipmentListFilters
 from ..schemas.delivery_window import DeliveryWindowIn
+from ..schemas.shipments import ShipmentRouteAddIn, ShipmentRoutePresetsIn
 from ..services.delivery_window import calculate_delivery_window
 from ..db.delivery_windows_table import load_window, save_window
 from ..db.datetime_util import now_str
@@ -10,6 +11,35 @@ from ..services.delivery_window_history import load_delivery_history
 from typing import Literal
 
 router = APIRouter()
+
+
+@router.get('/api/v1/shipment-routes/options')
+def shipment_route_add_options():
+    from ..services.shipment_route_add import route_options, route_presets
+    statuses = route_options(shipments_repo)
+    return {'statuses': statuses, 'presets': route_presets(LOGISTICS_CONFIG_PATH)}
+
+
+@router.put('/api/v1/shipment-routes/presets')
+def shipment_route_save_presets(body: ShipmentRoutePresetsIn):
+    from ..services.shipment_route_add import route_options, save_route_presets
+    try:
+        presets = save_route_presets(LOGISTICS_CONFIG_PATH, route_options(shipments_repo),
+                                     [item.model_dump() for item in body.presets])
+    except (OSError, ValueError) as exc:
+        detail = str(exc) if isinstance(exc, ValueError) else '本地配置无法写入，请检查文件权限'
+        raise HTTPException(status_code=400, detail=detail) from None
+    return {'presets': presets}
+
+
+@router.post('/api/v1/shipment-routes')
+def shipment_route_add(body: ShipmentRouteAddIn):
+    from ..services.shipment_route_add import add_routes
+    try:
+        return add_routes(shipments_repo, LOGISTICS_CONFIG_PATH, body.ids, body.nodeTime,
+                          body.estimatedDeliveryDate, body.nodeDesc, body.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
 
 _SHIPMENT_EXPORT_MAX = 10_000
 
@@ -1069,6 +1099,7 @@ def sync_shipments_route_status_from_dps(
     - 不传 / 空列表：同步全部有 waybillId 的运单
     """
     from ..services.shipment_dps_route_status_sync import sync_route_status_by_waybill_ids
+    from ..services.sync_coordination import DpsAuthorizationExpired
 
     raw = (body.shipment_nos if body else None) or []
     nos = [n.strip() for n in raw if n and n.strip()]
@@ -1081,6 +1112,10 @@ def sync_shipments_route_status_from_dps(
             nos or None,
         )
         return ShipmentDpsRouteStatusSyncResult(**result)
+    except DpsAuthorizationExpired as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except HTTPException:
+        raise
     except FileNotFoundError as exc:
         raise HTTPException(
             status_code=503,

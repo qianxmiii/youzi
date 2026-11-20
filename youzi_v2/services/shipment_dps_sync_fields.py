@@ -23,6 +23,8 @@ KNOWN_SYNC_FIELDS = frozenset(
         "zipcode",
         "ctns",
         "charged_weight",
+        "actual_weight",
+        "volume_cbm",
         "receivable_cny",
         "payable_cny",
         "profit_cny",

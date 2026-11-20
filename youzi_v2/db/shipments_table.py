@@ -26,6 +26,8 @@ CREATE TABLE {TABLE_NAME} (
     delivery_address TEXT,
     ctns INTEGER,
     charged_weight REAL,
+    actual_weight REAL,
+    volume_cbm REAL,
     zipcode TEXT,
     product_name TEXT,
     origin_warehouse_code TEXT,
@@ -113,6 +115,9 @@ def ensure_schema(conn: sqlite3.Connection) -> None:
             conn.execute(f"ALTER TABLE {TABLE_NAME} RENAME COLUMN piece_count TO ctns")
         else:
             conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN ctns INTEGER")
+    for column in ("actual_weight", "volume_cbm"):
+        if column not in cols:
+            conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN {column} REAL")
     if "charged_weight" not in cols:
         conn.execute(f"ALTER TABLE {TABLE_NAME} ADD COLUMN charged_weight REAL")
     if "latest_tracking_time" not in cols:

@@ -23,6 +23,10 @@ export interface Shipment {
   ctns: number | null
   /** 计费重 kg（DPS 同步） */
   chargedWeight?: number | null
+  /** 实重 kg：params.roughWeightTotal */
+  actualWeight?: number | null
+  /** 体积 m³：params.volumeTotal */
+  volumeCbm?: number | null
   /** 应收，人民币 */
   receivableCny?: number | null
   /** 应付，人民币 */

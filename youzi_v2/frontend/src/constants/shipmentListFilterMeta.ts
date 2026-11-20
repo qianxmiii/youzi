@@ -23,11 +23,14 @@ export const SHIPMENT_LIST_COLUMN_GROUPS = [
   {
     group: '基础信息',
     keys: [
+      'commerceMarks',
       'customer',
       'channelCode',
       'addressCode',
       'zipcode',
       'chargedWeight',
+      'actualWeight',
+      'volumeCbm',
       'carrierCode',
       'supplierName',
       'customerShipmentId',
@@ -56,12 +59,15 @@ export const SHIPMENT_LIST_COLUMN_GROUPS = [
 ] as const
 
 export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
+  commerceMarks: '标识',
   statusCode: '状态',
   customer: '客户',
   channelCode: '渠道',
   addressCode: '派送仓库',
   zipcode: '邮编',
   chargedWeight: '计费重',
+  actualWeight: '实重（kg）',
+  volumeCbm: '体积（m³）',
   carrierCode: '承运商',
   supplierName: '供应商',
   customerShipmentId: '货件号',
@@ -92,6 +98,7 @@ export const SHIPMENT_COLUMN_LABELS: Record<string, string> = {
 
 /** 与 shipment-list-filter-design.md 默认列一致（不含固定列运单号/状态/操作） */
 export const DEFAULT_SHIPMENT_VISIBLE_COLUMNS = [
+  'commerceMarks',
   'customer',
   'channelCode',
   'ctns',
@@ -110,7 +117,7 @@ export const DEFAULT_SHIPMENT_VISIBLE_COLUMNS = [
   'updatedTime',
 ] as const
 
-export const SHIPMENT_COLUMN_STORAGE_KEY = 'youzi-shipment-list-columns-v5'
+export const SHIPMENT_COLUMN_STORAGE_KEY = 'youzi-shipment-list-columns-v6'
 
 export type ShipmentSystemViewId =
   | 'warning_soon'

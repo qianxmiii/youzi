@@ -59,6 +59,13 @@ def extract_dps_charged_weight(
     return None
 
 
+def _measurement(value: Any) -> float | None:
+    """仅接收有限非负测量值；缺失或无效时保留本地已有数据。"""
+    from math import isfinite
+    number = _opt_float(value)
+    return number if number is not None and isfinite(number) and number >= 0 else None
+
+
 def extract_dps_money(row: dict[str, Any], params: dict[str, Any], *keys: str) -> float | None:
     """行级或 params 中的金额、利润率。百分号只去掉符号，不换算。"""
     for key in keys:
@@ -197,6 +204,8 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         "zipcode": _opt_str(row.get("deliveryZip")),
         "ctns": _opt_int(row.get("totalCtns")) or _opt_int(params.get("ctnsTotal")),
         "charged_weight": extract_dps_charged_weight(row, params),
+        "actual_weight": _measurement(params.get("roughWeightTotal")),
+        "volume_cbm": _measurement(params.get("volumeTotal")),
         "receivable_cny": extract_dps_money(row, params, "receivable"),
         "payable_cny": extract_dps_money(row, params, "proRecCharge"),
         "profit_cny": extract_dps_money(row, params, "profit"),

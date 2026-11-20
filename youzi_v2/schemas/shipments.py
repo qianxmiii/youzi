@@ -39,6 +39,14 @@ class ShipmentRecordIn(BaseModel):
     ctns: int | None = Field(
         default=None, validation_alias=AliasChoices("ctns", "pieceCount", "piece_count")
     )
+    actual_weight: float | None = Field(
+        default=None, ge=0, allow_inf_nan=False,
+        validation_alias=AliasChoices("actualWeight", "actual_weight"),
+    )
+    volume_cbm: float | None = Field(
+        default=None, ge=0, allow_inf_nan=False,
+        validation_alias=AliasChoices("volumeCbm", "volume_cbm"),
+    )
     charged_weight: float | None = Field(
         default=None,
         validation_alias=AliasChoices("chargedWeight", "charged_weight"),
@@ -163,6 +171,14 @@ class ShipmentUpdateIn(BaseModel):
     )
     ctns: int | None = Field(
         default=None, validation_alias=AliasChoices("ctns", "pieceCount", "piece_count")
+    )
+    actual_weight: float | None = Field(
+        default=None, ge=0, allow_inf_nan=False,
+        validation_alias=AliasChoices("actualWeight", "actual_weight"),
+    )
+    volume_cbm: float | None = Field(
+        default=None, ge=0, allow_inf_nan=False,
+        validation_alias=AliasChoices("volumeCbm", "volume_cbm"),
     )
     charged_weight: float | None = Field(
         default=None,
@@ -291,6 +307,24 @@ class ShipmentBatchIdsIn(BaseModel):
         max_length=200,
         validation_alias=AliasChoices("ids", "shipmentIds"),
     )
+
+
+class ShipmentRouteAddIn(BaseModel):
+    ids: list[str] = Field(min_length=1, max_length=50)
+    nodeTime: str | None = None
+    estimatedDeliveryDate: str | None = None
+    nodeDesc: str = Field(min_length=1, max_length=2000)
+    status: str = Field(min_length=1, max_length=30)
+
+
+class ShipmentRoutePresetIn(BaseModel):
+    label: str = Field(min_length=1, max_length=100)
+    status: str = Field(min_length=1, max_length=30)
+    text: str = Field(min_length=1, max_length=2000)
+
+
+class ShipmentRoutePresetsIn(BaseModel):
+    presets: list[ShipmentRoutePresetIn] = Field(max_length=100)
 
 
 class DpsExportJobCreateIn(BaseModel):

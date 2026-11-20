@@ -214,6 +214,7 @@ _API_TO_SNAKE: dict[str, str] = {
     "deliveryAddress": "delivery_address",
     "zipcode": "zipcode",
     "channelCode": "channel_code",
+    "channelNameZh": "channel_name_zh",
     "carrierCode": "carrier_code",
     "carrierNameZh": "carrier_name_zh",
     "trackingNumber": "tracking_number",
@@ -235,6 +236,10 @@ _API_TO_SNAKE: dict[str, str] = {
 
 
 def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any]) -> Any:
+    if field == "channel_code":
+        name = row.get("channel_name_zh")
+        if name is not None and str(name).strip():
+            return str(name).strip()
     if field == "carrier_code":
         name = row.get("carrier_name_zh")
         if name is not None and str(name).strip():

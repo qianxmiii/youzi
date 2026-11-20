@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import { BellDot, Route, SquarePen, Trash2 } from 'lucide-vue-next'
+import { BellDot, Route, Signpost, SquarePen, Trash2 } from 'lucide-vue-next'
 import BellCheckIcon from '@/components/icons/BellCheckIcon.vue'
 import { ICON_STROKE } from '@/constants/icons'
 
 withDefaults(
   defineProps<{
-    kind: 'view' | 'edit' | 'delete' | 'subscribe'
+    kind: 'view' | 'edit' | 'delete' | 'subscribe' | 'route-add'
     title: string
     /** 订阅图标：已订阅高亮 */
     active?: boolean
@@ -35,6 +35,7 @@ defineEmits<{
     @click.stop="$emit('click')"
   >
     <Route v-if="kind === 'view'" class="table-action-icon__svg" :stroke-width="ICON_STROKE" aria-hidden="true" />
+    <Signpost v-else-if="kind === 'route-add'" class="table-action-icon__svg" :stroke-width="ICON_STROKE" aria-hidden="true" />
     <SquarePen v-else-if="kind === 'edit'" class="table-action-icon__svg" :stroke-width="ICON_STROKE" aria-hidden="true" />
     <BellCheckIcon
       v-else-if="kind === 'subscribe' && active"
@@ -74,11 +75,13 @@ defineEmits<{
   height: 1.125rem;
 }
 
-.table-action-icon--view {
+.table-action-icon--view,
+.table-action-icon--route-add {
   color: rgb(37 99 235);
 }
 
-.table-action-icon--view:hover {
+.table-action-icon--view:hover,
+.table-action-icon--route-add:hover {
   background: rgb(239 246 255);
 }
 
@@ -131,11 +134,13 @@ defineEmits<{
   opacity: 0.55;
 }
 
-[data-theme='dark'] .table-action-icon--view {
+[data-theme='dark'] .table-action-icon--view,
+[data-theme='dark'] .table-action-icon--route-add {
   color: rgb(96 165 250);
 }
 
-[data-theme='dark'] .table-action-icon--view:hover {
+[data-theme='dark'] .table-action-icon--view:hover,
+[data-theme='dark'] .table-action-icon--route-add:hover {
   background: rgb(30 58 138 / 0.35);
 }
 

@@ -1,3 +1,4 @@
+import Decimal from 'decimal.js'
 import { SHIPMENT_STATUS_LABEL_ZH, normalizeShipmentStatusCode } from '@/constants/shipmentWorkspace'
 import type { Shipment } from '@/types/shipment'
 import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
@@ -244,11 +245,19 @@ export function formatPreportShipmentDataConfirmLine(rows: Shipment[]): string {
     : '数据请确认，谢谢！'
 }
 
-/** 「复制 → 数据」：运单明细摘要 + 换行 + 计费重；正文后空一行追加确认句 */
-export function formatPreportShipmentDataCopyText(rows: Shipment[]): string {
+/** 「复制 → 数据／数据（按方）」：运单明细摘要 + 计费重或体积；正文后追加确认句 */
+export function formatPreportShipmentDataCopyText(rows: Shipment[], basis: 'kg' | 'cbm' = 'kg'): string {
   if (!rows.length) return ''
   const body = rows
-    .map((row) => formatShipmentDetailSummaryBlock(row, { appendChargedWeight: true }))
+    .map((row) => {
+      if (basis === 'kg') return formatShipmentDetailSummaryBlock(row, { appendChargedWeight: true })
+      const volume = row.volumeCbm
+      const value = volume != null && Number.isFinite(volume) && volume >= 0
+        ? `${new Decimal(volume).toDecimalPlaces(2, Decimal.ROUND_CEIL).toFixed(2)}cbm`
+        : '—'
+      const label = isEnglishShipmentCopyContext(row) ? 'Chargevolume' : '体积'
+      return `${formatShipmentDetailSummaryLine(row)}\n${label}: ${value}`
+    })
     .join('\n\n')
   return `${body}\n\n${formatPreportShipmentDataConfirmLine(rows)}`
 }

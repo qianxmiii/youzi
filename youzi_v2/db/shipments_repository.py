@@ -118,6 +118,8 @@ _UPDATABLE = (
     "delivery_address",
     "ctns",
     "charged_weight",
+    "actual_weight",
+    "volume_cbm",
     "zipcode",
     "product_name",
     "origin_warehouse_code",
@@ -221,6 +223,8 @@ def _row_to_api(row: sqlite3.Row) -> dict[str, Any]:
             if "charged_weight" in row.keys() and row["charged_weight"] is not None
             else None
         ),
+        "actualWeight": _opt_row_float(row, "actual_weight"),
+        "volumeCbm": _opt_row_float(row, "volume_cbm"),
         "receivableCny": _opt_row_float(row, "receivable_cny"),
         "payableCny": _opt_row_float(row, "payable_cny"),
         "profitCny": _opt_row_float(row, "profit_cny"),
@@ -358,6 +362,8 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
         "deliveryAddress": "delivery_address",
         "ctns": "ctns",
         "chargedWeight": "charged_weight",
+        "actualWeight": "actual_weight",
+        "volumeCbm": "volume_cbm",
         "receivableCny": "receivable_cny",
         "payableCny": "payable_cny",
         "profitCny": "profit_cny",

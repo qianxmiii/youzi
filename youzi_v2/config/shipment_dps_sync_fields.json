@@ -55,6 +55,18 @@
       "onInsert": true,
       "onUpdate": true
     },
+    "actual_weight": {
+      "label": "实重",
+      "dpsSource": "params.roughWeightTotal（kg）；缺失或无效则保留已有值",
+      "onInsert": true,
+      "onUpdate": true
+    },
+    "volume_cbm": {
+      "label": "体积",
+      "dpsSource": "params.volumeTotal（m³）；缺失或无效则保留已有值",
+      "onInsert": true,
+      "onUpdate": true
+    },
     "charged_weight": {
       "label": "计费重",
       "dpsSource": "chargedWeight / chargeWeight 等（行或 params）；无值则不写入",

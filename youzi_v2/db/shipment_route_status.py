@@ -14,6 +14,7 @@ ROUTE_STATUS_SEEDS: list[tuple[str, str, str, str, int, bool]] = [
     ("DEPARTED_POL", "301", "离开起运港", "Departed POL", 50, True),
     ("ARRIVED_POD", "306", "到达目的港", "Arrived POD", 60, True),
     ("IMPORT_CUSTOMS_EXCEPTION", "402", "进口清关异常", "Import customs exception", 70, True),
+    ("IMPORT_CUSTOMS_RELEASE", "403", "进口清关放行", "Import customs release", 75, True),
     ("DEST_TRANSIT_WAREHOUSE", "502", "到达目的国中转仓库", "Dest transit warehouse", 80, True),
     ("TRUCK_DISPATCH_APPOINTED", "509", "卡派已约仓", "Truck dispatch warehouse appointed", 85, True),
     ("LAST_MILE_HANDOVER", "510", "快递派-已交仓", "Last-mile handover", 90, True),

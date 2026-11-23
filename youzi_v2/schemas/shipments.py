@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 
@@ -328,10 +328,11 @@ class ShipmentRoutePresetsIn(BaseModel):
 
 
 class ShipmentRemarkUpdateIn(BaseModel):
-    """单票或多票使用同一内容覆盖 DPS 内部备注。"""
+    """覆盖 DPS 内部备注或逐票追加相同内容。"""
 
     ids: list[str] = Field(min_length=1, max_length=200)
     remark: str = Field(max_length=5000)
+    mode: Literal['replace', 'append'] = 'replace'
 
 
 class DpsExportJobCreateIn(BaseModel):

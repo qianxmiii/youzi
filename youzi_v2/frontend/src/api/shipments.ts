@@ -382,16 +382,26 @@ export async function batchUpdateShipments(
   })
 }
 
+export type ShipmentRemarkMode = 'replace' | 'append'
+
+export interface ShipmentRemarkResult {
+  id: string
+  shipmentNo: string
+  status: 'success' | 'failed' | 'unknown'
+  message: string
+}
+
 export async function updateShipmentRemarks(
   ids: string[],
   remark: string,
   taskId?: string,
-): Promise<{ total: number; updated: number; failed: number }> {
+  mode: ShipmentRemarkMode = 'replace',
+): Promise<{ total: number; updated: number; failed: number; unknown?: number; remarkResults?: ShipmentRemarkResult[] }> {
   return api('/api/v1/shipment-remarks', {
     method: 'POST',
     headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
-    body: { ids, remark },
-    timeout: 60_000,
+    body: { ids, remark, mode },
+    timeout: mode === 'replace' ? 60_000 : undefined,
     retry: 0,
   })
 }

@@ -501,7 +501,7 @@ def update_shipment_remarks_api(
     body: ShipmentRemarkUpdateIn,
     task_id: str = Header(default="", alias="X-Youzi-Task-Id"),
 ):
-    """单票编辑或多票使用同一内容覆盖 DPS 内部备注。"""
+    """覆盖或追加 DPS 内部备注。"""
     del task_id  # 任务生命周期由中间件记录；不持久化备注正文。
     from ..services.shipment_remarks import update_shipment_remarks
 
@@ -510,6 +510,7 @@ def update_shipment_remarks_api(
             shipments_repo,
             LOGISTICS_CONFIG_PATH,
             body.ids,
+            mode=body.mode,
             body.remark,
         )
     except ValueError as exc:

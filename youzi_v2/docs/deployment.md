@@ -109,7 +109,7 @@ python youzi_v2/scripts/sync_all_tracking_scheduled.py
   - **`dps_route_status_query`**（明细状态轻量同步必填）：仅含 `url`（完整接口地址）；**url 只写在本文件**，业务代码/文档不得写真实地址
   - **`dps_getOrderProduct`**（运单产品）：仅含 `url`；**GET**（可用块内 `method` 改为 POST），查询参数 **`commerceWaybillId`** = 本地 `waybillId`；鉴权用根级 `dps_authorization`。页面只使用中文品名、英文品名、箱数
   - **`dps_update_amz`**（补货件号推送亚马逊）：仅含 `url`；鉴权用根级 `dps_authorization`
-  - **`dps_updateRemark`**（港前运单内部备注）：可选 `url`、`method`（默认 `PUT`）、`timeout`；不配置 `url` 时使用内置 DPS 地址，鉴权用根级 `dps_authorization`
+  - **`dps_updateRemark`**（港前和在途运单内部备注）：可选 `url`、`method`（默认 `PUT`）、`timeout`；不配置 `url` 时使用内置 DPS 地址，鉴权用根级 `dps_authorization`
   - **`dps_data_download`**（货箱）：exportBox；**POST** + `?ids=` 单个 waybillId；**单票**保存为 `{运单号}_data.ext`；**多票**各文件重命名后装入文件夹 `{N}票数据_{YYYYMMDDHHmmss}/`，压缩包名为 **`{N}票数据_{YYYYMMDDHHmmss}.zip`**
   - **`dps_mark_download`**（单个唛头）：**POST** + `?id=waybillId&type=2`（`type` 可在块内配置，默认 `2`）；**单票**用 DPS 原名（无则回退 `{运单号}_mark.ext`）
   - **`dps_batchmark_download`**（多个唛头）：**POST**，JSON body 为 waybillId **数组**；多票包名 `{YYYYMMDDHHmmss}.ext`

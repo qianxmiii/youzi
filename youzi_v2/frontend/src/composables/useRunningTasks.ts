@@ -83,6 +83,12 @@ export async function trackTask<T>(title: string, operation: (taskId: string) =>
     const labels: Record<string, string> = {checked:'已核对', matched:'件数一致', total:'总票数', updated:'已更新', skipped:'跳过', empty:'无轨迹', notFound:'未找到', logCount:'轨迹条数', created:'新增', unchanged:'无变化', failed:'失败', remoteTotal:'远端票数'}
     const counts = Object.entries(labels).filter(([key]) => typeof data[key] === 'number').map(([key, label]) => `${label} ${data[key]}`)
     const issues = Array.isArray(data.issues) ? data.issues as TaskRow[] : []
+    const remarkRows = Array.isArray(data.remarkResults)
+      ? (data.remarkResults as (TaskRow & { status: 'success' | 'failed' | 'unknown' })[]).map(row => ({
+        shipmentNo: row.shipmentNo,
+        message: `${{ success: '成功', failed: '失败', unknown: '待核对' }[row.status]} · ${row.message}`,
+      }))
+      : []
     const errors = Array.isArray(data.errors) ? data.errors.map(String) : []
     if (typeof data.error === 'string' && data.error.trim()) errors.push(data.error)
     if (data.skipped === true) errors.push(typeof data.reason === 'string' ? data.reason : '任务已跳过，未执行')
@@ -94,6 +100,10 @@ export async function trackTask<T>(title: string, operation: (taskId: string) =>
       task.resultKind = 'ctns'
       task.rows = issues.map(row => ({ ...row }))
       task.stats.push({label:'件数不一致', value:issues.filter(row => row.kind === 'mismatch').length, tone:'warning'}, {label:'查询异常', value:issues.filter(row => row.kind !== 'mismatch').length, tone:'warning'})
+    } else if (remarkRows.length) {
+      task.rows = remarkRows
+      task.stats.push({ label: '待核对', value: Number(data.unknown || 0), tone: 'warning' })
+      counts.push(`待核对 ${Number(data.unknown || 0)}`)
     } else if (errors.length) {
       task.rows = errors.map(message => ({shipmentNo:'—',message}))
     }
@@ -104,7 +114,7 @@ export async function trackTask<T>(title: string, operation: (taskId: string) =>
     if (issues.length) task.message += ` · 需核对 ${issues.length}`
     if (errors.length) task.message += ` · 错误 ${errors.length}`
     task.details = [task.message, ...stepDetails, ...issues.map(row => `${row.shipmentNo}：${row.message || (row.kind === 'mismatch' ? `件数不一致，差额 ${row.diff}` : '查询失败')}`), ...errors].join('\n')
-    finishTask(task, issues.length > 0 || errors.length > 0 || Number(data.failed || 0) > 0 || steps.some(step => (step.failed || 0) > 0))
+    finishTask(task, issues.length > 0 || errors.length > 0 || Number(data.failed || 0) > 0 || Number(data.unknown || 0) > 0 || steps.some(step => (step.failed || 0) > 0))
     return result
   } catch (error) {
     task.message = error instanceof Error ? error.message : '处理失败'

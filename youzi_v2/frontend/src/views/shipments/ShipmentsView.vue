@@ -230,6 +230,7 @@ const filterCarrier = ref<string | null>(null)
 const markManagerShow = ref(false)
 const remarkModalShow = ref(false)
 const remarkModalRows = ref<Shipment[]>([])
+const remarkModalBatch = ref(false)
 const routeAddShow = ref(false)
 const routeAddRows = ref<Shipment[]>([])
 function openRouteAdd(rows: Shipment[]) {
@@ -243,8 +244,9 @@ async function loadMarkOptions() {
   catch { message.error('标识筛选配置加载失败') }
 }
 async function marksUpdated() { await loadList(); await loadMarkOptions() }
-function openRemarkModal(rows: Shipment[]) {
+function openRemarkModal(rows: Shipment[], batch = false) {
   remarkModalRows.value = [...rows]
+  remarkModalBatch.value = batch
   remarkModalShow.value = true
 }
 async function remarksUpdated() {
@@ -2975,12 +2977,6 @@ const shipmentMaintenanceOptions = computed<DropdownOption[]>(() => [
       icon: () => h(Tag, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
       disabled: checkedRowKeys.value.length > 200,
     },
-    {
-      label: '内部备注',
-      key: 'remark',
-      icon: () => h(MessageSquareText, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
-      disabled: !selectedRows.value.length || selectedRows.value.length > 200,
-    },
   ] : []),
   {
     label: '新增路由',
@@ -2992,10 +2988,16 @@ const shipmentMaintenanceOptions = computed<DropdownOption[]>(() => [
 
 function handleShipmentMaintenanceSelect(key: string | number) {
   if (key === 'marks') markManagerShow.value = true
-  else if (key === 'remark') openRemarkModal(selectedRows.value)
+  else if (key === 'remark') openRemarkModal(selectedRows.value, true)
   else if (key === 'route') openRouteAdd(selectedRows.value)
 }
 
+  {
+    label: '内部备注',
+    key: 'remark',
+    icon: () => h(MessageSquareText, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
+    disabled: !selectedRows.value.length || selectedRows.value.length > 200,
+  },
 function promptBatchDelete() {
   const n = selectedCount.value
   if (!n) {
@@ -3544,7 +3546,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
     {
       title: '操作',
       key: 'actions',
-      width: isPreportWorkspace.value ? 232 : 198,
+      width: 232,
       align: 'center',
       fixed: 'right',
       render: (row) =>
@@ -3563,9 +3565,7 @@ const columns = computed<DataTableColumns<Shipment>>(() => {
             ),
             renderActionWithTooltip('edit', '编辑', { onClick: () => openEdit(row) }),
             renderActionWithTooltip('route-add', '新增路由', { onClick: () => openRouteAdd([row]) }),
-            ...(isPreportWorkspace.value
-              ? [renderActionWithTooltip('remark', '内部备注', { onClick: () => openRemarkModal([row]) })]
-              : []),
+            renderActionWithTooltip('remark', '内部备注', { onClick: () => openRemarkModal([row]) }),
             h(
               NPopconfirm,
               { onPositiveClick: () => handleDelete(row) },
@@ -4100,7 +4100,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 
     <ShipmentBatchAmazonRefsModal :show="batchAmazonRefsShow" @close="batchAmazonRefsShow = false" @updated="loadList(); loadFreshnessStats()" @progress="onBatchAmazonProgress" />
     <ShipmentMarkManagerModal :show="markManagerShow" :ids="checkedRowKeys.map(String)" @close="markManagerShow = false" @updated="marksUpdated" />
-    <ShipmentRemarkModal :show="remarkModalShow" :shipments="remarkModalRows" @close="remarkModalShow = false" @updated="remarksUpdated" />
+    <ShipmentRemarkModal :show="remarkModalShow" :shipments="remarkModalRows" :batch="remarkModalBatch" @close="remarkModalShow = false" @updated="remarksUpdated" />
     <ShipmentRouteAddModal :show="routeAddShow" :shipments="routeAddRows" @close="routeAddShow = false" @updated="loadList" />
     <ShipmentAmazonRefModal
       :show="amazonRefShow"

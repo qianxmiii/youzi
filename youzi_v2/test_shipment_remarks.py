@@ -8,6 +8,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
+import requests
+
 from youzi_v2.services.shipment_dps_mapper import dps_row_to_shipment
 from youzi_v2.services.shipment_remarks import update_shipment_remarks
 
@@ -87,12 +89,54 @@ class ShipmentRemarksTest(unittest.TestCase):
             update_shipment_remarks(self.repo, self.config_path, ["a"], "新备注")
         request.assert_not_called()
 
+    @patch("youzi_v2.services.shipment_remarks.requests.request", return_value=_Response())
+    def test_transit_and_delivered_statuses_allow_remark_edits(self, request):
+        for status in ("2", "3", "IN_TRANSIT", "DELIVERED"):
+            with self.subTest(status=status):
+                self.repo.rows["a"]["statusCode"] = status
+                result = update_shipment_remarks(self.repo, self.config_path, ["a"], "在途备注")
+                self.assertEqual(result["updated"], 1)
+                self.assertEqual(request.call_args.kwargs["json"]["commerceWaybillIds"], ["101"])
+
     def test_dps_mapper_preserves_multiline_remark_and_remote_clear(self):
         mapped = dps_row_to_shipment({"odd": "TEST-A", "remark": "第一行\n第二行"})
         cleared = dps_row_to_shipment({"odd": "TEST-B", "remark": ""})
 
         self.assertEqual(mapped["remark"], "第一行\n第二行")
         self.assertEqual(cleared["remark"], "")
+
+    @patch('youzi_v2.services.shipment_remarks.requests.request', return_value=_Response())
+    @patch('youzi_v2.services.shipment_remarks.query_shipments_by_order')
+    def test_append_uses_latest_dps_remark_and_skips_oversize_row(self, query, request):
+        self.repo.rows["a"]["statusCode"] = "2"
+        self.repo.rows["b"]["statusCode"] = "3"
+        query.return_value = ({'rows': [
+            {'odd': 'TEST-A', 'id': '101', 'remark': '远端新备注\r\n'},
+            {'odd': 'TEST-B', 'id': '102', 'remark': 'x' * 5000},
+        ]}, None)
+        result = update_shipment_remarks(self.repo, self.config_path, ['a', 'b'], '新增内容', mode='append')
+
+        self.assertEqual([row['status'] for row in result['remarkResults']], ['success', 'failed'])
+        request.assert_called_once()
+        self.assertEqual(request.call_args.kwargs['json'], {
+            'remark': '远端新备注\n新增内容', 'commerceWaybillIds': ['101'],
+        })
+        saved = self.repo._database.conn.execute('SELECT remark FROM shipments ORDER BY id').fetchall()
+        self.assertEqual(saved, [('远端新备注\n新增内容',), ('旧备注 B',)])
+
+    @patch('youzi_v2.services.shipment_remarks.requests.request', side_effect=requests.Timeout)
+    @patch('youzi_v2.services.shipment_remarks.query_shipments_by_order')
+    def test_append_timeout_readback_confirms_only_matching_rows(self, query, request):
+        initial = [{'odd': 'TEST-A', 'id': '101', 'remark': None}, {'odd': 'TEST-B', 'id': '102', 'remark': ''}]
+        query.side_effect = [({'rows': initial}, None), ({'rows': [{**initial[0], 'remark': '新增内容'}, initial[1]]}, None)]
+        result = update_shipment_remarks(self.repo, self.config_path, ['a', 'b'], '新增内容', mode='append')
+
+        request.assert_called_once()
+        self.assertEqual(request.call_args.kwargs['json']['commerceWaybillIds'], ['101', '102'])
+        self.assertEqual([row['status'] for row in result['remarkResults']], ['success', 'unknown'])
+        self.assertEqual(result['failed'], 0)
+        saved = self.repo._database.conn.execute('SELECT remark FROM shipments ORDER BY id').fetchall()
+        self.assertEqual(saved, [('新增内容',), ('旧备注 B',)])
 
 
 if __name__ == "__main__":

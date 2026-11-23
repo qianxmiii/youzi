@@ -28,12 +28,21 @@ def complete(task, body, status):
     if 'issues' in data:
         task['resultKind']='ctns'
         stats += [{'label':'件数不一致','value':sum(r.get('kind')=='mismatch' for r in issues)},{'label':'查询异常','value':sum(r.get('kind')!='mismatch' for r in issues)}]
-    task['rows'] = issues or [{'shipmentNo':'—','message':error} for error in errors]
+    remarks = data.get('remarkResults')
+    remark_rows = []
+    if isinstance(remarks, list):
+        statuses = {'success': '成功', 'failed': '失败', 'unknown': '待核对'}
+        stats.append({'label': '待核对', 'value': data.get('unknown', 0)})
+        remark_rows = [
+            {'shipmentNo': row['shipmentNo'], 'message': f"{statuses[row['status']]} · {row['message']}"}
+            for row in remarks
+        ]
+    task['rows'] = issues or remark_rows or [{'shipmentNo':'—','message':error} for error in errors]
     task['stats']=stats
-    bad = status>=400 or bool(errors or issues or data.get('failed')) or any(s.get('failed') for s in steps)
+    bad = status>=400 or bool(errors or issues or data.get('failed') or data.get('unknown')) or any(s.get('failed') for s in steps)
     task.update(state='failed' if bad else 'done',finished=int(time.time()*1000),progress=100)
     task['message']=' · '.join(f"{s['label']} {s['value']}" for s in stats) or ('请求失败' if bad else '处理完成')
-    task['details']='\n'.join([task['message'],*errors,*[str(r.get('shipmentNo',''))+'：'+str(r.get('message') or '件数不一致') for r in issues],*[str(s.get('label',''))+'：新增 '+str(s.get('created',0))+'，更新 '+str(s.get('updated',0)) for s in steps]])
+    task['details']='\n'.join([task['message'],*errors,*[str(r.get('shipmentNo',''))+'：'+str(r.get('message') or '件数不一致') for r in (issues or remark_rows)],*[str(s.get('label',''))+'：新增 '+str(s.get('created',0))+'，更新 '+str(s.get('updated',0)) for s in steps]])
     return task
 
 class RequestTaskTrackingMiddleware:

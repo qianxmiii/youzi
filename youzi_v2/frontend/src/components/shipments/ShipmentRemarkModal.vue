@@ -1,20 +1,37 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { NAlert, NButton, NInput, NModal, NPopconfirm, useMessage } from 'naive-ui'
+import { NAlert, NButton, NInput, NModal, NRadioButton, NRadioGroup, useMessage } from 'naive-ui'
 import { Copy } from 'lucide-vue-next'
-import { updateShipmentRemarks } from '@/api/shipments'
+import { updateShipmentRemarks, type ShipmentRemarkMode, type ShipmentRemarkResult } from '@/api/shipments'
 import { trackTask } from '@/composables/useRunningTasks'
 import type { Shipment } from '@/types/shipment'
 
-const props = defineProps<{ show: boolean; shipments: Shipment[] }>()
+const props = defineProps<{ show: boolean; shipments: Shipment[]; batch?: boolean }>()
 const emit = defineEmits<{ close: []; updated: [] }>()
 const message = useMessage()
 const remark = ref('')
 const busy = ref(false)
-const isSingle = computed(() => props.shipments.length === 1)
+const isSingle = computed(() => !props.batch && props.shipments.length === 1)
+const mode = ref<ShipmentRemarkMode>('append')
+const appending = computed(() => !isSingle.value && mode.value === 'append')
+const appendResults = ref<ShipmentRemarkResult[] | null>(null)
+const submissionUncertain = ref(false)
+const resultById = computed(() => new Map(appendResults.value?.map(row => [row.id, row])))
+const failedIds = computed(() => appendResults.value?.filter(row => row.status === 'failed').map(row => row.id) ?? [])
+const statusLabels = { success: '成功', failed: '失败', unknown: '待核对' }
 const missingWaybill = computed(() => props.shipments.filter((row) => !row.waybillId?.trim()))
 const originalRemark = computed(() => props.shipments[0]?.remark || '')
 const unchanged = computed(() => isSingle.value && remark.value.trim() === originalRemark.value.trim())
+const canSubmit = computed(() => !busy.value && !submissionUncertain.value && props.shipments.length > 0 &&
+  props.shipments.length <= 200 && (appending.value ? !!remark.value.trim() : !missingWaybill.value.length && !unchanged.value))
+
+function appendPreview(row: Shipment) {
+  const previous = (row.remark || '').replace(/\r\n?/g, '\n')
+  const addition = remark.value.replace(/\r\n?/g, '\n').trim()
+  if (!addition) return previous
+  if (!previous.trim()) return addition
+  return `${previous}${previous.endsWith('\n') ? '' : '\n'}${addition}`
+}
 
 function destinationLabel(row: Shipment) {
   const warehouse = row.addressCode?.trim()
@@ -27,6 +44,9 @@ watch(
   () => props.show,
   (open) => {
     if (!open) return
+    mode.value = 'append'
+    appendResults.value = null
+    submissionUncertain.value = false
     remark.value = isSingle.value ? originalRemark.value : ''
   },
 )
@@ -35,19 +55,37 @@ function close() {
   if (!busy.value) emit('close')
 }
 
-async function submit() {
-  if (busy.value || !props.shipments.length || props.shipments.length > 200 || missingWaybill.value.length) return
+async function submit(retry = false) {
+  if (!canSubmit.value || retry !== (appendResults.value !== null)) return
+  const ids = retry ? failedIds.value : props.shipments.map(row => row.id)
+  if (!ids.length) return
+  const append = appending.value
   busy.value = true
   try {
-    const ids = props.shipments.map((row) => row.id)
     const result = await trackTask(
-      isSingle.value ? '内部备注 · 单票覆盖' : '内部备注 · 批量覆盖',
-      (taskId) => updateShipmentRemarks(ids, remark.value, taskId),
+      append ? '内部备注 · 批量追加' : isSingle.value ? '内部备注 · 单票覆盖' : '内部备注 · 批量覆盖',
+      taskId => updateShipmentRemarks(ids, remark.value, taskId, append ? 'append' : 'replace'),
     )
-    message.success(`已覆盖 ${result.updated} 票内部备注`)
+    if (append) {
+      if (!result.remarkResults) {
+        submissionUncertain.value = true
+        emit('updated')
+        return
+      }
+      const merged = new Map(resultById.value)
+      for (const row of result.remarkResults) merged.set(row.id, row)
+      appendResults.value = [...merged.values()]
+      const summary = `成功 ${result.updated} 票，失败 ${result.failed} 票，待核对 ${result.unknown ?? 0} 票`
+      if (result.failed || result.unknown) message.warning(summary)
+      else message.success(summary)
+    } else {
+      message.success(`已覆盖 ${result.updated} 票内部备注`)
+      emit('close')
+    }
     emit('updated')
-    emit('close')
   } catch (error) {
+    const status = (error as { status?: number })?.status
+    if (append && (!status || status >= 500 || status === 408)) submissionUncertain.value = true
     message.error(
       (error as { data?: { detail?: string } })?.data?.detail ||
         (error instanceof Error ? error.message : '内部备注更新失败，请核对 DPS 结果'),
@@ -73,7 +111,7 @@ async function copyRemark(value: string | null | undefined, label = '备注') {
   <NModal
     :show="show"
     preset="card"
-    :title="isSingle ? '修改内部备注' : '批量覆盖内部备注'"
+    :title="isSingle ? '修改内部备注' : '批量内部备注'"
     :style="{ width: '760px', maxWidth: '95vw' }"
     :closable="!busy"
     :mask-closable="!busy"
@@ -97,11 +135,22 @@ async function copyRemark(value: string | null | undefined, label = '备注') {
     </template>
 
     <template v-else>
-      <p class="mb-3 text-sm">已选择 {{ shipments.length }} 票，以下运单将统一覆盖为同一条备注。</p>
+      <div class="mb-3 flex flex-wrap items-center gap-3 text-sm">
+        <span>已选择 {{ shipments.length }} 票</span>
+        <NRadioGroup v-model:value="mode" size="small" aria-label="备注更新方式" :disabled="busy || appendResults !== null || submissionUncertain">
+          <NRadioButton value="append">追加</NRadioButton>
+          <NRadioButton value="replace">覆盖</NRadioButton>
+        </NRadioGroup>
+      </div>
       <div class="mb-4 max-h-56 overflow-auto rounded border border-[var(--color-border)]">
         <table class="remark-table w-full table-fixed text-sm">
           <thead class="text-left">
-            <tr><th class="w-44 px-3 py-2" scope="col">运单号</th><th class="px-3 py-2" scope="col">修改前 <span class="readonly-label">只读</span></th><th class="w-16 px-3 py-2" scope="col">操作</th></tr>
+            <tr>
+              <th class="w-44 px-3 py-2" scope="col">运单号</th>
+              <th class="px-3 py-2" scope="col">修改前 <span class="readonly-label">只读</span></th>
+              <th v-if="appending" class="px-3 py-2" scope="col">{{ appendResults ? '追加结果' : '追加预览' }}</th>
+              <th class="w-16 px-3 py-2" scope="col">操作</th>
+            </tr>
           </thead>
           <tbody>
             <tr v-for="row in shipments" :key="row.id" class="border-t border-[var(--color-border)] align-top">
@@ -111,6 +160,13 @@ async function copyRemark(value: string | null | undefined, label = '备注') {
                 <div class="mt-1 text-xs text-[var(--color-muted)]">{{ destinationLabel(row) }}</div>
               </td>
               <td class="px-3 py-2"><div class="original-remark original-remark--cell">{{ row.remark || '暂无内部备注' }}</div></td>
+              <td v-if="appending" class="px-3 py-2">
+                <template v-if="resultById.get(row.id)">
+                  <strong>{{ statusLabels[resultById.get(row.id)!.status] }}</strong>
+                  <p class="mt-1 break-words">{{ resultById.get(row.id)?.message }}</p>
+                </template>
+                <div v-else class="original-remark original-remark--cell">{{ appendPreview(row) || '—' }}</div>
+              </td>
               <td class="px-3 py-2"><NButton size="tiny" quaternary circle type="primary" :title="`复制 ${row.shipmentNo} 备注`" :aria-label="`复制 ${row.shipmentNo} 备注`" :disabled="!row.remark" @click="copyRemark(row.remark, `${row.shipmentNo} 备注`)"><template #icon><Copy :size="14" /></template></NButton></td>
             </tr>
           </tbody>
@@ -119,34 +175,33 @@ async function copyRemark(value: string | null | undefined, label = '备注') {
     </template>
 
     <div class="mb-2 mt-4 flex items-center justify-between">
-      <label class="text-sm font-medium">修改后</label>
+      <label class="text-sm font-medium">{{ appending ? '追加内容' : '修改后' }}</label>
       <NButton size="tiny" quaternary circle type="primary" title="复制修改后备注" aria-label="复制修改后备注" :disabled="!remark" @click="copyRemark(remark, '修改后备注')"><template #icon><Copy :size="14" /></template></NButton>
     </div>
     <NInput
       v-model:value="remark"
       type="textarea"
-      :disabled="busy"
+      :disabled="busy || submissionUncertain || (appendResults !== null && !failedIds.length)"
       :maxlength="5000"
       show-count
       :autosize="{ minRows: 4, maxRows: 10 }"
-      placeholder="填写新的内部备注；留空并确认表示清空备注"
+      :placeholder="appending ? '输入要另起一行追加的内容' : '填写新的内部备注（留空保存将清空原备注）'"
     />
-    <p class="mt-2 text-xs text-amber-600">DPS 更新方式为覆盖，不会追加到原备注；远端成功后才更新本地显示。</p>
+    <p v-if="appending && !appendResults" class="mt-2 text-xs text-[var(--color-muted)]">预览基于列表中的备注，提交时以 DPS 最新备注为准。</p>
+    <p v-else-if="!appending" class="mt-2 text-xs text-amber-600">保存会覆盖原备注，留空保存会清空原备注。</p>
+    <NAlert v-if="submissionUncertain" type="warning" class="mt-3">未收到完整提交结果，请先到任务中心或 DPS 核对。</NAlert>
 
     <div class="mt-5 flex justify-end gap-2">
-      <NButton :disabled="busy" @click="close">取消</NButton>
-      <NPopconfirm @positive-click="submit">
-        <template #trigger>
-          <NButton
-            type="primary"
-            :loading="busy"
-            :disabled="busy || !shipments.length || shipments.length > 200 || !!missingWaybill.length || unchanged"
-          >
-            确认覆盖
-          </NButton>
-        </template>
-        将覆盖 {{ shipments.length }} 票现有内部备注，确定继续？
-      </NPopconfirm>
+      <NButton :disabled="busy" @click="close">{{ appendResults || submissionUncertain ? '关闭' : '取消' }}</NButton>
+      <NButton
+        v-if="!appendResults || failedIds.length"
+        type="primary"
+        :loading="busy"
+        :disabled="!canSubmit"
+        @click="submit(appendResults !== null)"
+      >
+        {{ appending ? appendResults ? `重试失败的 ${failedIds.length} 票` : `追加到 ${shipments.length} 票` : '保存' }}
+      </NButton>
     </div>
   </NModal>
 </template>

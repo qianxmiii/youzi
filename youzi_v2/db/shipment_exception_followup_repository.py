@@ -8,6 +8,7 @@ from typing import Any
 
 from .connection import Database
 from .datetime_util import now_str
+from .internal_tracking_logs_table import LATEST_INTERNAL_LOG_JOIN, LATEST_INTERNAL_LOG_TIME
 from .shipment_sla import sql_sla_delivered
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 from .shipment_exception_followup_table import TABLE_NAME
@@ -65,9 +66,10 @@ class ShipmentExceptionFollowupRepository:
             rows = self._conn.execute(
                 f"""
                 SELECT s.id, s.shipment_no, s.exception_code, s.exception_opened_time,
-                       s.customer, s.atd, s.latest_tracking_time,
+                       s.customer, s.atd, {LATEST_INTERNAL_LOG_TIME} AS latest_tracking_time,
                        COALESCE(ec.name_zh, s.exception_code) AS exception_name_zh
                 FROM {SHIPMENTS_TABLE} s
+                {LATEST_INTERNAL_LOG_JOIN}
                 LEFT JOIN {EXCEPTION_CODES_TABLE} ec ON ec.code = s.exception_code
                 WHERE s.exception_code IS NOT NULL AND TRIM(s.exception_code) != ''
                 ORDER BY s.shipment_no

@@ -44,7 +44,6 @@ import type { Shipment } from '@/types/shipment'
 import { formatAbsoluteDateTime, formatRelativeTime } from '@/utils/formatDateTime'
 import { buildChannelSelectOptions } from '@/utils/channelFilterOptions'
 import { ICON_STROKE } from '@/constants/icons'
-import { hasEffectiveInternalTracking } from '@/utils/internalTracking'
 import { notifyTrackingSyncResult } from '@/utils/trackingSyncNotify'
 import { usePendingShipmentSlaAlertCount } from '@/composables/usePendingShipmentSlaAlertCount'
 import {
@@ -594,20 +593,18 @@ function handleTrackingDrawerShipmentUpdated(row: Shipment) {
   if (idx >= 0) {
     items.value[idx] = {
       ...items.value[idx],
-      latestTrackingTime: row.latestTrackingTime,
-      latestTrackingDesc: row.latestTrackingDesc,
       deliveredTime: row.deliveredTime,
       exceptionCode: row.exceptionCode,
       exceptionDurationLabel: row.exceptionDurationLabel,
     }
   }
+  if (attentionTab.value === 'transport') void load()
 }
 
 function renderTrackingCell(row: ShipmentSlaAlert) {
-  const has = hasEffectiveInternalTracking(row)
   const time = formatTrackingTime(row.latestTrackingTime)
   const desc = (row.latestTrackingDesc || '').trim()
-  const block = has
+  const block = row.latestTrackingTime?.trim() || desc
     ? h('div', { class: 'min-w-0 flex-1' }, [
         h('div', { class: 'sla-tracking-time text-xs tabular-nums leading-tight' }, time),
         h(

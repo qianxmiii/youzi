@@ -7,6 +7,20 @@ from __future__ import annotations
 import sqlite3
 
 TABLE_NAME = "internal_tracking_logs"
+
+# 异常跟踪按轨迹记录时间判断停更，包含通用摘要过滤的入库文案。
+# 使用 shipment_no / tracking_time 索引逐票定位最新一条。
+LATEST_INTERNAL_LOG_JOIN = f"""
+    LEFT JOIN {TABLE_NAME} latest_internal ON latest_internal.rowid = (
+        SELECT log.rowid
+        FROM {TABLE_NAME} log
+        WHERE log.shipment_no = s.shipment_no AND log.tracking_time <> ''
+        ORDER BY log.tracking_time DESC, log.rowid DESC
+        LIMIT 1
+    )
+"""
+LATEST_INTERNAL_LOG_TIME = "COALESCE(latest_internal.tracking_time, s.latest_tracking_time)"
+LATEST_INTERNAL_LOG_DESC = "COALESCE(latest_internal.tracking_desc, s.latest_tracking_desc)"
 LEGACY_TABLE = "tracking_logs"
 
 _CREATE_SQL = f"""

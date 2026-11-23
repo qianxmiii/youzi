@@ -32,6 +32,7 @@ from .shipment_sla import (
     sql_sla_not_delivered,
 )
 from .exception_duration import duration_seconds, format_duration
+from .internal_tracking_logs_table import LATEST_INTERNAL_LOG_DESC, LATEST_INTERNAL_LOG_JOIN, LATEST_INTERNAL_LOG_TIME
 from .shipment_sla_alerts_table import TABLE_NAME
 from .shipment_sla_alert_followups_table import TABLE_NAME as FOLLOWUPS_TABLE
 from .channel_sla_rules_table import TABLE_NAME as RULES_TABLE
@@ -355,7 +356,11 @@ def _alert_to_api(
     if "latest_tracking_time" in row.keys():
         latest_tracking_time = (row["latest_tracking_time"] or "").strip()
     if is_delivered({"route_status": route_status}):
-        end_time = delivered_time or latest_tracking_time or None
+        summary_time = (
+            (row["summary_tracking_time"] or "").strip()
+            if "summary_tracking_time" in row.keys() else latest_tracking_time
+        )
+        end_time = delivered_time or summary_time or None
         out["daysInTransit"] = compute_days_in_transit(
             transit_start,
             delivered_time=end_time,
@@ -449,16 +454,19 @@ class ShipmentSlaAlertsRepository:
         with self._database.lock:
             rows = self._conn.execute(
                 f"""
-                SELECT id, shipment_no, channel_code, carrier_code, customer,
+                SELECT s.id, s.shipment_no, channel_code, carrier_code, customer,
                        destination_port_code, atd, etd, ata, warehouse_entry_time,
                        expected_delivery_time, delivered_time, route_status,
                        route_warehouse_in_time, route_arrived_pod_time,
                        route_dest_transit_warehouse_time,
-                       status_code, exception_code, latest_tracking_desc, latest_tracking_time
-                FROM {SHIPMENTS_TABLE}
+                       status_code, exception_code,
+                       {LATEST_INTERNAL_LOG_DESC} AS latest_tracking_desc,
+                       {LATEST_INTERNAL_LOG_TIME} AS latest_tracking_time
+                FROM {SHIPMENTS_TABLE} s
+                {LATEST_INTERNAL_LOG_JOIN}
                 WHERE {sql_sla_not_delivered("route_status")}
                   AND {sla_excluded_channels_sql("channel_code")}
-                ORDER BY shipment_no
+                ORDER BY s.shipment_no
                 """,
                 sla_excluded_channels_params(),
             ).fetchall()
@@ -881,8 +889,9 @@ class ShipmentSlaAlertsRepository:
                        s.expected_delivery_time,
                        s.delivered_time, s.route_status, s.status_code, s.exception_code,
                        s.exception_opened_time,
-                       s.latest_tracking_desc,
-                       s.latest_tracking_time, s.carrier_code AS ship_carrier_code,
+                       {LATEST_INTERNAL_LOG_DESC} AS latest_tracking_desc,
+                       {LATEST_INTERNAL_LOG_TIME} AS latest_tracking_time,
+                       s.latest_tracking_time AS summary_tracking_time, s.carrier_code AS ship_carrier_code,
                        cc.name_zh AS channel_name_zh,
                        COALESCE(NULLIF(TRIM(crc.name_zh), ''), NULLIF(TRIM(crc_by_id.name_zh), ''))
                            AS carrier_name_zh,
@@ -893,6 +902,7 @@ class ShipmentSlaAlertsRepository:
                        {_FOLLOW_UP_STATS_SQL}
                 FROM {TABLE_NAME} a
                 INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
+                {LATEST_INTERNAL_LOG_JOIN}
                 LEFT JOIN channel_codes cc ON cc.code = a.channel_code
                 LEFT JOIN {CARRIER_CODES_TABLE} crc ON crc.code = s.carrier_code
                 LEFT JOIN {CARRIER_CODES_TABLE} crc_by_id ON crc.code IS NULL
@@ -1146,8 +1156,9 @@ class ShipmentSlaAlertsRepository:
                        s.expected_delivery_time,
                        s.delivered_time, s.route_status, s.status_code, s.exception_code,
                        s.exception_opened_time,
-                       s.latest_tracking_desc,
-                       s.latest_tracking_time, s.carrier_code AS ship_carrier_code,
+                       {LATEST_INTERNAL_LOG_DESC} AS latest_tracking_desc,
+                       {LATEST_INTERNAL_LOG_TIME} AS latest_tracking_time,
+                       s.latest_tracking_time AS summary_tracking_time, s.carrier_code AS ship_carrier_code,
                        cc.name_zh AS channel_name_zh,
                        COALESCE(ec.name_zh, s.exception_code) AS exception_name_zh,
                        last_closed_exc.opened_time AS last_exc_opened_time,
@@ -1156,6 +1167,7 @@ class ShipmentSlaAlertsRepository:
                        {_FOLLOW_UP_STATS_SQL}
                 FROM {TABLE_NAME} a
                 INNER JOIN {SHIPMENTS_TABLE} s ON s.id = a.shipment_id
+                {LATEST_INTERNAL_LOG_JOIN}
                 LEFT JOIN channel_codes cc ON cc.code = a.channel_code
                 LEFT JOIN {EXCEPTION_CODES_TABLE} ec ON ec.code = s.exception_code
                 {_LAST_CLOSED_EXCEPTION_JOIN}

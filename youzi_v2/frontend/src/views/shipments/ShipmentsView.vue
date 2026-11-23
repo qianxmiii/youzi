@@ -678,12 +678,23 @@ function renderTrackingSummaryCell(
   return clickable
 }
 
+const lastOpenedTrackingShipmentId = ref<string | null>(null)
+
+function markTrackingOpened(shipmentId: string) {
+  lastOpenedTrackingShipmentId.value = shipmentId
+}
+
+function trackingRowClass(row: Shipment) {
+  return row.id === lastOpenedTrackingShipmentId.value ? 'shipment-row--last-tracking' : ''
+}
+
 function openLastMileTrackUrl(row: Shipment) {
   const info = resolveLastMileTracking(row)
   if (!info?.url) {
     message.warning('暂未识别承运商官网，请手动查询')
     return
   }
+  markTrackingOpened(row.id)
   window.open(info.url, '_blank', 'noopener,noreferrer')
 }
 
@@ -815,6 +826,9 @@ function renderShipmentNo(row: Shipment) {
     sn || '—',
   )
   return h('span', { class: 'shipment-no-cell-row' }, [
+    row.id === lastOpenedTrackingShipmentId.value
+      ? h('span', { class: 'shipment-last-tracking-dot', role: 'img', 'aria-label': '刚打开过官网轨迹', title: '刚打开过官网轨迹' })
+      : null,
     noCell,
     renderLastMileBadge(row),
     renderExceptionBadge(row),
@@ -2979,6 +2993,12 @@ const shipmentMaintenanceOptions = computed<DropdownOption[]>(() => [
     },
   ] : []),
   {
+    label: '内部备注',
+    key: 'remark',
+    icon: () => h(MessageSquareText, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
+    disabled: !selectedRows.value.length || selectedRows.value.length > 200,
+  },
+  {
     label: '新增路由',
     key: 'route',
     icon: () => h(Signpost, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
@@ -2992,12 +3012,6 @@ function handleShipmentMaintenanceSelect(key: string | number) {
   else if (key === 'route') openRouteAdd(selectedRows.value)
 }
 
-  {
-    label: '内部备注',
-    key: 'remark',
-    icon: () => h(MessageSquareText, { size: 16, strokeWidth: ICON_STROKE, 'aria-hidden': 'true' }),
-    disabled: !selectedRows.value.length || selectedRows.value.length > 200,
-  },
 function promptBatchDelete() {
   const n = selectedCount.value
   if (!n) {
@@ -3885,6 +3899,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       <NDataTable
         v-model:checked-row-keys="checkedRowKeys"
         :row-key="rowKey"
+        :row-class-name="trackingRowClass"
         :columns="columns"
         :data="items"
         :loading="loading"
@@ -4117,6 +4132,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :exception-label-by-code="exceptionLabelByCode"
       :route-status-label-by-code="routeStatusLabelByCode"
       @shipment-updated="handleTrackingDrawerShipmentUpdated"
+      @tracking-link-opened="markTrackingOpened"
     />
 
     <ShipmentAdvancedFilterDrawer
@@ -4294,6 +4310,19 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
 .shipments-data-table :deep(.shipment-td-no) {
   padding-right: 10px !important;
   overflow: hidden;
+}
+
+.shipments-data-table :deep(.n-data-table-tbody .n-data-table-tr.shipment-row--last-tracking > .n-data-table-td),
+.shipments-data-table :deep(.n-data-table-tbody .n-data-table-tr.shipment-row--last-tracking:hover > .n-data-table-td) {
+  background-color: color-mix(in srgb, var(--color-accent-text) 12%, var(--color-panel)) !important;
+}
+
+.shipments-data-table :deep(.shipment-last-tracking-dot) {
+  width: 0.375rem;
+  height: 0.375rem;
+  flex: none;
+  border-radius: 50%;
+  background: var(--color-accent-text);
 }
 
 .shipments-data-table :deep(.shipment-no-cell-row) {

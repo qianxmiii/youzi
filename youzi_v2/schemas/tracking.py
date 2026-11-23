@@ -10,6 +10,7 @@ class TrackingSyncRequest(BaseModel):
         default_factory=list,
         validation_alias=AliasChoices("shipmentNos", "shipment_nos"),
     )
+    after_route_add: bool = Field(default=False, validation_alias=AliasChoices("afterRouteAdd", "after_route_add"))
 
 
 class TrackingLogRecord(BaseModel):

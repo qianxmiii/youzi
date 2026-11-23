@@ -67,7 +67,10 @@ def sync_all_tracking(
     jobs_repo: TrackingSyncJobsRepository | None = None,
     trigger: str = "manual",
     log: LogFn | None = None,
+    after_route_add: bool = False,
 ) -> dict[str, Any]:
+    if after_route_add and not any(no.strip() for no in shipment_nos or []):
+        raise ValueError("新增路由后的轨迹更新必须指定运单号")
     log_lines, out_log = make_sync_logger(log)
 
     if trigger == "scheduled" and is_internal_full_batch(shipment_nos):
@@ -92,6 +95,7 @@ def sync_all_tracking(
             trigger=trigger,
             log_lines=log_lines,
             out_log=out_log,
+            after_route_add=after_route_add,
         )
     except Exception as exc:
         if jobs_repo is not None and job_id:
@@ -118,12 +122,14 @@ def _sync_all_tracking_body(
     trigger: str,
     log_lines: list[str],
     out_log: LogFn,
+    after_route_add: bool,
 ) -> dict[str, Any]:
     config = load_logistics_config(config_path)
     base_url = config["base_url"]
     batch_size = BATCH_SIZE
 
     manual_scope = bool(shipment_nos)
+    replace_logs = manual_scope and not after_route_add
     requested_nos = (
         len([s for s in shipment_nos if s and s.strip()]) if manual_scope else 0
     )
@@ -131,6 +137,7 @@ def _sync_all_tracking_body(
         lambda ids: shipments_repo.list_for_tracking_sync(
             ids if ids is not None else shipment_nos,
             include_delivered=manual_scope or ids is not None,
+            **({"include_preport": True} if after_route_add else {}),
         ), lambda row: row['tracking_number'],
     )
     total = len(tracking_list)
@@ -175,7 +182,7 @@ def _sync_all_tracking_body(
 
     out_log(
         "[轨迹同步] 开始全量覆盖写入（以接口为准）…"
-        if manual_scope
+        if replace_logs
         else "[轨迹同步] 开始增量写入…"
     )
 
@@ -202,7 +209,9 @@ def _sync_all_tracking_body(
         logs = logs_from_api_item(item)
         if not logs:
             empty += 1
-            if manual_scope:
+            if after_route_add:
+                continue
+            if replace_logs:
                 tracking_repo.replace_for_shipment(sn, [])
                 shipments_repo.update_internal_tracking_summary(
                     sn,
@@ -229,7 +238,7 @@ def _sync_all_tracking_body(
                 shipments_repo.update_internal_tracking_summary(sn, "", "", log_count=0)
             continue
 
-        if manual_scope:
+        if replace_logs:
             written = tracking_repo.replace_for_shipment(sn, logs)
             log_count += written
             latest_time, latest_desc = latest_from_logs(logs)
@@ -255,6 +264,9 @@ def _sync_all_tracking_body(
         latest_time, latest_desc = latest_from_logs(logs)
         stored_time = row.get("latest_tracking_time") or ""
         stored_desc = row.get("latest_tracking_desc") or ""
+        if after_route_add and stored_time > latest_time:
+            latest_time, latest_desc = stored_time, stored_desc
+            api_status = None
         summary_same = latest_time == stored_time and latest_desc == stored_desc
         status_same = not api_status or api_status == stored_status
         if inserted == 0 and summary_same and status_same:

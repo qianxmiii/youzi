@@ -44,17 +44,27 @@ const total = ref(0)
 const copiedLogId = ref<string | null>(null)
 
 const isDrawer = computed(() => props.mode === 'drawer')
+let loadRevision = 0
+let loadedScope = ''
 
 async function load() {
+  const revision = ++loadRevision
+  const scope = `${props.shipmentId}:${activeTab.value}`
+  if (scope !== loadedScope) {
+    logs.value = []
+    total.value = 0
+  }
   loading.value = true
   try {
     const limit = isDrawer.value ? 200 : 3
     if (activeTab.value === 'internal') {
       const res = await getShipmentTrackingLogs(props.shipmentId, { limit, offset: 0 })
+      if (revision !== loadRevision) return
       logs.value = res.items
       total.value = res.total
     } else {
       const res = await getShipmentCarrierTrackingLogs(props.shipmentId, { limit, offset: 0 })
+      if (revision !== loadRevision) return
       logs.value = (res.items as CarrierTrackingLog[]).map((item) => ({
         id: item.id,
         trackingTime: item.trackingTime,
@@ -62,8 +72,9 @@ async function load() {
       }))
       total.value = res.total
     }
+    loadedScope = scope
   } finally {
-    loading.value = false
+    if (revision === loadRevision) loading.value = false
   }
 }
 
@@ -71,10 +82,18 @@ function resetForShipment() {
   activeTab.value = props.initialTab
 }
 
-function selectTab(tab: 'internal' | 'carrier') {
+async function selectTab(tab: 'internal' | 'carrier') {
   if (activeTab.value === tab) return
   activeTab.value = tab
+  await load()
 }
+
+async function reloadInternalTracking() {
+  activeTab.value = 'internal'
+  await load()
+}
+
+defineExpose({ reloadInternalTracking })
 
 onMounted(() => {
   resetForShipment()
@@ -88,7 +107,6 @@ watch(() => props.initialTab, (tab) => {
   activeTab.value = tab
   load()
 })
-watch(activeTab, load)
 
 async function copyLog(log: LogRow) {
   try {
@@ -122,8 +140,7 @@ async function handleSyncInternal() {
   try {
     const res = await syncTracking([sn])
     notifyTrackingSyncResult(message, res, '内部轨迹')
-    activeTab.value = 'internal'
-    await load()
+    await reloadInternalTracking()
     await refreshShipmentAfterSync()
   } catch (e) {
     message.error(e instanceof Error ? e.message : '更新内部轨迹失败')
@@ -176,7 +193,8 @@ async function handleSyncCarrier() {
       </button>
     </div>
 
-    <div class="tracking-sync-actions mb-4 flex gap-2">
+    <div class="tracking-sync-actions mb-4 flex flex-wrap gap-2">
+      <slot name="tracking-actions" :syncing="syncingInternal || syncingCarrier" />
       <NButton
         size="small"
         class="flex-1"
@@ -238,7 +256,15 @@ async function handleSyncCarrier() {
                 aria-hidden="true"
               />
             </button>
-            <div class="timeline-time">{{ log.trackingTime }}</div>
+            <div class="flex flex-wrap items-center gap-x-2">
+              <div class="timeline-time">{{ log.trackingTime }}</div>
+              <slot
+                v-if="activeTab === 'carrier' && !loading"
+                name="carrier-log-action"
+                :log="log"
+                :syncing="syncingInternal || syncingCarrier"
+              />
+            </div>
             <div
               class="timeline-content"
               :class="{ 'timeline-content--emphasis': index === 0 }"

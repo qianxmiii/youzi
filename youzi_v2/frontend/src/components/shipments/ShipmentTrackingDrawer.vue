@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ExternalLink, RefreshCw } from 'lucide-vue-next'
+import { ExternalLink, RefreshCw, Signpost } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
-import { NDrawer, NDrawerContent, useMessage } from 'naive-ui'
+import { NButton, NDrawer, NDrawerContent, useMessage } from 'naive-ui'
 import { computed, ref } from 'vue'
 import { getShipment, syncShipmentsRouteStatusFromDps } from '@/api/shipments'
 import ShipmentExceptionHistory from '@/components/shipments/ShipmentExceptionHistory.vue'
+import ShipmentRouteAddModal from '@/components/shipments/ShipmentRouteAddModal.vue'
 import ShipmentTrackingPanel from '@/components/shipments/ShipmentTrackingPanel.vue'
 import ShipmentTrackingTimeReview from '@/components/shipments/ShipmentTrackingTimeReview.vue'
 import VipStarBadge from '@/components/common/VipStarBadge.vue'
@@ -18,6 +19,7 @@ import {
   shipmentStatusLabel,
 } from '@/constants/shipmentWorkspace'
 import type { Shipment } from '@/types/shipment'
+import type { CarrierTrackingLog } from '@/types/tracking'
 import { resolveLastMileTracking } from '@/utils/lastMileTracking'
 
 const props = defineProps<{
@@ -32,10 +34,15 @@ const props = defineProps<{
 const emit = defineEmits<{
   'update:show': [value: boolean]
   'shipment-updated': [shipment: Shipment]
+  'tracking-link-opened': [shipmentId: string]
 }>()
 
 const message = useMessage()
 const syncingRouteStatus = ref(false)
+const trackingPanel = ref<InstanceType<typeof ShipmentTrackingPanel> | null>(null)
+const routeAddShow = ref(false)
+const routeAddShipments = ref<Shipment[]>([])
+const routeAddSource = ref<Pick<CarrierTrackingLog, 'trackingTime' | 'trackingDesc'> | null>(null)
 
 const showModel = computed({
   get: () => props.show,
@@ -96,7 +103,8 @@ const headerStatusTitle = computed(() => {
 
 function openTrackUrl() {
   const url = transferNumber.value?.url
-  if (!url) return
+  if (!url || !props.shipment) return
+  emit('tracking-link-opened', props.shipment.id)
   window.open(url, '_blank', 'noopener,noreferrer')
 }
 
@@ -140,6 +148,27 @@ async function syncRouteStatus() {
     syncingRouteStatus.value = false
   }
 }
+
+function openRouteAdd(source: Pick<CarrierTrackingLog, 'trackingTime' | 'trackingDesc'> | null = null) {
+  if (!props.shipment?.waybillId?.trim()) return
+  routeAddShipments.value = [{ ...props.shipment }]
+  routeAddSource.value = source
+  routeAddShow.value = true
+}
+
+async function refreshAfterRouteAdd() {
+  const shipmentId = routeAddShipments.value[0]?.id
+  if (!shipmentId || !props.show || props.shipment?.id !== shipmentId) return
+  const [shipmentResult, trackingResult] = await Promise.allSettled([
+    getShipment(shipmentId),
+    trackingPanel.value?.reloadInternalTracking(),
+  ])
+  if (!props.show || props.shipment?.id !== shipmentId) return
+  if (shipmentResult.status === 'fulfilled') emit('shipment-updated', shipmentResult.value)
+  if (shipmentResult.status === 'rejected' || trackingResult.status === 'rejected') {
+    message.warning('轨迹抽屉刷新失败，可在新增路由弹窗重新回读')
+  }
+}
 </script>
 
 <template>
@@ -148,6 +177,8 @@ async function syncRouteStatus() {
     :width="520"
     placement="right"
     :auto-focus="false"
+    :mask-closable="!routeAddShow"
+    :close-on-esc="!routeAddShow"
     class="shipment-tracking-drawer"
   >
     <NDrawerContent closable :native-scrollbar="false" class="shipment-tracking-drawer-content">
@@ -255,17 +286,50 @@ async function syncRouteStatus() {
             @updated="(row) => emit('shipment-updated', row)"
           />
           <ShipmentTrackingPanel
+            ref="trackingPanel"
             :key="shipment.id + '-' + (initialTab || 'internal')"
             :shipment-id="shipment.id"
             :shipment="shipment"
             mode="drawer"
             :initial-tab="initialTab || 'internal'"
             @shipment-updated="(row) => emit('shipment-updated', row)"
-          />
+          >
+            <template #tracking-actions="{ syncing }">
+              <NButton
+                secondary
+                size="small"
+                :disabled="syncing || syncingRouteStatus || !shipment.waybillId?.trim()"
+                :title="shipment.waybillId?.trim() ? '给当前运单新增 DPS 路由' : '无 DPS 运单 ID，请先更新运单'"
+                @click="openRouteAdd()"
+              >
+                <template #icon><Signpost :size="16" :stroke-width="ICON_STROKE" aria-hidden="true" /></template>
+                新增路由
+              </NButton>
+            </template>
+            <template #carrier-log-action="{ log, syncing }">
+              <NButton
+                v-if="shipment.waybillId?.trim()"
+                size="tiny"
+                secondary
+                :disabled="syncing || syncingRouteStatus"
+                :aria-label="`用 ${log.trackingTime || '该条'} 的承运商轨迹新增路由`"
+                @click="openRouteAdd(log)"
+              >
+                用此条新增
+              </NButton>
+            </template>
+          </ShipmentTrackingPanel>
         </section>
       </div>
     </NDrawerContent>
   </NDrawer>
+  <ShipmentRouteAddModal
+    :show="routeAddShow"
+    :shipments="routeAddShipments"
+    :carrier-source="routeAddSource"
+    @close="routeAddShow = false"
+    @updated="refreshAfterRouteAdd"
+  />
 </template>
 
 <style scoped>

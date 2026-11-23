@@ -50,6 +50,7 @@ from ..tracking_sync_eligibility import (
 from .tracking_freshness import (
     carrier_ahead_of_internal_sql,
     carrier_freshness_sql,
+    carrier_no_tracking_eligible_sql,
     fcl_only_filter_sql,
     freshness_stats_sql,
     internal_freshness_sql,
@@ -1447,10 +1448,11 @@ class ShipmentsRepository:
         shipment_nos: list[str] | None = None,
         *,
         include_delivered: bool = False,
-    ) -> list[dict[str, str]]:
+    ) -> list[dict[str, Any]]:
         """承运商轨迹：全库/批处理仅 IN_TRANSIT；指定单号时可含已签收。"""
         allow_delivered = bool(shipment_nos) and include_delivered
         status_sql = carrier_tracking_sync_eligible_sql(include_delivered=allow_delivered)
+        carrier_eligible_sql, carrier_eligible_params = carrier_no_tracking_eligible_sql()
         with self._database.lock:
             if shipment_nos:
                 cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))
@@ -1460,25 +1462,28 @@ class ShipmentsRepository:
                 rows = self._conn.execute(
                     f"""
                     SELECT shipment_no, customer, carrier_code, supplier_name, carrier_id,
-                           tracking_number, ctns, latest_carrier_time, latest_carrier_desc
-                    FROM {TABLE_NAME}
+                           tracking_number, ctns, latest_carrier_time, latest_carrier_desc,
+                           NOT ({carrier_eligible_sql}) AS is_fcl_carrier
+                    FROM {TABLE_NAME} AS s
                     WHERE TRIM(shipment_no) != ''
                       AND {status_sql}
                       AND shipment_no IN ({placeholders})
                     ORDER BY shipment_no
                     """,
-                    cleaned,
+                    [*carrier_eligible_params, *cleaned],
                 ).fetchall()
             else:
                 rows = self._conn.execute(
                     f"""
                     SELECT shipment_no, customer, carrier_code, supplier_name, carrier_id,
-                           tracking_number, ctns, latest_carrier_time, latest_carrier_desc
-                    FROM {TABLE_NAME}
+                           tracking_number, ctns, latest_carrier_time, latest_carrier_desc,
+                           NOT ({carrier_eligible_sql}) AS is_fcl_carrier
+                    FROM {TABLE_NAME} AS s
                     WHERE TRIM(shipment_no) != ''
                       AND {status_sql}
                     ORDER BY shipment_no
-                    """
+                    """,
+                    carrier_eligible_params,
                 ).fetchall()
         return [
             {
@@ -1491,6 +1496,7 @@ class ShipmentsRepository:
                 "ctns": r["ctns"],
                 "latest_carrier_time": r["latest_carrier_time"] or "",
                 "latest_carrier_desc": r["latest_carrier_desc"] or "",
+                "is_fcl_carrier": bool(r["is_fcl_carrier"]),
             }
             for r in rows
         ]
@@ -1607,10 +1613,14 @@ class ShipmentsRepository:
         shipment_nos: list[str] | None = None,
         *,
         include_delivered: bool = False,
+        include_preport: bool = False,
     ) -> list[dict[str, str]]:
         """内部轨迹：全库/批处理不含已签收；指定单号时可含已签收。"""
         allow_delivered = bool(shipment_nos) and include_delivered
-        status_sql = internal_tracking_sync_eligible_sql(include_delivered=allow_delivered)
+        status_sql = internal_tracking_sync_eligible_sql(
+            include_delivered=allow_delivered,
+            include_preport=bool(shipment_nos) and include_preport,
+        )
         with self._database.lock:
             if shipment_nos:
                 cleaned = list(dict.fromkeys(s.strip() for s in shipment_nos if s and s.strip()))

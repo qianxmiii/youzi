@@ -10,6 +10,7 @@ from ..db.carrier_tracking_logs_repository import CarrierTrackingLogsRepository
 from ..db.code_tables_repository import CodeTablesRepository
 from ..db.shipment_tracking_numbers_repository import ShipmentTrackingNumbersRepository
 from ..db.shipments_repository import ShipmentsRepository
+from ..db.tracking_freshness import FCL_CARRIER_NAME_ZH
 from ..db.tracking_sync_jobs_repository import TrackingSyncJobsRepository
 from .carrier_batch_schedule import (
     is_carrier_full_batch,
@@ -108,10 +109,16 @@ def sync_carrier_tracking(
             )
         )
 
-    by_vendor: dict[str, list[dict[str, str]]] = {}
+    by_vendor: dict[str, list[dict[str, Any]]] = {}
     unassigned = 0
+    skipped_fcl = 0
     errors: list[str] = []
     for row in rows:
+        carrier = (row.get("carrier_code") or "").strip() or (row.get("supplier_name") or "").strip()
+        if row.get("is_fcl_carrier") or carrier == FCL_CARRIER_NAME_ZH:
+            for _ in checkpointed_rows((row,), lambda item: item["shipment_no"]):
+                skipped_fcl += 1
+            continue
         chain = resolve_vendor_chain_for_row(
             row,
             vendor_by_name,
@@ -135,7 +142,7 @@ def sync_carrier_tracking(
         )
 
     updated = 0
-    skipped = 0
+    skipped = skipped_fcl
     empty = 0
     not_found = 0
     log_count = 0
@@ -143,7 +150,8 @@ def sync_carrier_tracking(
     vendor_stats: dict[str, dict[str, int]] = {}
 
     out_log(
-        f"[承运商轨迹] 转运中 {total} 单，已匹配 vendor {total - unassigned} 单，未匹配 {unassigned} 单"
+        f"[承运商轨迹] 转运中 {total} 单，已匹配 vendor {total - unassigned - skipped_fcl} 单，未匹配 {unassigned} 单"
+        + (f"，跳过整柜 {skipped_fcl} 单" if skipped_fcl else "")
     )
 
     for vendor_name in sorted(by_vendor.keys()):

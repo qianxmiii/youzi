@@ -9,6 +9,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
+from youzi_v2.db.app_settings_table import ensure_schema
 from youzi_v2.services.shipment_dps_route_status_sync import pick_latest_milestone_from_nodes
 from youzi_v2.services.shipment_route_add import add_routes, route_options, route_presets, save_route_presets
 
@@ -24,6 +25,7 @@ class RouteAddTests(unittest.TestCase):
         self.conn = sqlite3.connect(':memory:')
         self.addCleanup(self.conn.close)
         self.conn.row_factory = sqlite3.Row
+        ensure_schema(self.conn)
         self.conn.execute('CREATE TABLE shipment_route_status_codes(code TEXT, name_zh TEXT, dps_status TEXT, sort_order INT, is_active INT)')
         self.conn.executemany('INSERT INTO shipment_route_status_codes VALUES(?,?,?,?,?)', [
             ('INFO', '信息传递', '100', 0, 0),
@@ -46,22 +48,22 @@ class RouteAddTests(unittest.TestCase):
         active = {'label': '签收', 'status': '601', 'text': 'Delivered'}
         inactive = {'label': '旧节点', 'status': '999', 'text': 'Inactive node'}
         self.config['dps_updateRoute']['presets'] = [inactive]
-        statuses = route_options(self.repo)
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'config.json'
             path.write_text(json.dumps(self.config), encoding='utf-8')
-            self.assertEqual(save_route_presets(path, statuses, [active, inactive]), [active, inactive])
-            self.assertEqual(route_presets(path), [active, inactive])
+            self.assertEqual(route_presets(self.repo, path), [inactive])
+            self.assertEqual(save_route_presets(self.repo, path, [active, inactive]), [active, inactive])
+            self.assertEqual(route_presets(self.repo, path), [active, inactive])
             saved = json.loads(path.read_text(encoding='utf-8'))
-            self.assertEqual(saved['dps_authorization'], self.config['dps_authorization'])
-            self.assertEqual(saved['dps_updateRoute']['url'], self.config['dps_updateRoute']['url'])
+            self.assertEqual(saved, self.config)
             with self.assertRaises(ValueError):
-                save_route_presets(path, statuses, [active, active])
+                save_route_presets(self.repo, path, [active, active])
             with self.assertRaises(ValueError):
-                save_route_presets(path, statuses, [{**inactive, 'text': 'Changed'}])
-            self.assertEqual(route_presets(path), [active, inactive])
-            save_route_presets(path, statuses, [])
-            self.assertEqual(route_presets(path), [])
+                save_route_presets(self.repo, path, [{**inactive, 'text': 'Changed'}])
+            self.assertEqual(route_presets(self.repo, path), [active, inactive])
+            save_route_presets(self.repo, path, [])
+            self.assertEqual(route_presets(self.repo, path), [])
+            self.assertEqual(route_presets(self.repo, path.with_name('missing.json')), [])
 
     def test_payload_defaults_and_explicit_dates(self):
         response = Mock(status_code=200)
@@ -91,10 +93,8 @@ class RouteAddTests(unittest.TestCase):
 
     def test_information_can_be_saved_and_submitted_without_becoming_latest_milestone(self):
         preset = {'label': '信息通知', 'status': '100', 'text': 'Update provided'}
-        with patch('youzi_v2.services.shipment_route_add.update_logistics_config') as update:
-            update.side_effect = lambda _path, apply: apply(self.config)
-            save_route_presets(Path('unused'), route_options(self.repo), [preset])
-        self.assertEqual(self.config['dps_updateRoute']['presets'], [preset])
+        save_route_presets(self.repo, Path('unused'), [preset])
+        self.assertEqual(route_presets(self.repo, Path('unused')), [preset])
 
         response = Mock(status_code=200)
         response.json.return_value = {'code': 200}

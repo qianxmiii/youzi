@@ -467,8 +467,8 @@ export async function importShipmentsExcel(file: File): Promise<ShipmentImportRe
 }
 
 /** 同步内部路由轨迹 */
-async function syncTrackingRequest(shipmentNos?: string[], taskId?: string): Promise<TrackingSyncResult> {
-  const body = shipmentNos?.length ? { shipmentNos } : undefined
+async function syncTrackingRequest(shipmentNos?: string[], taskId?: string, afterRouteAdd = false): Promise<TrackingSyncResult> {
+  const body = afterRouteAdd ? { shipmentNos, afterRouteAdd } : shipmentNos?.length ? { shipmentNos } : undefined
   return api<TrackingSyncResult>('/api/v1/shipments/sync-tracking', {
     method: 'POST',
     headers: taskId ? { 'X-Youzi-Task-Id': taskId } : undefined,
@@ -833,6 +833,10 @@ export async function batchReviewTrackingTimeCandidates(body: {
 export function checkShipmentProductCtns(ids: string[]) { return trackTask('核对件数', (taskId) => checkShipmentProductCtnsRequest(ids, taskId)) }
 
 export function syncTracking(shipmentNos?: string[]) { return trackTask('同步内部轨迹', (taskId) => syncTrackingRequest(shipmentNos, taskId)) }
+
+export function syncTrackingAfterRouteAdd(shipmentNos: string[]) {
+  return trackTask('新增路由 · 同步内部轨迹', taskId => syncTrackingRequest(shipmentNos, taskId, true))
+}
 
 export function syncCarrierTracking(shipmentNos?: string[]) { return trackTask('同步承运商轨迹', (taskId) => syncCarrierTrackingRequest(shipmentNos, taskId)) }
 

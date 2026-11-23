@@ -1,14 +1,18 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
-import { NButton, NDatePicker, NInput, NModal, NPopconfirm, NSelect, useMessage, type InputInst } from 'naive-ui'
-import { Check, ChevronDown } from 'lucide-vue-next'
+import { NButton, NDatePicker, NDropdown, NInput, NModal, NSelect, useMessage, type InputInst } from 'naive-ui'
+import { Check, ChevronDown, Copy } from 'lucide-vue-next'
 import { api } from '@/api/client'
 import type { Shipment } from '@/types/shipment'
-import { syncShipmentsRouteStatusFromDps } from '@/api/shipments'
+import { syncShipmentsRouteStatusFromDps, syncTrackingAfterRouteAdd } from '@/api/shipments'
 import { ICON_STROKE } from '@/constants/icons'
 import { normalizeRouteStatusLocalCode, ROUTE_STATUS_BADGE_TONE } from '@/constants/shipmentRouteStatus'
 
-const props = defineProps<{ show: boolean; shipments: Shipment[] }>()
+const props = defineProps<{
+  show: boolean
+  shipments: Shipment[]
+  carrierSource?: { trackingTime: string; trackingDesc: string } | null
+}>()
 const emit = defineEmits<{ close: []; updated: [] }>()
 const message = useMessage()
 const busy = ref(false)
@@ -23,6 +27,8 @@ const deliveredDate = ref<string | null>(null)
 const appointmentDatePlaceholder = '{预计交仓日期}'
 const deliveredDatePlaceholder = '{完成派送日期}'
 const warehousePlaceholder = '{派送仓库}'
+const descriptionFieldOptions = [appointmentDatePlaceholder, deliveredDatePlaceholder, warehousePlaceholder]
+  .map(key => ({ label: key.slice(1, -1), key }))
 const appointmentDatePattern = /\{预计交仓日期\}|\bN\/N\b/g
 const needsAppointmentDate = computed(() => description.value.search(appointmentDatePattern) !== -1)
 const needsDeliveredDate = computed(() => description.value.includes(deliveredDatePlaceholder))
@@ -171,13 +177,32 @@ function formatTime(value: number | null) {
   const d = new Date(value), pad = (n: number) => String(n).padStart(2, '0')
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
 }
+
+const carrierSourceTime = computed(() => {
+  const raw = props.carrierSource?.trackingTime?.trim().replace('T', ' ') || ''
+  if (!/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}(:\d{2})?$/.test(raw)) return null
+  const time = raw.length === 16 ? `${raw}:00` : raw
+  const timestamp = new Date(time.replace(' ', 'T')).getTime()
+  return Number.isFinite(timestamp) && formatTime(timestamp) === time ? timestamp : null
+})
+
+async function copyCarrierSource(value: string, label: string) {
+  try {
+    await navigator.clipboard.writeText(value)
+    message.success(`已复制${label}`)
+  } catch {
+    message.error(`${label}复制失败`)
+  }
+}
+
 let revision = 0
 watch(() => props.show, async show => {
   const current = ++revision
   if (!show) return
   const now = new Date(), delivery = new Date(now)
   delivery.setDate(delivery.getDate() + 15)
-  nodeTime.value = now.getTime(); deliveryTime.value = delivery.getTime()
+  nodeTime.value = props.carrierSource ? carrierSourceTime.value : now.getTime()
+  deliveryTime.value = delivery.getTime()
   timeSettingsOpen.value = true
   appointmentDate.value = null
   deliveredDate.value = null
@@ -197,8 +222,38 @@ watch(() => props.show, async show => {
   } catch { if (current === revision) error.value = '明细状态加载失败，请关闭后重试' }
   finally { if (current === revision) optionsLoading.value = false }
 })
+const successfulShipmentNos = computed(() => [...new Set((results.value ?? [])
+  .filter(row => row.status === 'success').map(row => row.shipmentNo.trim()).filter(Boolean))])
+
+async function refreshAddedRoutes() {
+  const shipmentNos = successfulShipmentNos.value
+  if (!shipmentNos.length) return
+  const warnings: string[] = []
+  try {
+    const sync = await syncShipmentsRouteStatusFromDps(shipmentNos)
+    if (sync.failed || sync.missingWaybillId || sync.empty) warnings.push('部分明细状态未能回读')
+  } catch { warnings.push('明细状态回读失败') }
+  try {
+    const sync = await syncTrackingAfterRouteAdd(shipmentNos)
+    if (sync.errors.length || sync.notFound || sync.empty || sync.excludedNotInTransit || sync.total < shipmentNos.length) {
+      warnings.push('部分内部轨迹暂未同步')
+    }
+  } catch { warnings.push('内部轨迹同步失败') }
+  error.value = warnings.length ? `节点已新增。${warnings.join('。')}。可稍后重新回读。` : ''
+}
+
+async function refreshAgain() {
+  if (busy.value) return
+  busy.value = true
+  error.value = ''
+  try {
+    await refreshAddedRoutes()
+    emit('updated')
+  } finally { busy.value = false }
+}
+
 async function submit() {
-  if (busy.value || attempted.value || invalid.value) return
+  if (busy.value || attempted.value || optionsLoading.value || invalid.value) return
   attempted.value = true; busy.value = true; error.value = ''
   try {
     const result = await api<{ items: Result[] }>('/api/v1/shipment-routes', {
@@ -208,13 +263,7 @@ async function submit() {
     results.value = result.items
     if (result.items.every(r => r.status === 'success')) message.success('路由新增成功')
     else message.warning('部分运单需要核对，请查看逐票结果')
-    const successful = result.items.filter(r => r.status === 'success').map(r => r.shipmentNo)
-    if (successful.length) {
-      try {
-        const sync = await syncShipmentsRouteStatusFromDps(successful)
-        if (sync.failed) error.value = '新增结果已保留，部分明细状态回读失败，请手动更新明细状态；勿重复新增节点'
-      } catch { error.value = '节点已新增，明细状态回读失败，请手动更新明细状态；勿重复新增节点' }
-    }
+    await refreshAddedRoutes()
     emit('updated')
   } catch (e) {
     error.value = (e as { data?: { detail?: string } })?.data?.detail || '请求未能确认完成，请先核对 DPS 路由，勿重复提交'
@@ -232,9 +281,6 @@ async function submit() {
         <h3 class="text-sm font-semibold">常用节点配置</h3>
         <NButton size="small" :disabled="configSaving || draftPresets.length >= 100" @click="draftPresets.push({ key: ++draftKey, label: '', status: null, text: '' })">添加节点</NButton>
       </div>
-      <p class="mb-3 text-xs text-[var(--color-muted)]">
-        描述可使用 <code>{{ appointmentDatePlaceholder }}</code>、<code>{{ deliveredDatePlaceholder }}</code> 或 <code>{{ warehousePlaceholder }}</code>。
-      </p>
       <div class="max-h-[55vh] space-y-3 overflow-y-auto p-1">
         <p v-if="!draftPresets.length" class="text-sm text-[var(--color-muted)]">暂无常用节点。</p>
         <div v-for="(preset, index) in draftPresets" :key="preset.key" class="rounded border border-[var(--color-border)] p-3">
@@ -244,6 +290,13 @@ async function submit() {
             <NButton size="small" :disabled="configSaving" @click="draftPresets.splice(index, 1)">移除</NButton>
           </div>
           <NInput v-model:value="preset.text" :disabled="configSaving" type="textarea" :maxlength="2000" :autosize="{ minRows: 2, maxRows: 4 }" placeholder="节点描述" :input-props="{ 'aria-label': '节点描述' }" />
+          <NDropdown
+            trigger="click"
+            :options="descriptionFieldOptions.map(option => ({ ...option, disabled: preset.text.length + option.key.length > 2000 }))"
+            @select="key => preset.text += String(key)"
+          >
+            <NButton size="tiny" quaternary class="mt-1.5" :disabled="configSaving">插入字段</NButton>
+          </NDropdown>
         </div>
       </div>
       <p v-if="configError" role="alert" class="mt-3 text-sm text-red-600">{{ configError }}</p>
@@ -253,9 +306,29 @@ async function submit() {
       </div>
     </section>
     <template v-else>
-    <p class="mb-3 text-sm text-[var(--color-muted)]">本次为 {{ shipments.length }} 票新增同一节点，最多 50 票。</p>
-    <div class="mb-4 max-h-24 overflow-auto rounded border border-[var(--color-border)] p-2 text-sm">{{ shipments.map(s => s.shipmentNo).join(', ') }}</div>
+    <div class="mb-3 flex items-start gap-2 text-sm">
+      <span v-if="shipments.length > 1" class="shrink-0 rounded bg-[var(--color-border-subtle)] px-2">{{ shipments.length }} 票</span>
+      <span class="max-h-20 min-w-0 overflow-auto break-words font-medium">{{ shipments.map(s => s.shipmentNo).join('、') }}</span>
+    </div>
+    <p v-if="shipments.length > 50" role="alert" class="mb-3 text-sm text-red-600">单次最多 50 票。</p>
     <p v-if="shipments.some(s => !s.waybillId)" class="mb-3 text-sm text-red-600">部分运单缺少 DPS ID，请先更新运单。</p>
+    <section v-if="carrierSource" aria-label="承运商轨迹原文" class="mb-3 space-y-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-border-subtle)] px-3 py-2 text-sm">
+      <div class="flex flex-wrap items-center justify-between gap-x-2">
+        <h3 class="font-medium">承运商轨迹</h3>
+        <div v-if="carrierSource.trackingTime" class="flex items-center gap-1 text-xs tabular-nums text-[var(--color-muted)]">
+          <span>{{ carrierSource.trackingTime }}</span>
+          <NButton size="tiny" quaternary circle title="复制时间" aria-label="复制时间" @click="copyCarrierSource(carrierSource.trackingTime, '时间')">
+            <template #icon><Copy :size="14" :stroke-width="ICON_STROKE" aria-hidden="true" /></template>
+          </NButton>
+        </div>
+      </div>
+      <div v-if="carrierSource.trackingDesc" class="flex items-start gap-1">
+        <p class="max-h-24 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words">{{ carrierSource.trackingDesc }}</p>
+        <NButton size="tiny" quaternary circle title="复制原文" aria-label="复制原文" @click="copyCarrierSource(carrierSource.trackingDesc, '原文')">
+          <template #icon><Copy :size="14" :stroke-width="ICON_STROKE" aria-hidden="true" /></template>
+        </NButton>
+      </div>
+    </section>
     <fieldset :disabled="busy || attempted" class="space-y-3">
       <div class="flex flex-wrap gap-2">
         <button
@@ -277,8 +350,7 @@ async function submit() {
         <label class="mb-1 block text-sm">节点描述</label>
         <NInput ref="descriptionInput" :value="description" type="textarea" :autosize="{ minRows: 2, maxRows: 5 }" :maxlength="2000" :disabled="busy || attempted" placeholder="输入描述或关键词" :input-props="{ 'aria-label': '节点描述' }" @update:value="updateDescription" />
         <section v-if="descriptionSuggestions.length" aria-label="匹配的常用描述" class="mt-1.5 rounded-lg border border-[var(--color-border)]">
-          <p class="px-3 pt-2 pb-1 text-xs text-[var(--color-muted)]">匹配的常用描述 · {{ descriptionSuggestions.length }}</p>
-          <ul class="max-h-36 overflow-auto px-1 pb-1">
+          <ul class="max-h-36 overflow-auto p-1">
             <li v-for="preset in descriptionSuggestions" :key="`${preset.status}:${preset.text}`">
               <button type="button" class="block w-full rounded px-2 py-1.5 text-left text-sm hover:bg-[var(--color-border-subtle)] focus-visible:outline-2 focus-visible:outline-[var(--color-accent-text)]" @click="selectDescriptionSuggestion(preset)">
                 <span class="block font-medium">{{ preset.label }} <span class="route-preset-code" :style="presetColors(preset.status)">{{ preset.status }}</span></span>
@@ -297,7 +369,6 @@ async function submit() {
           <label class="mb-1 block text-sm">完成派送日期（目的地当地）</label>
           <NDatePicker v-model:formatted-value="deliveredDate" type="date" format="yyyy-MM-dd" value-format="yyyy-MM-dd" clearable :disabled="busy || attempted" placeholder="选择当地完成派送的日期" aria-label="完成派送日期（目的地当地）" class="w-full" />
         </div>
-        <p v-if="shipments.length > 1" class="text-xs text-[var(--color-muted)] sm:col-span-2">本批运单共用所选日期。</p>
       </div>
       <div class="rounded-lg border border-[var(--color-border)]">
         <button type="button" class="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-lg px-3 py-2 text-left text-sm focus-visible:outline-2 focus-visible:outline-[var(--color-accent-text)]" :aria-expanded="timeSettingsOpen" @click="timeSettingsOpen = !timeSettingsOpen">
@@ -311,42 +382,45 @@ async function submit() {
           </span>
         </button>
         <div v-if="timeSettingsOpen" class="grid gap-3 px-3 pb-3 sm:grid-cols-2">
-          <div><label class="mb-1 block text-sm">节点时间</label><NDatePicker v-model:value="nodeTime" type="datetime" :disabled="busy || attempted" aria-label="节点时间" class="w-full" /></div>
-          <div><label class="mb-1 block text-sm">预计派送时间（默认当前日期＋15天）</label><NDatePicker v-model:value="deliveryTime" type="datetime" :disabled="busy || attempted" aria-label="预计派送时间" class="w-full" /></div>
+          <div>
+            <label class="mb-1 block text-sm">节点时间</label>
+            <NDatePicker v-model:value="nodeTime" type="datetime" :status="carrierSource && nodeTime === null ? 'error' : undefined" :disabled="busy || attempted" aria-label="节点时间" class="w-full" />
+            <p v-if="carrierSource && nodeTime === null" role="alert" class="mt-1 text-xs text-red-600">请选择节点时间。</p>
+          </div>
+          <div><label class="mb-1 block text-sm">预计派送时间</label><NDatePicker v-model:value="deliveryTime" type="datetime" :disabled="busy || attempted" aria-label="预计派送时间" class="w-full" /></div>
         </div>
       </div>
     </fieldset>
     <p v-if="error" role="alert" class="mt-3 text-sm text-red-600">{{ error }}</p>
     <div v-if="results" class="mt-4 max-h-52 overflow-auto text-sm" role="status">
-      <p v-for="row in results" :key="row.id" class="mb-1">{{ row.shipmentNo }} · {{ row.status === 'success' ? '成功' : row.status === 'failed' ? '失败' : '待核对' }} · {{ row.message }}</p>
-      <p class="mt-2 text-[var(--color-muted)]">已自动回读成功运单的明细状态；完整轨迹请使用“更新内部轨迹”。本次结果已保留，关闭前请核对。</p>
+      <p v-for="row in results" :key="row.id" class="mb-1">
+        {{ row.shipmentNo }} · {{ row.status === 'success' ? '成功' : row.status === 'failed' ? '失败' : '待核对' }}<template v-if="row.status !== 'success' && row.message"> · {{ row.message }}</template>
+      </p>
+      <p v-if="busy && successfulShipmentNos.length" class="mt-2 text-[var(--color-muted)]">正在回读轨迹…</p>
     </div>
-    <section v-if="!attempted && resolvedDescription" aria-label="提交预览" class="mt-3 space-y-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm">
+    <div v-if="!attempted && needsWarehouse && missingWarehouseShipments.length" role="alert" class="mt-3 text-xs text-red-600">
+      <p>缺少派送仓库</p>
+      <p class="mt-1 max-h-20 overflow-auto break-words">{{ missingWarehouseShipments.map(shipment => shipment.shipmentNo).join('、') }}</p>
+    </div>
+    <section v-if="!attempted && resolvedDescription && !missingDescriptionDate && (!needsWarehouse || warehousePreviews.length)" aria-label="提交预览" class="mt-3 space-y-2 rounded-lg border border-[var(--color-border)] px-3 py-2.5 text-sm">
       <div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <h3 class="text-sm font-semibold">提交预览</h3>
-        <span class="text-xs text-[var(--color-muted)]">{{ selectedStatusLabel || '明细状态未选择' }}</span>
+        <span v-if="selectedStatusLabel" class="text-xs text-[var(--color-muted)]">{{ selectedStatusLabel }}</span>
       </div>
-      <div v-if="needsWarehouse && missingWarehouseShipments.length" role="alert" class="text-xs text-red-600">
-        <p>以下运单缺少派送仓库，请补齐后再提交。</p>
-        <p class="mt-1 max-h-20 overflow-auto break-words">{{ missingWarehouseShipments.map(shipment => shipment.shipmentNo).join('、') }}</p>
-      </div>
-      <p v-if="missingDescriptionDate" class="text-xs text-[var(--color-muted)]">请选择上方日期以生成完整描述。</p>
-      <template v-else-if="needsWarehouse && shipments.length > 1">
-        <div v-if="warehousePreviews.length" class="max-h-40 space-y-1 overflow-y-auto">
+      <template v-if="needsWarehouse && shipments.length > 1">
+        <div class="max-h-40 space-y-1 overflow-y-auto">
           <div v-for="group in warehousePreviews" :key="group.code" class="rounded border border-[var(--color-border)] px-2.5 py-1.5">
             <h4 class="font-medium">{{ group.code }} · {{ group.count }} 票</h4>
             <p class="mt-1.5 whitespace-pre-wrap break-words">{{ group.description }}</p>
           </div>
         </div>
       </template>
-      <p v-else-if="!needsWarehouse || warehousePreviews.length" class="whitespace-pre-wrap break-words">{{ needsWarehouse ? warehousePreviews[0]?.description : resolvedDescription }}</p>
+      <p v-else class="whitespace-pre-wrap break-words">{{ needsWarehouse ? warehousePreviews[0]?.description : resolvedDescription }}</p>
     </section>
     <div class="mt-4 flex justify-end gap-2">
       <NButton :disabled="busy" @click="emit('close')">{{ attempted ? '关闭' : '取消' }}</NButton>
-      <NPopconfirm @positive-click="submit">
-        <template #trigger><NButton type="primary" :loading="busy" :disabled="invalid || optionsLoading || attempted">确认新增</NButton></template>
-        将为 {{ shipments.length }} 票运单向 DPS 新增此节点，确认时间、描述和状态无误？
-      </NPopconfirm>
+      <NButton v-if="successfulShipmentNos.length" :loading="busy" @click="refreshAgain">重新回读</NButton>
+      <NButton v-else type="primary" :loading="busy" :disabled="invalid || optionsLoading || attempted" @click="submit">新增路由</NButton>
     </div>
     </template>
   </NModal>

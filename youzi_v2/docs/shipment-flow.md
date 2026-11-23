@@ -64,6 +64,10 @@ curl -X POST "http://127.0.0.1:3001/api/v1/shipments/sync-tracking" \
 
 承运商配置在根目录 `config/config.json` 的 `vendors` 数组。运单 `carrier_code` 匹配主 vendor；若主 vendor 配置了 **`fallbackVendor`** / **`fallbackVendors`**（如SENLEI → SENLEI2），同步承运商轨迹时主系统查不到轨迹会依次尝试备用系统。
 
+更新承运商轨迹时，承运商为「整柜」的运单计入跳过，无需配置 vendor。
+
+从港前或在途运单列表及其轨迹抽屉打开转单号官网后，列表会标出最近一次打开的运单。再次打开其他运单的官网时，标记随之切换。
+
 **WY（wy-express）**
 
 | 配置项 | 说明 |

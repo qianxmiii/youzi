@@ -82,7 +82,7 @@ curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6
 | GET | `/api/v1/tools/image-link-zip/jobs/{jobId}/download` | 完成后下载 zip |
 | POST | `/api/v1/tools/shipment-file-rename/parse` | 解析运单 Excel，返回重命名映射（运单号/国家/仓库代码或邮编/件数 → `targetStem`；无仓库代码时用邮编）；浏览器递归扫描子文件夹后本地改名 |
 | GET | `/api/v1/shipment-routes/options` | 新增路由可选的明细状态（含 100 信息传递）及常用节点配置，见[新增路由](./shipment-route-add.md) |
-| PUT | `/api/v1/shipment-routes/presets` | 保存本地常用节点配置，最多100项 |
+| PUT | `/api/v1/shipment-routes/presets` | 保存常用节点到数据库，最多100项 |
 | POST | `/api/v1/shipment-routes` | 单票或批量新增DPS节点，最多50票，返回逐票结果；写请求不自动重试 |
 | POST | `/api/v1/tools/product-import` | 上传箱单发票，转换为产品导入模版；form 字段 `invoice` |
 | GET | `/api/v1/tools/product-import/download/{taskId}` | 下载生成的产品导入 .xls |

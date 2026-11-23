@@ -17,18 +17,17 @@ router = APIRouter()
 def shipment_route_add_options():
     from ..services.shipment_route_add import route_options, route_presets
     statuses = route_options(shipments_repo)
-    return {'statuses': statuses, 'presets': route_presets(LOGISTICS_CONFIG_PATH)}
+    return {'statuses': statuses, 'presets': route_presets(shipments_repo, LOGISTICS_CONFIG_PATH)}
 
 
 @router.put('/api/v1/shipment-routes/presets')
 def shipment_route_save_presets(body: ShipmentRoutePresetsIn):
-    from ..services.shipment_route_add import route_options, save_route_presets
+    from ..services.shipment_route_add import save_route_presets
     try:
-        presets = save_route_presets(LOGISTICS_CONFIG_PATH, route_options(shipments_repo),
+        presets = save_route_presets(shipments_repo, LOGISTICS_CONFIG_PATH,
                                      [item.model_dump() for item in body.presets])
-    except (OSError, ValueError) as exc:
-        detail = str(exc) if isinstance(exc, ValueError) else '本地配置无法写入，请检查文件权限'
-        raise HTTPException(status_code=400, detail=detail) from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from None
     return {'presets': presets}
 
 
@@ -510,8 +509,8 @@ def update_shipment_remarks_api(
             shipments_repo,
             LOGISTICS_CONFIG_PATH,
             body.ids,
-            mode=body.mode,
             body.remark,
+            mode=body.mode,
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from None
@@ -613,12 +612,16 @@ def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(Non
     """
     从 config/config.json 的 base_url 拉取内部路由轨迹，
     写入 internal_tracking_logs。全库同步为增量合并；指定 shipmentNos 时以接口全量覆盖本地轨迹（含已签收）。
+    afterRouteAdd 为 true 时，仅对指定运单增量合并，并纳入港前未取消运单。
     """
     shipment_nos: list[str] | None = None
+    after_route_add = bool(body and body.after_route_add)
     if body and body.shipment_nos:
         shipment_nos = [n.strip() for n in body.shipment_nos if n and n.strip()]
         if not shipment_nos:
             raise HTTPException(status_code=400, detail="运单号列表不能为空")
+    if after_route_add and not shipment_nos:
+        raise HTTPException(status_code=400, detail="新增路由后的轨迹更新必须指定运单号")
     try:
         return sync_all_tracking(
             shipments_repo,
@@ -627,6 +630,7 @@ def sync_shipments_internal_tracking(body: TrackingSyncRequest | None = Body(Non
             shipment_nos=shipment_nos,
             jobs_repo=tracking_jobs_repo,
             trigger="manual",
+            after_route_add=after_route_add,
         )
     except FileNotFoundError as exc:
         raise HTTPException(

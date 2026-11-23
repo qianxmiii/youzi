@@ -292,7 +292,7 @@ erDiagram
 | code_tables | 通用码表（国家、港口、状态等），见 `db/code_tables.py`；`carrier_codes.carrier_id` 存 DPS carrierId，反查 `carrier_code` |
 | amz_update_port_rules | 亚马逊推送港口（空运三字 / 海运五字），见 [design/dps-update-amz-design.md](./design/dps-update-amz-design.md) |
 | dict | 字典项，`db/dict_table.py` |
-| app_settings | 应用设置键值 |
+| app_settings | 应用设置键值，含新增路由常用节点 `shipment_route.presets` |
 | quote_history | 报价历史（含提货费 / 派送费 / 超长费 / 超尺寸费 等） |
 | addresses | 派送地址簿 |
 | addresses_warehouse | 仓库地址簿 |

@@ -5,6 +5,7 @@ from __future__ import annotations
 from youzi_v2.db.shipment_order_status import (
     CARRIER_TRACKING_SYNC_STATUSES,
     INTERNAL_TRACKING_SYNC_STATUSES,
+    PREPORT_DPS_REFRESH_STATUSES,
 )
 
 
@@ -18,8 +19,11 @@ def internal_tracking_sync_eligible_sql(
     alias: str = "",
     *,
     include_delivered: bool = False,
+    include_preport: bool = False,
 ) -> str:
     codes = set(INTERNAL_TRACKING_SYNC_STATUSES)
+    if include_preport:
+        codes.update(PREPORT_DPS_REFRESH_STATUSES)
     if include_delivered:
         codes.add("3")
         codes.add("DELIVERED")

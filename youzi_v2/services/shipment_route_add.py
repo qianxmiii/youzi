@@ -1,4 +1,5 @@
 """新增 DPS 路由；不重试写请求，不直接覆盖本地最新明细状态。"""
+import json
 import re
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta
@@ -7,13 +8,16 @@ from threading import Lock
 
 import requests
 
-from .shipment_query_config import load_config_json, resolve_dps_authorization, update_logistics_config
+from ..db.app_settings_table import TABLE_NAME as SETTINGS_TABLE, get_setting, set_setting
+from ..db.datetime_util import now_str
+from .shipment_query_config import load_config_json, resolve_dps_authorization
 
 _lock = Lock()
 _inflight = set()
 _APPOINTMENT_DATE_PLACEHOLDER = re.compile(r"\{预计交仓日期\}|\bN/N\b", re.ASCII)
 _DELIVERED_DATE_PLACEHOLDER = '{完成派送日期}'
 _WAREHOUSE_PLACEHOLDER = '{派送仓库}'
+_PRESETS_KEY = 'shipment_route.presets'
 
 
 def route_options(repo):
@@ -30,7 +34,7 @@ def route_options(repo):
             for row in rows if str(row['dps_status'] or '').strip()]
 
 
-def route_presets(config_path: Path) -> list[dict] | None:
+def _legacy_route_presets(config_path: Path) -> list[dict] | None:
     try:
         config = load_config_json(config_path)
     except (OSError, ValueError):
@@ -51,7 +55,25 @@ def route_presets(config_path: Path) -> list[dict] | None:
     return presets
 
 
-def save_route_presets(config_path: Path, statuses: list[dict], presets: list[dict]) -> list[dict]:
+def route_presets(repo, config_path: Path) -> list[dict] | None:
+    database = repo._database
+    with database.lock:
+        raw = get_setting(database.conn, _PRESETS_KEY)
+        if raw is not None:
+            return json.loads(raw)
+        legacy = _legacy_route_presets(config_path)
+        if legacy is None:
+            return None
+        with database.conn:
+            database.conn.execute(
+                f"INSERT OR IGNORE INTO {SETTINGS_TABLE} (key, value, updated_at) VALUES (?, ?, ?)",
+                (_PRESETS_KEY, json.dumps(legacy, ensure_ascii=False), now_str()),
+            )
+        return json.loads(get_setting(database.conn, _PRESETS_KEY))
+
+
+def save_route_presets(repo, config_path: Path, presets: list[dict]) -> list[dict]:
+    statuses = route_options(repo)
     allowed = {item['value'] for item in statuses}
     cleaned = [{key: item[key].strip() for key in ('label', 'status', 'text')} for item in presets]
     keys = {(item['status'], item['text']) for item in cleaned}
@@ -60,21 +82,14 @@ def save_route_presets(config_path: Path, statuses: list[dict], presets: list[di
     if len(keys) != len(cleaned):
         raise ValueError('同一状态下的节点描述不能重复')
 
-    def apply(config):
-        block = config.get('dps_updateRoute')
-        if not isinstance(block, dict):
-            raise ValueError('请先配置 dps_updateRoute')
-        existing = block.get('presets')
-        existing = existing if isinstance(existing, list) else []
+    database = repo._database
+    with database.lock:
+        existing = route_presets(repo, config_path) or []
         for item in cleaned:
-            if item['status'] not in allowed and not any(
-                isinstance(old, dict) and all(str(old.get(key) or '').strip() == value for key, value in item.items())
-                for old in existing
-            ):
+            if item['status'] not in allowed and item not in existing:
                 raise ValueError('请选择可新增路由的明细状态')
-        block['presets'] = cleaned
-
-    update_logistics_config(config_path, apply)
+        with database.conn:
+            set_setting(database.conn, _PRESETS_KEY, json.dumps(cleaned, ensure_ascii=False))
     return cleaned
 
 

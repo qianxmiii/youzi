@@ -4,6 +4,7 @@ import { NPopover, NPopconfirm, NButton, NProgress, NModal, NTag, NDataTable, us
 import { useRouter } from 'vue-router'
 import { useNow } from '@vueuse/core'
 import { api } from '@/api/client'
+import { collectCtnsMismatchNos } from '@/utils/productCtnsCheck'
 import { LoaderCircle, ListTodo, RefreshCw, Trash2, EyeOff, History, ChevronRight, Clock3, CircleCheck, CircleAlert, Info, Inbox } from 'lucide-vue-next'
 import { useRunningTasks, loadTaskHistory, persistTask, deleteTaskHistory, type RunningTask } from '@/composables/useRunningTasks'
 const { tasks, hiddenTaskIds, clearFinished, historyError, historyLoading, historyMore } = useRunningTasks()
@@ -50,7 +51,7 @@ async function open(task: RunningTask) {
 }
 const filter = ref('all')
 const visibleRows = computed(() => (selected.value?.rows || []).filter(row => filter.value === 'all' || (filter.value === 'mismatch' ? row.kind === 'mismatch' : row.kind !== 'mismatch')))
-const mismatchNos = computed(() => [...new Set((selected.value?.rows || []).filter(row => row.kind === 'mismatch').map(row => row.shipmentNo).filter(no => no && no !== '—'))])
+const mismatchNos = computed(() => collectCtnsMismatchNos(selected.value?.rows ?? []))
 const issueNos = computed(() => [...new Set((selected.value?.rows || []).filter(row => row.kind !== 'mismatch').map(row => row.shipmentNo).filter(no => no && no !== '—'))])
 const columns = computed<DataTableColumns<NonNullable<RunningTask['rows']>[number]>>(() => [
   { title:'运单号', key:'shipmentNo', width:180, ellipsis:{tooltip:true} },
@@ -127,7 +128,7 @@ async function copy() { try { await navigator.clipboard.writeText([selected.valu
         <NButton size="small" :type="filter === 'error' ? 'primary' : 'default'" secondary @click="filter = 'error'">查询异常</NButton>
       </div>
       <div class="flex flex-wrap gap-2">
-        <NButton v-if="selected?.resultKind === 'ctns'" size="small" :disabled="!mismatchNos.length" @click="copyNos(mismatchNos)">复制不一致单号</NButton>
+        <NButton v-if="selected?.resultKind === 'ctns'" size="small" :disabled="!mismatchNos.length" @click="copyNos(mismatchNos)">复制不一致单号（含未录产品）</NButton>
         <NButton v-if="selected?.resultKind === 'ctns'" size="small" :disabled="!issueNos.length" @click="copyNos(issueNos)">复制查询异常单号</NButton>
         <NButton size="small" @click="copy">复制完整结果</NButton>
       </div>
@@ -136,7 +137,7 @@ async function copy() { try { await navigator.clipboard.writeText([selected.valu
       <NDataTable size="small" :columns="columns" :data="visibleRows" :pagination="false" :max-height="360" :scroll-x="selected.resultKind === 'ctns' ? 720 : 400">
         <template #empty>{{ selected.state === 'running' ? '正在核对，请稍候…' : filter === 'all' ? '没有需要处理的异常' : filter === 'mismatch' ? '没有件数不一致的运单' : '没有查询异常的运单' }}</template>
       </NDataTable>
-      <p v-if="selected.resultKind === 'ctns' && issueNos.length" class="mt-3 text-xs text-[var(--color-muted)]">查询异常（如没有产品）不代表件数不一致，请补齐产品数据或检查查询结果后重新核对。</p>
+      <p v-if="selected.resultKind === 'ctns' && issueNos.length" class="mt-3 text-xs text-[var(--color-muted)]">未录产品的运单也可通过「复制不一致单号」一起复制。补齐产品数据或检查查询结果后可重新核对。</p>
     </template>
     <div v-else class="task-text-result">{{ selected?.details || (selected?.state === 'running' ? '正在处理，结果会自动更新。' : selected?.message) }}</div>
     <details v-if="auditText" class="mt-4"><summary class="cursor-pointer text-sm">修改前后值与推送记录</summary><div class="task-text-result mt-2">{{ auditText }}</div></details>

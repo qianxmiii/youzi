@@ -6,6 +6,7 @@ import {
   type ProductCtnsCheckIssue,
   type ProductCtnsCheckResult,
 } from '@/api/shipments'
+import { collectCtnsMismatchNos } from '@/utils/productCtnsCheck'
 
 const props = defineProps<{ show: boolean; ids: string[] }>()
 const emit = defineEmits<{ 'update:show': [value: boolean] }>()
@@ -20,15 +21,12 @@ function errorMessage(error: unknown): string {
 }
 
 const message = useMessage()
-const mismatchNos = computed(() => [...new Set((result.value?.issues ?? [])
-  .filter(row => row.kind === 'mismatch')
-  .map(row => row.shipmentNo.trim())
-  .filter(Boolean))])
+const mismatchNos = computed(() => collectCtnsMismatchNos(result.value?.issues ?? []))
 async function copyMismatchNos() {
   if (loading.value || !mismatchNos.value.length) return
   try {
     await navigator.clipboard.writeText(mismatchNos.value.join('\n'))
-    message.success(`已复制 ${mismatchNos.value.length} 个件数不一致单号`)
+    message.success(`已复制 ${mismatchNos.value.length} 个单号`)
   } catch {
     message.error('复制失败，请检查浏览器剪贴板权限')
   }
@@ -126,7 +124,7 @@ watch(
         <template v-if="result.issues.length">，下面 {{ result.issues.length }} 票需要看一下</template>
       </p>
       <div class="mb-3 flex justify-end">
-        <NButton size="small" :disabled="loading || !mismatchNos.length" @click="copyMismatchNos">复制不一致单号（{{ mismatchNos.length }}）</NButton>
+        <NButton size="small" :disabled="loading || !mismatchNos.length" @click="copyMismatchNos">复制不一致单号（含未录产品，共 {{ mismatchNos.length }} 票）</NButton>
       </div>
       <NDataTable
         size="small"

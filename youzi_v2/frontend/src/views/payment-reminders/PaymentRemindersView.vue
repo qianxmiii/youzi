@@ -438,7 +438,6 @@ function openCollectionTermDialog() {
   const Picker = defineComponent({
     setup() {
       return () => {
-        const term = Math.trunc(Number(termDays.value))
         const advance = Math.max(0, Math.trunc(Number(advanceDays.value)) || 0)
         const start = startTs.value == null ? '' : ymdFromTs(startTs.value)
         const due = dueTs.value == null ? '' : ymdFromTs(dueTs.value)

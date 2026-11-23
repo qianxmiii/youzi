@@ -172,11 +172,8 @@ export type QuoteCreateBody = {
   pickupFee?: number | null
   pickupFeeCurrency?: string
   sourceText?: string
-  profitAmount?: number | null
-  profitCurrency?: string
   profitUnit?: string
   exchangeRate?: number | null
-  nextFollowupDate?: string | null
 }
 
 export type QuoteFollowupBody = {

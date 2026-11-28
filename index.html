@@ -61,7 +61,7 @@
               <i class="bi bi-info-circle"></i> <span id="delivery-hint-text"></span>
             </div>
           </div>
-        
+
           <!-- 选择国家 -->
           <div class="col-md-4">
             <div class="form-floating">
@@ -98,34 +98,29 @@
           </div>
           <div class="mt-3">
             <label for="box-excel-paste" class="subtitle d-block mb-1">Excel 粘贴（三列 / 五列）</label>
-            <textarea id="box-excel-paste" class="form-control font-monospace" rows="6"
-              placeholder="在 Excel 中复制后粘贴到此处：&#10;三列：箱数 / 单箱毛重kg / 长x宽x高&#10;五列：箱数 / 单箱毛重kg / 长 / 宽 / 高&#10;支持表头行（首列非数字会自动跳过）"
+            <textarea id="box-excel-paste" class="form-control" rows="3" style="resize: vertical;"
+              placeholder="从 Excel 复制三列或五列数据，粘贴到此处自动填入。支持表头行，可拖动右下角展开。"
               onpaste="setTimeout(function(){ parseExcelBoxPasteFromTextarea(); }, 0)"></textarea>
             <div class="mt-2 d-flex flex-wrap gap-2 align-items-center">
-              <button type="button" class="btn btn-outline-primary btn-sm" onclick="parseExcelBoxPasteFromTextarea()">
+              <button type="button" class="btn btn-primary btn-sm box-parse-button" onclick="parseExcelBoxPasteFromTextarea()">
                 <i class="bi bi-table"></i> 解析表格并填入
               </button>
               <span class="form-text mb-0">支持两种格式：<strong>三列（箱数→重量→长×宽×高）</strong> 或 <strong>五列（箱数→重量→长→宽→高）</strong>；尺寸可分别带 cm，如 59 cm × 42.5 × 47.5 cm；直接从 Excel 复制即可</span>
             </div>
           </div>
-          <div class="mt-2">
-            <label class="form-label mb-2" style="font-size: 0.9rem; color: #6c757d;">尺寸调整（运输后尺寸增加）</label>
-            <div class="dimension-adjust-buttons">
+          <div class="box-batch-toolbar" role="group" aria-label="箱规批量操作">
+            <span class="box-batch-label" title="所有箱规的长宽高同时增加">尺寸调整</span>
+            <div class="dimension-adjust-buttons" role="group" aria-label="批量增加长宽高">
               <button type="button" class="btn btn-dimension-adjust" onclick="adjustDimensions(1)" title="所有箱规的长宽高各增加1cm">
-                <span class="btn-text">+1</span>
-                <span class="btn-unit">cm</span>
+                +1 cm
               </button>
               <button type="button" class="btn btn-dimension-adjust" onclick="adjustDimensions(2)" title="所有箱规的长宽高各增加2cm">
-                <span class="btn-text">+2</span>
-                <span class="btn-unit">cm</span>
+                +2 cm
               </button>
               <button type="button" class="btn btn-dimension-adjust" onclick="adjustDimensions(3)" title="所有箱规的长宽高各增加3cm">
-                <span class="btn-text">+3</span>
-                <span class="btn-unit">cm</span>
+                +3 cm
               </button>
             </div>
-          </div>
-          <div class="mt-2">
             <button type="button" class="btn btn-outline-primary btn-sm" onclick="fillQuantityToOne()" title="将所有箱数补全为1">
               <i class="bi bi-1-circle"></i> 箱数补全为1
             </button>
@@ -133,7 +128,15 @@
         </div>
 
         <!-- 箱规输出表格 -->
-        <table class="table table-bordered">
+        <div class="box-table-scroll">
+        <table class="table table-bordered box-spec-table">
+          <colgroup>
+            <col class="box-col-index">
+            <col span="4" class="box-col-input">
+            <col class="box-col-quantity">
+            <col span="5" class="box-col-result">
+            <col class="box-col-actions">
+          </colgroup>
           <thead>
             <tr>
               <th class="narrow-column">编号</th>
@@ -147,7 +150,7 @@
               <th class="narrow-column">实重</th>
               <th class="narrow-column">材积重</th>
               <th class="narrow-column">周长</th>
-              <th class="narrow-column" style="width: 150px;">操作</th>
+              <th class="narrow-column">操作</th>
             </tr>
           </thead>
           <tbody id="box-table">
@@ -164,13 +167,14 @@
               <td class="result-cell">0 kg</td>
               <td class="result-cell">0 cm</td>
               <td class="button-cell">
-                <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
-                <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
-                <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
+                <button type="button" class="btn btn-success btn-sm box-row-action" onclick="addRow()" title="新增行" aria-label="新增行"><i class="bi bi-plus" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-danger btn-sm box-row-action" onclick="deleteRow(event)" title="删除当前行" aria-label="删除当前行"><i class="bi bi-dash" aria-hidden="true"></i></button>
+                <button type="button" class="btn btn-info btn-sm box-row-action" onclick="copyRow(event)" title="复制当前行" aria-label="复制当前行"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
               </td>
             </tr>
           </tbody>
         </table>
+        </div>
 
         <!-- 总结区域 -->
         <div class="result my-4">
@@ -183,11 +187,11 @@
             <div class="col"><p>泡比: <span id="volume-ratio">0.00</span></p></div>
           </div>
         </div>
-        
+
         <!-- 计算历史和汇总信息区域 -->
         <div class="form-group mt-3">
-          <div class="d-flex gap-2 align-items-center">
-            <button id="import-data-btn" class="btn btn-outline-dark" type="button" onclick="importData()" style="height: 38px;">
+          <div class="d-flex flex-wrap gap-2 align-items-center box-secondary-actions">
+            <button id="import-data-btn" class="btn btn-primary" type="button" onclick="importData()" style="height: 38px;">
               <i id="import-icon" class="bi bi-send"></i> 导入数据
             </button>
             <button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#historyCollapse"
@@ -226,7 +230,7 @@
             id="warningsToggle" style="display: none;"> <!-- 初始隐藏 -->
             警告信息 <span class="badge bg-danger" id="warningCount">0</span>
           </button>
-        
+
           <div class="collapse" id="warningsCollapse">
             <div class="card card-body mt-2">
               <textarea id="box-warnings" class="form-control" rows="3" readonly></textarea>
@@ -236,12 +240,12 @@
       </div>
     </div>
   </br>
-    
+
     <!-- 报价计算模块 -->
         <div class="module">
           <div id="quote-calculation" class="my-4">
             <!-- <h3 class="text-center">报价计算</h3> -->
-            
+
             <!-- Tab导航 -->
             <ul class="nav nav-tabs" id="quoteTabs" role="tablist">
               <li class="nav-item" role="presentation">
@@ -255,7 +259,7 @@
                 </button>
               </li>
             </ul>
-            
+
             <!-- Tab内容 -->
             <div class="tab-content" id="quoteTabsContent">
               <!-- 单地址报价Tab -->
@@ -315,87 +319,55 @@
                     </tbody>
                   </table>
                   </div>
-                <!-- 表格显示字段名和输入框 -->
-                <div class="table-overflow shrink-on-small">
-                <table class="table table-bordered table-fixed">
-                    <thead>
-                      <tr>
-                        <th style="width: 8.5em">地址</th>
-                        <th style="width: 8.5em">邮编</th>
-                        <th style="width: 6em">箱数</th>
-                        <th>实重</th>
-                        <th>体积</th>
-                        <th class="hidden">材积重</th>
-                        <th>计费重</th>
-                        <th>计费方</th>
-                        <th style="width: 5em">泡比</th>
-                        <th style="width: 6em">成本</th>
-                        <th style="width: 6em">利润(RMB)</th>
-                        <th class="hidden">报价 (RMB)</th>
-                        <th class="hidden">报价 (USD)</th>
-                        <th style="width: 6em">利率</th>
-                        <th class="hidden">总利润 (RMB)</th>
-                        <th class="hidden">总报价 (USD)</th>
-                        <th class="hidden">总报价 (RMB)</th>
-                        <th>单价</th>
-                        <th>综合单价</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>            
-                        <!-- 地址 -->
-                        <td><input type="text" id="address" class="form-control uppercase" onchange="updatePostcode()" oninput="checkSpecificAddress()" /></td>
-                        <!-- 邮编 -->
-                        <td><input type="text" id="postcode" class="form-control" oninput="checkRemoteAddress()" /></td>
-                        <!-- 箱数 -->
-                        <td><input type="number" id="quantity" class="form-control" value="0" oninput="updateQuote()" /></td>
-                        <!-- 实重 -->
-                        <td><input type="number" id="weight" class="form-control" value="0" oninput="updateQuote()" /></td>
-                        <!-- 体积 -->
-                        <td><input type="number" id="volume" class="form-control" value="0" step="any" oninput="updateQuote()" /></td>
-                        <!-- 材积重 -->
-                        <td class="hidden"><input type="number" id="dimensionWeight" class="form-control result" value="0" step="any" oninput="updateQuote()" /></td>
-                        <!-- 计费重 -->
-                        <td><input type="number" id="chargeWeight" class="form-control result" value="0" readonly /></td>
-                        <!-- 计费方 -->
-                        <td><input type="number" id="chargeCBM" class="form-control result" value="0" readonly /></td>
-                        <!-- 泡比 -->
-                        <td><input type="number" id="volumeRatio" class="form-control result" value="0" readonly /></td>
-                        <!-- 成本 (RMB) -->
-                        <td>
+<div class="table-overflow shrink-on-small"><table class="table table-bordered table-fixed quote-fields-table"><thead><tr>
+<th style="width: 8.5em">地址</th>
+<th style="width: 8.5em">邮编</th>
+<th style="width: 6em">箱数</th>
+<th>实重</th>
+<th>体积</th>
+<th class="hidden">材积重</th>
+<th class="quote-computed-cell">计费重</th>
+<th class="quote-computed-cell">计费方</th>
+<th class="quote-computed-cell">泡比</th>
+<th style="width: 6em">成本</th>
+<th style="width: 6em">利润(RMB)</th>
+<th class="hidden">报价 (RMB)</th>
+<th class="hidden">报价 (USD)</th>
+<th class="quote-computed-cell">利率</th>
+<th class="hidden">总利润 (RMB)</th>
+<th class="hidden">总报价 (USD)</th>
+<th class="hidden">总报价 (RMB)</th>
+<th class="quote-computed-cell">单价</th>
+<th class="quote-computed-cell">综合单价</th></tr></thead><tbody><tr>
+<td><input type="text" id="address" class="form-control uppercase" onchange="updatePostcode()" oninput="checkSpecificAddress()" /></td>
+<td><input type="text" id="postcode" class="form-control" oninput="checkRemoteAddress()" /></td>
+<td><input type="number" id="quantity" class="form-control" value="0" oninput="updateQuote()" /></td>
+<td><input type="number" id="weight" class="form-control" value="0" oninput="updateQuote()" /></td>
+<td><input type="number" id="volume" class="form-control" value="0" step="any" oninput="updateQuote()" /></td>
+<td class="hidden"><input type="number" id="dimensionWeight" class="form-control result" value="0" step="any" oninput="updateQuote()" /></td>
+<td class="quote-computed-cell"><input type="number" id="chargeWeight" class="form-control result" value="0" readonly /></td>
+<td class="quote-computed-cell"><input type="number" id="chargeCBM" class="form-control result" value="0" readonly /></td>
+<td class="quote-computed-cell"><input type="number" id="volumeRatio" class="form-control result" value="0" readonly /></td>
+<td>
                           <span id="cost-tooltip" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="我在思考...">
                             <input type="number" id="cost_rmb" class="form-control" value="0" oninput="updateQuote(); checkCostInput()" />
                           </span>
                         </td>
-                        <!-- 利润 (RMB) -->
-                        <td><input type="number" id="profit_rmb" class="form-control" value="0" oninput="updateQuote()" /></td>
-                        <!-- 报价 (RMB) -->
-                        <td class="hidden"><input type="number" id="price_rmb" class="form-control result" value="0" /></td>
-                        <!-- 报价 (USD) -->
-                        <td class="hidden"><input type="number" id="price_usd" class="form-control result" value="0" /></td>
-                        <!-- 利率 -->
-                        <td><input type="text" id="profit_rate" class="form-control result" value="0" readonly 
-                          data-bs-toggle="tooltip" data-bs-placement="top" />
-                        </td>
-                        <!-- 总利润 (RMB) -->
-                        <td class="hidden"><input type="number" id="total_profit_rmb" class="form-control result" value="0" readonly /></td>
-                        <!-- 总报价 (USD) -->
-                        <td class="hidden"><input type="number" id="total_price_usd" class="form-control result" value="0" readonly /></td>
-                        <!-- 总报价 (RMB) -->
-                        <td class="hidden"><input type="number" id="total_price_rmb" class="form-control result" value="0" readonly /></td>
-                        <!-- 单价 -->
-                        <td><input type="number" id="unit_price" class="form-control result" value="0" readonly /></td>
-                        <!-- 综合单价 -->
-                        <td><input type="number" id="total_unit_price" class="form-control result" value="0" readonly 
-                          data-bs-toggle="tooltip" data-bs-placement="top" title="包含提货费、偏远费等所有费用后的单价" /></td>
-                      </tr>
-                    </tbody>
-                  </table>
-                  </div>
+<td><input type="number" id="profit_rmb" class="form-control" value="0" oninput="updateQuote()" /></td>
+<td class="hidden"><input type="number" id="price_rmb" class="form-control result" value="0" /></td>
+<td class="hidden"><input type="number" id="price_usd" class="form-control result" value="0" /></td>
+<td class="quote-computed-cell"><input type="text" id="profit_rate" class="form-control result" value="0" readonly
+                          data-bs-toggle="tooltip" data-bs-placement="top" /></td>
+<td class="hidden"><input type="number" id="total_profit_rmb" class="form-control result" value="0" readonly /></td>
+<td class="hidden"><input type="number" id="total_price_usd" class="form-control result" value="0" readonly /></td>
+<td class="hidden"><input type="number" id="total_price_rmb" class="form-control result" value="0" readonly /></td>
+<td class="quote-computed-cell"><input type="number" id="unit_price" class="form-control result" value="0" readonly /></td>
+<td class="quote-computed-cell"><input type="number" id="total_unit_price" class="form-control result" value="0" readonly
+                          data-bs-toggle="tooltip" data-bs-placement="top" title="包含提货费、偏远费等所有费用后的单价" /><button type="button" class="fee-inclusion-button" popovertarget="fee-inclusion-panel" id="fee-inclusion-trigger">计入费用</button></td></tr></tbody></table></div>
                 </form>
-                
+
                 <!-- 多选模块 MOQ等 -->
-                <div class="option-items align-items-center">
+                <div class="option-items align-items-center quote-options quote-options-main" aria-label="附加条件与报价设置">
                   <!-- 偏远 -->
                   <div class="form-check mr-3">
                     <input type="checkbox" id="remote-address" class="form-check-input" oninput="updateQuote()" />
@@ -417,30 +389,21 @@
                     <label for="overlength_check" class="form-check-label">超长</label>
                   </div>
                   <!-- 超长费用 输入框 -->
-                  <div id="overlength-input-container" style="display: none;">
-                    <input type="number" id="overlength-input" class="form-control form-input" placeholder="RMB/箱" value="150" oninput="updateQuote()">
-                    <input type="number" id="overlength-quantity" class="form-control form-input" placeholder="箱数" value="0" oninput="updateQuote()">
-                  </div>
+
                   <!-- 超尺寸 -->
                   <div class="form-check mr-3">
                     <input type="checkbox" id="oversize_check" class="form-check-input" onchange="toggleOverSizeFeeInput()" />
                     <label for="oversize_check" class="form-check-label">超尺寸</label>
                   </div>
                   <!-- 超尺寸费用 输入框 -->
-                  <div id="oversize-input-container" style="display: none;">
-                    <input type="number" id="oversize-input" class="form-control form-input" placeholder="RMB/箱" value="150" oninput="updateQuote()">
-                    <input type="number" id="oversize-quantity" class="form-control form-input" placeholder="箱数" value="0" oninput="updateQuote()">
-                  </div>
+
                   <!-- 超重 -->
                   <div class="form-check mr-3">
                     <input type="checkbox" id="overweight_check" class="form-check-input" onchange="toggleOverWeightFeeInput()" />
                     <label for="overweight_check" class="form-check-label">超重</label>
                   </div>
                   <!-- 超重费用 输入框 -->
-                  <div id="overweight-input-container" style="display: none;">
-                    <input type="number" id="overweight-input" class="form-control form-input" placeholder="RMB/箱" value="180" oninput="updateQuote()">
-                    <input type="number" id="overweight-quantity" class="form-control form-input" placeholder="箱数" value="0" oninput="updateQuote()">
-                  </div>
+
                   <!-- MOQ -->
                   <div class="form-check mr-3">
                     <input type="checkbox" id="MOQ" class="form-check-input" oninput="toggleMOQInput()" />
@@ -463,26 +426,6 @@
                       <option value="cbm">cbm</option>
                     </select>
                   </div>
-                  <!-- 提货费 -->
-                  <div class="form-check mr-3">
-                    <input type="checkbox" id="pickup-fee-checkbox" class="form-check-input" onchange="togglePickupFeeInput()" />
-                    <label for="pickup-fee-checkbox" class="form-check-label">提货费</label>
-                  </div>
-                  <!-- 提货费 输入框 -->
-                  <div id="pickup-fee-input-container" style="display: none; width: 100px;">
-                    <input type="number" id="pickup-fee" class="form-control" placeholder="RMB" data-bs-toggle="tooltip" data-bs-placement="top" data-bs-title="我在思考..." oninput="updateQuote()" />
-                    <input type="number" id="pickup-fee-USD" class="form-control" placeholder="USD" oninput="updateQuote()" />
-                  </div>
-                  <!-- 派送费 -->
-                  <div class="form-check mr-3">
-                    <input type="checkbox" id="delivery-fee-checkbox" class="form-check-input" onchange="toggleDeliveryFeeInput()" />
-                    <label for="delivery-fee-checkbox" class="form-check-label">派送费</label>
-                  </div>
-                  <!-- 派送费 输入框 -->
-                  <div id="delivery-fee-input-container" style="display: none; width: 100px;">
-                    <input type="number" id="delivery-fee" class="form-control" placeholder="RMB" oninput="updateQuote()" />
-                    <input type="number" id="delivery-fee-USD" class="form-control" placeholder="USD" oninput="updateQuote()" />
-                  </div>
                   <!-- DDU和DDP -->
                   <div class="form-check form-switch">
                     <input type="checkbox" id="ddu_check" class="form-check-input" role="switch" onchange="updateQuote();">
@@ -497,6 +440,62 @@
                     <input type="checkbox" id="USD_check" class="form-check-input" onchange="updateQuote(); checkCostInput()" />
                     <label for="USD_check" class="form-check-label">美元</label>
                   </div>
+                </div>
+                <div class="surcharge-details" aria-label="附加条件费用明细">
+                  <div id="overlength-input-container" class="surcharge-fields surcharge-detail-row" style="display: none;">
+                    <span class="surcharge-detail-name">超长</span>
+                    <label class="fee-field"><span>单箱费用</span><span class="fee-input-unit"><input type="number" id="overlength-input" aria-label="超长单箱费用（RMB）" class="form-control" min="0" value="150" oninput="updateQuote()" /><span>RMB/箱</span></span></label>
+                    <span class="fee-multiply">×</span>
+                    <label class="fee-field fee-quantity"><span>箱数</span><input type="number" id="overlength-quantity" aria-label="超长箱数" title="箱数" placeholder="箱数" class="form-control" min="0" step="1" value="0" oninput="updateQuote()" /></label>
+                    <output id="overlength-subtotal" class="fee-subtotal">= 0 RMB</output>
+                  </div>
+                  <div id="oversize-input-container" class="surcharge-fields surcharge-detail-row" style="display: none;">
+                    <span class="surcharge-detail-name">超尺寸</span>
+                    <label class="fee-field"><span>单箱费用</span><span class="fee-input-unit"><input type="number" id="oversize-input" aria-label="超尺寸单箱费用（RMB）" class="form-control" min="0" value="150" oninput="updateQuote()" /><span>RMB/箱</span></span></label>
+                    <span class="fee-multiply">×</span>
+                    <label class="fee-field fee-quantity"><span>箱数</span><input type="number" id="oversize-quantity" aria-label="超尺寸箱数" title="箱数" placeholder="箱数" class="form-control" min="0" step="1" value="0" oninput="updateQuote()" /></label>
+                    <output id="oversize-subtotal" class="fee-subtotal">= 0 RMB</output>
+                  </div>
+                  <div id="overweight-input-container" class="surcharge-fields surcharge-detail-row" style="display: none;">
+                    <span class="surcharge-detail-name">超重</span>
+                    <label class="fee-field"><span>单箱费用</span><span class="fee-input-unit"><input type="number" id="overweight-input" aria-label="超重单箱费用（RMB）" class="form-control" min="0" value="180" oninput="updateQuote()" /><span>RMB/箱</span></span></label>
+                    <span class="fee-multiply">×</span>
+                    <label class="fee-field fee-quantity"><span>箱数</span><input type="number" id="overweight-quantity" aria-label="超重箱数" title="箱数" placeholder="箱数" class="form-control" min="0" step="1" value="0" oninput="updateQuote()" /></label>
+                    <output id="overweight-subtotal" class="fee-subtotal">= 0 RMB</output>
+                  </div>
+                </div>
+                <!-- 费用选项另起一行 -->
+                <div class="option-items align-items-center quote-options quote-options-fees" aria-label="附加费用">
+                  <span class="quote-options-caption">附加费用</span>
+                  <!-- 提货费 -->
+                  <div class="form-check mr-3">
+                    <input type="checkbox" id="pickup-fee-checkbox" class="form-check-input" onchange="togglePickupFeeInput()" />
+                    <label for="pickup-fee-checkbox" class="form-check-label">提货费</label>
+                  </div>
+                  <!-- 提货费 输入框 -->
+                  <div id="pickup-fee-input-container" class="pickup-fields" style="display: none;">
+                    <label class="fee-currency-input"><span>RMB</span><input type="number" id="pickup-fee" aria-label="提货费人民币金额" min="0" class="form-control" placeholder="金额" oninput="updateQuote()" /></label>
+                    <label class="fee-currency-input"><span>USD</span><input type="number" id="pickup-fee-USD" aria-label="提货费美元金额" min="0" class="form-control" placeholder="金额" oninput="updateQuote()" /></label>
+                  </div>
+                  <!-- 派送费 -->
+                  <div class="form-check mr-3">
+                    <input type="checkbox" id="delivery-fee-checkbox" class="form-check-input" onchange="toggleDeliveryFeeInput()" />
+                    <label for="delivery-fee-checkbox" class="form-check-label">派送费</label>
+                  </div>
+                  <!-- 派送费 输入框 -->
+                  <div id="delivery-fee-input-container" class="pickup-fields" style="display: none;">
+                    <label class="fee-currency-input"><span>RMB</span><input type="number" id="delivery-fee" aria-label="派送费人民币金额" min="0" class="form-control" placeholder="金额" oninput="updateQuote()" /></label>
+                    <label class="fee-currency-input"><span>USD</span><input type="number" id="delivery-fee-USD" aria-label="派送费美元金额" min="0" class="form-control" placeholder="金额" oninput="updateQuote()" /></label>
+                  </div>
+                  <!-- 报关费：按报价币种收取固定费用 -->
+                  <div class="form-check mr-3">
+                    <input type="checkbox" id="customs-fee-checkbox" class="form-check-input" onchange="updateQuote()" />
+                    <label for="customs-fee-checkbox" class="form-check-label" title="按报价格式计费">报关费 <span id="customs-fee-amount" class="quote-fee-amount">54 USD</span></label>
+                  </div>
+                  <div class="form-check mr-3">
+                    <input type="checkbox" id="clearance-fee-checkbox" class="form-check-input" onchange="updateQuote()" />
+                    <label for="clearance-fee-checkbox" class="form-check-label">清关费 <span id="clearance-fee-amount" class="quote-fee-amount"></span></label>
+                  </div>
                   <!-- 承运商选择（界面隐藏，保留 DOM 供分泡/tooltip 逻辑） -->
                   <div class="form-floating mr-3" style="width: 150px; display: none;">
                     <select id="carrier-select" class="form-select" onchange="updateCarrierTooltip()">
@@ -505,16 +504,15 @@
                     <label for="carrier-select">承运商</label>
                   </div>
                   <!-- 分泡比例 -->
-                  <div class="form-floating mr-3" id="volume-ratio-container" style="width: 150px; display: none;">
-                    <select id="volume-ratio-select" class="form-select" onchange="updateQuote()">
+                  <div class="mr-3" id="volume-ratio-container" style="width: 130px; display: none;">
+                    <select id="volume-ratio-select" class="form-select" aria-label="分泡比例" title="分泡比例" onchange="updateQuote()">
                       <option value="" selected>不分泡</option>
                       <option value="30">分泡30%</option>
                       <option value="50">分泡50%</option>
                     </select>
-                    <label for="volume-ratio-select">分泡比例</label>
                   </div>
                 </div>
-              
+
                 <!-- 报价 - 报价格式下拉选项框 -->
                 <div class="form-group">
                   <label for="quote-type" class = "subtitle">报价格式</label>
@@ -543,10 +541,13 @@
                 </div>
                 <!-- 报价 - 报价文本 -->
                 <div class="form-group mt-4 position-relative">
-                  <label for="notes" class="subtitle">报价文本</label>
+                  <div class="quote-text-toolbar">
+                      <label for="notes" class="subtitle mb-0">报价文本</label>
+                      <button type="button" id="copy-quote-button" class="quote-copy-icon" onclick="copyQuoteText(this)" title="复制报价" aria-label="复制报价"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
+                    </div>
                   <textarea id="notes" class="form-control" rows="8"></textarea>
                 </div>
-                
+
                 <!-- 报价历史记录按钮 -->
                 <div class="form-group mt-3">
                   <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#quoteHistoryModal">
@@ -554,7 +555,7 @@
                   </button>
                 </div>
               </div>
-              
+
               <!-- 批量报价Tab -->
               <div class="tab-pane fade" id="batch-quote" role="tabpanel" aria-labelledby="batch-quote-tab">
                 <div class="mt-3">
@@ -582,21 +583,21 @@
                       </button>
                     </div>
                   </div>
-                  
+
                   <!-- 箱规输入 -->
                   <div class="mb-3">
                     <label for="batch-box-spec" class="form-label">箱规信息</label>
-                    <input type="text" id="batch-box-spec" class="form-control" 
-                           placeholder="例如: 45*45*50 10KG 50CTNS 或 45x45x50 10kg 50箱" 
+                    <input type="text" id="batch-box-spec" class="form-control"
+                           placeholder="例如: 45*45*50 10KG 50CTNS 或 45x45x50 10kg 50箱"
                            oninput="parseBatchBoxSpec()" />
                     <div class="form-text">格式：长*宽*高 重量 总箱数（支持 *、x、× 分隔符，支持 kg/kg/lb/磅 单位，支持 箱/ctn/件 等箱数单位）</div>
                   </div>
-                  
+
                   <!-- 地址分配输入 -->
                   <div class="mb-3">
                     <label for="batch-address-distribution" class="form-label">地址分配</label>
-                    <input type="text" id="batch-address-distribution" class="form-control" 
-                           placeholder="例如: RDU4 4CTNS | AVP1 25CTNS | LAS1 20CTNS | GYR3 1CTNS" 
+                    <input type="text" id="batch-address-distribution" class="form-control"
+                           placeholder="例如: RDU4 4CTNS | AVP1 25CTNS | LAS1 20CTNS | GYR3 1CTNS"
                            oninput="parseBatchAddressDistribution()" />
                     <div class="form-text">格式：地址 箱数 | 地址 箱数 | ...</div>
                   </div>
@@ -677,12 +678,12 @@
                     </select>
                     <div class="form-text">Sea express、Fast sea express、Air express 渠道需要选择发货区域</div>
                   </div>
-                  
+
                   <!-- 批量报价结果表格 -->
                   <div id="batch-quote-tables-container" class="accordion" style="display: none;">
                     <!-- 折叠面板将在这里动态生成 -->
                   </div>
-                  
+
                   <!-- 空状态提示 -->
                   <div id="batch-quote-empty-state" class="text-center py-5">
                     <div class="empty-state-icon mb-3">
@@ -706,7 +707,7 @@
                       </div>
                     </div>
                   </div>
-                  
+
 
                 </div>
               </div>
@@ -758,7 +759,7 @@
 
         <!-- Tab 内容 -->
         <div class="tab-content" id="myTabContent">
-          
+
           <!-- Tab1 常用功能 -->
           <div class="tab-pane fade show active" id="commonTab" role="tabpanel" aria-labelledby="tab1-tab">
             <div class="container mt-4">
@@ -816,7 +817,7 @@
                         </li>
                       </ul>
                     </div>
-                    
+
                     <!-- 右侧内容区 -->
                     <div class="tab-content h-100" id="termTabContent">
                           <!-- 常用术语内容 -->
@@ -839,18 +840,18 @@
                                     </button>
                                   </div>
                                 </div>
-                        
+
                                 <!-- 术语统计 -->
                                 <div class="terms-statistics mb-3">
                                   <small class="text-muted" id="termsCount">共找到 0 个术语</small>
                                 </div>
-                        
+
                                 <!-- 术语对照表 -->
                                 <div id="termList" class="flex-grow-1 overflow-auto"></div>
-                        
+
                                 <!-- 无结果提示 -->
                                 <div id="noResults" class="no-results">没有找到匹配的术语。</div>
-                        
+
                                 <!-- 回到顶部按钮 -->
                                 <div class="back-to-top-container">
                                   <button id="backToTop" class="btn btn-outline-secondary btn-sm" onclick="scrollToTop()" style="display: none;">
@@ -858,18 +859,18 @@
                                   </button>
                                 </div>
                               </div>
-                              
+
                               <!-- 右侧筛选区域 -->
                               <div class="filter-sidebar ms-3">
                                 <!-- 分类筛选按钮 -->
                                 <div class="category-buttons mb-3" id="categoryButtons">
                                   <!-- 按钮将通过 JavaScript 动态生成 -->
                                 </div>
-                        
+
                                 <!-- 标签筛选区域 -->
                                 <div class="tag-buttons" id="termTagBtns">
                                 </div>
-                                
+
                                 <!-- 清除标签按钮 -->
                                 <div class="mt-3">
                                   <button type="button" class="btn btn-outline-secondary btn-sm w-100" onclick="clearAllTags()" id="clearTagsBtn" style="display: none;">
@@ -879,7 +880,7 @@
                               </div>
                             </div>
                           </div>
-                          
+
                         </div>
                   </div>
                   <div class="modal-footer">
@@ -889,7 +890,7 @@
               </div>
             </div>
 
-            
+
             <!-- 3. 客户地址簿 -->
             <div class="modal fade" id="addressModal" tabindex="-1">
               <div class="modal-dialog modal-xl">
@@ -919,7 +920,7 @@
                         </select>
                       </div>
                     </div>
-            
+
                     <!-- 地址表格 -->
                     <div class="table-responsive">
                       <table class="table table-hover align-middle">
@@ -955,7 +956,7 @@
                 </div>
               </div>
             </div>
-            
+
             <!-- 世界时钟模态框 -->
             <div class="modal fade" id="worldClockModal" tabindex="-1" aria-labelledby="worldClockModalLabel" aria-hidden="true">
               <div class="modal-dialog modal-lg">
@@ -977,12 +978,12 @@
                 </div>
               </div>
             </div>
-            
+
             </div>
 
           <!-- Tab2 == 快捷回复 Tab 内容 -->
           <div class="tab-pane fade" id="quickReplyTab" role="tabpanel" aria-labelledby="tab2-tab">
-           
+
             <div class="quick-reply-container" id="quick-reply-container">
               <!-- 分类按钮 -->
               <div class="form-group">
@@ -991,7 +992,7 @@
                       <!-- 分类按钮将通过 JavaScript 动态生成 -->
                   </div>
               </div>
-          
+
               <!-- 输入下拉搜索框 -->
               <div class="form-group">
                 <label for="quick-reply-search">搜索回复</label>
@@ -1002,7 +1003,7 @@
                   </div>
                 </div>
               </div>
-              
+
               <!-- 回复内容显示区域 -->
               <div class="form-group">
                 <label for="quick-reply-select">选择回复</label>
@@ -1018,7 +1019,7 @@
                       <i class="bi bi-clipboard"></i> 复制
                   </button>
               </div>
-          
+
               <!-- 英文回复 -->
               <div class="form-group">
                   <label for="english-message">English Message</label>
@@ -1030,7 +1031,7 @@
           </div>
 
           </div> <!-- Tab 2 end -->
-          
+
 
           <!-- Tab 3 成本计算 -->
           <div class="tab-pane fade" id="costCalTab" role="tabpanel" aria-labelledby="tab3-tab">
@@ -1048,7 +1049,7 @@
                       oninput="parseCalTabCargoInfo()" />
                     <div class="form-text">支持自动识别箱数、重量、体积信息</div>
                   </div>
-                  
+
                   <!-- 产品选择和重量比 -->
                   <div class="row g-3">
                     <div class="col-md-6">
@@ -1138,7 +1139,7 @@
                   </div>
                 </div>
               </div>
-              
+
               <!-- 包税成本表格 -->
               <div class="card">
                 <div class="card-header bg-secondary">
@@ -1263,7 +1264,7 @@
                     <label for="t4_region">发货区域</label>
                   </div>
                 </div>
-              
+
                 <!-- 渠道 -->
                 <div class="col-md-6 mb-3">
                   <div class="form-floating">
@@ -1330,7 +1331,7 @@
                         <input type="text" id="pickup-fee-display" class="form-control" readonly>
                     </div>
                 </div>
-    
+
                 <!-- 车型表格 -->
                 <table class="table table-bordered">
                     <thead>
@@ -1352,7 +1353,7 @@
           <div class="tab-pane fade" id="tabSample" role="tabpanel" aria-labelledby="tab4-tab">
             <div class="container mt-4">
               <h4 class="mb-4">柚子杂货铺</h4>
-              
+
               <!-- 工具按钮区域 -->
               <div class="row">
                 <div class="col-md-4 mb-3">
@@ -1372,7 +1373,7 @@
         </div> <!-- Tab 内容 -->
       </div>
       </div>
-      
+
       <!-- 日期计算模态框 -->
       <div class="modal fade" id="dateCalcModal" tabindex="-1" aria-labelledby="dateCalcModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-xl">
@@ -1416,7 +1417,7 @@
                     </div>
                   </div>
                 </div>
-                
+
                 <!-- 功能2：日期差计算 -->
                 <div class="col-md-6 mb-4">
                   <div class="card">
@@ -1444,7 +1445,7 @@
                   </div>
                 </div>
               </div>
-              
+
               <!-- 快速操作按钮 -->
               <div class="row">
                 <div class="col-12">
@@ -1478,7 +1479,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 复制成功提示 -->
       <div class="position-fixed top-0 start-50 translate-middle-x" style="z-index: 9999; margin-top: 20px;">
         <div id="copyToast" class="custom-toast" role="alert" aria-live="assertive" aria-atomic="true" style="display: none;">
@@ -1490,7 +1491,7 @@
           </div>
         </div>
       </div>
-      
+
       <!-- 报价历史记录模态框 -->
       <div class="modal fade" id="quoteHistoryModal" tabindex="-1" aria-labelledby="quoteHistoryModalLabel" aria-hidden="true" data-bs-backdrop="static">
         <div class="modal-dialog modal-xl">
@@ -1537,7 +1538,7 @@
                   </button>
                 </div>
               </div>
-              
+
               <!-- 历史记录表格 -->
               <div class="table-responsive">
                 <table class="table table-striped table-hover">
@@ -1559,7 +1560,7 @@
                   </tbody>
                 </table>
               </div>
-              
+
               <!-- 分页 -->
               <div class="d-flex justify-content-between align-items-center mt-3">
                 <div>
@@ -1767,7 +1768,7 @@
   <script src="js/bookmarks.js"></script>
   <script src="data/warehouse_data.js"></script>
   <script src="js/warehouse.js"></script>
-  
+
   <!-- 页面加载完成后初始化 -->
   <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -1775,26 +1776,26 @@
       if (typeof initQuickReplyCategories === 'function') {
         initQuickReplyCategories();
       }
-      
+
       // 初始化其他功能
       if (typeof initLogisticsMemo === 'function') {
         initLogisticsMemo();
       }
-      
+
       // 初始化常用网址功能
       if (typeof initBookmarks === 'function') {
         initBookmarks();
       }
-      
+
       // 初始化承运商选择器
       if (typeof initCarrierSelector === 'function') {
         initCarrierSelector();
       }
-      
+
       // 初始化派送时间查询的运输渠道选项
       const deliveryChannelSelect = document.getElementById('deliveryChannel');
       const deliveryETDInput = document.getElementById('deliveryETD');
-      
+
       if (deliveryChannelSelect && deliveryETDInput) {
         // 动态生成运输渠道选项
         if (typeof basicChannels !== 'undefined') {
@@ -1806,20 +1807,20 @@
             deliveryChannelSelect.appendChild(option);
           });
         }
-        
+
         deliveryChannelSelect.addEventListener('change', function() {
           const defaultETD = getDefaultETDByChannel(this.value);
           deliveryETDInput.value = defaultETD.toISOString().slice(0, 10);
         });
-        
+
         // 设置初始默认值
         const defaultETD = getDefaultETDByChannel('Sea truck');
         deliveryETDInput.value = defaultETD.toISOString().slice(0, 10);
       }
-      
+
     });
   </script>
-  
+
   <!-- 派送时间查询模态框 -->
   <div class="modal fade" id="deliveryTimeModal" tabindex="-1" aria-labelledby="deliveryTimeModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-xl">
@@ -1863,7 +1864,7 @@
                       </div>
                     </div>
                   </div>
-                  
+
                   <div class="d-flex justify-content-center align-items-center gap-3 flex-wrap">
                     <div class="form-check mb-0">
                       <input class="form-check-input" type="checkbox" id="deliveryAmazonMode" onchange="onAmazonModeChange()">
@@ -1883,7 +1884,7 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 结果表格 -->
           <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
@@ -1967,13 +1968,13 @@
               </div>
             </div>
           </div>
-          
+
           <!-- 统计信息 -->
           <div class="mb-3">
             <span class="badge bg-info" id="warehouseCount">共 0 条记录</span>
             <span class="badge bg-success ms-2" id="warehouseSelectedCount">已选中 0 条</span>
           </div>
-          
+
           <!-- 仓库列表表格 -->
           <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
             <table class="table table-hover table-striped mb-0" id="warehouseTable">
@@ -2010,6 +2011,29 @@
       </div>
     </div>
   </div>
+
+
+<div id="fee-inclusion-panel" popover="auto" aria-labelledby="fee-inclusion-heading">
+  <div class="fee-popover-heading"><strong id="fee-inclusion-heading">计入综合单价</strong><button type="button" popovertarget="fee-inclusion-panel" popovertargetaction="hide" aria-label="关闭">×</button></div>
+  <div class="fee-inclusion-options"><label><input type="checkbox" id="include-fee-remote" onchange="updateQuote()" checked> 偏远费</label><label><input type="checkbox" id="include-fee-residential" onchange="updateQuote()" > 住宅费</label><label><input type="checkbox" id="include-fee-overlength" onchange="updateQuote()" > 超长费</label><label><input type="checkbox" id="include-fee-oversize" onchange="updateQuote()" > 超尺寸费</label><label><input type="checkbox" id="include-fee-overweight" onchange="updateQuote()" > 超重费</label><label><input type="checkbox" id="include-fee-pickup" onchange="updateQuote()" > 提货费</label><label><input type="checkbox" id="include-fee-delivery" onchange="updateQuote()" > 派送费</label><label><input type="checkbox" id="include-fee-customs" onchange="updateQuote()" > 报关费</label><label><input type="checkbox" id="include-fee-clearance" onchange="updateQuote()" > 清关费</label></div>
+</div>
+<script>
+(() => {
+  const panel = document.getElementById('fee-inclusion-panel');
+  const trigger = document.getElementById('fee-inclusion-trigger');
+  const position = () => {
+    if (!panel.matches(':popover-open')) return;
+    const rect = trigger.getBoundingClientRect();
+    const width = panel.offsetWidth;
+    const height = panel.offsetHeight;
+    panel.style.left = Math.max(8, Math.min(rect.right - width, innerWidth - width - 8)) + 'px';
+    panel.style.top = Math.max(8, rect.bottom + height + 8 <= innerHeight ? rect.bottom + 8 : rect.top - height - 8) + 'px';
+  };
+  panel.addEventListener('toggle', position);
+  window.addEventListener('resize', position);
+  window.addEventListener('scroll', position, true);
+})();
+</script>
 </body>
 
 </html>

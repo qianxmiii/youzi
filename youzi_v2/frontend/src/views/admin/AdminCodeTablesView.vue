@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
 import {
   NButton,
   NDataTable,
@@ -67,6 +68,7 @@ const editingRow = ref<CodeTableRow | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
 
 const activeMeta = computed(() => tables.value.find((t) => t.table === activeTable.value))
+const carrierTableMasked = computed(() => activeTable.value === 'carrier_codes' && !carrierVisible.value)
 const isChannelTable = computed(() => activeTable.value === CHANNEL_CODES_TABLE)
 const hasMarkFields = computed(() => activeMeta.value?.hasMarkFields ?? false)
 const hasPortType = computed(() => activeMeta.value?.hasPortType ?? false)
@@ -349,7 +351,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
         <h2 class="page-h2">后台管理 · 码表</h2>
         <p class="mt-1 text-xs text-[var(--color-muted)]">基础资料、运单配置与专项规则</p>
       </div>
-      <NSpace v-if="!isChannelTable">
+      <NSpace v-if="!isChannelTable && !carrierTableMasked">
         <NButton size="small" quaternary @click="downloadTemplate">下载模板</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入 Excel</NButton>
         <NButton size="small" type="primary" :disabled="!activeTable" @click="openCreate">
@@ -380,6 +382,7 @@ const columns = computed<DataTableColumns<CodeTableRow>>(() => {
     <div v-if="isChannelTable" class="min-h-0 flex-1 overflow-hidden">
       <ChannelsView embedded />
     </div>
+    <div v-else-if="carrierTableMasked" class="panel p-3 text-sm">承运商信息 ***</div>
 
     <template v-else>
       <div class="code-table-toolbar shrink-0">

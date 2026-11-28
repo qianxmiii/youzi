@@ -112,9 +112,14 @@ def sync_carrier_tracking(
     by_vendor: dict[str, list[dict[str, Any]]] = {}
     unassigned = 0
     skipped_fcl = 0
+    skipped_missing_carrier = 0
     errors: list[str] = []
     for row in rows:
-        carrier = (row.get("carrier_code") or "").strip() or (row.get("supplier_name") or "").strip()
+        carrier = (row.get("carrier_code") or "").strip()
+        if not carrier:
+            for _ in checkpointed_rows((row,), lambda item: item["shipment_no"]):
+                skipped_missing_carrier += 1
+            continue
         if row.get("is_fcl_carrier") or carrier == FCL_CARRIER_NAME_ZH:
             for _ in checkpointed_rows((row,), lambda item: item["shipment_no"]):
                 skipped_fcl += 1
@@ -128,9 +133,7 @@ def sync_carrier_tracking(
         if not chain:
             unassigned += 1
             sn = row.get("shipment_no") or ""
-            reason = carrier_vendor_unassigned_reason(
-                row, vendor_by_name, vendor_by_id
-            )
+            reason = carrier_vendor_unassigned_reason(carrier)
             err_line = f"未匹配承运商/{sn}: {reason}"
             errors.append(err_line)
             out_log(f"[承运商轨迹] {err_line}")
@@ -142,7 +145,7 @@ def sync_carrier_tracking(
         )
 
     updated = 0
-    skipped = skipped_fcl
+    skipped = skipped_fcl + skipped_missing_carrier
     empty = 0
     not_found = 0
     log_count = 0
@@ -150,8 +153,9 @@ def sync_carrier_tracking(
     vendor_stats: dict[str, dict[str, int]] = {}
 
     out_log(
-        f"[承运商轨迹] 转运中 {total} 单，已匹配 vendor {total - unassigned - skipped_fcl} 单，未匹配 {unassigned} 单"
+        f"[承运商轨迹] 转运中 {total} 单，已匹配 vendor {total - unassigned - skipped} 单，未匹配 {unassigned} 单"
         + (f"，跳过整柜 {skipped_fcl} 单" if skipped_fcl else "")
+        + (f"，跳过未填承运商 {skipped_missing_carrier} 单" if skipped_missing_carrier else "")
     )
 
     for vendor_name in sorted(by_vendor.keys()):

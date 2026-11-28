@@ -1,13 +1,16 @@
 <script setup lang="ts">
+import { carrierVisible, displayCarrier } from '@/composables/useCarrierPrivacy'
 import {
   NButton,
   NDataTable,
   NDatePicker,
+  NDropdown,
+  NModal,
   NPagination,
   NSelect,
   NSpace,
-  NTag,
   NTooltip,
+  useDialog,
   useMessage,
 } from 'naive-ui'
 import type { DataTableColumns } from 'naive-ui'
@@ -21,18 +24,18 @@ import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import { ICON_STROKE } from '@/constants/icons'
 import type { Shipment } from '@/types/shipment'
 import type { TrackingTimeCandidate, TrackingTimeReviewAction } from '@/types/trackingTimeWriteback'
-import { formatSignedTimeReviewQuestion } from '@/types/trackingTimeWriteback'
-import { formatAbsoluteDateTime } from '@/utils/formatDateTime'
+import { formatAbsoluteDateTime, formatDateYmd, formatTimestampForApi } from '@/utils/formatDateTime'
 import { usePendingTrackingTimeReviewCount } from '@/composables/usePendingTrackingTimeReviewCount'
 
 const message = useMessage()
+const dialog = useDialog()
 const router = useRouter()
 const { refreshPendingTrackingTimeReviewCount } = usePendingTrackingTimeReviewCount()
 const loading = ref(false)
 const reviewingId = ref<string | null>(null)
 const batching = ref<'use_expected_delivery' | 'use_signed_track' | 'reject' | null>(null)
 const checkedRowKeys = ref<string[]>([])
-const manualRowId = ref<string | null>(null)
+const manualRow = ref<TrackingTimeCandidate | null>(null)
 const manualAt = ref<number | null>(null)
 const items = ref<TrackingTimeCandidate[]>([])
 const total = ref(0)
@@ -50,6 +53,24 @@ function formatTime(value: string | null | undefined) {
   const text = (value || '').trim()
   if (!text) return '—'
   return formatAbsoluteDateTime(text) || text
+}
+
+function renderDateWithTime(value: string | null | undefined) {
+  if (!value?.trim()) return '—'
+  return h(NTooltip, { trigger: 'hover' }, {
+    trigger: () => h('span', {
+      class: 'whitespace-nowrap tabular-nums',
+      'aria-label': formatTime(value),
+    }, formatDateYmd(value)),
+    default: () => formatTime(value),
+  })
+}
+
+function dateDifference(row: TrackingTimeCandidate) {
+  const days = (Date.parse(formatDateYmd(row.compareValue)) - Date.parse(formatDateYmd(row.candidateValue))) / 86_400_000
+  if (!Number.isFinite(days)) return '—'
+  if (days === 0) return '同一天'
+  return `签收${days > 0 ? '晚' : '早'} ${Math.abs(days)} 天`
 }
 
 async function load() {
@@ -76,6 +97,7 @@ async function load() {
 }
 
 async function review(row: TrackingTimeCandidate, action: TrackingTimeReviewAction, manualValue?: string) {
+  if (reviewingId.value || batching.value) return
   reviewingId.value = row.id
   try {
     await reviewTrackingTimeCandidate(row.id, { action, manualValue })
@@ -83,10 +105,10 @@ async function review(row: TrackingTimeCandidate, action: TrackingTimeReviewActi
       use_expected_delivery: '已采用预计送仓时间',
       use_signed_track: '已采用签收节点时间',
       manual: '已写入手动签收时间',
-      reject: '已暂不处理',
+      reject: '已保留当前签收',
     }
     message.success(labels[action] || '已处理')
-    manualRowId.value = null
+    manualRow.value = null
     manualAt.value = null
     if (items.value.length === 1 && page.value > 1) {
       page.value -= 1
@@ -99,21 +121,33 @@ async function review(row: TrackingTimeCandidate, action: TrackingTimeReviewActi
   }
 }
 
-async function batchReview(action: 'use_expected_delivery' | 'use_signed_track' | 'reject') {
+const batchLabels = {
+  use_expected_delivery: '采用预计送仓',
+  use_signed_track: '采用签收节点',
+  reject: '保留当前签收',
+}
+
+function confirmBatchReview(action: keyof typeof batchLabels) {
   const ids = checkedRowKeys.value.filter(Boolean)
-  if (!ids.length || batching.value) return
+  if (!ids.length || batching.value || reviewingId.value) return
+  dialog.warning({
+    title: '批量审批',
+    content: `为选中的 ${ids.length} 票${batchLabels[action]}？`,
+    positiveText: '确认',
+    negativeText: '取消',
+    onPositiveClick: () => batchReview(action, ids),
+  })
+}
+
+async function batchReview(action: keyof typeof batchLabels, ids: string[]) {
+  if (batching.value || reviewingId.value) return
   batching.value = action
   try {
     const res = await batchReviewTrackingTimeCandidates({ ids, action })
-    const labels = {
-      use_expected_delivery: '采用预计送仓',
-      use_signed_track: '采用签收节点',
-      reject: '暂不处理',
-    }
     if (res.failed) {
-      message.warning(`${labels[action]}完成 ${res.ok} 条，失败 ${res.failed} 条`)
+      message.warning(`${batchLabels[action]}完成 ${res.ok} 条，失败 ${res.failed} 条`)
     } else {
-      message.success(`已${labels[action]} ${res.ok} 条`)
+      message.success(`已${batchLabels[action]} ${res.ok} 条`)
     }
     checkedRowKeys.value = []
     if (items.value.length <= ids.length && page.value > 1) {
@@ -127,15 +161,14 @@ async function batchReview(action: 'use_expected_delivery' | 'use_signed_track' 
   }
 }
 
-function submitManual(row: TrackingTimeCandidate) {
+function submitManual() {
+  const row = manualRow.value
+  if (!row) return
   if (manualAt.value == null) {
     message.warning('请选择签收时间')
     return
   }
-  const d = new Date(manualAt.value)
-  const pad = (n: number) => String(n).padStart(2, '0')
-  const manualValue = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`
-  void review(row, 'manual', manualValue)
+  void review(row, 'manual', formatTimestampForApi(manualAt.value))
 }
 
 function shipmentStub(row: TrackingTimeCandidate): Shipment {
@@ -257,6 +290,20 @@ function carrierDisplayLabel(row: TrackingTimeCandidate): string {
   return row.carrierCode?.trim() || '—'
 }
 
+const reviewOptions = [
+  { label: '手动填写', key: 'manual' },
+  { label: '保留当前签收', key: 'reject' },
+]
+
+function selectReviewOption(row: TrackingTimeCandidate, key: string | number) {
+  if (key === 'manual') {
+    manualAt.value = null
+    manualRow.value = row
+  } else if (key === 'reject') {
+    void review(row, 'reject')
+  }
+}
+
 const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
   { type: 'selection', fixed: 'left', width: 40 },
   {
@@ -271,44 +318,31 @@ const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
     key: 'carrierNameZh',
     width: 112,
     ellipsis: { tooltip: true },
-    render: (row) => carrierDisplayLabel(row),
+    render: (row) => displayCarrier(carrierDisplayLabel(row)),
   },
   {
-    title: '推荐（预计送仓）',
+    title: '预计送仓（推荐）',
     key: 'candidateValue',
-    width: 148,
-    render: (row) => formatTime(row.candidateValue),
+    width: 124,
+    render: (row) => renderDateWithTime(row.candidateValue),
   },
   {
-    title: '对照（签收节点）',
+    title: '签收节点',
     key: 'compareValue',
-    width: 168,
-    render: (row) => formatTime(row.compareValue),
+    width: 112,
+    render: (row) => renderDateWithTime(row.compareValue),
   },
   {
     title: '当前签收',
     key: 'deliveredTime',
-    width: 148,
-    render: (row) => formatTime(row.deliveredTime),
+    width: 112,
+    render: (row) => renderDateWithTime(row.deliveredTime),
   },
   {
-    title: '审批问题',
-    key: 'reviewQuestion',
-    minWidth: 240,
-    ellipsis: { tooltip: true },
-    render: (row) => formatSignedTimeReviewQuestion(row.candidateValue),
-  },
-  {
-    title: '预计送仓轨迹',
-    key: 'sourceTrackDesc',
-    minWidth: 200,
-    ellipsis: { tooltip: true },
-  },
-  {
-    title: '状态',
-    key: 'reviewStatus',
-    width: 96,
-    render: () => h(NTag, { size: 'small', type: 'warning', bordered: false }, () => '待审批'),
+    title: '日期差',
+    key: 'dateDifference',
+    width: 108,
+    render: dateDifference,
   },
   {
     title: '轨迹',
@@ -321,12 +355,12 @@ const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
   {
     title: '操作',
     key: 'actions',
-    width: 320,
+    width: 204,
     fixed: 'right',
     render: (row) => {
       const busy = reviewingId.value === row.id
-      const disabled = batching.value != null || (reviewingId.value != null && reviewingId.value !== row.id)
-      return h(NSpace, { size: 6, wrap: true }, () => [
+      const disabled = batching.value != null || reviewingId.value != null
+      return h(NSpace, { size: 4, wrap: false }, () => [
           h(
             NButton,
             {
@@ -336,41 +370,23 @@ const columns = computed<DataTableColumns<TrackingTimeCandidate>>(() => [
               disabled,
               onClick: () => void review(row, 'use_expected_delivery'),
             },
-            () => '采用预计送仓',
+            () => '用预计',
           ),
           h(
             NButton,
             {
               size: 'small',
               loading: busy,
-              disabled,
+              disabled: disabled || !row.compareValue?.trim(),
               onClick: () => void review(row, 'use_signed_track'),
             },
-            () => '签收节点',
+            () => '用节点',
           ),
           h(
-            NButton,
-            {
-              size: 'small',
-              loading: busy,
-              disabled,
-              onClick: () => {
-                manualRowId.value = manualRowId.value === row.id ? null : row.id
-                manualAt.value = null
-              },
-            },
-            () => '手动',
+            NDropdown,
+            { trigger: 'click', options: reviewOptions, disabled, onSelect: (key) => selectReviewOption(row, key) },
+            { default: () => h(NButton, { size: 'small', quaternary: true, disabled }, () => '更多') },
           ),
-          h(
-            NButton,
-            {
-              size: 'small',
-              loading: busy,
-              disabled,
-              onClick: () => void review(row, 'reject'),
-            },
-          () => '暂不处理',
-        ),
       ])
     },
   },
@@ -403,38 +419,31 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="tracking-approval-page flex h-full min-h-0 w-full flex-col gap-4">
-    <div class="flex shrink-0 flex-wrap items-start justify-between gap-3">
-      <div>
+  <div class="tracking-approval-page flex h-full min-h-0 w-full flex-col gap-2">
+    <div class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <div class="flex items-center gap-3">
         <h2 class="page-h2">轨迹审批</h2>
-        <p class="mt-1 text-xs text-[var(--color-muted)]">
-          签收节点与预计送仓日期不一致时，推荐采用预计送仓时间作为签收时间；也可选用签收节点或手动填写。
-        </p>
+        <span class="text-sm tabular-nums text-[var(--color-fg-secondary)]">待审批 {{ total }} 票</span>
       </div>
-      <NButton size="small" :loading="loading" @click="load">刷新</NButton>
+      <div class="tracking-approval-filters" :class="{ 'tracking-approval-filters--masked': !carrierVisible }">
+        <span class="text-xs text-[var(--color-muted)]">承运商</span>
+        <span v-if="!carrierVisible">***</span>
+        <NSelect
+          v-else
+          v-model:value="filterCarrier"
+          :options="carrierOptions"
+          clearable
+          filterable
+          size="small"
+          class="min-w-0"
+          placeholder="全部"
+          aria-label="承运商筛选"
+        />
+        <NButton size="small" :loading="loading" @click="load">刷新</NButton>
+      </div>
     </div>
 
     <article class="panel flex min-h-0 flex-1 flex-col overflow-hidden p-0">
-      <div class="shrink-0 flex flex-wrap items-center justify-between gap-3 border-b border-[var(--color-border)] px-4 py-3">
-        <div class="text-sm text-[var(--color-fg-secondary)]">
-          待审批
-          <span class="ml-1 font-semibold tabular-nums text-[var(--color-fg-emphasis)]">{{ total }}</span>
-          条
-        </div>
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="text-xs text-[var(--color-muted)]">承运商</span>
-          <NSelect
-            v-model:value="filterCarrier"
-            :options="carrierOptions"
-            clearable
-            filterable
-            size="small"
-            class="w-40"
-            placeholder="全部"
-          />
-        </div>
-      </div>
-
       <div
         v-if="checkedRowKeys.length"
         class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-4 py-2"
@@ -449,53 +458,31 @@ onMounted(() => {
             size="small"
             type="primary"
             :loading="batching === 'use_expected_delivery'"
-            :disabled="batching != null && batching !== 'use_expected_delivery'"
-            @click="batchReview('use_expected_delivery')"
+            :disabled="batching != null || reviewingId != null"
+            @click="confirmBatchReview('use_expected_delivery')"
           >
             采用预计送仓
           </NButton>
           <NButton
             size="small"
             :loading="batching === 'use_signed_track'"
-            :disabled="batching != null && batching !== 'use_signed_track'"
-            @click="batchReview('use_signed_track')"
+            :disabled="batching != null || reviewingId != null"
+            @click="confirmBatchReview('use_signed_track')"
           >
             签收节点
           </NButton>
           <NButton
             size="small"
             :loading="batching === 'reject'"
-            :disabled="batching != null && batching !== 'reject'"
-            @click="batchReview('reject')"
+            :disabled="batching != null || reviewingId != null"
+            @click="confirmBatchReview('reject')"
           >
-            暂不处理
+            保留当前签收
           </NButton>
           <NButton size="small" quaternary :disabled="batching != null" @click="checkedRowKeys = []">
             取消选择
           </NButton>
         </NSpace>
-      </div>
-
-      <div
-        v-if="manualRowId"
-        class="flex shrink-0 flex-wrap items-end gap-3 border-b border-[var(--color-border)] px-4 py-3"
-      >
-        <div class="text-xs text-[var(--color-muted)]">手动填写签收时间</div>
-        <NDatePicker
-          v-model:value="manualAt"
-          type="datetime"
-          clearable
-          size="small"
-          format="yyyy-MM-dd HH:mm:ss"
-        />
-        <NButton
-          size="small"
-          type="primary"
-          :loading="reviewingId === manualRowId"
-          @click="submitManual(items.find((r) => r.id === manualRowId)!)"
-        >
-          确认写入
-        </NButton>
       </div>
 
       <div v-if="error" class="shrink-0 px-4 py-8 text-sm text-red-400">{{ error }}</div>
@@ -515,7 +502,7 @@ onMounted(() => {
           :data="items"
           :row-key="(row: TrackingTimeCandidate) => row.id"
           size="small"
-          :scroll-x="1740"
+          :scroll-x="1040"
           :bordered="false"
         />
       </div>
@@ -535,6 +522,31 @@ onMounted(() => {
       </div>
     </article>
 
+    <NModal
+      :show="manualRow !== null"
+      preset="card"
+      :title="manualRow?.shipmentNo ? `填写签收时间 · ${manualRow.shipmentNo}` : '填写签收时间'"
+      class="w-[min(460px,calc(100vw-2rem))]"
+      :mask-closable="false"
+      :closable="reviewingId === null"
+      :close-on-esc="reviewingId === null"
+      @update:show="show => { if (!show && !reviewingId) manualRow = null }"
+    >
+      <div v-if="manualRow" class="space-y-3">
+        <dl class="grid grid-cols-2 gap-2 text-sm tabular-nums">
+          <div><dt class="text-[var(--color-muted)]">预计送仓</dt><dd>{{ formatTime(manualRow.candidateValue) }}</dd></div>
+          <div><dt class="text-[var(--color-muted)]">签收节点</dt><dd>{{ formatTime(manualRow.compareValue) }}</dd></div>
+        </dl>
+        <NDatePicker v-model:value="manualAt" type="datetime" clearable format="yyyy-MM-dd HH:mm:ss" />
+      </div>
+      <template #footer>
+        <NSpace justify="end">
+          <NButton :disabled="reviewingId !== null" @click="manualRow = null">取消</NButton>
+          <NButton type="primary" :disabled="manualAt == null" :loading="reviewingId !== null" @click="submitManual">确认写入</NButton>
+        </NSpace>
+      </template>
+    </NModal>
+
     <ShipmentTrackingDrawer
       v-model:show="trackingDrawerShow"
       :shipment="trackingDrawerShipment"
@@ -546,6 +558,19 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.tracking-approval-filters {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr) max-content;
+  align-items: center;
+  gap: 0.5rem;
+  width: min(100%, 17rem);
+}
+
+.tracking-approval-filters--masked {
+  grid-template-columns: repeat(3, max-content);
+  width: auto;
+}
+
 .tracking-approval-table-wrap {
   min-height: 200px;
 }

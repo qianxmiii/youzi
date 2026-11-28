@@ -94,6 +94,12 @@ const router = createRouter({
           meta: { title: '运单分组' },
         },
         {
+          path: 'bills-of-lading',
+          name: 'bills-of-lading',
+          component: () => import('@/views/shipments/BillsOfLadingView.vue'),
+          meta: { title: '提单管理' },
+        },
+        {
           path: 'vessel-schedules',
           name: 'vessel-schedules',
           component: () => import('@/views/vessel-schedules/VesselSchedulesView.vue'),
@@ -121,7 +127,7 @@ const router = createRouter({
           path: 'admin',
           name: 'admin',
           component: () => import('@/views/admin/AdminCodeTablesView.vue'),
-          meta: { title: '后台管理' },
+          meta: { title: '码表' },
         },
         {
           path: 'customers/addresses',

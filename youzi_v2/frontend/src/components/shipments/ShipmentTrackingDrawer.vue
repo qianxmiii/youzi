@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { displayCarrier } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import { ExternalLink, RefreshCw, Signpost } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { NButton, NDrawer, NDrawerContent, useMessage } from 'naive-ui'
@@ -256,7 +258,10 @@ async function refreshAfterRouteAdd() {
               </div>
               <div class="meta-split-cell">
                 <dt class="section-label">承运商</dt>
-                <dd class="section-value meta-carrier">{{ carrierText }}</dd>
+                <dd class="section-value meta-carrier flex items-center gap-2">
+                  {{ displayCarrier(carrierText) }}
+                  <CarrierVisibilityToggle />
+                </dd>
               </div>
             </div>
             <div class="meta-item meta-item--split">

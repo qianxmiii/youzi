@@ -161,16 +161,28 @@ class WecomAibotRuntime:
     def is_ready(self) -> bool:
         return self._authenticated and self._ws is not None
 
+    def _load_connection_config(self) -> dict[str, Any]:
+        return load_wecom_webhook_config(self._config_path)
+
+    def _long_connection_enabled(self) -> bool:
+        return read_wecom_long_connection_enabled(self._config_path)
+
+    def _on_authenticated(self) -> None:
+        append_wecom_aibot_log(
+            "aibot_subscribe 认证成功；@机器人 发送运单号可查询状态；"
+            "chat_id 见 youzi_v2/logs/wecom-aibot-YYYY-MM-DD.log"
+        )
+
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
             return
-        cfg = load_wecom_webhook_config(self._config_path)
+        cfg = self._load_connection_config()
         if cfg["mode"] != "aibot" or not cfg["enabled"]:
             return
         if not cfg["bot_id"] or not cfg["secret"]:
             return
-        if not read_wecom_long_connection_enabled(self._config_path):
-            append_wecom_aibot_log("长连接未启动：wecom_webhook.long_connection=false")
+        if not self._long_connection_enabled():
+            append_wecom_aibot_log("长连接未启动：long_connection=false")
             return
         self._stop.clear()
         self._thread = threading.Thread(
@@ -217,7 +229,7 @@ class WecomAibotRuntime:
     def _run_loop(self) -> None:
         delay = 1.0
         while not self._stop.is_set():
-            cfg = load_wecom_webhook_config(self._config_path)
+            cfg = self._load_connection_config()
             if cfg["mode"] != "aibot" or not cfg["enabled"]:
                 break
             try:
@@ -239,10 +251,7 @@ class WecomAibotRuntime:
         try:
             subscribe(ws, bot_id=cfg["bot_id"], secret=cfg["secret"])
             self._authenticated = True
-            append_wecom_aibot_log(
-                "aibot_subscribe 认证成功；@机器人 发送运单号可查询状态；"
-                "chat_id 见 youzi_v2/logs/wecom-aibot-YYYY-MM-DD.log"
-            )
+            self._on_authenticated()
             last_ping = time.monotonic()
             while not self._stop.is_set():
                 self._drain_reply_queue(ws)
@@ -534,10 +543,14 @@ class WecomAibotRuntime:
                     slot.ack = msg
                     slot.event.set()
 
+        if should_log_chat_callback(str(cmd) if cmd else None):
+            self._handle_callback(cmd, msg)
+
+    def _handle_callback(self, cmd: str, msg: dict[str, Any]) -> None:
         if cmd == "aibot_msg_callback":
             self._enqueue_shipment_query_reply(msg)
 
-        if should_log_chat_callback(str(cmd) if cmd else None):
+        if should_log_chat_callback(cmd):
             chat_id, chat_type = extract_chat_id_from_frame(msg)
             if chat_id:
                 append_wecom_aibot_log(

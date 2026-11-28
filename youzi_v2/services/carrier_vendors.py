@@ -411,46 +411,26 @@ def resolve_vendor_for_row(
     """运单 carrier_code 优先按 config vendors.id 匹配；兼容码表编码与 vendor 名称。"""
     by_id = vendor_by_id or {}
     cc = (row.get("carrier_code") or "").strip()
-    if cc:
-        if cc in by_id:
-            return by_id[cc]
-        if code_to_carrier_id:
-            mapped = (code_to_carrier_id.get(cc) or "").strip()
-            if mapped and mapped in by_id:
-                return by_id[mapped]
-    candidates = [
-        cc,
-        (row.get("supplier_name") or "").strip(),
-    ]
-    for name in candidates:
-        if not name:
-            continue
-        if name in vendor_by_name:
-            return vendor_by_name[name]
-        for vendor in vendor_by_name.values():
-            aliases = [vendor.get("name") or "", *(vendor.get("aliases") or [])]
-            if name in {a.strip() for a in aliases if a and str(a).strip()}:
-                return vendor
+    if not cc:
+        return None
+    if cc in by_id:
+        return by_id[cc]
+    if code_to_carrier_id:
+        mapped = (code_to_carrier_id.get(cc) or "").strip()
+        if mapped in by_id:
+            return by_id[mapped]
+    if cc in vendor_by_name:
+        return vendor_by_name[cc]
+    for vendor in vendor_by_name.values():
+        if any(cc == str(alias).strip() for alias in vendor.get("aliases") or [] if alias):
+            return vendor
     return None
 
 
-def carrier_vendor_unassigned_reason(
-    row: dict[str, str],
-    vendor_by_name: dict[str, dict[str, Any]],
-    vendor_by_id: dict[str, dict[str, Any]] | None = None,
-) -> str:
+def carrier_vendor_unassigned_reason(carrier_code: str) -> str:
     """说明运单为何未匹配到 config.json 中的 vendors。"""
-    by_id = vendor_by_id or {}
-    cc = (row.get("carrier_code") or "").strip()
-    sup = (row.get("supplier_name") or "").strip()
-    if not cc and not sup:
-        sample_ids = "、".join(sorted(by_id.keys())[:4])
-        sample_names = "、".join(sorted(vendor_by_name.keys())[:4])
-        hint = f"vendors.id：{sample_ids}…" if sample_ids else f"vendors.name：{sample_names}…"
-        return f"未填写承运商/供应商，请在运单 carrier_code 填写 vendors.id 或名称以匹配 config：{hint}"
-    label = cc or sup
     return (
-        f"承运商「{label}」与 config.vendors 未匹配"
+        f"承运商「{carrier_code}」与 config.vendors 未匹配"
         f"（carrier_code 应对应 vendors.id，或填写 vendor 名称/aliases）"
     )
 

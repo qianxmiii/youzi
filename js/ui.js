@@ -198,9 +198,9 @@ function addRow() {
         <td class="result-cell">0 kg</td>
         <td class="result-cell">0 cm</td>
         <td>
-            <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
-            <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
+            <button type="button" class="btn btn-success btn-sm box-row-action" onclick="addRow()" title="新增行" aria-label="新增行"><i class="bi bi-plus" aria-hidden="true"></i></button>
+            <button type="button" class="btn btn-danger btn-sm box-row-action" onclick="deleteRow(event)" title="删除当前行" aria-label="删除当前行"><i class="bi bi-dash" aria-hidden="true"></i></button>
+            <button type="button" class="btn btn-info btn-sm box-row-action" onclick="copyRow(event)" title="复制当前行" aria-label="复制当前行"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
         </td>
     `;
     table.appendChild(newRow);
@@ -268,9 +268,9 @@ function copyRow(event) {
         <td class="result-cell">0 kg</td>
         <td class="result-cell">0 cm</td>
         <td>
-            <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
-            <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
-            <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
+            <button type="button" class="btn btn-success btn-sm box-row-action" onclick="addRow()" title="新增行" aria-label="新增行"><i class="bi bi-plus" aria-hidden="true"></i></button>
+            <button type="button" class="btn btn-danger btn-sm box-row-action" onclick="deleteRow(event)" title="删除当前行" aria-label="删除当前行"><i class="bi bi-dash" aria-hidden="true"></i></button>
+            <button type="button" class="btn btn-info btn-sm box-row-action" onclick="copyRow(event)" title="复制当前行" aria-label="复制当前行"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
         </td>
     `;
     
@@ -548,7 +548,8 @@ function togglePickupFeeInput() {
         pickupFeeInputContainer.style.display = "block";
     } else {
         pickupFeeInputContainer.style.display = "none";
-        document.getElementById("pickup-fee").value = ""; // 清空提货费输入框
+        document.getElementById("pickup-fee").value = "";
+        document.getElementById("pickup-fee-USD").value = ""; // 清空提货费输入框
     }
 
     // 触发更新

@@ -17,6 +17,7 @@ const emit = defineEmits<{
 const addressTypeOptions = [
   { label: 'AMZ', value: 'AMZ' },
   { label: 'WFS', value: 'WFS' },
+  { label: 'TikTok', value: 'TIKTOK' },
 ]
 
 const form = reactive<AddressPayload>({
@@ -116,7 +117,7 @@ function handleSubmit() {
             v-model:value="form.addressType"
             :options="addressTypeOptions"
             clearable
-            placeholder="AMZ / WFS"
+            placeholder="AMZ / WFS / TikTok"
           />
         </NFormItem>
         <NFormItem label="收件人公司名">

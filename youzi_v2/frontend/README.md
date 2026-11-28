@@ -8,6 +8,8 @@ Youzi v2 前端 — Vue 3 SPA
 
 提供物流运营 Web 界面：工作台、运单管理、船期监控、地址簿、统计、客户/渠道管理、计划任务等。通过 `/api` 调用 FastAPI 后端。
 
+右上角的眼睛用于遮挡承运商和船公司信息。打开页面时默认显示 `***`，点击可显示或再次遮挡。切换菜单沿用当前状态，刷新页面恢复遮挡。开关只控制 Youzi v2 的屏幕显示，API 权限和 Excel 导出沿用原有规则。
+
 ## 主要文件
 
 | 路径 | 作用 |
@@ -44,7 +46,7 @@ Youzi v2 前端 — Vue 3 SPA
 | `/channels` | 重定向至码表「渠道」 | → `/admin?table=channel_codes` |
 | `/scheduled-tasks` | 计划任务 | ✅ |
 | `/admin` | 后台管理 · 码表（渠道 tab = 完整渠道管理） | ✅ |
-| `/display-settings` | 系统管理 · 设置 · 显示设置 | ✅ |
+| `/display-settings` | 后台管理 · 显示设置 | ✅ |
 | `/cost` | 成本计算（自税/包税） | 侧栏暂隐藏 |
 | `/quote-center/followups` | 报价跟进 | ✅ |
 | `/tools` | 工具中心（分类卡片入口） | ✅ |

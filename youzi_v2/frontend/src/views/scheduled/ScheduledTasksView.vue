@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { carrierVisible, displayCarrier } from '@/composables/useCarrierPrivacy'
 import {
   NButton,
   NDataTable,
@@ -321,11 +322,11 @@ async function onRunCarrier() {
   try {
     const res = await runScheduledCarrierSync()
     const msg = syncResultMessage(res)
-    if (msg.type === 'warning') message.warning(msg.text)
+    if (msg.type === 'warning') message.warning(displayCarrier(msg.text))
     else message.success(`承运商轨迹：${msg.text}`)
     await load()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '执行失败')
+    message.error(carrierVisible.value && e instanceof Error ? e.message : '承运商轨迹执行失败')
   } finally {
     runningCarrier.value = false
   }
@@ -702,9 +703,12 @@ onMounted(load)
                           <span>{{ index + 1 }}. {{ step.label }}</span>
                           <NTag size="small" :bordered="false" :type="step.status === 'done' ? 'success' : step.status === 'partial' ? 'warning' : step.status === 'running' ? 'info' : 'default'">{{ dailyLabels[step.status] }}</NTag>
                         </div>
-                        <p v-if="step.message" class="mt-1 text-xs break-all text-[var(--color-muted)]">{{ step.message }}</p>
+                        <p v-if="step.message" class="mt-1 text-xs break-all text-[var(--color-muted)]">{{ step.key === 'carrier' ? displayCarrier(step.message) : step.message }}</p>
                         <p v-if="step.candidateCount != null" class="mt-1 text-xs text-[var(--color-muted)]">本阶段候选 {{ step.candidateCount }}，已处理 {{ step.completedCount }}，待处理 {{ step.pendingCount }}</p>
-                        <p v-for="(issue, i) in step.errors" :key="i" class="mt-1 text-xs break-all text-red-500">{{ issue }}</p>
+                        <p v-if="step.key === 'carrier' && !carrierVisible && step.errors?.length" class="mt-1 text-xs text-red-500">错误 {{ step.errors.length }} 条，详情 ***</p>
+                        <template v-else>
+                          <p v-for="(issue, i) in step.errors" :key="i" class="mt-1 text-xs break-all text-red-500">{{ issue }}</p>
+                        </template>
                       </li>
                     </ol>
                   </template>

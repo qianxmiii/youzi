@@ -2,6 +2,7 @@
 import type { FunctionalComponent } from 'vue'
 import { computed } from 'vue'
 import {
+  Anchor,
   BarChart3,
   BookOpen,
   Calculator,
@@ -50,6 +51,7 @@ const ICONS: Record<string, FunctionalComponent<LucideProps>> = {
   truck: Truck,
   alert: TriangleAlert,
   ship: Ship,
+  anchor: Anchor,
   chart: BarChart3,
   users: Users,
   approval: ClipboardCheck,

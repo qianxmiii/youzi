@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { carrierVisible, displayCarrier } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import {
   NButton,
   NDatePicker,
@@ -27,6 +29,8 @@ const props = defineProps<{
   show: boolean
   mode: 'create' | 'edit'
   initial: VesselVoyageDetail | null
+  submitting?: boolean
+  requirePortPair?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -116,7 +120,9 @@ function resetForm() {
     shippingCompany.value = ''
     vesselVoyage.value = ''
     notes.value = ''
-    portCalls.value = [{ portName: '', sequence: 1, eta: null, ata: null, etd: null, atd: null }]
+    portCalls.value = Array.from({ length: props.requirePortPair ? 2 : 1 }, (_, index) => ({
+      portName: '', sequence: index + 1, eta: null, ata: null, etd: null, atd: null,
+    }))
   }
 }
 
@@ -196,15 +202,16 @@ async function pullFromCarrier() {
     const label =
       scheduleProviders.value.find((p) => p.shippingCompany === data.shippingCompany)?.label ||
       data.shippingCompany
-    message.success(`已从 ${label} 拉取 ${data.portCalls?.length ?? 0} 个挂靠港`)
+    message.success(`已从 ${displayCarrier(label)} 拉取 ${data.portCalls?.length ?? 0} 个挂靠港`)
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '船期拉取失败')
+    message.error(carrierVisible.value && e instanceof Error ? e.message : '船期拉取失败')
   } finally {
     fetchLoading.value = false
   }
 }
 
 function handleSubmit() {
+  if (props.submitting || fetchLoading.value) return
   const name = vesselName.value.trim()
   const voy = voyageNo.value.trim()
   const vv = vesselVoyage.value.trim()
@@ -222,8 +229,8 @@ function handleSubmit() {
       atd: formatTs(pc.atd),
     }))
     .filter((pc) => pc.portName)
-  if (!cleaned.length) {
-    message.warning('请至少添加一个挂靠港口')
+  if (cleaned.length < (props.requirePortPair ? 2 : 1)) {
+    message.warning(props.requirePortPair ? '请填写起运港和目的港' : '请至少添加一个挂靠港口')
     return
   }
   emit('submit', {
@@ -243,20 +250,28 @@ function handleSubmit() {
     :show="show"
     preset="card"
     :title="title"
+    :closable="!submitting"
+    :mask-closable="!submitting"
+    :close-on-esc="!submitting"
     class="voyage-form-modal"
     style="width: min(56rem, 96vw)"
     @update:show="emit('update:show', $event)"
   >
-    <NForm label-placement="top" class="voyage-form-modal__form">
+    <NForm label-placement="top" :disabled="submitting" class="pb-2">
       <div class="grid gap-4 sm:grid-cols-2">
         <NFormItem label="船公司" class="sm:col-span-2">
-          <NSelect
-            v-model:value="shippingCompany"
-            :options="providerOptions"
-            filterable
-            tag
-            placeholder="选择已接入船公司"
-          />
+          <div class="flex w-full items-center gap-2">
+            <span v-if="!carrierVisible">***</span>
+            <NSelect
+              v-else
+              v-model:value="shippingCompany"
+              :options="providerOptions"
+              filterable
+              tag
+              placeholder="选择已接入船公司"
+            />
+            <CarrierVisibilityToggle />
+          </div>
         </NFormItem>
         <NFormItem label="船名">
           <CarrierVesselSelect
@@ -311,14 +326,12 @@ function handleSubmit() {
       <div class="mb-2 flex shrink-0 items-center justify-between gap-2">
         <div class="min-w-0">
           <div class="text-sm font-medium text-zinc-300">挂靠港口</div>
-          <div v-if="portCallCount > 0" class="text-xs text-[var(--color-muted)]">
-            共 {{ portCallCount }} 个，列表可滚动
-          </div>
+          <div v-if="portCallCount > 0" class="text-xs text-[var(--color-muted)]">{{ portCallCount }} 个</div>
         </div>
         <NButton size="small" class="shrink-0" @click="addPortCall">添加港口</NButton>
       </div>
 
-      <div class="voyage-form-modal__ports space-y-3">
+      <div class="space-y-3">
         <div
           v-for="(pc, index) in portCalls"
           :key="index"
@@ -375,38 +388,30 @@ function handleSubmit() {
 
     <template #footer>
       <NSpace justify="end">
-        <NButton @click="emit('update:show', false)">取消</NButton>
-        <NButton type="primary" @click="handleSubmit">保存</NButton>
+        <NButton :disabled="submitting" @click="emit('update:show', false)">取消</NButton>
+        <NButton type="primary" :loading="submitting" :disabled="fetchLoading" @click="handleSubmit">保存</NButton>
       </NSpace>
     </template>
   </NModal>
 </template>
 
 <style scoped>
-.voyage-form-modal :deep(.n-card) {
+:global(.voyage-form-modal) {
   max-height: 90vh;
+  max-height: min(90vh, calc(100dvh - 1.5rem));
   display: flex;
   flex-direction: column;
 }
 
-.voyage-form-modal :deep(.n-card__content) {
-  flex: 1;
-  min-height: 0;
-  overflow: hidden;
+:global(.voyage-form-modal > .n-card-header),
+:global(.voyage-form-modal > .n-card__footer) {
+  flex: 0 0 auto;
 }
 
-.voyage-form-modal__form {
-  display: flex;
-  flex-direction: column;
+:global(.voyage-form-modal > .n-card-content) {
+  flex: 1 1 auto;
   min-height: 0;
-  max-height: calc(90vh - 7.5rem);
-}
-
-.voyage-form-modal__ports {
-  flex: 1;
-  min-height: 8rem;
-  max-height: min(50vh, 28rem);
   overflow-y: auto;
-  padding-right: 0.25rem;
+  overscroll-behavior: contain;
 }
 </style>

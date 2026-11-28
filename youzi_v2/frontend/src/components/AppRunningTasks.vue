@@ -4,6 +4,8 @@ import { NPopover, NPopconfirm, NButton, NProgress, NModal, NTag, NDataTable, us
 import { useRouter } from 'vue-router'
 import { useNow } from '@vueuse/core'
 import { api } from '@/api/client'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
 import { collectCtnsMismatchNos } from '@/utils/productCtnsCheck'
 import { LoaderCircle, ListTodo, RefreshCw, Trash2, EyeOff, History, ChevronRight, Clock3, CircleCheck, CircleAlert, Info, Inbox } from 'lucide-vue-next'
 import { useRunningTasks, loadTaskHistory, persistTask, deleteTaskHistory, type RunningTask } from '@/composables/useRunningTasks'
@@ -23,6 +25,9 @@ const now = useNow({interval:1000})
 function stateOf(task: RunningTask) { return task.historical && task.state === 'running' ? 'unknown' : task.state }
 function statusText(task: RunningTask) { return ({running:'进行中',done:'已完成',failed:'需关注',unknown:'待确认'})[stateOf(task)] }
 function taskName(task: RunningTask) { return task.source && task.title.startsWith(task.source + ' · ') ? task.title.slice(task.source.length + 3) : task.title }
+function isCarrierTaskMasked(task: RunningTask) {
+  return !carrierVisible.value && taskName(task) === '同步承运商轨迹'
+}
 function duration(task: RunningTask) {
   if (stateOf(task) === 'unknown') return '结果待核对'
   const seconds = Math.max(0, Math.floor(((task.finished || now.value.getTime()) - task.started) / 1000))
@@ -33,6 +38,7 @@ function startedLabel(task: RunningTask) { return new Date(task.started).toLocal
 function hasSummary(task: RunningTask) { return task.message && !['处理中','正在处理','处理完成'].includes(task.message.trim()) }
 const issue = computed(() => tasks.some(t => t.unseen && t.state === 'failed' && !hiddenTaskIds.value.includes(t.id)))
 const selected = ref<RunningTask | null>(null)
+const selectedCarrierTaskMasked = computed(() => selected.value ? isCarrierTaskMasked(selected.value) : false)
 const detailShow = ref(false)
 const message = useMessage()
 const auditText = ref('')
@@ -91,7 +97,7 @@ async function copy() { try { await navigator.clipboard.writeText([selected.valu
             <div class="task-card__top"><span class="task-card__source">{{ task.source || '处理任务' }}</span><span class="task-card__status"><LoaderCircle v-if="stateOf(task) === 'running'" :size="12" class="animate-spin" /><CircleCheck v-else-if="stateOf(task) === 'done'" :size="12" /><CircleAlert v-else :size="12" />{{ statusText(task) }}</span></div>
             <div class="task-card__title"><strong :title="taskName(task)">{{ taskName(task) }}</strong><ChevronRight :size="15" /></div>
             <div v-if="task.progress != null && stateOf(task) === 'running'" class="task-card__progress"><NProgress type="line" :percentage="Math.max(0, Math.min(100, Math.round(task.progress)))" :show-indicator="false" :height="4" /><span>{{ Math.round(task.progress) }}%</span></div>
-            <p v-if="hasSummary(task)" class="task-card__summary" :title="task.message">{{ task.message }}</p>
+            <p v-if="hasSummary(task)" class="task-card__summary" :title="isCarrierTaskMasked(task) ? undefined : task.message">{{ isCarrierTaskMasked(task) ? '***' : task.message }}</p>
             <p v-if="task.saveError" class="task-card__warning">记录未保存，点击重试</p>
             <div class="task-card__meta"><span><Clock3 :size="11" />{{ startedLabel(task) }}</span><span>{{ duration(task) }}</span></div>
           </button>
@@ -114,33 +120,39 @@ async function copy() { try { await navigator.clipboard.writeText([selected.valu
       <span v-if="selected?.source">来源：{{ selected.source }}</span>
       <span v-if="selected">开始于 {{ new Date(selected.started).toLocaleString() }}</span>
     </div>
-    <div v-if="selected?.stats?.length" class="task-stat-grid">
-      <div v-for="stat in selected.stats" :key="stat.label" class="task-stat" :class="stat.tone ? `task-stat--${stat.tone}` : ''">
-        <span class="text-xs text-[var(--color-muted)]">{{ stat.label }}</span><strong class="mt-1 block text-2xl font-semibold">{{ stat.value }}</strong>
-      </div>
+    <div v-if="selected && taskName(selected) === '同步承运商轨迹'" class="mb-2 flex items-center gap-2 text-sm">
+      <span v-if="selectedCarrierTaskMasked">***</span>
+      <CarrierVisibilityToggle />
     </div>
-    <p v-else class="mb-4 text-sm">{{ selected?.message }}</p>
-    <NProgress v-if="selected?.state === 'running' && selected.progress != null" type="line" :percentage="Math.round(selected.progress)" class="my-3" />
-    <div class="mb-3 mt-5 flex flex-wrap items-center justify-between gap-2">
-      <div class="flex gap-1" v-if="selected?.resultKind === 'ctns'">
-        <NButton size="small" :type="filter === 'all' ? 'primary' : 'default'" secondary @click="filter = 'all'">全部异常</NButton>
-        <NButton size="small" :type="filter === 'mismatch' ? 'primary' : 'default'" secondary @click="filter = 'mismatch'">件数不一致</NButton>
-        <NButton size="small" :type="filter === 'error' ? 'primary' : 'default'" secondary @click="filter = 'error'">查询异常</NButton>
+    <template v-if="!selectedCarrierTaskMasked">
+      <div v-if="selected?.stats?.length" class="task-stat-grid">
+        <div v-for="stat in selected.stats" :key="stat.label" class="task-stat" :class="stat.tone ? `task-stat--${stat.tone}` : ''">
+          <span class="text-xs text-[var(--color-muted)]">{{ stat.label }}</span><strong class="mt-1 block text-2xl font-semibold">{{ stat.value }}</strong>
+        </div>
       </div>
-      <div class="flex flex-wrap gap-2">
-        <NButton v-if="selected?.resultKind === 'ctns'" size="small" :disabled="!mismatchNos.length" @click="copyNos(mismatchNos)">复制不一致单号（含未录产品）</NButton>
-        <NButton v-if="selected?.resultKind === 'ctns'" size="small" :disabled="!issueNos.length" @click="copyNos(issueNos)">复制查询异常单号</NButton>
-        <NButton size="small" @click="copy">复制完整结果</NButton>
+      <p v-else class="mb-4 text-sm">{{ selected?.message }}</p>
+      <NProgress v-if="selected?.state === 'running' && selected.progress != null" type="line" :percentage="Math.round(selected.progress)" class="my-3" />
+      <div class="mb-3 mt-5 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex gap-1" v-if="selected?.resultKind === 'ctns'">
+          <NButton size="small" :type="filter === 'all' ? 'primary' : 'default'" secondary @click="filter = 'all'">全部异常</NButton>
+          <NButton size="small" :type="filter === 'mismatch' ? 'primary' : 'default'" secondary @click="filter = 'mismatch'">件数不一致</NButton>
+          <NButton size="small" :type="filter === 'error' ? 'primary' : 'default'" secondary @click="filter = 'error'">查询异常</NButton>
+        </div>
+        <div class="flex flex-wrap gap-2">
+          <NButton v-if="selected?.resultKind === 'ctns'" size="small" :disabled="!mismatchNos.length" @click="copyNos(mismatchNos)">复制不一致单号（含未录产品）</NButton>
+          <NButton v-if="selected?.resultKind === 'ctns'" size="small" :disabled="!issueNos.length" @click="copyNos(issueNos)">复制查询异常单号</NButton>
+          <NButton size="small" @click="copy">复制完整结果</NButton>
+        </div>
       </div>
-    </div>
-    <template v-if="selected?.rows">
-      <NDataTable size="small" :columns="columns" :data="visibleRows" :pagination="false" :max-height="360" :scroll-x="selected.resultKind === 'ctns' ? 720 : 400">
-        <template #empty>{{ selected.state === 'running' ? '正在核对，请稍候…' : filter === 'all' ? '没有需要处理的异常' : filter === 'mismatch' ? '没有件数不一致的运单' : '没有查询异常的运单' }}</template>
-      </NDataTable>
-      <p v-if="selected.resultKind === 'ctns' && issueNos.length" class="mt-3 text-xs text-[var(--color-muted)]">未录产品的运单也可通过「复制不一致单号」一起复制。补齐产品数据或检查查询结果后可重新核对。</p>
+      <template v-if="selected?.rows">
+        <NDataTable size="small" :columns="columns" :data="visibleRows" :pagination="false" :max-height="360" :scroll-x="selected.resultKind === 'ctns' ? 720 : 400">
+          <template #empty>{{ selected.state === 'running' ? '正在核对，请稍候…' : filter === 'all' ? '没有需要处理的异常' : filter === 'mismatch' ? '没有件数不一致的运单' : '没有查询异常的运单' }}</template>
+        </NDataTable>
+        <p v-if="selected.resultKind === 'ctns' && issueNos.length" class="mt-3 text-xs text-[var(--color-muted)]">未录产品的运单也可通过「复制不一致单号」一起复制。补齐产品数据或检查查询结果后可重新核对。</p>
+      </template>
+      <div v-else class="task-text-result">{{ selected?.details || (selected?.state === 'running' ? '正在处理，结果会自动更新。' : selected?.message) }}</div>
+      <details v-if="auditText" class="mt-4"><summary class="cursor-pointer text-sm">修改前后值与推送记录</summary><div class="task-text-result mt-2">{{ auditText }}</div></details>
     </template>
-    <div v-else class="task-text-result">{{ selected?.details || (selected?.state === 'running' ? '正在处理，结果会自动更新。' : selected?.message) }}</div>
-    <details v-if="auditText" class="mt-4"><summary class="cursor-pointer text-sm">修改前后值与推送记录</summary><div class="task-text-result mt-2">{{ auditText }}</div></details>
   </NModal>
 </template>
 

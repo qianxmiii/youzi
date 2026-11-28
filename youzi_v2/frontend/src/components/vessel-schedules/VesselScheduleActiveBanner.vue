@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { carrierVisible, displayCarrier } from '@/composables/useCarrierPrivacy'
 import { Ship } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { computed } from 'vue'
@@ -60,8 +61,8 @@ const nextEta = computed(() => nextPort.value?.eta ?? nextPort.value?.etd ?? nul
       <div class="vessel-banner__cell vessel-banner__cell--divider">
         <p class="vessel-banner__label">CARRIER</p>
         <div class="vessel-banner__carrier">
-          <span class="vessel-banner__carrier-logo" aria-hidden="true">{{ carrierInitials(shippingCompany) }}</span>
-          <span class="vessel-banner__value vessel-banner__value--wrap">{{ shippingCompany || '—' }}</span>
+          <span v-if="carrierVisible" class="vessel-banner__carrier-logo" aria-hidden="true">{{ carrierInitials(shippingCompany) }}</span>
+          <span class="vessel-banner__value vessel-banner__value--wrap">{{ displayCarrier(shippingCompany) }}</span>
         </div>
       </div>
       <div class="vessel-banner__cell vessel-banner__cell--next vessel-banner__cell--divider">

@@ -293,6 +293,8 @@ erDiagram
 | amz_update_port_rules | 亚马逊推送港口（空运三字 / 海运五字），见 [design/dps-update-amz-design.md](./design/dps-update-amz-design.md) |
 | dict | 字典项，`db/dict_table.py` |
 | app_settings | 应用设置键值，含新增路由常用节点 `shipment_route.presets` |
+| bill_of_lading_bindings | 按规范化提单号保存一个航次及起运港、目的港挂靠 ID |
+| shipment_customs_nodes | 按运单号与进出口阶段保留最新的 DPS 查验或放行节点 |
 | quote_history | 报价历史（含提货费 / 派送费 / 超长费 / 超尺寸费 等） |
 | addresses | 派送地址簿 |
 | addresses_warehouse | 仓库地址簿 |

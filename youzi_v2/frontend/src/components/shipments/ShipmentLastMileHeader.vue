@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { carrierVisible, displayCarrier } from '@/composables/useCarrierPrivacy'
 import { NButton, NTooltip, useMessage } from 'naive-ui'
 import { computed } from 'vue'
 import LastMileBadge from '@/components/common/LastMileBadge.vue'
@@ -41,8 +42,8 @@ function openTrackUrl() {
       <span class="last-mile-label text-[11px] font-medium">转单号</span>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-      <code class="last-mile-code max-w-full truncate font-mono text-xs">{{ lastMile.number }}</code>
-      <div class="flex shrink-0 items-center gap-1">
+      <code class="last-mile-code max-w-full truncate font-mono text-xs">{{ displayCarrier(lastMile.number) }}</code>
+      <div v-if="carrierVisible" class="flex shrink-0 items-center gap-1">
         <NButton size="tiny" quaternary @click="copyNumber">复制</NButton>
         <NTooltip v-if="!lastMile.url" trigger="hover">
           <template #trigger>

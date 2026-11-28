@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
 import {
   NButton,
   NCheckbox,
@@ -37,6 +38,7 @@ import ShipmentAmazonRefModal from '@/components/shipments/ShipmentAmazonRefModa
 import ShipmentDeliveryWindowModal from '@/components/shipments/ShipmentDeliveryWindowModal.vue'
 import ShipmentOrderProductsModal from '@/components/shipments/ShipmentOrderProductsModal.vue'
 import ShipmentProductCtnsCheckModal from '@/components/shipments/ShipmentProductCtnsCheckModal.vue'
+import ShipmentExportTemplatesModal from '@/components/shipments/ShipmentExportTemplatesModal.vue'
 import { getDeliveryWindow } from '@/api/deliveryWindow'
 import { prepareShipmentDWCopy } from '@/utils/deliveryWindowCopy'
 import ShipmentFilterSummaryBar from '@/components/shipments/ShipmentFilterSummaryBar.vue'
@@ -63,6 +65,7 @@ import {
   getTrackingFreshnessStats,
   getTrackingSyncDailyStats,
   importShipmentsExcel,
+  listShipmentExportTemplates,
   listShipments,
   openShipmentExceptions,
   batchSubscribeShipments,
@@ -77,6 +80,10 @@ import {
   syncTracking,
   unsubscribeShipment,
   updateShipment,
+  UnmappedExportChannelsError,
+  type ShipmentExportChannelOption,
+  type ShipmentExportField,
+  type ShipmentExportTemplate,
   type ShipmentFilterOptions,
 } from '@/api/shipments'
 import type { TrackingSyncDailyStats } from '@/types/tracking'
@@ -118,11 +125,8 @@ import {
 import {
   DEFAULT_SHIPMENT_VISIBLE_COLUMNS,
   SHIPMENT_COLUMN_STORAGE_KEY,
-  SHIPMENT_SYSTEM_VIEWS,
   SHIPMENT_TIME_FIELD_OPTIONS,
   emptyAdvancedTimeRanges,
-  systemViewFilters,
-  type ShipmentSystemViewId,
   type ShipmentTimeField,
 } from '@/constants/shipmentListFilterMeta'
 import { buildCarrierSelectOptions } from '@/utils/carrierFilterOptions'
@@ -286,7 +290,6 @@ const deliveryRisk = ref<string | null>(null)
 const advancedTimes = ref(emptyAdvancedTimeRanges())
 const advancedFilterShow = ref(false)
 const columnSettingsShow = ref(false)
-const selectedSystemView = ref<ShipmentSystemViewId | null>(null)
 
 function loadVisibleColumnKeys(): string[] {
   try {
@@ -598,6 +601,7 @@ function renderTrackingSummaryCell(
   time: string | null | undefined,
   desc: string | null | undefined,
 ) {
+  if (tab === 'carrier' && !carrierVisible.value) return h('span', '***')
   const t = (time || '').trim()
   const d = (desc || '').trim()
   if (!t && !d) {
@@ -701,6 +705,7 @@ function openLastMileTrackUrl(row: Shipment) {
 function renderLastMileBadge(row: Shipment) {
   const info = resolveLastMileTracking(row)
   if (!info) return null
+  if (!carrierVisible.value) return h(LastMileBadge)
   const badgeBtn = h(
     'button',
     {
@@ -947,12 +952,9 @@ const channelCategoryOptions = computed(() =>
   filterOptions.value.channelCategories.map((v) => ({ label: v, value: v })),
 )
 
-const systemViewOptions = computed(() =>
-  SHIPMENT_SYSTEM_VIEWS.map((v) => ({ label: v.label, value: v.id })),
-)
-
 function carrierLabel(code: string | null | undefined): string {
   if (!code) return ''
+  if (!carrierVisible.value) return '***'
   if (code === CARRIER_FILTER_EMPTY) return '（未填写）'
   const opt = carrierOptions.value.find((o) => o.value === code)
   return opt?.label || code
@@ -1042,9 +1044,7 @@ const advancedOnlyActiveCount = computed(() => {
   if (advBillNos.value.trim()) n++
   if (advCustomerShipmentIds.value.trim()) n++
   if (filterCarrier.value) n++
-  // 港前国家/供应商已放外层，不计入高级筛选角标
   if (isPreportWorkspace.value && markFilter.value.length) n++
-  if (!isPreportWorkspace.value && filterSupplierName.value) n++
   if (!isPreportWorkspace.value && filterCountry.value) n++
   if (filterChannelNameZh.value) n++
   if (filterCustomerNo.value) n++
@@ -1526,7 +1526,6 @@ watch(shipmentWorkspace, (next, prev) => {
   } else {
     freshnessStats.value = null
     carrierDaily.value = null
-    selectedSystemView.value = null
     filterHasTrackingNumber.value = false
   }
   void loadList()
@@ -1643,20 +1642,92 @@ function downloadBlob(blob: Blob, filename: string) {
   URL.revokeObjectURL(url)
 }
 
-async function handleExport() {
-  exporting.value = true
+const exportTemplateModalShow = ref(false)
+const exportTemplateFields = ref<ShipmentExportField[]>([])
+const exportTemplateChannels = ref<ShipmentExportChannelOption[]>([])
+const exportTemplates = ref<ShipmentExportTemplate[]>([])
+const initialExportTemplateId = ref<string | null>(null)
+const loadingExportTemplates = ref(false)
+const exportTemplateOptions = computed<DropdownOption[]>(() => [
+  { label: '标准模板', key: 'standard' },
+  ...exportTemplates.value.map((template) => ({ label: template.name, key: template.id })),
+  { label: '管理模板', key: 'manage', disabled: loadingExportTemplates.value },
+])
+
+async function loadExportTemplates() {
+  if (loadingExportTemplates.value) return
+  loadingExportTemplates.value = true
   try {
-    const params = buildListParams()
-    const blob = await exportShipmentsExcel({
-      ...params,
-      limit: Math.min(total.value || 10_000, 10_000),
-      offset: 0,
-    })
+    const result = await listShipmentExportTemplates()
+    exportTemplateFields.value = result.fields
+    exportTemplates.value = result.templates
+    exportTemplateChannels.value = result.channels
+  } catch (error) {
+    message.error(apiErrorMessage(error, '加载导出模板失败'))
+  } finally {
+    loadingExportTemplates.value = false
+  }
+}
+
+function handleExportTemplateSelect(key: string | number) {
+  if (key === 'manage') {
+    if (exportTemplateFields.value.length) {
+      initialExportTemplateId.value = null
+      exportTemplateModalShow.value = true
+    }
+    return
+  }
+  void handleExport(key === 'standard' ? undefined : String(key))
+}
+
+function updateExportTemplate(template: ShipmentExportTemplate) {
+  exportTemplates.value = [...exportTemplates.value.filter(({ id }) => id !== template.id), template]
+    .sort((a, b) => a.name.localeCompare(b.name, 'zh'))
+}
+
+async function handleExport(templateId?: string) {
+  const count = total.value
+  const params = { ...buildListParams(), limit: Math.min(count || 10_000, 10_000), offset: 0 }
+  await downloadShipmentExport(params, count, templateId)
+}
+
+async function downloadShipmentExport(
+  params: ReturnType<typeof buildListParams>, count: number, templateId?: string, allowUnmapped = false,
+) {
+  if (exporting.value) return
+  exporting.value = true
+  const templateName = templateId
+    ? exportTemplates.value.find(({ id }) => id === templateId)?.name ?? '自定义模板'
+    : '标准模板'
+  try {
+    const blob = await exportShipmentsExcel(params, templateId, allowUnmapped)
     const ts = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '').slice(0, 14)
-    downloadBlob(blob, `运单导出_${ts}.xlsx`)
-    message.success(`已导出 ${total.value} 条运单（当前筛选）`)
+    const filenameTemplate = templateName.replace(/[<>:"/\\|?*]/g, '_')
+    downloadBlob(blob, `运单导出_${filenameTemplate}_${ts}.xlsx`)
+    message.success(`已按「${templateName}」导出 ${count} 条运单`)
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '导出失败')
+    if (e instanceof UnmappedExportChannelsError && templateId) {
+      const affected = e.channels.reduce((sum, { count }) => sum + count, 0)
+      dialog.warning({
+        title: '渠道映射未齐全',
+        content: () => h('div', [
+          h('p', `${e.channels.length} 个渠道未映射，涉及 ${affected} 票。`),
+          h('ul', { class: 'mt-2 max-h-48 list-disc overflow-auto pl-5 text-sm' },
+            e.channels.map(({ code, name, count }) =>
+              h('li', { key: code }, `${name === code ? code : `${name} (${code})`} · ${count} 票`)),
+          ),
+        ]),
+        positiveText: '使用原渠道导出',
+        negativeText: '补齐映射',
+        onPositiveClick: () => downloadShipmentExport(params, count, templateId, true),
+        onNegativeClick: () => {
+          initialExportTemplateId.value = templateId
+          exportTemplateModalShow.value = true
+        },
+      })
+    } else {
+      message.error(e instanceof Error ? e.message : '导出失败')
+    }
   } finally {
     exporting.value = false
   }
@@ -1821,14 +1892,21 @@ async function handleSyncCarrierTracking(shipmentNos?: string[]) {
     await loadFreshnessStats()
     await loadList()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '更新承运商轨迹失败')
+    const error = e as { statusCode?: number; status?: number; response?: { status?: number }; data?: { detail?: unknown } } | null
+    const status = error?.statusCode ?? error?.status ?? error?.response?.status
+    if (status === 409) {
+      message.info('承运商轨迹同步任务正在运行，请稍后刷新查看结果，无需重复同步')
+    } else {
+      const detail = error?.data?.detail
+      const errorMessage = typeof detail === 'string' ? detail : e instanceof Error ? e.message : ''
+      message.error(carrierVisible.value && errorMessage ? errorMessage : '更新承运商轨迹失败')
+    }
   } finally {
     syncingCarrier.value = false
   }
 }
 
 function resetFilterValues() {
-  selectedSystemView.value = null
   filterStatus.value = workspaceDefaultStatus()
   filterRouteStatus.value = null
   filterException.value = null
@@ -1913,7 +1991,7 @@ function removeFilterTag(key: string) {
       searchTrackingContent.value = ''
       break
     case 'filterStatus':
-      filterStatus.value = workspaceDefaultStatus()
+      filterStatus.value = null
       break
     case 'filterRouteStatus':
       filterRouteStatus.value = null
@@ -2040,23 +2118,6 @@ function removeFilterTag(key: string) {
       deliveryRisk.value = null
       break
   }
-  selectedSystemView.value = null
-  onFiltersChanged()
-}
-
-function applySystemView(viewId: ShipmentSystemViewId | null) {
-  if (!viewId) {
-    selectedSystemView.value = null
-    return
-  }
-  resetFilterValues()
-  const overrides = systemViewFilters(viewId)
-  if (overrides.deliveryRisk) deliveryRisk.value = overrides.deliveryRisk
-  if (overrides.notDelivered) notDelivered.value = true
-  if (overrides.hasAta) hasAta.value = true
-  if (overrides.pendingTrackingTimeReview) filterPendingTrackingTimeReview.value = true
-  filterStatus.value = null
-  selectedSystemView.value = viewId
   onFiltersChanged()
 }
 
@@ -3237,6 +3298,7 @@ const optionalColumnDefs = computed((): Record<string, DataTableColumns<Shipment
     width: 90,
     ellipsis: { tooltip: true },
     render: (row) => {
+      if (!carrierVisible.value) return h('span', '***')
       const label = carrierDisplayLabel(row)
       const code = row.carrierCode?.trim()
       if (!code || label === code) {
@@ -3682,7 +3744,12 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
         </template>
         <NButton type="primary" size="small" @click="openCreate">新增运单</NButton>
         <NButton size="small" :loading="importing" @click="triggerImport">导入运单</NButton>
-        <NButton size="small" :loading="exporting" @click="handleExport">导出运单</NButton>
+        <NDropdown trigger="click" :options="exportTemplateOptions" @update:show="show => show && loadExportTemplates()" @select="handleExportTemplateSelect">
+          <NButton size="small" icon-placement="right" :loading="exporting" :disabled="exporting">
+            <template #icon><ChevronDown :size="14" aria-hidden="true" /></template>
+            导出运单
+          </NButton>
+        </NDropdown>
       </NSpace>
     </div>
 
@@ -3822,7 +3889,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
             @update:value="onFiltersChanged"
           />
           <NSelect
-            v-if="isPreportWorkspace"
             v-model:value="filterSupplierName"
             :options="supplierOptions"
             placeholder="供应商"
@@ -3868,23 +3934,10 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
               {{ advancedOnlyActiveCount }}
             </span>
           </NButton>
-          <NSelect
-            v-if="!isPreportWorkspace"
-            :value="selectedSystemView"
-            :options="systemViewOptions"
-            placeholder="系统视图"
-            clearable
-            size="small"
-            class="shipments-filter-select shipments-filter-select--wide"
-            @update:value="(v) => (v ? applySystemView(v) : resetFilters())"
-          />
           <NButton size="small" quaternary class="shrink-0" @click="columnSettingsShow = true">
             列设置
           </NButton>
           <NButton size="small" quaternary class="shrink-0" @click="resetFilters">重置</NButton>
-          <NButton size="small" quaternary class="shrink-0" :loading="exporting" @click="handleExport">
-            导出
-          </NButton>
         </div>
       </div>
     </div>
@@ -4033,6 +4086,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
           </NButton>
         </NDropdown>
         <NDropdown
+          v-if="!isPreportWorkspace"
           trigger="hover"
           :options="exceptionDropdownOptions"
           @select="handleExceptionMenuSelect"
@@ -4109,6 +4163,15 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       @submit="handleFormSubmit"
     />
 
+    <ShipmentExportTemplatesModal
+      v-model:show="exportTemplateModalShow"
+      :fields="exportTemplateFields"
+      :templates="exportTemplates"
+      :channels="exportTemplateChannels"
+      :initial-template-id="initialExportTemplateId"
+      @saved="updateExportTemplate"
+    />
+
     <ShipmentDeliveryWindowModal v-model:show="deliveryWindowShow" :shipment="deliveryWindowRow" />
     <ShipmentOrderProductsModal v-model:show="orderProductsShow" :shipment="orderProductsRow" />
     <ShipmentProductCtnsCheckModal v-model:show="productCtnsCheckShow" :ids="productCtnsCheckIds" />
@@ -4138,7 +4201,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
     <ShipmentAdvancedFilterDrawer
       v-model:show="advancedFilterShow"
       v-model:filter-carrier="filterCarrier"
-      v-model:filter-supplier-name="filterSupplierName"
       v-model:filter-country="filterCountry"
       v-model:filter-channel-name-zh="filterChannelNameZh"
       v-model:filter-customer-no="filterCustomerNo"
@@ -4177,7 +4239,6 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       v-model:advanced-times="advancedTimes"
       :filter-options="filterOptions"
       :carrier-options="carrierOptions"
-      :supplier-options="supplierOptions"
       :country-options="countryOptions"
       :channel-name-zh-options="channelNameZhOptions"
       :time-field-options="timeFieldOptions"
@@ -4186,7 +4247,7 @@ const tableScrollX = computed(() => sumTableColumnWidths(columns.value) + 96)
       :has-group-filter-options="hasGroupFilterOptions"
       :group-filter-options="groupFilterOptions"
       :rule-type-filter-options="ruleTypeFilterOptions"
-      :hide-country-supplier="isPreportWorkspace"
+      :hide-country="isPreportWorkspace"
       @apply="onFiltersChanged"
     />
 

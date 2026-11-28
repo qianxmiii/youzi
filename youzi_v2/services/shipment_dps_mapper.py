@@ -171,6 +171,11 @@ def map_dps_status(
     return "UNKNOWN"
 
 
+def dps_row_route_info(params: dict[str, Any]) -> dict[str, Any]:
+    route = params.get("commerceWaybillRouteInfo")
+    return route if isinstance(route, dict) else {}
+
+
 def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
     """将 DPS rows[] 单项转为 upsert_by_shipment_no 可用的 snake_case 字典。"""
     shipment_no = _opt_str(row.get("odd"))
@@ -178,11 +183,7 @@ def dps_row_to_shipment(row: dict[str, Any]) -> dict[str, Any] | None:
         return None
 
     params = row.get("params") if isinstance(row.get("params"), dict) else {}
-    route = (
-        params.get("commerceWaybillRouteInfo")
-        if isinstance(params.get("commerceWaybillRouteInfo"), dict)
-        else {}
-    )
+    route = dps_row_route_info(params)
     country_vo = (
         params.get("countryVo") if isinstance(params.get("countryVo"), dict) else {}
     )

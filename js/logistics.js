@@ -359,6 +359,13 @@ function importData() {
 function updateQuote() {
     if (typeof applySurchargeFeeDefaults === 'function') applySurchargeFeeDefaults();
 
+    // 更新附加费输入展示与小计。
+    for (const key of ["overlength", "oversize", "overweight"]) {
+        const fee = new Decimal(document.getElementById(`${key}-input`).value || 0);
+        const quantity = new Decimal(document.getElementById(`${key}-quantity`).value || 0);
+        document.getElementById(`${key}-subtotal`).textContent = `= ${fee.mul(quantity).toFixed(2)} RMB`;
+        document.getElementById(`${key}-subtotal`).classList.toggle("is-zero", fee.mul(quantity).isZero());
+    }
     // 获取用户输入
     let data = getInputData();
 
@@ -384,7 +391,7 @@ function updateQuote() {
     pickupFeeUSD = pickupFeeCheck ? parseFloat(document.getElementById("pickup-fee-USD").value) || 0 : 0;
     pickUpFee = new Decimal(pickupFeeRMB).dividedBy(exchange_rate).add(pickupFeeUSD).toFixed(0);
 
-    // 获取派送费（可同时填 USD / RMB；报价文本按填写币种显示，不跟报价格式挂钩）
+    // 与提货费一致，两种币种可同时录入并合并换算。
     let deliveryFeeCheck = document.getElementById("delivery-fee-checkbox")?.checked || false;
     deliveryFeeRMB = deliveryFeeCheck ? parseFloat(document.getElementById("delivery-fee").value) || 0 : 0;
     deliveryFeeUSD = deliveryFeeCheck ? parseFloat(document.getElementById("delivery-fee-USD").value) || 0 : 0;
@@ -392,6 +399,19 @@ function updateQuote() {
     const deliveryFee = new Decimal(deliveryFeeRMB).dividedBy(exchange_rate).add(deliveryFeeUSD).toDecimalPlaces(0, Decimal.ROUND_HALF_UP);
     const deliveryFeeRmbTotal = new Decimal(deliveryFeeRMB).add(new Decimal(deliveryFeeUSD).mul(exchange_rate));
     const deliveryFeeTip = formatDeliveryFeeTip(deliveryFeeRMB, deliveryFeeUSD);
+    const customsFeeIsUSD = !data.quoteType.includes("RMB");
+    const clearanceSupported = data.country === "欧洲" || data.country === "英国";
+    const clearanceCheckbox = document.getElementById("clearance-fee-checkbox");
+    clearanceCheckbox.disabled = !clearanceSupported;
+    const clearanceRequested = clearanceSupported && (clearanceCheckbox.checked || data.isDDU);
+    const clearanceAmount = data.country === "欧洲" ? (customsFeeIsUSD ? 62 : 400) : (customsFeeIsUSD ? 48 : 350);
+    document.getElementById("clearance-fee-amount").textContent = clearanceSupported ? `${clearanceAmount} ${customsFeeIsUSD ? "USD" : "RMB"}` : "仅欧洲 / 英国";
+
+    const customsFeeAmount = document.getElementById("customs-fee-amount");
+    if (customsFeeAmount) customsFeeAmount.textContent = customsFeeIsUSD ? "54 USD" : "350 RMB";
+    const customsFeeChecked = document.getElementById("customs-fee-checkbox")?.checked || false;
+    const customsFeeUSD = new Decimal(customsFeeChecked ? 54 : 0);
+    const customsFeeRMB = new Decimal(customsFeeChecked ? 350 : 0);
 
     // 计算材积重 (kg) 使用公式：体积 * 1000000 / 6000
     if (data.totalVolume.greaterThan(0)) {
@@ -580,7 +600,7 @@ function updateQuote() {
     document.getElementById("total_price_rmb").value = totalPriceRMB.toFixed(2);
 
     // 计算单价(RMB) = 总报价 (RMB) / 计费重
-    unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : new Decimal(0);
+    unitPriceRMB = chargeWeight !=0 ? totalPriceRMB.dividedBy(chargeWeight) : new Decimal(priceRmb);
     document.getElementById("unit_price").value = unitPriceRMB.toFixed(2);
 
     // 计算单箱实重，判断是否使用托（pallets）单位
@@ -601,6 +621,7 @@ function updateQuote() {
     }
 
     addFee = new Decimal(0); //每次初始化
+    const clearanceFeeTip = clearanceRequested ? getDDUFee(data.country, customsFeeIsUSD ? 1 : 0) : "";
     // 根据选择的备注格式动态生成备注内容
     if (data.quoteType === "通用") {
         // 构建备注内容
@@ -610,7 +631,7 @@ function updateQuote() {
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days ${MOQ} `;
         if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
         if (data.isMOQ) notes += `MOQ is ${data.moqInput}kg `;
-        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        notes += clearanceFeeTip;
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity);
         if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity, undefined, 'residential');
         if (data.isOverLength) notes += getOverLengthFee(data.country, data.overLengthQuantity, "USD", data.overLengthFee);
@@ -618,7 +639,8 @@ function updateQuote() {
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "USD", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         if (deliveryFeeCheck) notes += deliveryFeeTip;
-        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(deliveryFee).add(addFee)} usd`;
+        if (customsFeeChecked) notes += customsFeeIsUSD ? "\nCustoms declaration fee: 54 usd" : "\n报关费: 350 RMB";
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(deliveryFee).add(customsFeeUSD).add(addFee)} usd`;
 
     } else if (data.quoteType === "通用-CBM") {
         // 构建备注内容
@@ -627,10 +649,11 @@ function updateQuote() {
         notes += `${data.channel}: ${priceUsd} usd/cbm * ${chargeCBM}cbm = ${totalPriceUsd}usd `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} days`;
         if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
-        if (data.isDDU) notes += getDDUFee(data.country, 1);
+        notes += clearanceFeeTip;
         if (data.pickupFeeCheck) notes += `\nPickup fee: ${pickUpFee} usd`;
         if (deliveryFeeCheck) notes += deliveryFeeTip;
-        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(deliveryFee).add(addFee)} usd`;
+        if (customsFeeChecked) notes += customsFeeIsUSD ? "\nCustoms declaration fee: 54 usd" : "\n报关费: 350 RMB";
+        notes += `\nTotal fee: ${totalPriceUsd.add(pickUpFee).add(deliveryFee).add(customsFeeUSD).add(addFee)} usd`;
 
     } else if (data.quoteType === "通用-单价") {
         // 构建备注内容
@@ -651,7 +674,7 @@ function updateQuote() {
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/kg * ${chargeWeight.toFixed(0)}kg = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
         if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
-        if (data.isDDU) notes += getDDUFee(data.country, 0);
+        notes += clearanceFeeTip;
         if (data.isRemoteAddress && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB");
         if (data.isResidential && shippingChannels["快递派"].includes(data.channel)) notes += getRemoteAddressfee(data.totalQuantity,"RMB","residential");
         if (data.isOverLength) notes += getOverLengthFee(data.country, data.overLengthQuantity, "RMB", data.overLengthFee);
@@ -659,7 +682,8 @@ function updateQuote() {
         if (data.isOverWeight) notes += getOverWeightFee(data.country, data.overWeightQuantity, "RMB", data.overWeightFee);
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
         if (deliveryFeeCheck) notes += deliveryFeeTip;
-        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(deliveryFeeRmbTotal).add(addFee)} RMB`;
+        if (customsFeeChecked) notes += customsFeeIsUSD ? "\nCustoms declaration fee: 54 usd" : "\n报关费: 350 RMB";
+        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(deliveryFeeRmbTotal).add(customsFeeRMB).add(addFee)} RMB`;
 
     } else if (data.quoteType === "通用-RMB-CBM") {
         // 构建备注内容
@@ -668,35 +692,80 @@ function updateQuote() {
         notes += `${getCN(data.channel)}: ${priceRmb}RMB/cbm * ${chargeCBM}cbm = ${totalPriceRMB}RMB `;
         notes += `${getTransitTime(data.country, data.channel, data.postcode, data.address)} 天 ${MOQ} `;
         if (data.isMOQBox) notes += ' ' + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
-        if (data.isDDU) notes += getDDUFee(data.country, 0); 
+        notes += clearanceFeeTip;
         if (data.pickupFeeCheck) notes += `\n提货费: ${pickupFeeRMB} RMB`;
         if (deliveryFeeCheck) notes += deliveryFeeTip;
-        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(deliveryFeeRmbTotal).add(addFee)} RMB`;
+        if (customsFeeChecked) notes += customsFeeIsUSD ? "\nCustoms declaration fee: 54 usd" : "\n报关费: 350 RMB";
+        notes += `\n总费用: ${totalPriceRMB.add(pickupFeeRMB).add(deliveryFeeRmbTotal).add(customsFeeRMB).add(addFee)} RMB`;
 
     }
 
-    // 计算综合单价（包含所有费用）
-    // 综合单价 = (总报价RMB + 提货费RMB + 派送费RMB + 附加费RMB) / 计费重
-    // 注意：addFee 在 RMB 格式下是 RMB，在 USD 格式下是 USD，需要转换
-    // 使用固定转换比例：3.5 USD = 25 RMB（比例 25/3.5 ≈ 7.14）
-    const FIXED_USD_TO_RMB_RATE = new Decimal(25).dividedBy(3.5);
-    let addFeeRMB = new Decimal(0);
-    if (data.quoteType.includes("RMB")) {
-        // RMB格式：addFee 已经是 RMB
-        addFeeRMB = addFee;
-    } else {
-        // USD格式：addFee 是 USD，使用固定比例转换成 RMB
-        addFeeRMB = addFee.mul(FIXED_USD_TO_RMB_RATE);
+    if (data.quoteType.includes("单价")) notes += clearanceFeeTip;
+
+    // 统一收集费用：计入单价与单列费用使用同一份金额，避免重复收取。
+    const feeItems = [];
+    const feeCurrency = customsFeeIsUSD ? "USD" : "RMB";
+    const collectRuleFee = (key, name, active, calculate) => {
+        if (!active) return;
+        const saved = addFee;
+        addFee = new Decimal(0);
+        const detail = calculate();
+        const amount = addFee;
+        addFee = saved;
+        feeItems.push({key, name, amount, detail});
+    };
+    const express = shippingChannels["快递派"].includes(data.channel);
+    collectRuleFee("remote", "偏远费", data.isRemoteAddress && express, () => getRemoteAddressfee(data.totalQuantity, feeCurrency));
+    collectRuleFee("residential", "住宅费", data.isResidential && express, () => getRemoteAddressfee(data.totalQuantity, feeCurrency, "residential"));
+    collectRuleFee("overlength", "超长费", data.isOverLength, () => getOverLengthFee(data.country, data.overLengthQuantity, feeCurrency, data.overLengthFee));
+    collectRuleFee("oversize", "超尺寸费", data.isOverSize, () => getOverSizeFee(data.country, data.overSizeQuantity, feeCurrency, data.overSizeFee));
+    collectRuleFee("overweight", "超重费", data.isOverWeight, () => getOverWeightFee(data.country, data.overWeightQuantity, feeCurrency, data.overWeightFee));
+    const pickupRmbTotal = new Decimal(pickupFeeRMB).add(new Decimal(pickupFeeUSD).mul(exchange_rate));
+    const toQuoteCurrency = amount => customsFeeIsUSD ? amount.div(exchange_rate) : amount;
+    if (pickupFeeCheck) feeItems.push({key: "pickup", name: "提货费", amount: toQuoteCurrency(pickupRmbTotal)});
+    if (deliveryFeeCheck) feeItems.push({key: "delivery", name: "派送费", amount: toQuoteCurrency(deliveryFeeRmbTotal)});
+    if (customsFeeChecked) feeItems.push({key: "customs", name: "报关费", amount: customsFeeIsUSD ? customsFeeUSD : customsFeeRMB});
+    if (clearanceRequested) feeItems.push({key: "clearance", name: "清关费", amount: new Decimal(clearanceAmount)});
+    // 附加费按报价币种向上取整，单列与计入单价沿用相同金额。
+    feeItems.forEach(fee => { fee.amount = new Decimal(fee.amount).ceil(); });
+    const included = feeItems.filter(fee => document.getElementById(`include-fee-${fee.key}`).checked);
+    const separate = feeItems.filter(fee => !document.getElementById(`include-fee-${fee.key}`).checked);
+    const includedTotal = included.reduce((sum, fee) => sum.add(fee.amount), new Decimal(0));
+    const separateTotal = separate.reduce((sum, fee) => sum.add(fee.amount), new Decimal(0));
+    const billingQuantity = data.quoteType.includes("CBM") ? chargeCBM : chargeWeight;
+    const baseAmount = customsFeeIsUSD ? totalPriceUsd : totalPriceRMB;
+    const quoteNumber = value => new Decimal(value).toDecimalPlaces(2).toString();
+    const quotedAmount = baseAmount.add(includedTotal);
+    // 尚未录入货量时仍展示成本与利润计算出的单价。
+    const quotedUnit = billingQuantity.greaterThan(0)
+        ? quotedAmount.div(billingQuantity)
+        : new Decimal(customsFeeIsUSD ? priceUsd : priceRmb);
+    const unitLabel = data.quoteType.includes("CBM") ? "cbm" : "kg";
+    const includedNames = included.map(fee => fee.name).join("、");
+    const englishNames = {remote: "Remote address fee", residential: "Residential fee", overlength: "Overlength fee", oversize: "Oversize fee", overweight: "Overweight fee", pickup: "Pickup fee", delivery: "Delivery fee", customs: "Customs declaration fee", clearance: "Customs clearance fee"};
+    notes = `${data.address} ${data.totalQuantity.toFixed(0)}ctns ${data.totalWeight.toFixed(0)}kg ${quoteNumber(data.totalVolume)}cbm\n${data.isDDU ? "DDU" : "DDP"} ${customsFeeIsUSD ? data.channel : getCN(data.channel)}: ${quoteNumber(quotedUnit)} ${feeCurrency}/${unitLabel}`;
+    if (!data.quoteType.includes("单价")) notes += ` × ${billingQuantity}${unitLabel} = ${quoteNumber(quotedAmount)} ${feeCurrency}`;
+    notes += ` ${getTransitTime(data.country, data.channel, data.postcode, data.address)} ${customsFeeIsUSD ? "days" : "天"} ${MOQ}`;
+    if (data.isMOQ && unitLabel === "kg") {
+        notes += customsFeeIsUSD ? ` Minimum billable weight: ${moqValue}kg` : ` 最低计费重量：${moqValue}kg`;
     }
-    
-    let totalAllFeesRMB = totalPriceRMB.add(new Decimal(pickupFeeRMB)).add(deliveryFeeRmbTotal).add(addFeeRMB);
+    if (data.isMOQBox) notes += " " + formatMoqBoxTip(data.moqBoxInput, data.moqBoxUnit, data.quoteType);
+    if (included.length) notes += `\n${customsFeeIsUSD ? "Includes: " + included.map(fee => englishNames[fee.key]).join(", ") : "已含：" + includedNames}`;
+    for (const fee of separate) {
+        notes += fee.detail
+            ? `\n${fee.detail.trim()}`
+            : `\n${customsFeeIsUSD ? englishNames[fee.key] : fee.name}: ${quoteNumber(fee.amount)} ${feeCurrency}`;
+    }
+    notes += `\n${customsFeeIsUSD ? "Total fee" : "总费用"}: ${quotedAmount.add(separateTotal).ceil().toString()} ${feeCurrency}`;
+    const addFeeRMB = new Decimal(0);
+    const totalAllFeesRMB = totalPriceRMB.add(customsFeeIsUSD ? includedTotal.mul(exchange_rate) : includedTotal);
     let totalUnitPrice = new Decimal(0);
     if (data.quoteType.includes("CBM")) {
         // 按方计费时，使用计费方
-        totalUnitPrice = chargeCBM.greaterThan(0) ? totalAllFeesRMB.dividedBy(chargeCBM) : new Decimal(0);
+        totalUnitPrice = chargeCBM.greaterThan(0) ? totalAllFeesRMB.dividedBy(chargeCBM) : new Decimal(priceRmb);
     } else {
         // 按重量计费时，使用计费重
-        totalUnitPrice = chargeWeight.greaterThan(0) ? totalAllFeesRMB.dividedBy(chargeWeight) : new Decimal(0);
+        totalUnitPrice = chargeWeight.greaterThan(0) ? totalAllFeesRMB.dividedBy(chargeWeight) : new Decimal(priceRmb);
     }
     
     // 更新综合单价显示
@@ -713,16 +782,8 @@ function updateQuote() {
     
     // 更新 tooltip 显示费用明细
     let feeDetails = `基础报价: ${totalPriceRMB.toFixed(2)} RMB`;
-    if (new Decimal(pickupFeeRMB).greaterThan(0)) {
-        feeDetails += `\n提货费: ${pickupFeeRMB} RMB`;
-    }
-    if (deliveryFeeRMB > 0 || deliveryFeeUSD > 0) {
-        feeDetails += formatDeliveryFeeTip(deliveryFeeRMB, deliveryFeeUSD);
-    }
-    if (addFeeRMB.greaterThan(0)) {
-        feeDetails += `\n附加费: ${addFeeRMB.toFixed(2)} RMB`;
-    }
-    feeDetails += `\n总费用: ${totalAllFeesRMB.toFixed(2)} RMB`;
+    for (const fee of included) feeDetails += `\n已计入 · ${fee.name}: ${fee.amount.toFixed(2)} ${feeCurrency}`;
+    feeDetails += `\n计入单价的运费合计: ${totalAllFeesRMB.toFixed(2)} RMB`;
     totalUnitPriceElement.setAttribute('title', feeDetails);
     totalUnitPriceElement.setAttribute('data-bs-title', feeDetails);
     
@@ -749,6 +810,7 @@ function updateQuote() {
     }
 
     // 将备注内容填入 textarea
+    notes = notes.replace(/\bUSD\b/g, "usd");
     document.getElementById("notes").value = notes;
 
 }
@@ -797,9 +859,9 @@ function renderAllBoxSpecsIntoTable(allBoxSpecs) {
                 <td class="result-cell">0 kg</td>
                 <td class="result-cell">0 cm</td>
                 <td>
-                    <button class="btn btn-success btn-sm" onclick="addRow()">+</button>
-                    <button class="btn btn-danger btn-sm" onclick="deleteRow(event)">-</button>
-                    <button class="btn btn-info btn-sm" onclick="copyRow(event)" title="复制当前行">📋</button>
+                    <button type="button" class="btn btn-success btn-sm box-row-action" onclick="addRow()" title="新增行" aria-label="新增行"><i class="bi bi-plus" aria-hidden="true"></i></button>
+                    <button type="button" class="btn btn-danger btn-sm box-row-action" onclick="deleteRow(event)" title="删除当前行" aria-label="删除当前行"><i class="bi bi-dash" aria-hidden="true"></i></button>
+                    <button type="button" class="btn btn-info btn-sm box-row-action" onclick="copyRow(event)" title="复制当前行" aria-label="复制当前行"><i class="bi bi-clipboard" aria-hidden="true"></i></button>
                 </td>
             `;
         }
@@ -4149,3 +4211,38 @@ function toggleVolumeRatioVisibility() {
 }
 
 // exportAddressBook 和 getAddressBookData 函数已移动到 tab.js
+
+// 复制当前可编辑报价文本，而非重新生成内容。
+async function copyQuoteText(button) {
+    const notes = document.getElementById('notes');
+    if (!notes.value.trim()) {
+        showToast('暂无报价可复制', 'warning');
+        return;
+    }
+    button.disabled = true;
+    let copied = false;
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(notes.value);
+            copied = true;
+        } else {
+            const start = notes.selectionStart;
+            const end = notes.selectionEnd;
+            notes.focus({ preventScroll: true });
+            notes.select();
+            copied = document.execCommand('copy');
+            notes.setSelectionRange(start, end);
+            button.focus({ preventScroll: true });
+        }
+    } catch (error) {
+        copied = false;
+    } finally {
+        button.disabled = false;
+    }
+    if (!copied) {
+        showToast('复制失败，请选中文本手动复制', 'warning');
+        return;
+    }
+    showToast('报价已复制', 'success');
+    if (typeof saveQuoteHistory === 'function') saveQuoteHistory();
+}

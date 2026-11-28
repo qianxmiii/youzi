@@ -3,7 +3,9 @@ from fastapi import APIRouter, Header
 from ..context import *
 from .shipment_list_query import ShipmentListFilters
 from ..schemas.delivery_window import DeliveryWindowIn
-from ..schemas.shipments import ShipmentRouteAddIn, ShipmentRoutePresetsIn
+from ..schemas.shipments import ShipmentExportTemplateIn, ShipmentRouteAddIn, ShipmentRoutePresetsIn
+from ..services import shipment_export_templates
+from ..services.shipment_excel import shipment_export_fields, shipment_export_formats
 from ..services.delivery_window import calculate_delivery_window
 from ..db.delivery_windows_table import load_window, save_window
 from ..db.datetime_util import now_str
@@ -41,6 +43,7 @@ def shipment_route_add(body: ShipmentRouteAddIn):
         raise HTTPException(status_code=400, detail=str(exc)) from None
 
 _SHIPMENT_EXPORT_MAX = 10_000
+_SHIPMENT_PRODUCT_EXPORT_MAX = 100
 
 
 def _delivery_window(shipment_id: str, preferences: dict | None = None):
@@ -191,13 +194,50 @@ def batch_unsubscribe_shipments(body: ShipmentBatchIdsIn):
     """批量取消运单轨迹订阅。"""
     return shipment_subscriptions_repo.unsubscribe_many(body.ids)
 
+@router.get("/api/v1/shipments/export-templates")
+def list_shipment_export_templates():
+    return {
+        "fields": [
+            {"field": field, "label": label, "formats": shipment_export_formats(field)}
+            for field, label in shipment_export_fields().items()
+        ],
+        "templates": shipment_export_templates.list_templates(_database),
+        "channels": shipment_export_templates.list_channel_options(_database),
+    }
+
+
+@router.post("/api/v1/shipments/export-templates")
+def save_shipment_export_template(body: ShipmentExportTemplateIn):
+    try:
+        return shipment_export_templates.save_template(
+            _database, body.name, [column.model_dump() for column in body.columns], body.id,
+            channel_mappings=None if body.channelMappings is None else [row.model_dump() for row in body.channelMappings],
+        )
+    except KeyError:
+        raise HTTPException(status_code=404, detail="导出模板不存在，请重新选择") from None
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
 @router.get("/api/v1/shipments/export")
 def export_shipments_excel(
     filters: ShipmentListFilters,
     limit: int = Query(_SHIPMENT_EXPORT_MAX, le=_SHIPMENT_EXPORT_MAX),
     offset: int = 0,
+    templateId: str | None = None,
+    allowUnmappedChannels: bool = False,
 ):
-    """导出当前筛选条件下的运单列表（Excel，表头与导入模板一致）。"""
+    """按当前筛选条件及所选模板导出运单。"""
+    columns = None
+    channel_mapping = {}
+    if templateId:
+        try:
+            template = shipment_export_templates.get_template(_database, templateId)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="导出模板不存在，请重新选择") from None
+        columns = template["columns"]
+        if any(column["field"] == "channel_code" for column in columns):
+            channel_mapping = {row["channelCode"]: row["value"] for row in template.get("channelMappings", [])}
     shipment_nos = filters.get("shipment_nos")
     if shipment_nos:
         cleaned = [n.strip() for n in shipment_nos if n and n.strip()]
@@ -216,7 +256,33 @@ def export_shipments_excel(
                 f"当前筛选共 {total} 条，超过导出上限 {_SHIPMENT_EXPORT_MAX}，请缩小筛选范围"
             ),
         )
-    data = build_export_excel_bytes(result.get("items") or [])
+    items = result.get("items") or []
+    if channel_mapping and not allowUnmappedChannels:
+        unmapped = shipment_export_templates.unmapped_channels(items, channel_mapping)
+        if unmapped:
+            raise HTTPException(status_code=409, detail={"code": "unmapped_export_channels", "channels": unmapped})
+    country_rows = None
+    if columns and any(column.get("format") in ("country_name", "country_code") for column in columns):
+        country_rows = code_tables_repo.list_rows("country_codes", limit=500)["items"]
+    product_names = None
+    if columns and any(column["field"] == "product_name" for column in columns):
+        from ..services.dps_order_product import query_export_product_names
+
+        waybill_ids = list(dict.fromkeys(
+            waybill_id for item in items if (waybill_id := str(item.get("waybillId") or "").strip())
+        ))
+        if len(waybill_ids) > _SHIPMENT_PRODUCT_EXPORT_MAX:
+            raise HTTPException(
+                status_code=400,
+                detail=f"含产品明细的模板每次最多查询 {_SHIPMENT_PRODUCT_EXPORT_MAX} 票，请缩小筛选范围",
+            )
+        try:
+            product_names = query_export_product_names(LOGISTICS_CONFIG_PATH, waybill_ids)
+        except ValueError:
+            raise HTTPException(status_code=502, detail="读取 DPS 产品明细失败，请稍后重试") from None
+    data = build_export_excel_bytes(
+        items, columns=columns, channel_mapping=channel_mapping, country_rows=country_rows, product_names=product_names,
+    )
     ts = datetime.now().strftime("%Y%m%d_%H%M%S")
     filename = f"运单导出_{ts}.xlsx"
     encoded = quote(filename)

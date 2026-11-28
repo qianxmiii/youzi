@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import {
   NButton,
   NDatePicker,
@@ -198,17 +200,24 @@ function handleSubmit() {
           />
         </NFormItem>
         <NFormItem label="承运商">
-          <NSelect
-            v-model:value="carrierCode"
-            :options="carrierOptions"
-            filterable
-            tag
-            clearable
-            placeholder="不修改"
-          />
+          <div class="flex w-full items-center gap-2">
+            <span v-if="!carrierVisible">***</span>
+            <NSelect
+              v-else
+              v-model:value="carrierCode"
+              :options="carrierOptions"
+              filterable
+              tag
+              clearable
+              placeholder="不修改"
+            />
+            <CarrierVisibilityToggle />
+          </div>
         </NFormItem>
         <NFormItem label="尾程快递">
+          <span v-if="!carrierVisible">***</span>
           <NSelect
+            v-else
             v-model:value="expressCodePick"
             :options="EXPRESS_CODE_BATCH_OPTIONS"
             placeholder="不修改"

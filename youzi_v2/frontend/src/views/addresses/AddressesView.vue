@@ -50,6 +50,7 @@ const editingRow = ref<Address | null>(null)
 const typeOptions = [
   { label: 'AMZ', value: 'AMZ' },
   { label: 'WFS', value: 'WFS' },
+  { label: 'TikTok', value: 'TIKTOK' },
 ]
 
 function countryOptionLabel(code: string): string {
@@ -245,7 +246,7 @@ const columns: DataTableColumns<Address> = [
     width: 72,
     render: (row) =>
       row.addressType
-        ? h(NTag, { size: 'small', bordered: false, type: row.addressType === 'AMZ' ? 'info' : 'warning' }, () => row.addressType)
+        ? h(NTag, { size: 'small', bordered: false, type: row.addressType === 'AMZ' ? 'info' : row.addressType === 'TIKTOK' ? 'success' : 'warning' }, () => row.addressType === 'TIKTOK' ? 'TikTok' : row.addressType)
         : '—',
   },
   { title: '国家', key: 'countryCode', width: 64 },
@@ -290,14 +291,14 @@ const columns: DataTableColumns<Address> = [
       <div>
         <h2 class="page-h2">地址簿</h2>
         <p class="mt-1 text-xs text-[var(--color-muted)]">
-          平台仓库地址（AMZ / WFS）；共 {{ total }} 条 · 支持 Excel 导入/导出，地址类型填 AMZ 或 WFS
+          平台仓库地址（AMZ / WFS / TikTok）；共 {{ total }} 条 · 支持 Excel 导入/导出
         </p>
       </div>
       <NSpace>
-        <NButton size="small" @click="downloadTemplate">下载模板</NButton>
-        <NButton size="small" :loading="importing" @click="triggerImport">导入 Excel</NButton>
-        <NButton size="small" :loading="exporting" @click="handleExport">导出 Excel</NButton>
-        <NButton type="primary" @click="openCreate">新增地址</NButton>
+        <NButton size="small" class="w-24" @click="downloadTemplate">下载模板</NButton>
+        <NButton size="small" class="w-24" :loading="importing" @click="triggerImport">导入 Excel</NButton>
+        <NButton size="small" class="w-24" :loading="exporting" @click="handleExport">导出 Excel</NButton>
+        <NButton size="small" class="w-24" type="primary" @click="openCreate">新增地址</NButton>
       </NSpace>
       <input ref="fileInputRef" type="file" accept=".xlsx,.xls" class="hidden" @change="onFileSelected" />
     </div>

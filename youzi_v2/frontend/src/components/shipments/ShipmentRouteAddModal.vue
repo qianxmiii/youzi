@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import { computed, nextTick, ref, watch } from 'vue'
 import { NButton, NDatePicker, NDropdown, NInput, NModal, NSelect, useMessage, type InputInst } from 'naive-ui'
 import { Check, ChevronDown, Copy } from 'lucide-vue-next'
@@ -314,15 +316,16 @@ async function submit() {
     <p v-if="shipments.some(s => !s.waybillId)" class="mb-3 text-sm text-red-600">部分运单缺少 DPS ID，请先更新运单。</p>
     <section v-if="carrierSource" aria-label="承运商轨迹原文" class="mb-3 space-y-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-border-subtle)] px-3 py-2 text-sm">
       <div class="flex flex-wrap items-center justify-between gap-x-2">
-        <h3 class="font-medium">承运商轨迹</h3>
-        <div v-if="carrierSource.trackingTime" class="flex items-center gap-1 text-xs tabular-nums text-[var(--color-muted)]">
+        <h3 class="flex items-center gap-2 font-medium">承运商轨迹 <CarrierVisibilityToggle /></h3>
+        <div v-if="carrierVisible && carrierSource.trackingTime" class="flex items-center gap-1 text-xs tabular-nums text-[var(--color-muted)]">
           <span>{{ carrierSource.trackingTime }}</span>
           <NButton size="tiny" quaternary circle title="复制时间" aria-label="复制时间" @click="copyCarrierSource(carrierSource.trackingTime, '时间')">
             <template #icon><Copy :size="14" :stroke-width="ICON_STROKE" aria-hidden="true" /></template>
           </NButton>
         </div>
       </div>
-      <div v-if="carrierSource.trackingDesc" class="flex items-start gap-1">
+      <p v-if="!carrierVisible">***</p>
+      <div v-else-if="carrierSource.trackingDesc" class="flex items-start gap-1">
         <p class="max-h-24 min-w-0 flex-1 overflow-auto whitespace-pre-wrap break-words">{{ carrierSource.trackingDesc }}</p>
         <NButton size="tiny" quaternary circle title="复制原文" aria-label="复制原文" @click="copyCarrierSource(carrierSource.trackingDesc, '原文')">
           <template #icon><Copy :size="14" :stroke-width="ICON_STROKE" aria-hidden="true" /></template>

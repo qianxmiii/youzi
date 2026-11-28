@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { SquareArrowOutUpRight } from 'lucide-vue-next'
+import { Layers, SquareArrowOutUpRight } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { useMessage } from 'naive-ui'
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import TableActionIcon from '@/components/common/TableActionIcon.vue'
 import { subscribePortCall, unsubscribePortCall } from '@/api/vesselSchedules'
@@ -15,15 +15,18 @@ const props = defineProps<{
   shippingCompany?: string | null
   portCalls: VoyagePortCall[]
   tableFilter?: string
+  selectedPortCallId?: string | null
 }>()
 
 const emit = defineEmits<{
   refresh: []
+  'select-bills': [portCallId: string]
 }>()
 
 const message = useMessage()
 const router = useRouter()
 const togglingId = ref<string | null>(null)
+const tableWrap = ref<HTMLElement | null>(null)
 
 type TimeField = 'eta' | 'ata' | 'etd' | 'atd'
 
@@ -52,6 +55,18 @@ const filteredPortCalls = computed(() => {
 })
 
 const totalPorts = computed(() => filteredPortCalls.value.length)
+
+watch([() => props.selectedPortCallId, filteredPortCalls, tableWrap], () => {
+  const wrap = tableWrap.value
+  if (!wrap || !props.selectedPortCallId) return
+  const row = Array.from(wrap.querySelectorAll<HTMLElement>('[data-port-call-id]'))
+    .find(element => element.dataset.portCallId === props.selectedPortCallId)
+  if (!row) return
+  const bounds = wrap.getBoundingClientRect()
+  const selected = row.getBoundingClientRect()
+  if (selected.bottom > bounds.bottom) wrap.scrollTop += selected.bottom - bounds.bottom
+  else if (selected.top < bounds.top) wrap.scrollTop += selected.top - bounds.top
+}, { flush: 'post' })
 
 const rangeLabel = computed(() => {
   if (!totalPorts.value) return '共 0 个挂靠港'
@@ -165,7 +180,7 @@ function openRelatedShipments() {
       </span>
     </header>
 
-    <div class="voyage-timeline__table-wrap scrollbar-visible">
+    <div ref="tableWrap" class="voyage-timeline__table-wrap scrollbar-visible">
       <table class="voyage-timeline__table">
         <thead>
           <tr>
@@ -183,6 +198,8 @@ function openRelatedShipments() {
             v-for="pc in filteredPortCalls"
             :key="pc.id || `${pc.sequence}-${pc.portName}`"
             class="voyage-timeline__row"
+            :class="{ 'voyage-timeline__row--selected': pc.id && pc.id === selectedPortCallId }"
+            :data-port-call-id="pc.id"
           >
             <td class="voyage-timeline__port">
               <div class="voyage-timeline__port-inner">
@@ -257,6 +274,17 @@ function openRelatedShipments() {
                   :loading="togglingId === pc.id"
                   @click="toggleSubscribe(pc)"
                 />
+                <button
+                  v-if="pc.id"
+                  type="button"
+                  class="voyage-timeline__link-btn"
+                  title="查看该挂靠的提单／柜"
+                  :aria-label="`查看 ${portPrimaryName(pc)} 挂靠的提单和柜`"
+                  :aria-pressed="pc.id === selectedPortCallId"
+                  @click="emit('select-bills', pc.id)"
+                >
+                  <Layers class="voyage-timeline__link-icon" :stroke-width="ICON_STROKE" aria-hidden="true" />
+                </button>
                 <button
                   type="button"
                   class="voyage-timeline__link-btn"
@@ -379,6 +407,10 @@ function openRelatedShipments() {
 
 .voyage-timeline__row {
   border-bottom: 1px solid var(--color-list-divider);
+}
+
+.voyage-timeline__row--selected {
+  background: color-mix(in srgb, var(--color-accent-text) 10%, var(--color-panel));
 }
 
 .voyage-timeline__row:last-child {

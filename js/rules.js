@@ -30,8 +30,8 @@ function getRemoteAddressfee(totalQuantity, unit, feeLabel) {
         remoteAddressStr = LINE_BREAK + (isResidential ? '住宅费: ' : '偏远地址费: ');
         remoteAddressFee = new Decimal(25).mul(totalQuantity);
         if (remoteAddressFee.lessThan(150)) {
-            remoteAddressStr += '25RMB/箱，低消150RMB ';
-            addFee = addFee.add(21);
+            remoteAddressStr += '25RMB/箱 * ' + totalQuantity.toFixed(0) + '箱 = ' + remoteAddressFee + 'RMB，低消150RMB，实收150RMB ';
+            addFee = addFee.add(150);
         } else {
             remoteAddressStr += '25RMB/箱 * ' + totalQuantity.toFixed(0) + '箱 = ' + remoteAddressFee + 'RMB ';
             addFee = addFee.add(remoteAddressFee);
@@ -187,8 +187,8 @@ function getDDUFee(country,type){
     let str = '';
     if (country == "欧洲") {
         if (type == 0){
-            str += '\n' + '清关费: 450RMB';
-            addFee = addFee.add(450);
+            str += '\n' + '清关费: 400RMB';
+            addFee = addFee.add(400);
         } else {
             str += '\n' + 'Customs clearance fee: 62usd';
             addFee = addFee.add(62);

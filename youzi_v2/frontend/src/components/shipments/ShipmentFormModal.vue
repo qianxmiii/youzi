@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import {
   NButton,
   NDatePicker,
@@ -18,6 +20,7 @@ import type { CodeTableRow } from '@/types/codeTable'
 import type { Shipment, ShipmentPayload } from '@/types/shipment'
 import { emptyShipmentForm } from '@/types/shipment'
 import { PAYMENT_STATUS_EDIT_OPTIONS } from '@/constants/shipmentFilters'
+import { buildChannelSelectOptions } from '@/utils/channelFilterOptions'
 import {
   buildCarrierFormSelectOptionsWithCurrent,
   resolveCarrierFormSelectValue,
@@ -48,6 +51,9 @@ const message = useMessage()
 const form = ref<ShipmentPayload>(emptyShipmentForm())
 const submitting = ref(false)
 const carrierCodeRows = ref<CodeTableRow[]>([])
+const channelCodeRows = ref<CodeTableRow[]>([])
+const loadingCarriers = ref(false)
+const loadingChannels = ref(false)
 const initialCarrierNameZh = ref<string | null>(null)
 const etd = ref<number | null>(null)
 const eta = ref<number | null>(null)
@@ -98,20 +104,51 @@ const title = computed(() => (props.mode === 'create' ? '新增运单' : '编辑
 
 const addressTypeOptions = dictOptions('address_type')
 
-const carrierSelectOptions = computed(() =>
-  buildCarrierFormSelectOptionsWithCurrent(
+const channelSelectOptions = computed(() => {
+  const options = buildChannelSelectOptions(channelCodeRows.value.filter((row) => row.isActive))
+  const current = props.initial?.channelCode?.trim()
+  if (current && !options.some((option) => option.value === current)) {
+    options.unshift({ label: props.initial?.channelNameZh?.trim() || current, value: current })
+  }
+  return options
+})
+
+const carrierSelectOptions = computed(() => {
+  const initial = props.initial?.carrierCode?.trim()
+  const canonical = resolveCarrierFormSelectValue(initial, carrierCodeRows.value)
+  const options = buildCarrierFormSelectOptionsWithCurrent(
     carrierCodeRows.value,
-    form.value.carrierCode,
+    canonical,
     initialCarrierNameZh.value,
-  ),
-)
+  )
+  return options.map((option) =>
+    initial && option.value === canonical ? { ...option, value: initial } : option,
+  )
+})
 
 async function loadCarrierOptions() {
+  if (loadingCarriers.value) return
+  loadingCarriers.value = true
   try {
     const res = await listCodeTableRows('carrier_codes', { limit: 500 })
     carrierCodeRows.value = res.items
-  } catch {
-    carrierCodeRows.value = []
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载承运商选项失败')
+  } finally {
+    loadingCarriers.value = false
+  }
+}
+
+async function loadChannelOptions() {
+  if (loadingChannels.value) return
+  loadingChannels.value = true
+  try {
+    const res = await listCodeTableRows('channel_codes', { limit: 500 })
+    channelCodeRows.value = res.items
+  } catch (error) {
+    message.error(error instanceof Error ? error.message : '加载渠道选项失败')
+  } finally {
+    loadingChannels.value = false
   }
 }
 
@@ -125,17 +162,18 @@ const statusOptions = [
 ]
 
 watch(
-  () => props.show,
-  (visible) => {
+  () => [props.show, props.mode] as const,
+  ([visible, mode]) => {
     if (visible) {
       void loadDictTypes('address_type')
       void loadCarrierOptions()
+      if (mode === 'edit') void loadChannelOptions()
     }
   },
 )
 
 watch(
-  () => [props.show, props.mode, props.initial, carrierCodeRows.value] as const,
+  () => [props.show, props.mode, props.initial] as const,
   ([visible]) => {
     if (!visible) return
     if (props.mode === 'edit' && props.initial) {
@@ -145,7 +183,7 @@ watch(
         customer: props.initial.customer,
         customerNo: props.initial.customerNo,
         refShipmentNo: props.initial.refShipmentNo ?? null,
-        channelCode: props.initial.channelCode,
+        channelCode: props.initial.channelCode?.trim() || null,
         countryCode: props.initial.countryCode,
         addressType: props.initial.addressType,
         addressCode: props.initial.addressCode,
@@ -155,10 +193,7 @@ watch(
         productName: props.initial.productName,
         originWarehouseCode: props.initial.originWarehouseCode,
         supplierName: props.initial.supplierName,
-        carrierCode: resolveCarrierFormSelectValue(
-          props.initial.carrierCode,
-          carrierCodeRows.value,
-        ),
+        carrierCode: props.initial.carrierCode?.trim() || null,
         carrierId: props.initial.carrierId,
         trackingNumber: props.initial.trackingNumber,
         expressCode: props.initial.expressCode ?? null,
@@ -290,33 +325,56 @@ function handleSubmit() {
           <NInput v-model:value="form.productName" />
         </NFormItem>
         <NFormItem label="渠道">
-          <NInput v-model:value="form.channelCode" />
+          <NSelect
+            v-if="mode === 'edit'"
+            v-model:value="form.channelCode"
+            :options="channelSelectOptions"
+            :loading="loadingChannels"
+            filterable
+            clearable
+            placeholder="选择渠道"
+          />
+          <NInput v-else v-model:value="form.channelCode" />
         </NFormItem>
         <NFormItem label="承运商">
-          <NSelect
-            v-model:value="form.carrierCode"
-            :options="carrierSelectOptions"
-            clearable
-            filterable
-            placeholder="选择承运商"
-          />
+          <div class="flex w-full items-center gap-2">
+            <NButton v-if="!carrierVisible" size="small" quaternary @click="carrierVisible = true">
+              显示承运商
+            </NButton>
+            <NSelect
+              v-else
+              v-model:value="form.carrierCode"
+              :options="carrierSelectOptions"
+              :loading="loadingCarriers"
+              clearable
+              filterable
+              placeholder="选择承运商"
+            />
+            <CarrierVisibilityToggle v-if="carrierVisible" />
+          </div>
         </NFormItem>
         <NFormItem label="承运单号">
+          <span v-if="!carrierVisible">***</span>
           <NInput
+            v-else
             v-model:value="form.carrierId"
             placeholder="承运商侧主单号（同步可自动填入）"
             clearable
           />
         </NFormItem>
         <NFormItem label="转单号">
+          <span v-if="!carrierVisible">***</span>
           <NInput
+            v-else
             v-model:value="form.trackingNumber"
             placeholder="尾程 UPS/FedEx 等"
             clearable
           />
         </NFormItem>
         <NFormItem label="尾程快递">
+          <span v-if="!carrierVisible">***</span>
           <NSelect
+            v-else
             v-model:value="form.expressCode"
             :options="EXPRESS_CODE_OPTIONS"
             clearable

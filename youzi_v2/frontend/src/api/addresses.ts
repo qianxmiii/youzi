@@ -1,6 +1,6 @@
 import { api } from './client'
 
-export type AddressType = 'AMZ' | 'WFS' | ''
+export type AddressType = 'AMZ' | 'WFS' | 'TIKTOK' | ''
 
 export interface Address {
   id: string

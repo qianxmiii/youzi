@@ -1,3 +1,4 @@
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
 import type { TrackingSyncResult } from '@/types/tracking'
 
 type SyncMessage = {
@@ -20,9 +21,13 @@ export function formatTrackingMessage(res: TrackingSyncResult, label = '轨迹')
     text += `；分组提醒 +${res.groupAlertsCreated}`
   }
   if (res.errors.length) {
-    const preview = res.errors.slice(0, 3).join('；')
-    const more = res.errors.length > 3 ? `…等 ${res.errors.length} 条` : ''
-    text += `；错误：${preview}${more}`
+    if (label === '承运商轨迹' && !carrierVisible.value) {
+      text += `；错误 ${res.errors.length} 条，详情 ***`
+    } else {
+      const preview = res.errors.slice(0, 3).join('；')
+      const more = res.errors.length > 3 ? `…等 ${res.errors.length} 条` : ''
+      text += `；错误：${preview}${more}`
+    }
   }
   return text
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { displayCarrier } from '@/composables/useCarrierPrivacy'
 import { NButton, NPopover, NSpin, useMessage } from 'naive-ui'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -174,7 +175,7 @@ onUnmounted(() => {
                 <span class="text-[var(--color-muted)]">{{ trackingSourceLabel(n.trackingSource) }}</span>
               </p>
               <p class="header-notify-popover__desc line-clamp-2">
-                <template v-for="(part, idx) in splitDeliveredHighlight(n.latestDesc)" :key="idx">
+                <template v-for="(part, idx) in splitDeliveredHighlight(n.trackingSource === 'carrier' ? displayCarrier(n.latestDesc) : n.latestDesc)" :key="idx">
                   <span v-if="part.highlight" class="header-notify-popover__highlight">
                     {{ part.text }}
                   </span>

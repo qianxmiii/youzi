@@ -83,6 +83,9 @@ curl "http://127.0.0.1:3001/api/v1/workbench/overview?todoLimit=8&arrivalLimit=6
 | POST | `/api/v1/tools/shipment-file-rename/parse` | 解析运单 Excel，返回重命名映射（运单号/国家/仓库代码或邮编/件数 → `targetStem`；无仓库代码时用邮编）；浏览器递归扫描子文件夹后本地改名 |
 | GET | `/api/v1/shipment-routes/options` | 新增路由可选的明细状态（含 100 信息传递）及常用节点配置，见[新增路由](./shipment-route-add.md) |
 | PUT | `/api/v1/shipment-routes/presets` | 保存常用节点到数据库，最多100项 |
+| GET | `/api/v1/bills-of-lading` | 分页查询提单，返回总票数、签收票数及港口筛选项。支持 `country`（默认 US，空字符串表示全部）、`search`、`state`、`delivery_scope`（`all` 全部、`open` 未全部签收、`delivered` 已全部签收）、`origin_port`、`destination_port`、`limit`、`offset`。传 `voyage_id` 查询绑定到该航次的提单，`port_call_id` 匹配指定起运或到港挂靠 |
+| GET | `/api/v1/bills-of-lading/detail` | 按查询参数 `bill_no` 读取提单、柜、清关证据及运单明细，包含运单渠道编码与渠道中文名 |
+| PUT | `/api/v1/bills-of-lading/binding` | 查询参数 `bill_no`，请求体传 `voyageId`、`originCallId`、`destinationCallId`；`voyageId: null` 解除绑定 |
 | POST | `/api/v1/shipment-routes` | 单票或批量新增DPS节点，最多50票，返回逐票结果；写请求不自动重试 |
 | POST | `/api/v1/tools/product-import` | 上传箱单发票，转换为产品导入模版；form 字段 `invoice` |
 | GET | `/api/v1/tools/product-import/download/{taskId}` | 下载生成的产品导入 .xls |
@@ -114,10 +117,20 @@ curl -O -J "http://127.0.0.1:3001/api/v1/tools/image-link-zip/jobs/{jobId}/downl
 | POST | `/batch-delete` | 批量删除 |
 | PATCH | `/batch-update` | 批量更新字段 |
 | GET | `/filter-options` | 筛选项（含 `supplierNames`、`originWarehouseCodes`、`groups`、`routeStatuses`：`{ code, nameZh, dpsStatus }`） |
-| GET | `/export` | Excel 导出 |
+| GET | `/export` | 按当前筛选导出 Excel。可选 `templateId` 使用保存的模板，省略时使用标准列。模板含渠道列且已添加映射时，漏配返回 409 和未映射渠道及票数。传 `allowUnmappedChannels=true` 后未映射项沿用原渠道展示值 |
+| GET | `/export-templates` | 获取可选字段、可映射渠道和数据库中保存的导出模板 |
+| POST | `/export-templates` | 保存导出模板。传 `name` 和按导出顺序排列的 `columns: [{field,label,locked?,format?}]`，可选 `channelMappings: [{channelCode,value}]`。传 `id` 更新，省略 `id` 新建或复制 |
+
+列的可选格式由模板接口的 `fields[].formats` 返回。国家支持 `country_name`、`country_code`，日期支持 `date_long`（`yyyy-mm-dd`）、`date_short`（`mm-dd`）。日期格式使用 Excel 日期单元格，短格式仍保留年份。省略格式时沿用原导出规则。
+
+空白列使用模板内唯一的字段标识 `blank_<正整数>`，必须填写 `label`，导出时只写表头，数据单元格全部留空。
+
+自定义模板包含 `product_name` 时，按「查看产品」的数据来源查询 DPS 产品明细。中文和英文分别去重、用英文逗号分隔，同时有两种语言时分行写入同一格。没有明细或没有 DPS 运单 ID 时留空，每次最多查询 100 票。标准模板的「品名」沿用运单摘要。
+
+在列配置中将 `linkedTo` 设为下一列的字段标识，可把相邻两列合成一列。用第一列的表头，非空内容以换行分隔，并按各自配置的显示格式写入同一单元格。
 | POST | `/import` | Excel 导入 |
 | POST | `/sync-tracking` | 同步内部轨迹（完成后自动评估相关分组提醒，见响应 `groupAlertsCreated`） |
-| POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上） |
+| POST | `/sync-carrier-tracking` | 同步承运商轨迹（同上）。仅使用运单承运商字段匹配，未填承运商或承运商为整柜时计为跳过 |
 | POST | `/sync-from-dps` | 按运单号从 DPS `shipment_queryByOrder` 拉取并 upsert（body: `shipmentNos`，最多 200）。同时写入应收 `receivable`、应付 `proRecCharge`、利润 `profit`（均为人民币）和利润率 `profitRate` |
 | POST | `/sync-preport-from-dps` | 港前全部更新：已下单、提货中、已入仓（不含已取消），按运单号走同一 `shipment_queryByOrder` 写入；无 body |
 | POST | `/sync-today-from-dps` | 港前「同步今天」：当天 00:00:00–23:59:59，依次同步提货中、已入仓（均 `orderTimeStart`/`orderTimeEnd`）；一步失败仍继续；无 body |
@@ -442,6 +455,8 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 
 ## 地址簿
 
+平台仓库地址类型支持 `AMZ`、`WFS`、`TIKTOK`（界面显示 TikTok），可用于录入、筛选及 Excel 导入导出。
+
 | 前缀 | 说明 |
 |------|------|
 | `/api/addresses` | 派送地址 CRUD（Legacy 路径） |
@@ -453,6 +468,8 @@ curl "http://127.0.0.1:3001/api/v1/shipments?groupNo=G260618001&limit=20"
 |------|------|
 | `/api/v1/dict/{dict_type}` | 字典项 |
 | `/api/v1/admin/code-tables/*` | 码表管理 + Excel 导入 |
+
+新增承运商时，重复编码返回 HTTP 409，响应 `detail` 提示修改现有记录或换用其他编码。前端共用 API 客户端将请求错误转成可读的 `message`，状态码与响应体仍可用于业务判断。
 
 ## Legacy API
 

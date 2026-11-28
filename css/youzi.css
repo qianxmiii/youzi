@@ -524,6 +524,63 @@ button[data-bs-toggle="collapse"][data-bs-target="#summaryCollapse"]:not(.active
 }
 
 /* 箱规表格操作列样式 */
+.box-table-scroll {
+  overflow-x: auto;
+}
+
+.box-spec-table {
+  width: 100%;
+  min-width: 1120px;
+  table-layout: fixed;
+  margin-bottom: 0;
+}
+
+.box-spec-table .box-col-index { width: 56px; }
+.box-spec-table .box-col-quantity { width: 80px; }
+.box-spec-table .box-col-actions { width: 132px; }
+.box-spec-table .box-col-input { width: 11%; }
+
+.box-spec-table > thead > tr > th {
+  width: auto;
+  padding: 12px 8px;
+  background-color: #f1f3f5;
+  color: #495566;
+  font-size: 0.875rem;
+  font-weight: 600;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+.box-spec-table > tbody > tr > td {
+  padding: 10px 8px;
+  vertical-align: middle;
+  background-color: #fff;
+}
+
+.box-spec-table > tbody > tr > td.result-cell {
+  background-color: #f7f9fb;
+  font-variant-numeric: tabular-nums;
+}
+
+.box-spec-table > tbody > tr > td.index-cell {
+  color: #778291;
+}
+
+.box-spec-table > tbody > tr > td.button-cell {
+  width: auto;
+  min-width: 0;
+}
+
+.box-spec-table .form-control {
+  min-width: 0;
+  width: 100%;
+  padding: 8px;
+  text-align: center;
+  font-weight: 600;
+  color: #24364b;
+  font-variant-numeric: tabular-nums;
+}
+
 .button-cell {
   width: 150px;
   min-width: 150px;
@@ -532,6 +589,63 @@ button[data-bs-toggle="collapse"][data-bs-target="#summaryCollapse"]:not(.active
 
 .button-cell .btn {
   margin-right: 2px;
+}
+
+/* 仅作用于箱规行，覆盖通用按钮的尺寸和阴影 */
+#box-table > tr > td:last-child {
+  white-space: nowrap;
+  vertical-align: middle;
+}
+
+#box-table .box-row-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin: 0 2px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  font-size: 18px;
+  line-height: 1;
+  box-shadow: none;
+  transition: background-color 150ms ease, border-color 150ms ease;
+}
+
+#box-table .box-row-action.btn-success {
+  color: #147d64;
+  background: #e8f6f0;
+}
+
+#box-table .box-row-action.btn-danger {
+  color: #c0392b;
+  background: #fceeed;
+}
+
+#box-table .box-row-action.btn-info {
+  color: #216da5;
+  background: #eaf3fb;
+  font-size: 15px;
+}
+
+#box-table .box-row-action:hover {
+  border-color: currentColor;
+  filter: brightness(0.97);
+}
+
+#box-table .box-row-action:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+#box-table .box-row-action:active {
+  filter: brightness(0.92);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #box-table .box-row-action { transition: none; }
 }
 
 /* 特别说明标签样式 */
@@ -966,6 +1080,119 @@ button[data-bs-toggle="collapse"][data-bs-target="#summaryCollapse"]:not(.active
   .btn-dimension-adjust .btn-unit {
     font-size: 0.6rem;
   }
+}
+
+/* 箱规按钮层级与数字字体 */
+#calculator #box-excel-paste {
+  font-family: inherit;
+  font-size: 0.9375rem;
+}
+
+#calculator .box-parse-button {
+  min-height: 36px;
+  padding: 6px 14px;
+  border-radius: 6px;
+  font-weight: 600;
+  box-shadow: none;
+}
+
+#calculator .box-secondary-actions > .btn {
+  margin: 0;
+  padding: 6px 12px;
+  border: 1px solid #cbd3dc;
+  border-radius: 6px;
+  background: #fff;
+  color: #526174;
+  font-size: 0.875rem;
+  box-shadow: none;
+  transform: none;
+}
+
+#calculator .box-secondary-actions > .btn:hover {
+  background: #edf1f5;
+  border-color: #aab7c5;
+  color: #344256;
+}
+
+#calculator .box-secondary-actions > .btn[aria-expanded="true"] {
+  background: #e5ecf3;
+  border-color: #aab7c5;
+  color: #344256;
+}
+
+#calculator .box-secondary-actions > #import-data-btn {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  font-weight: 600;
+}
+
+#calculator .box-secondary-actions > #import-data-btn:hover {
+  background: #1d4ed8;
+  border-color: #1d4ed8;
+  color: #fff;
+}
+
+#calculator .box-secondary-actions > #import-data-btn:focus-visible {
+  outline: 3px solid #93b4fa;
+  outline-offset: 2px;
+}
+
+#calculator .box-spec-table input,
+#calculator .box-spec-table .result-cell,
+#calculator .result span,
+#summaryCollapse span {
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+/* 箱规批量工具栏 */
+.box-batch-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 12px;
+}
+
+.box-batch-label {
+  color: #6c757d;
+  font-size: 0.875rem;
+}
+
+.box-batch-toolbar .dimension-adjust-buttons {
+  display: flex;
+  gap: 6px;
+}
+
+.box-batch-toolbar .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  border-width: 1px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+
+.box-batch-toolbar .btn-dimension-adjust {
+  flex-direction: row;
+  min-width: 64px;
+  font-weight: 500;
+  transition: background-color 150ms ease, color 150ms ease;
+}
+
+.box-batch-toolbar .btn-dimension-adjust::before {
+  display: none;
+}
+
+.box-batch-toolbar .btn-dimension-adjust:hover {
+  transform: none;
+  box-shadow: none;
 }
 
 /* 计算历史样式 */
@@ -4243,3 +4470,126 @@ button[data-bs-toggle="collapse"][data-bs-target="#summaryCollapse"]:not(.active
         transform: translateY(-100%);
     }
 }
+/* 单地址报价选项：条件与费用分层 */
+.quote-options {
+  flex-wrap: wrap;
+  gap: 10px 12px;
+  padding: 16px;
+  background: #fff;
+  border: 1px solid #e2e8ed;
+}
+.quote-options-main { margin-top: 20px; border-radius: 12px 12px 0 0; }
+.quote-options-fees { margin-bottom: 22px; border-top: 0; border-radius: 0 0 12px 12px; background: #f7faf9; }
+.quote-options > .form-check:not(.form-switch) {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  margin: 0;
+  padding: 7px 12px;
+  border: 1px solid #dfe6eb;
+  border-radius: 8px;
+  background: #fff;
+  transition: border-color .15s, background .15s;
+}
+.quote-options > .form-check:not(.form-switch):hover { border-color: #80cbbd; }
+.quote-options > .form-check:has(input:checked):not(.form-switch) { border-color: #69bdab; background: #eaf8f3; }
+.quote-options .form-check-input { float: none; margin: 0; flex-shrink: 0; }
+.quote-options .form-check-input:checked { background-color: #149b83; border-color: #149b83; }
+.quote-options .form-check-label { cursor: pointer; white-space: nowrap; font-size: 14px; }
+.quote-options .form-control, .quote-options .form-select { min-height: 38px; font-size: 14px; border-radius: 8px; }
+.quote-options .form-control:focus, .quote-options .form-select:focus { border-color: #149b83; box-shadow: 0 0 0 3px #149b831a; }
+.quote-options #volume-ratio-container {
+  position: relative;
+  flex-shrink: 0;
+}
+.quote-options #volume-ratio-select {
+  height: 38px;
+  padding: 6px 32px 6px 12px;
+  border-color: #dfe6eb;
+  text-align: left;
+}
+.quote-options .form-switch { margin: 0; }
+.quote-options-caption { font-size: 13px; font-weight: 600; color: #647780; margin-right: 4px; }
+.quote-fee-amount { margin-left: 6px; padding-left: 8px; border-left: 1px solid #dbe6e1; color: #14816f; font-size: 12px; font-weight: 600; }
+.quote-options #pickup-fee-input-container .form-control + .form-control { margin-top: 6px; }
+@media (max-width: 768px) {
+  .quote-options { padding: 12px; gap: 8px; }
+  .quote-options .form-switch { margin-left: 0; }
+  .quote-options-caption { flex-basis: 100%; }
+}
+
+.quote-options .surcharge-fields:not([style*="display: none"]) { display: inline-flex !important; }
+.quote-options .surcharge-fields { align-items: center; gap: 8px; padding: 8px 10px; background: #f4f8f7; border-radius: 8px; flex-wrap: wrap; }
+.fee-field { display: flex; flex-direction: column; gap: 4px; margin: 0; font-size: 12px; color: #61736e; }
+.fee-input-unit { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.quote-options .fee-field input { width: 90px; }
+.quote-options .fee-quantity input { width: 68px; }
+.fee-multiply { color: #83938d; margin-top: 20px; }
+.fee-subtotal { font-size: 13px; color: #14816f; font-weight: 600; margin-top: 20px; white-space: nowrap; }
+.quote-options .pickup-fields:not([style*="display: none"]) { display: inline-flex !important; }
+.quote-options .pickup-fields { align-items: center; gap: 6px; }
+.quote-options .pickup-fields input { width: 110px; order: -1; }
+.quote-options .pickup-fields select { width: 82px; }
+.quote-options #pickup-fee-input-container .form-control + .form-control { margin-top: 0; }
+
+.quote-options .pickup-fields { align-items: flex-end; gap: 8px; }
+.quote-options .pickup-fields input { order: initial; }
+
+.quote-options .fee-currency-input { position: relative; margin: 0; }
+.quote-options .fee-currency-input > span { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #687d75; font-size: 12px; pointer-events: none; }
+.quote-options .fee-currency-input input { width: 140px; padding-left: 48px; }
+
+/* 展开的附加条件独立成行，保持上方选项位置稳定。 */
+.surcharge-details { background: #fff; border-inline: 1px solid #e2e8ed; }
+.surcharge-details:not(:has(.surcharge-detail-row:not([style*="display: none"]))) { display: none; }
+.surcharge-details .surcharge-detail-row:not([style*="display: none"]) { display: flex !important; }
+.surcharge-details .surcharge-detail-row { align-items: center; gap: 12px; flex-wrap: wrap; padding: 12px 16px; border-top: 1px solid #edf1f3; }
+.surcharge-detail-name { width: 58px; font-size: 14px; font-weight: 600; color: #40564e; }
+.surcharge-details .fee-field > span:first-child:not(.fee-input-unit) { display: none; }
+.surcharge-details .fee-input-unit input { width: 110px; }
+.surcharge-details .fee-quantity input { width: 84px; }
+.surcharge-details input { min-height: 38px; font-size: 14px; border-radius: 8px; }
+.surcharge-details .fee-multiply, .surcharge-details .fee-subtotal { margin-top: 0; }
+.surcharge-details .fee-subtotal { font-weight: 500; }
+.surcharge-details .fee-subtotal.is-zero { color: #84928c; }
+@media (max-width: 576px) {
+  .surcharge-details .surcharge-detail-row { gap: 8px; padding: 12px; }
+  .surcharge-detail-name { width: 100%; }
+  .surcharge-details .fee-input-unit input { width: 90px; }
+  .surcharge-details .fee-quantity input { width: 68px; }
+}
+
+/* 原位区分填写项与计算结果 */
+.quote-fields-table th.quote-computed-cell, .quote-fields-table td.quote-computed-cell { background: #edf6f2; }
+.quote-fields-table th.quote-computed-cell { color: #4c7364; }
+.quote-fields-table .quote-computed-cell .form-control.result { background: transparent; border-color: transparent; box-shadow: none; }
+
+#included-fees-summary { display: block; font-size: 11px; color: #698077; white-space: normal; }
+
+
+.fee-inclusion-button { border: 0; background: transparent; color: #14816f; font-size: 12px; padding: 6px 0; white-space: nowrap; }
+.fee-inclusion-button:hover { text-decoration: underline; }
+.fee-inclusion-button:focus-visible { outline: 2px solid #14816f; outline-offset: 3px; border-radius: 3px; }
+.fee-inclusion-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fee-inclusion-options label { display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid #e0e8e3; border-radius: 8px; cursor: pointer; white-space: nowrap; font-size: 14px; }
+.fee-inclusion-options label:has(input:checked) { background: #edf8f2; border-color: #71b9a0; }
+.fee-inclusion-options input { accent-color: #14816f; width: 16px; height: 16px; }
+
+#fee-inclusion-panel { position: fixed; inset: auto; margin: 0; width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto; padding: 16px; border: 1px solid #dce6e0; border-radius: 12px; background: #fff; color: #29483b; box-shadow: 0 8px 32px #183d2426; }
+#fee-inclusion-panel::backdrop { background: transparent; pointer-events: none; }
+.fee-popover-heading { display: flex; align-items: center; justify-content: space-between; font-size: 14px; }
+.fee-popover-heading button { border: 0; background: none; color: #71857b; font-size: 22px; line-height: 1; padding: 4px; }
+#fee-inclusion-panel > p { font-size: 12px; color: #7b8a82; margin: 8px 0 12px; }
+#fee-inclusion-panel .fee-inclusion-options label { padding: 9px 10px; }
+
+.quote-fields-table .fee-inclusion-button { display: inline-block; width: auto; min-width: 0; white-space: nowrap !important; word-break: keep-all; font-size: 12px; line-height: 1.5; padding: 4px 0; }
+
+.quote-fields-table .fee-inclusion-button { height: auto; border-radius: 0; box-shadow: none; background: transparent; }
+
+.quote-text-toolbar { display: flex; align-items: center; justify-content: flex-start; gap: 8px; margin-bottom: 10px; }
+.quote-text-toolbar #copy-quote-button { width: auto; height: auto; padding: 7px 14px; border-radius: 7px; white-space: nowrap; box-shadow: none; }
+
+.quote-text-toolbar #copy-quote-button { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: #14816f; box-shadow: none; cursor: pointer; }
+.quote-text-toolbar #copy-quote-button:hover { background: #e8f5ef; }
+.quote-text-toolbar #copy-quote-button:focus-visible { outline: 2px solid #14816f; outline-offset: 2px; }

@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import json
+import re
+from datetime import date, datetime
 from pathlib import Path
+from ..db.datetime_util import normalize_tracking_time
 from ..db.shipment_order_status import SHIPMENT_STATUS_LABELS_ZH
 
 from typing import TYPE_CHECKING, Any
@@ -11,6 +14,8 @@ from typing import TYPE_CHECKING, Any
 from io import BytesIO
 
 from openpyxl import Workbook, load_workbook
+from openpyxl.styles import Alignment
+from openpyxl.utils import get_column_letter
 
 from youzi_v2.db.shipments_repository import ShipmentsRepository
 
@@ -19,6 +24,9 @@ if TYPE_CHECKING:
 from youzi_v2.internal_tracking import mask_internal_summary
 
 _CONFIG_PATH = Path(__file__).resolve().parents[1] / "config" / "shipment_excel_columns.json"
+_COUNTRY_FORMATS = ("country_name", "country_code")
+_DATE_FORMATS = {"date_long": "yyyy-mm-dd", "date_short": "mm-dd"}
+_EXPORT_DATE_FIELDS = frozenset({"etd", "atd", "eta", "ata", "delivered_time", "latest_tracking_time"})
 
 
 def _load_mapping() -> dict[str, Any]:
@@ -279,22 +287,109 @@ def _export_cell_value(field: str, row: dict[str, Any], mapping: dict[str, Any])
     return val
 
 
-def build_export_excel_bytes(items: list[dict[str, Any]]) -> bytes:
-    """按 shipment_excel_columns.json 表头导出，与导入模板一致。"""
+def shipment_export_fields() -> dict[str, str]:
+    return {field: label for label, field in _load_mapping()["columns"].items()}
+
+
+def is_blank_export_field(field: str) -> bool:
+    return re.fullmatch(r"blank_[1-9][0-9]*", field) is not None
+
+
+def shipment_export_formats(field: str) -> tuple[str, ...]:
+    if field == "country_code":
+        return _COUNTRY_FORMATS
+    if field in _EXPORT_DATE_FIELDS:
+        return tuple(_DATE_FORMATS)
+    return ()
+
+
+def build_export_excel_bytes(
+    items: list[dict[str, Any]], *, columns: list[dict[str, Any]] | None = None,
+    channel_mapping: dict[str, str] | None = None,
+    country_rows: list[dict[str, Any]] | None = None,
+    product_names: dict[str, str] | None = None,
+) -> bytes:
+    """按标准列或所选模板导出。"""
     mapping = _load_mapping()
     col_map: dict[str, str] = mapping["columns"]
     headers = list(col_map.keys())
     fields = [col_map[h] for h in headers]
+    if columns is not None:
+        fields = [column["field"] for column in columns]
+        headers = [column["label"] for column in columns]
+    formats = [column.get("format") for column in columns] if columns is not None else [None] * len(fields)
+    links = {index: index + 1 for index, column in enumerate(columns or [])
+             if column.get("linkedTo") and index + 1 < len(fields) and column["linkedTo"] == fields[index + 1]}
+    linked_followers = set(links.values())
+    export_indices = [index for index in range(len(fields)) if index not in linked_followers]
+    wrapped = Alignment(vertical="top", wrap_text=True)
+    blank_fields = {field for field in fields if is_blank_export_field(field)}
+    channel_index = fields.index("channel_code") if channel_mapping and "channel_code" in fields else None
+    country_aliases = {name.casefold(): code for name, code in mapping.get("country_aliases", {}).items()}
+    country_names = {code: name for name, code in mapping.get("country_aliases", {}).items()}
+    for country in country_rows or []:
+        code = country["code"].strip().upper()
+        for name in (country.get("nameZh"), country.get("nameEn")):
+            if name and name.strip():
+                country_aliases[name.strip().casefold()] = code
+        if country.get("nameZh"):
+            country_names[code] = country["nameZh"].strip()
 
     wb = Workbook()
     ws = wb.active
     sheet_names: list[str] = mapping.get("sheet_preference", [])
     ws.title = (sheet_names[0] if sheet_names else "运单信息")[:31]
-    ws.append(headers)
+    ws.append([headers[index] for index in export_indices])
+    for cell in ws[1]:
+        cell.data_type = "s"
+    for position, index in enumerate(export_indices, 1):
+        if index in links:
+            ws.column_dimensions[get_column_letter(position)].width = 36
 
     for item in items:
         row = {_API_TO_SNAKE.get(k, k): v for k, v in item.items()}
-        ws.append([_export_cell_value(f, row, mapping) for f in fields])
+        values = []
+        for field, output_format in zip(fields, formats):
+            if field == "product_name" and product_names is not None:
+                value = product_names.get(str(item.get("waybillId") or "").strip()) or None
+            else:
+                value = None if field in blank_fields else _export_cell_value(field, row, mapping)
+            if value is not None and output_format in _COUNTRY_FORMATS:
+                raw = str(row.get(field) or "").strip()
+                code = country_aliases.get(raw.casefold(), raw.upper())
+                if output_format == "country_name":
+                    value = country_names.get(code) or value
+                else:
+                    value = code if code in country_names or (len(code) == 2 and code.isascii() and code.isalpha()) else raw
+            elif value is not None and output_format in _DATE_FORMATS:
+                try:
+                    value = datetime.fromisoformat(normalize_tracking_time(str(value))).date()
+                except ValueError:
+                    pass
+            values.append(value)
+        mapped = channel_mapping.get((row.get("channel_code") or "").strip()) if channel_mapping else None
+        if mapped is not None and channel_index is not None:
+            values[channel_index] = mapped
+        for first, second in links.items():
+            parts = []
+            for index in (first, second):
+                value = values[index]
+                if value is not None:
+                    parts.append(value.strftime("%m-%d") if isinstance(value, date) and formats[index] == "date_short" else str(value))
+            values[first] = "\n".join(parts) or None
+        ws.append([values[index] for index in export_indices])
+        for output_index, source_index in enumerate(export_indices, 1):
+            value, output_format = values[source_index], formats[source_index]
+            cell = ws.cell(row=ws.max_row, column=output_index)
+            if source_index in links or (fields[source_index] == "product_name" and product_names is not None):
+                cell.alignment = wrapped
+                if value is not None:
+                    cell.data_type = "s"
+            elif isinstance(value, date) and output_format in _DATE_FORMATS:
+                cell.number_format = _DATE_FORMATS[output_format]
+            elif (source_index == channel_index and mapped is not None
+                  or isinstance(value, str) and output_format in _COUNTRY_FORMATS):
+                cell.data_type = "s"
 
     buf = BytesIO()
     wb.save(buf)

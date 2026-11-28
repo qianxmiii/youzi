@@ -9,6 +9,26 @@ from pydantic import AliasChoices, BaseModel, ConfigDict, Field, field_validator
 SHIPMENT_PAYMENT_STATUSES = frozenset({"UNPAID", "PAID"})
 
 
+class ShipmentExportColumnIn(BaseModel):
+    field: str = Field(min_length=1, max_length=80)
+    label: str = Field(default="", max_length=100)
+    locked: bool | None = None
+    linkedTo: str | None = Field(default=None, max_length=80)
+    format: Literal["country_name", "country_code", "date_long", "date_short"] | None = None
+
+
+class ShipmentExportChannelMappingIn(BaseModel):
+    channelCode: str = Field(min_length=1, max_length=200)
+    value: str = Field(min_length=1, max_length=200)
+
+
+class ShipmentExportTemplateIn(BaseModel):
+    id: str | None = Field(default=None, pattern=r"^[0-9a-f]{32}$")
+    name: str = Field(min_length=1, max_length=60)
+    columns: list[ShipmentExportColumnIn] = Field(min_length=1, max_length=100)
+    channelMappings: list[ShipmentExportChannelMappingIn] | None = Field(default=None, max_length=500)
+
+
 class ShipmentRecordIn(BaseModel):
     model_config = ConfigDict(populate_by_name=True, extra="ignore")
 

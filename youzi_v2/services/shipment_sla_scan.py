@@ -310,11 +310,11 @@ def scan_shipment_sla_alerts(
         thresholds = load_thresholds(database)
         rules_by_channel = rules_repo.list_enabled_grouped()
 
-        stale_resolved = alerts_repo.resolve_delivered_stale_alerts()
+        stale_resolved = alerts_repo.resolve_out_of_scope_alerts()
         if stale_resolved and followup_repo:
             followup_repo.resolve_pending_for_delivered_shipments()
         if stale_resolved:
-            out(f"[运输时效] 兜底清理已签收预警 {stale_resolved} 条")
+            out(f"[运输时效] 关闭已退出在途跟踪的预警 {stale_resolved} 条")
 
         orphan_resolved = 0
         rematched = alerts_repo.rematch_alerts_to_current_shipments()
@@ -359,10 +359,6 @@ def scan_shipment_sla_alerts(
             # 人工异常期间暂停运输扫描，保留原预警状态供关闭后恢复。
             if (row.get("exception_code") or "").strip():
                 continue
-            if str(row.get("status_code") or "").strip().upper() in {"4", "CANCELLED", "CANCELED"}:
-                resolved += alerts_repo.resolve_open_for_shipment(shipment_id)
-                continue
-
             channel_code = (row.get("channel_code") or "").strip()
             carrier_code = (row.get("carrier_code") or "").strip()
 

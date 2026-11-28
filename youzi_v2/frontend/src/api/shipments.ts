@@ -445,16 +445,79 @@ export async function getShipmentExceptionEvents(
 
 const SHIPMENT_EXPORT_MAX = 10_000
 
-export async function exportShipmentsExcel(params: ListShipmentsParams): Promise<Blob> {
+export interface ShipmentExportColumn {
+  field: string
+  label: string
+  locked?: boolean
+  linkedTo?: string | null
+  format?: ShipmentExportFormat | null
+}
+
+export type ShipmentExportFormat = 'country_name' | 'country_code' | 'date_long' | 'date_short'
+
+export interface ShipmentExportField {
+  field: string
+  label: string
+  formats: ShipmentExportFormat[]
+}
+
+export interface ShipmentExportTemplate {
+  id: string
+  name: string
+  columns: ShipmentExportColumn[]
+  channelMappings?: ShipmentExportChannelMapping[]
+}
+
+export interface ShipmentExportChannelMapping {
+  channelCode: string
+  value: string
+}
+
+export interface ShipmentExportChannelOption {
+  code: string
+  name: string
+}
+
+export class UnmappedExportChannelsError extends Error {
+  constructor(readonly channels: (ShipmentExportChannelOption & { count: number })[]) {
+    super('有渠道未映射')
+  }
+}
+
+export function listShipmentExportTemplates() {
+  return api<{
+    fields: ShipmentExportField[]
+    templates: ShipmentExportTemplate[]
+    channels: ShipmentExportChannelOption[]
+  }>('/api/v1/shipments/export-templates')
+}
+
+export function saveShipmentExportTemplate(template: Omit<ShipmentExportTemplate, 'id'> & { id?: string }) {
+  return api<ShipmentExportTemplate>('/api/v1/shipments/export-templates', { method: 'POST', body: template })
+}
+
+export async function exportShipmentsExcel(
+  params: ListShipmentsParams, templateId?: string, allowUnmappedChannels = false,
+): Promise<Blob> {
   const q = buildShipmentListQuery({
     ...params,
     limit: Math.min(params.limit ?? SHIPMENT_EXPORT_MAX, SHIPMENT_EXPORT_MAX),
     offset: 0,
   })
-  return api<Blob, 'blob'>('/api/v1/shipments/export', {
-    query: q,
-    responseType: 'blob',
-  })
+  if (templateId) q.templateId = templateId
+  if (allowUnmappedChannels) q.allowUnmappedChannels = 'true'
+  try {
+    return await api<Blob, 'blob'>('/api/v1/shipments/export', { query: q, responseType: 'blob' })
+  } catch (error) {
+    const response = error as { status?: number; data?: Blob }
+    if (response.status === 409 && response.data instanceof Blob) {
+      const body = await response.data.text().then((text) => JSON.parse(text)).catch(() => null)
+      if (body?.detail?.code === 'unmapped_export_channels' && Array.isArray(body.detail.channels)) {
+        throw new UnmappedExportChannelsError(body.detail.channels)
+      }
+    }
+    return readBlobApiError(error, '导出运单失败')
+  }
 }
 
 export async function importShipmentsExcel(file: File): Promise<ShipmentImportResult> {

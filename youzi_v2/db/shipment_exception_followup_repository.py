@@ -9,11 +9,14 @@ from typing import Any
 from .connection import Database
 from .datetime_util import now_str
 from .internal_tracking_logs_table import LATEST_INTERNAL_LOG_JOIN, LATEST_INTERNAL_LOG_TIME
-from .shipment_sla import sql_sla_delivered
+from .shipment_order_status import WORKSPACE_TRANSIT, workspace_status_filter_sql
+from .shipment_sla import sql_sla_delivered, sql_sla_not_delivered
 from .shipments_table import TABLE_NAME as SHIPMENTS_TABLE
 from .shipment_exception_followup_table import TABLE_NAME
 
 EXCEPTION_CODES_TABLE = "shipment_exception_codes"
+_TRANSIT_SQL, _TRANSIT_PARAMS = workspace_status_filter_sql(WORKSPACE_TRANSIT)
+_ACTIVE_TRANSIT_SQL = f"{_TRANSIT_SQL} AND {sql_sla_not_delivered('s.route_status')}"
 
 
 def _format_followup_display_message(row: sqlite3.Row) -> str:
@@ -72,8 +75,10 @@ class ShipmentExceptionFollowupRepository:
                 {LATEST_INTERNAL_LOG_JOIN}
                 LEFT JOIN {EXCEPTION_CODES_TABLE} ec ON ec.code = s.exception_code
                 WHERE s.exception_code IS NOT NULL AND TRIM(s.exception_code) != ''
+                  AND {_ACTIVE_TRANSIT_SQL}
                 ORDER BY s.shipment_no
-                """
+                """,
+                _TRANSIT_PARAMS,
             ).fetchall()
         return [dict(r) for r in rows]
 
@@ -103,8 +108,9 @@ class ShipmentExceptionFollowupRepository:
         now = now_str()
         with self._database.lock:
             row = self._conn.execute(
-                f"SELECT shipment_no, exception_code FROM {SHIPMENTS_TABLE} WHERE id = ?",
-                (shipment_id,),
+                f"""SELECT s.shipment_no, s.exception_code FROM {SHIPMENTS_TABLE} s
+                    WHERE s.id = ? AND {_ACTIVE_TRANSIT_SQL}""",
+                (shipment_id, *_TRANSIT_PARAMS),
             ).fetchone()
             if not row or not (row["exception_code"] or "").strip():
                 return False
@@ -242,13 +248,14 @@ class ShipmentExceptionFollowupRepository:
                 SELECT n.*, s.customer,
                        COALESCE(ec.name_zh, n.exception_code) AS exception_name_zh
                 FROM {TABLE_NAME} n
-                LEFT JOIN {SHIPMENTS_TABLE} s ON s.id = n.shipment_id
+                JOIN {SHIPMENTS_TABLE} s ON s.id = n.shipment_id
                 LEFT JOIN {EXCEPTION_CODES_TABLE} ec ON ec.code = n.exception_code
-                WHERE n.resolved_at IS NULL OR TRIM(n.resolved_at) = ''
+                WHERE (n.resolved_at IS NULL OR TRIM(n.resolved_at) = '')
+                  AND {_ACTIVE_TRANSIT_SQL}
                 ORDER BY datetime(n.triggered_at) DESC
                 LIMIT ?
                 """,
-                (lim,),
+                (*_TRANSIT_PARAMS, lim),
             ).fetchall()
         return [_notification_to_api(r) for r in rows]
 
@@ -256,9 +263,12 @@ class ShipmentExceptionFollowupRepository:
         with self._database.lock:
             row = self._conn.execute(
                 f"""
-                SELECT COUNT(*) AS c FROM {TABLE_NAME}
-                WHERE resolved_at IS NULL OR TRIM(resolved_at) = ''
-                """
+                SELECT COUNT(*) AS c FROM {TABLE_NAME} n
+                JOIN {SHIPMENTS_TABLE} s ON s.id = n.shipment_id
+                WHERE (n.resolved_at IS NULL OR TRIM(n.resolved_at) = '')
+                  AND {_ACTIVE_TRANSIT_SQL}
+                """,
+                _TRANSIT_PARAMS,
             ).fetchone()
         return int(row["c"] or 0)
 

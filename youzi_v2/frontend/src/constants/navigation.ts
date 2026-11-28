@@ -51,7 +51,8 @@ export const navGroups: NavGroup[] = [
       { name: '异常跟踪', to: '/shipment-exceptions', icon: 'alert' },
       { name: '催款管理', to: '/shipments/payment-reminders', icon: 'wallet' },
       { name: '运单分组', to: '/shipment-groups', icon: 'layers' },
-      { name: '船期监控', to: '/vessel-schedules', icon: 'ship' },
+      { name: '提单管理', to: '/bills-of-lading', icon: 'ship' },
+      { name: '船期监控', to: '/vessel-schedules', icon: 'anchor' },
     ],
   },
   {
@@ -78,21 +79,13 @@ export const navGroups: NavGroup[] = [
     items: [{ name: '工具中心', to: '/tools', icon: 'wrench' }],
   },
   {
-    label: '系统管理',
+    label: '后台管理',
     icon: 'group-system',
     items: [
+      { name: '码表', to: '/admin', icon: 'book' },
+      { name: '时效规则', to: '/admin/attention-rules', icon: 'settings' },
       { name: '计划任务', to: '/scheduled-tasks', icon: 'clock' },
-      {
-        name: '设置',
-        to: '',
-        icon: 'settings',
-        children: [{ name: '显示设置', to: '/display-settings', icon: 'globe' }],
-      },
+      { name: '显示设置', to: '/display-settings', icon: 'globe' },
     ],
-  },
-  {
-    label: '后台管理',
-    icon: 'settings',
-    items: [{ name: '码表', to: '/admin', icon: 'settings' }, { name: '时效规则', to: '/admin/attention-rules', icon: 'settings' }],
   },
 ]

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
 import {
   NButton,
   NCheckbox,
@@ -1013,6 +1014,7 @@ const columns = computed<DataTableColumns<ShipmentSlaAlert>>(() => [
     ellipsis: { tooltip: true },
     render: (row) => {
       const label = carrierDisplayLabel(row)
+      if (!carrierVisible.value) return h('span', '***')
       const code = row.carrierCode?.trim()
       if (!code || label === code) return label
       return h(

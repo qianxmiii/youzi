@@ -8,6 +8,7 @@ import AppOrderFlowBell from '@/components/AppOrderFlowBell.vue'
 import AppTodoBell from '@/components/AppTodoBell.vue'
 import WorldClockBar from '@/components/header/WorldClockBar.vue'
 import ThemeToggle from '@/components/ThemeToggle.vue'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import { ChevronLeft } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { useSidebarCollapsed } from '@/composables/useSidebarCollapsed'
@@ -68,6 +69,7 @@ onMounted(async () => {
       <AppOrderFlowBell />
       <AppTodoBell />
       <AppMessageBell />
+      <CarrierVisibilityToggle />
       <span class="status-pill">
         <span
           class="h-1.5 w-1.5 rounded-full"

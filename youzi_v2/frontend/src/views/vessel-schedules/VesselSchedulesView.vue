@@ -1,28 +1,31 @@
 <script setup lang="ts">
+import { carrierVisible, displayCarrier } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import { Download, RefreshCw } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import {
   NButton,
-  NCollapse,
-  NCollapseItem,
   NDataTable,
   NDropdown,
   NInput,
   NInputNumber,
   NModal,
   NSelect,
+  NTabPane,
+  NTabs,
   NTag,
   useDialog,
   useMessage,
   type DataTableColumns,
   type DropdownOption,
 } from 'naive-ui'
-import { computed, h, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { computed, h, nextTick, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import CarrierVesselSelect from '@/components/vessel-schedules/CarrierVesselSelect.vue'
 import VesselScheduleActiveBanner from '@/components/vessel-schedules/VesselScheduleActiveBanner.vue'
 import VoyageFormModal from '@/components/vessel-schedules/VoyageFormModal.vue'
 import VoyageTimeline from '@/components/vessel-schedules/VoyageTimeline.vue'
+import VoyageBillsPanel from '@/components/vessel-schedules/VoyageBillsPanel.vue'
 import {
   createVesselSchedule,
   deleteVesselSchedule,
@@ -52,6 +55,7 @@ import { resolveVesselName, resolveVoyageNo } from '@/utils/vesselVoyageDisplay'
 const message = useMessage()
 const dialog = useDialog()
 const route = useRoute()
+const router = useRouter()
 const syncModalShow = ref(false)
 const loading = ref(false)
 const detailLoading = ref(false)
@@ -66,6 +70,9 @@ const tableFilter = ref('')
 const statusFilter = ref<MaritimeStatus | ''>('')
 const shipments = ref<VoyageShipment[]>([])
 const shipmentTotal = ref(0)
+const relatedTab = ref<'bills' | 'shipments'>('bills')
+const selectedPortCallId = ref<string | null>(null)
+const relatedSection = ref<HTMLElement | null>(null)
 
 const modalShow = ref(false)
 const modalMode = ref<'create' | 'edit'>('create')
@@ -139,8 +146,11 @@ async function loadVoyages() {
   loading.value = true
   try {
     const res = await listVesselSchedules({ search: search.value.trim() || undefined, limit: 200 })
-    voyages.value = res.items
-    if (selectedId.value && !res.items.some((v) => v.id === selectedId.value)) {
+    const current = detail.value
+    voyages.value = current && route.query.voyageId === current.id && !res.items.some(voyage => voyage.id === current.id)
+      ? [current, ...res.items] : res.items
+    if (selectedId.value && !res.items.some((v) => v.id === selectedId.value)
+      && route.query.voyageId !== selectedId.value) {
       selectedId.value = null
       selectedVesselName.value = null
     }
@@ -164,35 +174,53 @@ async function loadVoyages() {
   }
 }
 
+let detailRevision = 0
 async function loadDetail() {
-  if (!selectedId.value) {
+  const revision = ++detailRevision
+  const id = selectedId.value
+  if (!id) {
     detail.value = null
     shipments.value = []
     shipmentTotal.value = 0
+    detailLoading.value = false
     return
   }
   detailLoading.value = true
   try {
-    detail.value = await getVesselSchedule(selectedId.value)
+    const result = await getVesselSchedule(id)
+    if (revision !== detailRevision || id !== selectedId.value) return
+    detail.value = result
+    if (!voyages.value.some(voyage => voyage.id === id)) voyages.value = [result, ...voyages.value]
+    syncVesselNameFromSelectedId()
+    if (selectedPortCallId.value && !result.portCalls.some(port => port.id === selectedPortCallId.value)) {
+      selectedPortCallId.value = null
+    }
     await loadShipments()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '加载航次详情失败')
+    if (revision === detailRevision) {
+      detail.value = null
+      message.error(e instanceof Error ? e.message : '加载航次详情失败')
+    }
   } finally {
-    detailLoading.value = false
+    if (revision === detailRevision) detailLoading.value = false
   }
 }
 
+let shipmentRevision = 0
 async function loadShipments() {
-  if (!selectedId.value) return
+  const revision = ++shipmentRevision
+  const id = selectedId.value
+  if (!id) return
   try {
-    const res = await listVoyageShipments(selectedId.value, {
+    const res = await listVoyageShipments(id, {
       maritimeStatus: statusFilter.value || undefined,
       limit: 200,
     })
+    if (revision !== shipmentRevision || id !== selectedId.value) return
     shipments.value = res.items as VoyageShipment[]
     shipmentTotal.value = res.total
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '加载关联运单失败')
+    if (revision === shipmentRevision && id === selectedId.value) message.error(e instanceof Error ? e.message : '加载关联运单失败')
   }
 }
 
@@ -201,7 +229,44 @@ async function handleRefresh() {
   await loadDetail()
 }
 
+function applyRouteSelection() {
+  const { voyageId, portCallId, maritimeStatus } = route.query
+  if (typeof maritimeStatus === 'string' && maritimeStatus) {
+    statusFilter.value = maritimeStatus as MaritimeStatus
+    if (!portCallId) relatedTab.value = 'shipments'
+  }
+  if (typeof voyageId !== 'string' || !voyageId) return
+  if (selectedId.value !== voyageId) search.value = ''
+  selectedId.value = voyageId
+  selectedPortCallId.value = typeof portCallId === 'string' && portCallId ? portCallId : null
+  if (selectedPortCallId.value) {
+    tableFilter.value = ''
+    relatedTab.value = 'bills'
+  }
+}
+
+function setPortCall(portCallId: string | null) {
+  selectedPortCallId.value = portCallId
+  void router.replace({ query: { ...route.query, voyageId: selectedId.value, portCallId: portCallId || undefined } })
+}
+
+async function showPortBills(portCallId: string) {
+  relatedTab.value = 'bills'
+  setPortCall(portCallId)
+  await nextTick()
+  relatedSection.value?.scrollIntoView({ block: 'nearest' })
+}
+
+function clearRouteSelection() {
+  selectedPortCallId.value = null
+  if (route.query.voyageId || route.query.portCallId) {
+    void router.replace({ query: { ...route.query, voyageId: undefined, portCallId: undefined } })
+  }
+}
+
 onMounted(async () => {
+  applyRouteSelection()
+  void loadVoyages()
   try {
     const res = await listMaritimeScheduleProviders()
     scheduleProviders.value = res.items
@@ -211,16 +276,13 @@ onMounted(async () => {
   } catch {
     /* ignore */
   }
-  const qStatus = route.query.maritimeStatus
-  if (typeof qStatus === 'string' && qStatus) {
-    statusFilter.value = qStatus as MaritimeStatus
-  }
-  await loadVoyages()
-  const qVoyage = route.query.voyageId
-  if (typeof qVoyage === 'string' && qVoyage) {
-    selectedId.value = qVoyage
-  }
-  await loadDetail()
+})
+
+watch(() => [route.name, route.query.voyageId, route.query.portCallId, route.query.maritimeStatus], (_next, previous) => {
+  if (route.name !== 'vessel-schedules') return
+  const id = selectedId.value
+  applyRouteSelection()
+  if (previous[0] !== 'vessel-schedules' && id && id === selectedId.value) void loadDetail()
 })
 
 watch(selectedVesselName, (name, prev) => {
@@ -239,7 +301,10 @@ watch(selectedVesselName, (name, prev) => {
   }
 })
 
-watch(selectedId, () => {
+watch(selectedId, (id) => {
+  if (route.query.voyageId !== id) selectedPortCallId.value = null
+  shipments.value = []
+  shipmentTotal.value = 0
   syncVesselNameFromSelectedId()
   loadDetail()
 })
@@ -318,7 +383,7 @@ async function refreshDetailFromCarrier() {
     await loadVoyages()
     await loadDetail()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '船期更新失败')
+    message.error(carrierVisible.value && e instanceof Error ? e.message : '船期更新失败')
   } finally {
     scheduleSyncing.value = false
   }
@@ -339,7 +404,7 @@ async function handleScheduleSyncAll() {
     ].filter(Boolean)
     if (res.failed && res.errors.length) {
       message.warning(
-        `${parts.join('，')}；${res.errors
+        !carrierVisible.value ? parts.join('，') : `${parts.join('，')}；${res.errors
           .slice(0, 2)
           .map((e) => `${e.vesselCode}: ${e.message}`)
           .join('；')}`,
@@ -353,7 +418,7 @@ async function handleScheduleSyncAll() {
     await loadVoyages()
     await loadDetail()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '全库船期同步失败')
+    message.error(carrierVisible.value && e instanceof Error ? e.message : '全库船期同步失败')
   } finally {
     syncAllLoading.value = false
   }
@@ -375,7 +440,7 @@ async function handleScheduleSync() {
     const res = await syncExternalVesselSchedule(company, code, syncPeriod.value)
     const label =
       scheduleProviders.value.find((p) => p.shippingCompany === company)?.label || company
-    message.success(res.created ? `已从 ${label} 新建航次` : `已从 ${label} 更新航次`)
+    message.success(res.created ? `已从 ${displayCarrier(label)} 新建航次` : `已从 ${displayCarrier(label)} 更新航次`)
     selectedId.value = res.voyage.id
     selectedVesselName.value = resolveVesselName(res.voyage)
     syncVesselCode.value = ''
@@ -383,7 +448,7 @@ async function handleScheduleSync() {
     await loadVoyages()
     await loadDetail()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '船期同步失败')
+    message.error(carrierVisible.value && e instanceof Error ? e.message : '船期同步失败')
   } finally {
     scheduleSyncing.value = false
   }
@@ -565,6 +630,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
             clearable
             placeholder="选择船名"
             :loading="loading"
+            @update:value="clearRouteSelection"
           />
         </label>
         <label class="vessel-schedules-filter__field">
@@ -577,6 +643,7 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
             placeholder="选择航次"
             :disabled="!selectedVesselName"
             :loading="loading"
+            @update:value="clearRouteSelection"
           />
         </label>
         <label class="vessel-schedules-filter__field vessel-schedules-filter__field--grow">
@@ -637,11 +704,22 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
         :shipping-company="detail.shippingCompany"
         :port-calls="detail.portCalls"
         :table-filter="tableFilter"
+        :selected-port-call-id="selectedPortCallId"
         @refresh="loadDetail"
+        @select-bills="showPortBills"
       />
 
-      <NCollapse v-if="shipmentTotal > 0 || summary" class="vessel-schedules-collapse">
-        <NCollapseItem :title="`关联运单（${shipmentTotal} 票）`" name="shipments">
+      <section ref="relatedSection" class="panel px-3 pb-3">
+        <NTabs v-model:value="relatedTab" type="line" size="small">
+          <NTabPane name="bills" tab="提单／柜">
+            <VoyageBillsPanel
+              :voyage-id="detail.id"
+              :port-calls="detail.portCalls"
+              :port-call-id="selectedPortCallId"
+              @update:port-call-id="setPortCall"
+            />
+          </NTabPane>
+          <NTabPane :tab="`运单（${shipmentTotal} 票）`" name="shipments">
           <div v-if="summary" class="mb-3 flex flex-wrap gap-2">
             <NTag v-if="summary.arrivingSoon" type="warning" :bordered="false">
               三天内到港 {{ summary.arrivingSoon }}
@@ -669,8 +747,9 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
             size="small"
             :scroll-x="900"
           />
-        </NCollapseItem>
-      </NCollapse>
+          </NTabPane>
+        </NTabs>
+      </section>
 
     </template>
 
@@ -693,7 +772,11 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
       :mask-closable="!scheduleSyncing"
     >
       <div class="flex flex-col gap-3">
-        <NSelect v-model:value="syncCompany" :options="providerOptions" placeholder="船公司" filterable />
+        <div class="flex items-center gap-2">
+          <span v-if="!carrierVisible">船公司 ***</span>
+          <NSelect v-else v-model:value="syncCompany" :options="providerOptions" placeholder="船公司" filterable />
+          <CarrierVisibilityToggle />
+        </div>
         <CarrierVesselSelect
           v-if="syncVesselSearchEnabled"
           v-model:vessel-code="syncVesselCode"
@@ -792,10 +875,6 @@ const shipmentColumns: DataTableColumns<VoyageShipment> = [
   text-align: center;
   font-size: 0.875rem;
   color: var(--color-muted);
-}
-
-.vessel-schedules-collapse :deep(.n-collapse-item__header) {
-  font-weight: 600;
 }
 
 </style>

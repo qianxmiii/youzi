@@ -61,6 +61,7 @@ class Database:
         from . import quote_followups_table
         from . import order_flow_orders_table
         from . import vessel_voyages_table
+        from . import bills_of_lading_table
 
         with self._lock:
             app_settings_table.ensure_schema(self._conn)
@@ -97,6 +98,7 @@ class Database:
             customers_table.ensure_schema(self._conn)
             shipment_tracking_numbers_table.ensure_schema(self._conn)
             vessel_voyages_table.ensure_schema(self._conn)
+            bills_of_lading_table.ensure_schema(self._conn)
             port_subscriptions_table.ensure_schema(self._conn)
             shipment_subscriptions_table.ensure_schema(self._conn)
             shipment_groups_table.ensure_schema(self._conn)

@@ -276,7 +276,7 @@ class WarehouseAddressRecordIn(BaseModel):
     address_type: str = Field(
         default="",
         validation_alias=AliasChoices("addressType", "address_type"),
-        description="AMZ / WFS",
+        description="AMZ / WFS / TIKTOK",
     )
     company: str = Field(default="", description="收件人公司名")
     contact: str = Field(default="", description="收件人")

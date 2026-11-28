@@ -1,5 +1,5 @@
 """
-平台仓库地址簿（AMZ / WFS）：仓库代码、收件人、国家/州省/城市、地址行、电话、备注等。
+平台仓库地址簿（AMZ / WFS / TikTok）：仓库代码、收件人、国家/州省/城市、地址行、电话、备注等。
 """
 
 from __future__ import annotations
@@ -13,7 +13,7 @@ from .app_settings_table import get_setting, set_setting
 from .connection import Database
 
 TABLE_NAME = "addresses_warehouse"
-ADDRESS_TYPES = frozenset({"AMZ", "WFS"})
+ADDRESS_TYPES = frozenset({"AMZ", "WFS", "TIKTOK"})
 _MIGRATION_KEY = "addresses_warehouse_migrated_v1"
 
 _CREATE_SQL = f"""
@@ -225,7 +225,7 @@ def _normalize_payload(data: dict[str, Any]) -> dict[str, Any]:
     if address_type == "FBA":
         address_type = "AMZ"
     if address_type and address_type not in ADDRESS_TYPES:
-        raise ValueError("地址类型须为 AMZ 或 WFS")
+        raise ValueError("地址类型须为 AMZ、WFS 或 TikTok")
 
     warehouse_code = (
         data.get("warehouse_code") or data.get("warehouseCode") or ""

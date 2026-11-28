@@ -434,7 +434,7 @@ class ShipmentGroupsRepository:
                     SUM(CASE WHEN TRIM(COALESCE(s.ata, '')) != '' THEN 1 ELSE 0 END) AS arrived,
                     SUM(
                         CASE
-                            WHEN UPPER(COALESCE(s.status_code, '')) = 'DELIVERED'
+                            WHEN UPPER(TRIM(COALESCE(s.status_code, ''))) IN ('3', 'DELIVERED')
                               OR TRIM(COALESCE(s.delivered_time, '')) != ''
                             THEN 1 ELSE 0
                         END

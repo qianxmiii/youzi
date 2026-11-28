@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import {
   NButton,
   NCheckbox,
@@ -16,7 +18,6 @@ import type { ShipmentAdvancedTimeRanges } from '@/constants/shipmentListFilterM
 const show = defineModel<boolean>('show', { default: false })
 
 const filterCarrier = defineModel<string | null>('filterCarrier', { default: null })
-const filterSupplierName = defineModel<string | null>('filterSupplierName', { default: null })
 const filterCountry = defineModel<string | null>('filterCountry', { default: null })
 const filterChannelNameZh = defineModel<string | null>('filterChannelNameZh', { default: null })
 const filterCustomerNo = defineModel<string>('filterCustomerNo', { default: '' })
@@ -59,7 +60,6 @@ const advancedTimes = defineModel<ShipmentAdvancedTimeRanges>('advancedTimes', {
 defineProps<{
   filterOptions: ShipmentFilterOptions
   carrierOptions: { label: string; value: string }[]
-  supplierOptions: { label: string; value: string }[]
   countryOptions: { label: string; value: string }[]
   channelNameZhOptions: { label: string; value: string }[]
   timeFieldOptions: { label: string; value: string }[]
@@ -68,8 +68,7 @@ defineProps<{
   hasGroupFilterOptions: { label: string; value: string }[]
   groupFilterOptions: { label: string; value: string }[]
   ruleTypeFilterOptions: { label: string; value: string }[]
-  /** 港前国家/供应商已在外层，高级筛选内隐藏避免重复 */
-  hideCountrySupplier?: boolean
+  hideCountry?: boolean
 }>()
 
 const emit = defineEmits<{ apply: [] }>()
@@ -145,7 +144,7 @@ function apply() {
             />
             <NInput v-model:value="searchKeyword" placeholder="关键词：品名、地址等" clearable size="small" />
             <NSelect
-              v-if="!hideCountrySupplier"
+              v-if="!hideCountry"
               v-model:value="filterCountry"
               :options="countryOptions"
               placeholder="国家/地区"
@@ -156,16 +155,11 @@ function apply() {
             <NInput v-model:value="filterDestinationPort" placeholder="目的港" clearable size="small" />
             <NInput v-model:value="filterAddressKeyword" placeholder="仓库 / 地址关键词" clearable size="small" />
             <NSelect v-model:value="filterChannelNameZh" :options="channelNameZhOptions" placeholder="渠道（中文名）" clearable filterable size="small" />
-            <NSelect v-model:value="filterCarrier" :options="carrierOptions" placeholder="承运商" clearable filterable size="small" />
-            <NSelect
-              v-if="!hideCountrySupplier"
-              v-model:value="filterSupplierName"
-              :options="supplierOptions"
-              placeholder="供应商"
-              clearable
-              filterable
-              size="small"
-            />
+            <div class="flex items-center gap-2">
+              <span v-if="!carrierVisible" class="grow">承运商 ***</span>
+              <NSelect v-else v-model:value="filterCarrier" :options="carrierOptions" placeholder="承运商" clearable filterable size="small" />
+              <CarrierVisibilityToggle />
+            </div>
             <NSelect
               v-model:value="filterPaymentStatus"
               :options="[...PAYMENT_STATUS_FILTER_OPTIONS]"

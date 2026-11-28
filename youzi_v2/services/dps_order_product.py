@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
@@ -240,3 +241,27 @@ def query_order_products(
     except ValueError as exc:
         raise ValueError("DPS 运单产品响应不是 JSON") from exc
     return parse_order_product_body(body)
+
+
+def query_export_product_names(config_path: Path, waybill_ids: list[str]) -> dict[str, str]:
+    """从查看产品使用的接口取品名，分别按语言去重。"""
+    if not waybill_ids:
+        return {}
+
+    def names_for(waybill_id: str) -> str:
+        products = query_order_products(config_path, waybill_id)
+        lines = []
+        for field in ("cnName", "enName"):
+            names = (product[field].strip() for product in products)
+            line = ",".join(dict.fromkeys(name for name in names if name))
+            if line:
+                lines.append(line)
+        return "\n".join(lines)
+
+    names_by_id = {}
+    batch_size = 4
+    with ThreadPoolExecutor(max_workers=batch_size) as executor:
+        for start in range(0, len(waybill_ids), batch_size):
+            batch = waybill_ids[start:start + batch_size]
+            names_by_id.update(zip(batch, executor.map(names_for, batch)))
+    return names_by_id

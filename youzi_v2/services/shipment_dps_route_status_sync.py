@@ -20,6 +20,7 @@ from ..db.shipment_sla import (
 )
 from ..db.shipments_repository import ShipmentsRepository
 from .dps_waybill_route_info import query_waybill_route_info
+from .bills_of_lading import record_customs_nodes
 from .shipment_route_status_exception import apply_customs_exception_from_route_status
 from .shipment_sla_scan import maybe_resolve_alerts_after_delivery
 
@@ -182,6 +183,7 @@ def sync_route_status_by_waybill_ids(
             out(f"[DPS明细状态] {sn} 接口无节点")
             continue
 
+        record_customs_nodes(shipments_repo._database, sn, nodes)
         route_status, milestone_node = pick_latest_milestone_from_nodes(nodes)
         latest = pick_latest_node(nodes) or {}
         prev_route = _opt_str(ship.get("routeStatus"))

@@ -25,6 +25,7 @@ from .services.wecom_aibot_runtime import (
 )
 from .routers import (
     addresses,
+    bills_of_lading,
     channels,
     code_tables,
     customer_addresses,
@@ -102,6 +103,7 @@ def _stop_scheduled_tracking_sync() -> None:
 for route_module in (
     pages,
     code_tables,
+    bills_of_lading,
     payment_reminders,
     quote_opportunities,
     shipments,

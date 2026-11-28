@@ -11,7 +11,8 @@ from ..db.code_tables_repository import CodeTablesRepository
 from ..db.shipment_order_status import PREPORT_DPS_REFRESH_STATUSES
 from ..db.shipment_sla import SLA_DELIVERED_ROUTE_STATUS
 from ..db.shipments_repository import ShipmentsRepository
-from .shipment_dps_mapper import dps_row_to_shipment
+from .bills_of_lading import record_customs_nodes
+from .shipment_dps_mapper import dps_row_route_info, dps_row_to_shipment
 from .shipment_dps_sync_fields import filter_dps_payload, get_dps_sync_fields_config
 from .shipment_dps_sync_schedule import should_run_scheduled_dps_sync
 from .shipment_dps_sync_settings import (
@@ -148,6 +149,8 @@ def _upsert_dps_rows(
                 filtered['commerce_marks']=json.dumps(marks,ensure_ascii=False)
             before_id = None if is_new else existing["id"]
             result_row, was_created = shipments_repo.upsert_by_shipment_no(filtered)
+            if isinstance(row.get("params"), dict):
+                record_customs_nodes(database, shipment_no, [dps_row_route_info(row["params"])])
             if was_created:
                 created += 1
             elif before_id and result_row.get("updatedTime") == existing.get(

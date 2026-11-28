@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { displayCarrier } from '@/composables/useCarrierPrivacy'
 import { Clock, ClipboardCheck, Layers, Package, RefreshCw, Ship, TriangleAlert } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { NButton, NSpin, NTag, useMessage } from 'naive-ui'
@@ -619,7 +620,7 @@ function onFeedDismiss(item: AlertFeedItem) {
                     </div>
                     <p class="workbench-feed__desc line-clamp-2">
                       <template
-                        v-for="(part, idx) in splitDeliveredHighlight(n.latestDesc)"
+                        v-for="(part, idx) in splitDeliveredHighlight(n.trackingSource === 'carrier' ? displayCarrier(n.latestDesc) : n.latestDesc)"
                         :key="idx"
                       >
                         <span v-if="part.highlight" class="workbench-feed__highlight">{{ part.text }}</span>

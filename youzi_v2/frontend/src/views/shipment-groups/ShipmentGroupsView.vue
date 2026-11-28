@@ -42,6 +42,7 @@ import type {
 } from '@/types/shipmentGroup'
 import ShipmentGroupAlertCard from '@/components/shipments/ShipmentGroupAlertCard.vue'
 import { ICON_STROKE } from '@/constants/icons'
+import { coarseShipmentStatusBadgeClass, normalizeShipmentStatusCode, shipmentStatusLabel } from '@/constants/shipmentWorkspace'
 import {
   SHIPMENT_GROUP_RULE_OPTIONS,
   defaultRuleDraft,
@@ -101,9 +102,7 @@ function deliveredTimeToTimestamp(value: string | null | undefined): number | nu
 function patchMemberStats() {
   if (!detail.value) return
   const items = memberShipments.value
-  const delivered = items.filter(
-    (s) => (s.deliveredTime ?? '').trim() || s.statusCode === 'DELIVERED',
-  ).length
+  const delivered = items.filter((s) => memberStatusCode(s) === '3').length
   detail.value.arrivedCount = items.filter((s) => (s.ata ?? '').trim()).length
   detail.value.deliveredCount = delivered
   detail.value.undeliveredCount = Math.max(0, items.length - delivered)
@@ -149,19 +148,9 @@ async function saveMemberDeliveredTime(row: Shipment, ts: number | null) {
   }
 }
 
-function memberStatusBadgeClass(code: string | null | undefined): string {
-  const c = (code || 'UNKNOWN').toUpperCase()
-  if (c === 'DELIVERED') return 'shipment-status-badge--success'
-  if (c === 'INSPECTION') return 'shipment-status-badge--warning'
-  if (c === 'IN_TRANSIT') return 'shipment-status-badge--warning'
-  return 'shipment-status-badge--default'
-}
-
-function memberStatusLabel(code: string | null | undefined): string {
-  const c = (code || 'UNKNOWN').toUpperCase()
-  if (c === 'IN_TRANSIT') return 'TRANSIT'
-  if (c === 'UNKNOWN') return 'PENDING'
-  return c
+function memberStatusCode(row: Shipment): string {
+  const code = normalizeShipmentStatusCode(row.statusCode).toUpperCase()
+  return code === 'DELIVERED' || row.deliveredTime?.trim() ? '3' : code
 }
 
 function goToShipment(_row: Shipment) {
@@ -232,12 +221,14 @@ const memberColumns = computed<DataTableColumns<Shipment>>(() => [
     key: 'statusCode',
     width: 92,
     align: 'center',
-    render: (row) =>
-      h(
+    render: (row) => {
+      const code = memberStatusCode(row)
+      return h(
         'span',
-        { class: ['shipment-status-badge', memberStatusBadgeClass(row.statusCode)] },
-        memberStatusLabel(row.statusCode),
-      ),
+        { class: ['shipment-status-badge', coarseShipmentStatusBadgeClass(code)] },
+        shipmentStatusLabel(code),
+      )
+    },
   },
   {
     title: '到港',
@@ -1040,5 +1031,30 @@ onMounted(async () => {
 .shipment-group-members-table :deep(.shipment-status-badge--success) {
   color: var(--tag-success-fg);
   background: var(--tag-success-bg);
+}
+
+.shipment-group-members-table :deep(.shipment-status-badge--indigo) {
+  color: var(--tag-indigo-fg);
+  background: var(--tag-indigo-bg);
+}
+
+.shipment-group-members-table :deep(.shipment-status-badge--sky) {
+  color: var(--tag-sky-fg);
+  background: var(--tag-sky-bg);
+}
+
+.shipment-group-members-table :deep(.shipment-status-badge--orange) {
+  color: var(--tag-orange-fg);
+  background: var(--tag-orange-bg);
+}
+
+.shipment-group-members-table :deep(.shipment-status-badge--teal) {
+  color: var(--tag-teal-fg);
+  background: var(--tag-teal-bg);
+}
+
+.shipment-group-members-table :deep(.shipment-status-badge--slate) {
+  color: var(--tag-slate-fg);
+  background: var(--tag-slate-bg);
 }
 </style>

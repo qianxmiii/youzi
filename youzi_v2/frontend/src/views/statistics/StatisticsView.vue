@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { carrierVisible, displayCarrier } from '@/composables/useCarrierPrivacy'
 import {
   NAlert,
   NButton,
@@ -145,7 +146,13 @@ function groupColumns(
   showSignedRate = true,
 ): DataTableColumns<PerformanceGroupRow> {
   const cols: DataTableColumns<PerformanceGroupRow> = [
-    { title: nameTitle, key: 'label', minWidth: 120, ellipsis: { tooltip: true } },
+    {
+      title: nameTitle,
+      key: 'label',
+      minWidth: 120,
+      ellipsis: { tooltip: true },
+      render: (row) => nameTitle === '承运商' ? displayCarrier(row.label) : row.label,
+    },
     { title: '总票数', key: 'totalCount', width: 88, align: 'right' },
     { title: '已签收', key: 'signedCount', width: 88, align: 'right' },
   ]
@@ -284,7 +291,7 @@ const carrierChannelColumns: DataTableColumns<PerformanceCarrierChannelRow> = [
     key: 'carrierLabel',
     minWidth: 120,
     ellipsis: { tooltip: true },
-    render: (row) => row.carrierLabel?.trim() || row.carrierCode,
+    render: (row) => displayCarrier(row.carrierLabel?.trim() || row.carrierCode),
   },
   {
     title: '渠道',
@@ -363,7 +370,7 @@ const detailColumns: DataTableColumns<ShipmentPerformanceDetailRow> = [
   },
   { title: '客户', key: 'customer', minWidth: 100, ellipsis: { tooltip: true } },
   { title: '渠道', key: 'channelCode', width: 100 },
-  { title: '承运商', key: 'carrierCode', width: 100 },
+  { title: '承运商', key: 'carrierCode', width: 100, render: (row) => displayCarrier(row.carrierCode) },
   { title: '目的港', key: 'destinationPortCode', width: 88 },
   { title: 'ETD', key: 'etd', width: 100, render: (row) => formatDateYmd(row.etd) },
   { title: 'ATD', key: 'atd', width: 100, render: (row) => formatDateYmd(row.atd) },
@@ -631,7 +638,8 @@ onMounted(async () => {
         </div>
         <div>
           <p class="mb-1 text-[10px] text-[var(--color-muted)]">承运商</p>
-          <NSelect v-model:value="carrierCode" :options="carrierOptions" clearable filterable />
+          <span v-if="!carrierVisible">***</span>
+          <NSelect v-else v-model:value="carrierCode" :options="carrierOptions" clearable filterable />
         </div>
         <div>
           <p class="mb-1 text-[10px] text-[var(--color-muted)]">客户</p>
@@ -702,7 +710,7 @@ onMounted(async () => {
                     :key="row.label"
                     class="flex items-center justify-between gap-2"
                   >
-                    <span class="truncate text-[var(--color-fg)]">{{ idx + 1 }}. {{ row.label }}</span>
+                    <span class="truncate text-[var(--color-fg)]">{{ idx + 1 }}. {{ displayCarrier(row.label) }}</span>
                     <span class="shrink-0 tabular-nums text-[var(--color-muted)]">
                       {{ row.avg != null ? `${row.avg} 天` : '—' }}
                       <span v-if="row.sample" class="text-[var(--color-fg-secondary)]">· n={{ row.sample }}</span>

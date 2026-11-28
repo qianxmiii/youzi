@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { carrierVisible } from '@/composables/useCarrierPrivacy'
+import CarrierVisibilityToggle from '@/components/common/CarrierVisibilityToggle.vue'
 import { Check, Copy } from 'lucide-vue-next'
 import { ICON_STROKE } from '@/constants/icons'
 import { NButton, NSpin, useMessage } from 'naive-ui'
@@ -163,7 +165,7 @@ async function handleSyncCarrier() {
     await load()
     await refreshShipmentAfterSync()
   } catch (e) {
-    message.error(e instanceof Error ? e.message : '更新承运商轨迹失败')
+    message.error(carrierVisible.value && e instanceof Error ? e.message : '更新承运商轨迹失败')
   } finally {
     syncingCarrier.value = false
   }
@@ -216,7 +218,11 @@ async function handleSyncCarrier() {
       </NButton>
     </div>
 
-    <NSpin :show="loading">
+    <div v-if="activeTab === 'carrier' && !carrierVisible" class="flex items-center gap-2 text-sm">
+      <span>***</span>
+      <CarrierVisibilityToggle />
+    </div>
+    <NSpin v-else :show="loading">
       <div v-if="!loading && total === 0" class="text-sm text-[var(--color-muted)]">
         暂无轨迹记录
       </div>
@@ -297,7 +303,11 @@ async function handleSyncCarrier() {
         承运商
       </button>
     </div>
-    <NSpin :show="loading">
+    <div v-if="activeTab === 'carrier' && !carrierVisible" class="flex items-center gap-2 text-sm">
+      <span>***</span>
+      <CarrierVisibilityToggle />
+    </div>
+    <NSpin v-else :show="loading">
       <div v-if="!loading && total === 0" class="text-xs text-[var(--color-muted)]">暂无轨迹记录</div>
       <ul v-else class="space-y-2">
         <li
